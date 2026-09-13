@@ -21,7 +21,7 @@ const provider: Provider = {
   id: "provider", kind: "custom", name: "测试 Provider", group: "", baseUrl: "https://example.com/v1",
   model: "test-model", models: [], modelReasoningEfforts: {}, modelContextWindows: {}, modelApiFormats: {},
   imageInputModels: [], imageInputModelsConfigured: false, modelSelectionControlledByCodex: true,
-  fastModeEnabled: false, apiFormat: "openaiResponses", active: false, autoSwitchEnabled: false,
+  fastModeEnabled: false, websocketEnabled: false, apiFormat: "openaiResponses", active: false, autoSwitchEnabled: false,
   hasApiKey: true, supportsDirectSwitch: false, balanceQueryUsesApiKey: true, hasBalanceQueryToken: false,
   hasWalletQueryToken: false, hasWalletLoginCredentials: false,
 };

@@ -29,6 +29,7 @@ pub(crate) fn write_official_local_proxy_config(paths: &Paths) -> Result<(), Str
         LOCAL_PROXY_PROVIDER_NAME,
         Some(DEFAULT_OFFICIAL_MODEL),
         false,
+        false,
     )
 }
 
@@ -46,6 +47,7 @@ fn write_provider_local_proxy_config(
         &provider.name,
         Some(codex_model_for_provider(provider)),
         uses_local_catalog,
+        provider.websocket_enabled && provider.api_format == ProviderApiFormat::OpenaiResponses,
     )
 }
 
@@ -147,7 +149,7 @@ fn write_provider_group_local_proxy_config(
         .into_iter()
         .next()
         .ok_or_else(|| "Provider group does not contain any models".to_string())?;
-    write_local_proxy_config(paths, group, Some(&selected_model), true)
+    write_local_proxy_config(paths, group, Some(&selected_model), true, false)
 }
 
 struct ProviderGroupCatalogData {

@@ -375,6 +375,7 @@ fn provider_image_generation_request_preserves_gpt_image_model() {
         context_window: None,
         model_selection_controlled_by_codex: false,
         fast_mode_enabled: false,
+        websocket_enabled: false,
         api_format: ProviderApiFormat::OpenaiResponses,
         balance_platform: None,
         balance_query_url: None,

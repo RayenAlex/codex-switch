@@ -37,6 +37,7 @@ export function ProviderModal({ provider, saving, onClose, onSave, t }: Provider
   const [modelConfigs, setModelConfigs] = useState<ModelReasoningConfig[]>([]);
   const [apiKey, setApiKey] = useState("");
   const [supportsFastMode, setSupportsFastMode] = useState(true);
+  const [websocketEnabled, setWebsocketEnabled] = useState(false);
   const balance = useProviderBalanceDetection({ provider, baseUrl, apiKey });
 
   useEffect(() => {
@@ -65,6 +66,7 @@ export function ProviderModal({ provider, saving, onClose, onSave, t }: Provider
     setModel(provider?.model ?? nextModels[0] ?? "");
     setApiKey("");
     setSupportsFastMode(provider?.fastModeEnabled ?? true);
+    setWebsocketEnabled(provider?.websocketEnabled ?? false);
   }, [provider]);
 
   const rowModels = modelConfigs.map((config) => config.model.trim()).filter(Boolean);
@@ -111,6 +113,7 @@ export function ProviderModal({ provider, saving, onClose, onSave, t }: Provider
       contextWindow: null,
       modelSelectionControlledByCodex: provider?.modelSelectionControlledByCodex ?? true,
       fastModeEnabled: supportsFastMode,
+      websocketEnabled,
       apiKey: apiKey.trim() || undefined,
       apiFormat: provider?.apiFormat ?? "openaiResponses",
       balancePlatform: detectedPlatform,
@@ -135,6 +138,7 @@ export function ProviderModal({ provider, saving, onClose, onSave, t }: Provider
         <h2>{provider ? t("providers.modal.editTitle") : t("providers.modal.addTitle")}</h2>
         <p>{t("providers.modal.description")}</p>
         <ProviderFormFields apiKey={apiKey} baseUrl={baseUrl} supportsFastMode={supportsFastMode}
+          websocketEnabled={websocketEnabled}
           modelConfigs={modelConfigs} name={name}
           provider={provider} saving={saving} activeModel={activeModel}
           balanceSettings={{
@@ -160,6 +164,7 @@ export function ProviderModal({ provider, saving, onClose, onSave, t }: Provider
           }}
           onApiKeyChange={setApiKey}
           onSupportsFastModeChange={setSupportsFastMode}
+          onWebsocketEnabledChange={setWebsocketEnabled}
           onBaseUrlChange={(value) => {
             setBaseUrl(value);
             if (!nameTouched) setName(relayName(value));

@@ -10,6 +10,7 @@ interface ProviderFormFieldsProps {
   apiKey: string;
   baseUrl: string;
   supportsFastMode: boolean;
+  websocketEnabled: boolean;
   modelConfigs: ModelReasoningConfig[];
   name: string;
   provider: Provider | null;
@@ -19,6 +20,7 @@ interface ProviderFormFieldsProps {
   onApiKeyChange: (value: string) => void;
   onBaseUrlChange: (value: string) => void;
   onSupportsFastModeChange: (value: boolean) => void;
+  onWebsocketEnabledChange: (value: boolean) => void;
   onModelConfigsChange: (configs: ModelReasoningConfig[]) => void;
   onActiveModelChange: (model: string) => void;
   onNameChange: (value: string) => void;
@@ -48,10 +50,31 @@ export function ProviderFastModeSupportControl({
   </div>;
 }
 
+interface ProviderWebsocketControlProps {
+  enabled: boolean;
+  available: boolean;
+  saving: boolean;
+  onChange: (value: boolean) => void;
+}
+
+export function ProviderWebsocketControl({
+  enabled, available, saving, onChange,
+}: ProviderWebsocketControlProps) {
+  return <div className="provider-form-switch">
+    <div>
+      <label htmlFor="provider-websocket-enabled">WebSocket</label>
+      <small>Codex Responses</small>
+    </div>
+    <Checkbox id="provider-websocket-enabled" checked={enabled} disabled={saving || !available}
+      onChange={(event) => onChange(event.target.checked)} />
+  </div>;
+}
+
 export function ProviderFormFields({
   apiKey,
   baseUrl,
   supportsFastMode,
+  websocketEnabled,
   modelConfigs,
   name,
   provider,
@@ -61,6 +84,7 @@ export function ProviderFormFields({
   onApiKeyChange,
   onBaseUrlChange,
   onSupportsFastModeChange,
+  onWebsocketEnabledChange,
   onModelConfigsChange,
   onActiveModelChange,
   onNameChange,
@@ -80,6 +104,9 @@ export function ProviderFormFields({
       onChange={(event) => onApiKeyChange(event.target.value)} />
     <ProviderFastModeSupportControl supportsFastMode={supportsFastMode} saving={saving}
       onChange={onSupportsFastModeChange} t={t} />
+    <ProviderWebsocketControl enabled={websocketEnabled}
+      available={(provider?.apiFormat ?? "openaiResponses") === "openaiResponses"}
+      saving={saving} onChange={onWebsocketEnabledChange} />
     <RelayModelPicker baseUrl={relayApiUrl(baseUrl)} apiKey={apiKey}
       providerId={provider?.hasApiKey && relayApiUrl(provider.baseUrl) === relayApiUrl(baseUrl)
         ? provider.id : undefined}

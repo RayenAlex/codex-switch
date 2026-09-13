@@ -185,6 +185,7 @@
             model: Some("deepseek-chat"),
             include_model_catalog: true,
             requires_openai_auth: false,
+            supports_websockets: false,
             token_command: "csw",
         };
         let current = merge_local_proxy_config(STALE_OFFICIAL_CONFIG, &options)
@@ -319,6 +320,7 @@
             model: Some("deepseek-chat"),
             include_model_catalog: true,
             requires_openai_auth: false,
+            supports_websockets: false,
             token_command: r"C:\Program Files\Codex Switch\csw.exe",
         };
         let merged = merge_local_proxy_config("model = \"old\"", &options).unwrap();
@@ -348,6 +350,7 @@
             model: Some("first-model"),
             include_model_catalog: true,
             requires_openai_auth: false,
+            supports_websockets: false,
             token_command: "csw",
         };
         let second = LocalProxyConfigOptions {
@@ -355,6 +358,7 @@
             model: Some("second-model"),
             include_model_catalog: true,
             requires_openai_auth: false,
+            supports_websockets: false,
             token_command: "csw",
         };
 

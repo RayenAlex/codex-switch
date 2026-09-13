@@ -176,6 +176,7 @@ fn provider_field_values(provider: &ProviderProfile) -> Vec<serde_json::Value> {
         json!(provider.context_window),
         json!(provider.model_selection_controlled_by_codex),
         json!(provider.fast_mode_enabled),
+        json!(provider.websocket_enabled),
         json!(provider.api_format),
         json!(provider.balance_platform),
         json!(provider.balance_query_url),
@@ -187,7 +188,7 @@ fn provider_field_values(provider: &ProviderProfile) -> Vec<serde_json::Value> {
     ]
 }
 
-fn provider_field_versions_mut(values: &mut ProviderFieldModifiedAt) -> [&mut String; 22] {
+fn provider_field_versions_mut(values: &mut ProviderFieldModifiedAt) -> [&mut String; 23] {
     [
         &mut values.kind,
         &mut values.name,
@@ -203,6 +204,7 @@ fn provider_field_versions_mut(values: &mut ProviderFieldModifiedAt) -> [&mut St
         &mut values.context_window,
         &mut values.model_selection_controlled_by_codex,
         &mut values.fast_mode_enabled,
+        &mut values.websocket_enabled,
         &mut values.api_format,
         &mut values.balance_platform,
         &mut values.balance_query_url,
@@ -329,6 +331,7 @@ fn provider_summary(
         context_window: provider.context_window,
         model_selection_controlled_by_codex: provider.model_selection_controlled_by_codex,
         fast_mode_enabled: provider.fast_mode_enabled,
+        websocket_enabled: provider.websocket_enabled,
         api_format: provider.api_format,
         active,
         auto_switch_enabled: auto_switch_enabled && provider.kind == ProviderKind::Custom,

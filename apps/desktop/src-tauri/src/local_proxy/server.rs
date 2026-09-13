@@ -88,7 +88,7 @@ fn update_proxy_service_tier_for_openai_auth(account_id: Option<&str>) -> bool {
     true
 }
 
-fn start_server<R: Runtime>(app: tauri::AppHandle<R>) -> Result<bool, String> {
+fn start_server<R: Runtime + 'static>(app: tauri::AppHandle<R>) -> Result<bool, String> {
     let mut guard = runtime()
         .lock()
         .map_err(|_| "Local proxy runtime lock is poisoned".to_string())?;
@@ -110,24 +110,62 @@ fn start_server<R: Runtime>(app: tauri::AppHandle<R>) -> Result<bool, String> {
         "{}:{LOCAL_PROXY_PORT}",
         proxy_bind_host(lan_listening_enabled(&state))
     );
-    let server = Arc::new(bind_http_server(&bind_addr)?);
+    let gateway_listener = bind_gateway_listener(&bind_addr)?;
+    let (server, internal_addr) = bind_internal_http_server()?;
+    let server = Arc::new(server);
     let server_for_thread = server.clone();
+    let request_app = app.clone();
     let handle = thread::Builder::new()
-        .name("codex-switch-local-proxy".to_string())
+        .name("codex-switch-local-proxy-http".to_string())
         .spawn(move || {
             for request in server_for_thread.incoming_requests() {
-                let request_app = app.clone();
+                let request_app = request_app.clone();
                 let _ = thread::Builder::new()
                     .name("codex-switch-local-proxy-request".to_string())
                     .spawn(move || handle_request(request_app, request));
             }
         })
-        .map_err(|error| format!("Failed to spawn local proxy thread: {error}"))?;
+        .map_err(|error| format!("Failed to spawn local proxy HTTP thread: {error}"))?;
+    let gateway = match proxy_gateway::start(gateway_listener, app, internal_addr) {
+        Ok(gateway) => gateway,
+        Err(error) => {
+            server.unblock();
+            let _ = handle.join();
+            return Err(error);
+        }
+    };
     *guard = Some(ProxyRuntime {
         server,
         handle: Some(handle),
+        gateway: Some(gateway),
     });
     Ok(true)
+}
+
+fn bind_gateway_listener(bind_addr: &str) -> Result<std::net::TcpListener, String> {
+    let deadline = Instant::now() + LOCAL_PROXY_REBIND_RETRY_TIMEOUT;
+    loop {
+        match std::net::TcpListener::bind(bind_addr) {
+            Ok(listener) => return Ok(listener),
+            Err(error) => {
+                if error.kind() != io::ErrorKind::AddrInUse || Instant::now() >= deadline {
+                    return Err(format!("Failed to start local proxy at {bind_addr}: {error}"));
+                }
+                thread::sleep(LOCAL_PROXY_REBIND_RETRY_INTERVAL);
+            }
+        }
+    }
+}
+
+fn bind_internal_http_server() -> Result<(Server, SocketAddr), String> {
+    let listener = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+        .map_err(|error| format!("Failed to bind local proxy HTTP worker: {error}"))?;
+    let address = listener
+        .local_addr()
+        .map_err(|error| format!("Failed to read local proxy HTTP worker address: {error}"))?;
+    let server = Server::from_listener(listener, None)
+        .map_err(|error| format!("Failed to start local proxy HTTP worker: {error}"))?;
+    Ok((server, address))
 }
 
 fn proxy_bind_host(listen_on_all_interfaces: bool) -> &'static str {
@@ -157,36 +195,9 @@ fn lan_listening_enabled(state: &ManagerStateFile) -> bool {
     state.local_proxy_listen_on_all_interfaces && configured_lan_api_key(state).is_some()
 }
 
+#[cfg(test)]
 fn bind_http_server(bind_addr: &str) -> Result<Server, String> {
-    let deadline = Instant::now() + LOCAL_PROXY_REBIND_RETRY_TIMEOUT;
-    loop {
-        match Server::http(bind_addr) {
-            Ok(server) => return Ok(server),
-            Err(error) => {
-                let address_in_use = is_address_in_use(error.as_ref());
-                if !address_in_use || Instant::now() >= deadline {
-                    return Err(format!(
-                        "Failed to start local proxy at {bind_addr}: {error}"
-                    ));
-                }
-                thread::sleep(LOCAL_PROXY_REBIND_RETRY_INTERVAL);
-            }
-        }
-    }
-}
-
-fn is_address_in_use(error: &(dyn std::error::Error + 'static)) -> bool {
-    let mut current = Some(error);
-    while let Some(error) = current {
-        if error
-            .downcast_ref::<io::Error>()
-            .is_some_and(|error| error.kind() == io::ErrorKind::AddrInUse)
-        {
-            return true;
-        }
-        current = error.source();
-    }
-    false
+    Server::http(bind_addr).map_err(|error| error.to_string())
 }
 
 fn listener_wake_address(server: &Server) -> Option<SocketAddr> {
@@ -201,6 +212,12 @@ fn listener_wake_address(server: &Server) -> Option<SocketAddr> {
 }
 
 fn stop_proxy_runtime(mut proxy_runtime: ProxyRuntime) {
+    if let Some(mut gateway) = proxy_runtime.gateway.take() {
+        if let Some(shutdown) = gateway.shutdown.take() {
+            let _ = shutdown.send(());
+        }
+        gateway.handle.abort();
+    }
     proxy_runtime.server.unblock();
     if let Some(handle) = proxy_runtime.handle.take() {
         let _ = handle.join();
@@ -242,6 +259,19 @@ fn stop_server() {
     aggregate_scheduler::clear();
 }
 
+fn trusted_gateway_client_address(
+    headers: &[(String, String)],
+    socket_address: Option<SocketAddr>,
+) -> Option<SocketAddr> {
+    let socket_address = socket_address?;
+    if !socket_address.ip().is_loopback() {
+        return Some(socket_address);
+    }
+    header_value(headers, "x-codex-switch-client-address")
+        .and_then(|value| value.parse().ok())
+        .or(Some(socket_address))
+}
+
 fn handle_request<R: Runtime>(app: tauri::AppHandle<R>, mut request: Request) {
     let _diagnostic_scope = match diagnostic_log_path(&app) {
         Ok(path) => Some(DiagnosticScope::enter(path)),
@@ -256,7 +286,7 @@ fn handle_request<R: Runtime>(app: tauri::AppHandle<R>, mut request: Request) {
     }));
     let method = request.method().clone();
     let url = request.url().to_string();
-    let remote_address = request.remote_addr().map(|address| address.to_string());
+    let socket_address = request.remote_addr().copied();
     let headers = request
         .headers()
         .iter()
@@ -267,9 +297,9 @@ fn handle_request<R: Runtime>(app: tauri::AppHandle<R>, mut request: Request) {
             )
         })
         .collect::<Vec<_>>();
-
-    let is_loopback = request
-        .remote_addr()
+    let client_address = trusted_gateway_client_address(&headers, socket_address);
+    let remote_address = client_address.map(|address| address.to_string());
+    let is_loopback = client_address
         .map(|address| address.ip().is_loopback())
         .unwrap_or(false);
     let quota_query = method == Method::Get && lan_keys::is_quota_endpoint(request_path(&url));

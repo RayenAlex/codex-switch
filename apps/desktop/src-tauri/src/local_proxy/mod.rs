@@ -19,12 +19,17 @@ mod gui_auto_switch;
 mod gui_forwarding;
 mod gui_routing;
 pub(crate) mod lan_keys;
+mod proxy_gateway;
 mod quota_detection;
 mod quota_sse;
 mod session_titles;
 pub(crate) mod sse_idle_timeout;
 mod sse_transport;
 mod upstream_transport;
+mod websocket_diagnostics;
+mod websocket_fallback;
+mod websocket_forwarding;
+mod websocket_tracking;
 
 pub(crate) use lan_keys::{
     delete_local_proxy_lan_api_key, list_local_proxy_lan_api_keys, save_local_proxy_lan_api_key,
@@ -108,6 +113,7 @@ mod tests {
     include!("tests/anthropic_sessions.rs");
     include!("tests/chat_stream_status.rs");
     include!("tests/http_streaming.rs");
+    include!("tests/websocket.rs");
     include!("tests/lan_http.rs");
     include!("tests/gui_routing.rs");
     include!("tests/error_logging.rs");

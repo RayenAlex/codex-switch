@@ -156,6 +156,9 @@ fn normalize_provider_profile(mut provider: ProviderProfile) -> Result<ProviderP
         provider.wallet_username = None;
         provider.wallet_password = None;
     }
+    if provider.api_format != ProviderApiFormat::OpenaiResponses {
+        provider.websocket_enabled = false;
+    }
     let (model, models) = normalize_model_selection(&provider.model, provider.models)?;
     provider.model = model;
     provider.models = models;

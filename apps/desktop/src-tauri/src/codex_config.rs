@@ -29,6 +29,7 @@ pub(crate) struct LocalProxyConfig<'a> {
     pub(crate) model: Option<&'a str>,
     pub(crate) model_catalog_filename: Option<&'a str>,
     pub(crate) requires_openai_auth: bool,
+    pub(crate) supports_websockets: bool,
     pub(crate) token_command: &'a str,
 }
 
@@ -175,6 +176,7 @@ fn replace_local_proxy_table(
     let mut provider = Table::new();
     provider["name"] = value(options.name);
     provider["base_url"] = value(LOCAL_PROXY_BASE_URL);
+    provider["supports_websockets"] = value(options.supports_websockets);
     provider["wire_api"] = value("responses");
     provider["requires_openai_auth"] = value(options.requires_openai_auth);
     set_proxy_auth(&mut provider, options);
@@ -369,6 +371,7 @@ mod tests {
             model: Some("deepseek-chat"),
             model_catalog_filename: Some("codex-switch-model-catalog.json"),
             requires_openai_auth: false,
+            supports_websockets: false,
             token_command: r"C:\Program Files\Codex Switch\csw.exe",
         }
     }
@@ -392,6 +395,30 @@ js_repl = true
         assert!(updated.contains("# Keep my model note"));
         assert!(updated.contains("[model_providers.codex-switch-local]"));
         updated.parse::<DocumentMut>().unwrap();
+    }
+
+    #[test]
+    fn proxy_declares_websocket_support_disabled_by_default() {
+        let updated = apply_local_proxy("", &proxy_options()).unwrap();
+        let document = updated.parse::<DocumentMut>().unwrap();
+
+        assert_eq!(
+            document["model_providers"][LOCAL_PROXY_PROVIDER_ID]["supports_websockets"].as_bool(),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn proxy_can_enable_websocket_support() {
+        let mut options = proxy_options();
+        options.supports_websockets = true;
+        let updated = apply_local_proxy("", &options).unwrap();
+        let document = updated.parse::<DocumentMut>().unwrap();
+
+        assert_eq!(
+            document["model_providers"][LOCAL_PROXY_PROVIDER_ID]["supports_websockets"].as_bool(),
+            Some(true)
+        );
     }
 
     #[test]

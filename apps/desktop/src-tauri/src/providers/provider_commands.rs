@@ -149,6 +149,7 @@ pub(crate) fn save_provider_blocking<R: Runtime>(
         context_window: provider.context_window,
         model_selection_controlled_by_codex: provider.model_selection_controlled_by_codex,
         fast_mode_enabled: provider.fast_mode_enabled,
+        websocket_enabled: provider.websocket_enabled,
         api_format: provider.api_format,
         balance_platform,
         balance_query_url,

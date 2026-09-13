@@ -7,7 +7,7 @@ const provider: Provider = {
   model: "deepseek-v3", models: ["deepseek-v3", "kimi-k3", "kimi-k3"],
   modelReasoningEfforts: { "kimi-k3": ["low", "high", "max"] }, modelContextWindows: {}, modelApiFormats: {},
   imageInputModels: [], imageInputModelsConfigured: false, modelSelectionControlledByCodex: true,
-  fastModeEnabled: false, apiFormat: "openaiResponses", active: true, autoSwitchEnabled: false,
+  fastModeEnabled: false, websocketEnabled: false, apiFormat: "openaiResponses", active: true, autoSwitchEnabled: false,
   hasApiKey: true, supportsDirectSwitch: false, balanceQueryUsesApiKey: true, hasBalanceQueryToken: false,
   hasWalletQueryToken: false, hasWalletLoginCredentials: false,
 };

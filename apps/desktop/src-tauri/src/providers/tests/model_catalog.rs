@@ -251,6 +251,7 @@ model_reasoning_effort = "xhigh"
             model: Some("deepseek-v4-flash"),
             include_model_catalog: true,
             requires_openai_auth: false,
+            supports_websockets: false,
             token_command: "csw",
         };
         let provider_proxy = merge_local_proxy_config(backup, &provider_options).unwrap();
@@ -276,6 +277,7 @@ model_reasoning_effort = "xhigh"
             model: Some("deepseek-v4-flash"),
             include_model_catalog: true,
             requires_openai_auth: false,
+            supports_websockets: false,
             token_command: "csw",
         };
         let provider_proxy = merge_local_proxy_config(backup, &provider_options).unwrap();

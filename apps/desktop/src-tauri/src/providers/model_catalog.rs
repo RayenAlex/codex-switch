@@ -271,6 +271,7 @@ fn write_local_proxy_config(
     name: &str,
     model: Option<&str>,
     include_model_catalog: bool,
+    supports_websockets: bool,
 ) -> Result<(), String> {
     let state = read_state(paths);
     let existing = if paths.current_config.exists() {
@@ -289,6 +290,7 @@ fn write_local_proxy_config(
         model,
         include_model_catalog,
         requires_openai_auth,
+        supports_websockets,
         token_command: &token_command,
     };
     let merged = merge_local_proxy_config(&existing, &options)?;
@@ -300,6 +302,7 @@ struct LocalProxyConfigOptions<'a> {
     model: Option<&'a str>,
     include_model_catalog: bool,
     requires_openai_auth: bool,
+    supports_websockets: bool,
     token_command: &'a str,
 }
 
@@ -316,6 +319,7 @@ fn merge_local_proxy_config(
                 .include_model_catalog
                 .then_some(MODEL_CATALOG_FILENAME),
             requires_openai_auth: options.requires_openai_auth,
+            supports_websockets: options.supports_websockets,
             token_command: options.token_command,
         },
     )

@@ -28,6 +28,8 @@ pub(crate) struct ProviderProfile {
     pub(crate) model_selection_controlled_by_codex: bool,
     #[serde(default)]
     pub(crate) fast_mode_enabled: bool,
+    #[serde(default)]
+    pub(crate) websocket_enabled: bool,
     pub(crate) api_format: ProviderApiFormat,
     #[serde(default)]
     pub(crate) balance_platform: Option<ProviderBalancePlatform>,
@@ -63,6 +65,7 @@ pub(crate) struct ProviderSummary {
     pub(crate) context_window: Option<u64>,
     pub(crate) model_selection_controlled_by_codex: bool,
     pub(crate) fast_mode_enabled: bool,
+    pub(crate) websocket_enabled: bool,
     pub(crate) api_format: ProviderApiFormat,
     pub(crate) active: bool,
     pub(crate) auto_switch_enabled: bool,

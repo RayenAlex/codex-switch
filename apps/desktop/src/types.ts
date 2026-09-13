@@ -103,6 +103,7 @@ export interface Provider {
   contextWindow?: number | null;
   modelSelectionControlledByCodex: boolean;
   fastModeEnabled: boolean;
+  websocketEnabled: boolean;
   apiFormat: ProviderApiFormat;
   active: boolean;
   autoSwitchEnabled: boolean;
@@ -135,6 +136,7 @@ export interface ProviderInput {
   contextWindow?: number | null;
   modelSelectionControlledByCodex: boolean;
   fastModeEnabled?: boolean;
+  websocketEnabled?: boolean;
   apiKey?: string;
   apiFormat: ProviderApiFormat;
   balancePlatform?: ProviderBalancePlatform | null;

@@ -1,6 +1,7 @@
 struct ProxyRuntime {
     server: Arc<Server>,
     handle: Option<JoinHandle<()>>,
+    gateway: Option<proxy_gateway::GatewayRuntime>,
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
