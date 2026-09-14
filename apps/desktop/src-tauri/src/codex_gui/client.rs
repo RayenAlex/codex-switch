@@ -1,5 +1,8 @@
+mod live_settings;
+mod plugin_refresh;
+
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     path::PathBuf,
     process::Stdio,
     sync::{
@@ -34,7 +37,8 @@ pub(super) struct Client {
     process: Mutex<Child>,
     pending: Mutex<Pending>,
     approvals: Mutex<HashMap<String, GuiEvent>>,
-    active_turns: Mutex<HashSet<String>>,
+    active_turns: Mutex<HashMap<String, String>>,
+    plugin_revision: Mutex<Option<String>>,
     next_id: AtomicU64,
     pub(super) alive: AtomicBool,
     app: AppHandle,
@@ -50,6 +54,8 @@ impl Client {
         let mut command = Command::new(executable.path);
         command
             .arg("app-server")
+            .arg("-c")
+            .arg("features.step_model_switching=true")
             .arg("-c")
             .arg(format!("sqlite_home={}", json!(home.to_string_lossy())))
             .arg("-c")
@@ -77,7 +83,8 @@ impl Client {
             process: Mutex::new(process),
             pending: Mutex::new(HashMap::new()),
             approvals: Mutex::new(HashMap::new()),
-            active_turns: Mutex::new(HashSet::new()),
+            active_turns: Mutex::new(HashMap::new()),
+            plugin_revision: Mutex::new(None),
             next_id: AtomicU64::new(1),
             alive: AtomicBool::new(true),
             app,
@@ -109,6 +116,16 @@ impl Client {
 
     pub(super) async fn request(&self, method: &str, mut params: Value) -> Result<Value> {
         super::home::scope_thread_request(method, &mut params);
+        super::context_settings::apply(self.app.clone(), method, &mut params)
+            .await
+            .map_err(|_| GuiError::ContextSettings)?;
+        if method == "turn/start" {
+            self.refresh_plugins().await?;
+        }
+        self.request_raw(method, params).await
+    }
+
+    async fn request_raw(&self, method: &str, params: Value) -> Result<Value> {
         if !self.alive.load(Ordering::Acquire) {
             return Err(GuiError::Disconnected);
         }
@@ -152,14 +169,11 @@ impl Client {
                 id: value.get("id").cloned(),
             };
             workspaces::hide_project_paths(&mut event.params, &self.projectless_root);
-            if method == "turn/started" {
-                if let Some(id) = event.params["turn"]["id"].as_str() {
-                    self.active_turns.lock().await.insert(id.to_owned());
-                }
+            if matches!(method, "turn/started" | "turn/completed") {
+                self.track_live_turn(&event).await;
             }
             if method == "turn/completed" {
                 if let Some(id) = event.params["turn"]["id"].as_str() {
-                    self.active_turns.lock().await.remove(id);
                     self.approvals
                         .lock()
                         .await
@@ -173,7 +187,8 @@ impl Client {
                         | "item/fileChange/requestApproval"
                         | "item/tool/requestUserInput"
                         | "item/permissions/requestApproval"
-                ) {
+                ) && !super::mcp_approval::supported(&event)
+                {
                     if self
                         .write(json!({"id": id, "error": {"code": -32601,
                         "message": "This client does not support this request"}}))

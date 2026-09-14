@@ -6,26 +6,14 @@ import { MAX_ATTACHMENTS, type AttachmentReference } from "./attachmentTypes";
 import { MAX_REPLY_QUOTES, MAX_QUOTE_CHARACTERS, quoteKey, quotedReply, type ReplyQuote } from "./replyQuotes";
 import { queuedMessageText } from "./queuedMessageDraft";
 
-export const MAX_IMAGES = 8;
-export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
-export const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
-export interface DraftImage { id: string; name: string; url?: string }
+import { IMAGE_TYPES, MAX_IMAGES, MAX_IMAGE_BYTES, readImage, type DraftImage } from "./draftImages";
+export { IMAGE_TYPES, MAX_IMAGES, MAX_IMAGE_BYTES, readImage, type DraftImage } from "./draftImages";
 interface Draft extends ComposerText {
   images: DraftImage[];
   attachments?: AttachmentReference[];
   quotes?: ReplyQuote[];
 }
 const EMPTY_DRAFT: Draft = { text: "", mentions: [], images: [] };
-
-export function readImage(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => typeof reader.result === "string"
-      ? resolve(reader.result) : reject(new Error("Invalid image"));
-    reader.onerror = reader.onabort = () => reject(new Error("Image read failed"));
-    reader.readAsDataURL(file);
-  });
-}
 
 export function useComposerDraft(key: string, controller: GuiController) {
   const submitting = useRef(false);
@@ -106,19 +94,26 @@ export function useComposerDraft(key: string, controller: GuiController) {
   const { paste, pasteKeyDown, readingFiles } = useFilePaste({ key, addAttachments, addImages,
     report: controller.report });
   const reading = readingFiles || draft.images.some((image) => !image.url);
-  const send = async () => {
+  const send = async (goalMode = false, onAccepted?: () => void) => {
     if (reading || submitting.current) return;
+    if (goalMode && (!draft.text.trim() || draft.text.length > 4000
+      || draft.images.length || draft.attachments?.length || draft.mentions.length)) {
+      controller.report("请用 4000 字以内的文字描述目标；图片、文件和技能可退出目标模式后发送。");
+      return;
+    }
     submitting.current = true;
     const skills = [...new Map(draft.mentions.map(({ skill }) =>
       [skill.path, { name: skill.name, path: skill.path }])).values()];
     try {
       const images = draft.images.flatMap((image) => image.url ? [image.url] : []);
       const text = quotedReply(draft.text, draft.quotes);
-      const accepted = draft.attachments?.length
+      const accepted = goalMode ? await controller.goals.set({ objective: text, status: "active" })
+        : draft.attachments?.length
         ? await controller.send(text, images, skills, draft.attachments)
         : await controller.send(text, images, skills);
       if (accepted) {
         setDrafts((values) => values[key] === draft ? { ...values, [key]: EMPTY_DRAFT } : values);
+        onAccepted?.();
       } else {
         const selected = key === "new" ? controller.getSnapshot().selected ?? "new" : key;
         setDrafts((values) => values[key] !== draft || selected === key || values[selected]

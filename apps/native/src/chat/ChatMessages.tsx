@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Keyboard, Pressable, RefreshControl, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useChatScroll } from './useChatScroll';
@@ -37,25 +37,30 @@ function WorkSummary({ entry, onOpen }: { entry: WorkEntry; onOpen: () => void }
   </Pressable>;
 }
 
-function TimelineEntry({ entry, open }: { entry: TurnEntry; open: (selection: Selection) => void }) {
+const TimelineEntry = memo(function TimelineEntry({ entry, open }: {
+  entry: TurnEntry; open: (selection: Selection) => void;
+}) {
+  const openItem = useCallback((id: string) => open({ type: 'item', id }), [open]);
   if (entry.kind === 'duration') return <ChatTurnDuration turn={entry.turn} />;
   if (entry.kind === 'summary') return <ChatTurnSummary turn={entry.turn}
     onOpen={(id, panel) => open({ type: 'turn', id, panel })} />;
   if (entry.kind === 'work') return <WorkSummary entry={entry} onOpen={() => open({ type: 'work', id: entry.id })} />;
   return <ChatMessage item={entry.item} process={entry.kind === 'process'}
-    onOpen={(id) => open({ type: 'item', id })}
+    onOpen={openItem}
     running={entry.turn.status === 'inProgress' && entry.item.status !== 'completed'} />;
-}
+});
 
-export function ChatMessages({ thread, loading, loadingMore, hasMore, loadOlder }: ChatMessagesProps) {
-  const entries = useConversationEntries(thread?.turns ?? []);
-  const { list, more, preservePosition, historyBottomSpace, initializing, onItemLayout, onFooterLayout, ...scrollHandlers }
+export function ChatMessages({ thread, loading, loadingMore, hasMore, loadOlder, offline }: ChatMessagesProps) {
+  const turns = useMemo(() => (thread?.turns ?? []).map((turn) => offline && turn.status === 'inProgress'
+    ? { ...turn, status: 'cached' } : turn), [thread?.turns, offline]);
+  const { entries, hasObservedLiveTurn } = useConversationEntries(turns);
+  const { list, more, preservePosition, historyBottomSpace, initializing, onItemLayout, onFooterLayout,
+    showScrollToBottom, scrollToBottom, ...scrollHandlers }
     = useChatScroll<TurnEntry>({ hasMore, loading, loadingMore, loadOlder,
       latestItemId: entries.at(-1)?.id, bottomPadding: styles.messages.padding });
   const refresh = useHistoryRefresh(more, loadingMore);
-  // Live work is readable as soon as it arrives, even while the keyboard delays the initial scroll anchor.
-  const hasInlineWork = entries.some((entry) => entry.kind === 'work' && entry.inline);
-  const showInitialLoading = (!hasInlineWork && initializing) || (loading && !loadingMore && !entries.length);
+  // Keep live messages visible through completion, including replies that never call tools.
+  const showInitialLoading = (!hasObservedLiveTurn && initializing) || (loading && !loadingMore && !entries.length);
   const [selection, setSelection] = useState<Selection | null>(null);
   const open = useCallback((value: Selection) => { Keyboard.dismiss(); setSelection(value); }, []);
   // Resolve against live history so open process, plan, output and diff drawers keep receiving updates.
@@ -98,6 +103,12 @@ export function ChatMessages({ thread, loading, loadingMore, hasMore, loadOlder 
     </View>}
     ListFooterComponent={<View style={[styles.messageFooter, { paddingBottom: historyBottomSpace }]}
       onLayout={onFooterLayout} />} />
+    {showScrollToBottom && !showInitialLoading && entries.length > 0 && <Pressable
+      accessibilityRole="button" accessibilityLabel="回到底部" onPress={scrollToBottom}
+      style={({ pressed }) => [styles.scrollToBottom, pressed && styles.scrollToBottomPressed]}>
+      <Ionicons name="arrow-down" size={18} color={palette.ink} />
+      <Text style={styles.scrollToBottomText}>回到底部</Text>
+    </Pressable>}
     {showInitialLoading && <View style={styles.messageLoadingOverlay}>
       <ActivityIndicator size="small" accessibilityLabel="正在加载聊天记录" />
       <Text style={[styles.subtitle, styles.messageLoadingText]}>正在加载聊天记录…</Text>

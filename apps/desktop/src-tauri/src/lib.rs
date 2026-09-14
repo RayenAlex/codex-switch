@@ -57,6 +57,7 @@ mod provider_platform;
 mod providers;
 mod remote_chat;
 mod remote_control;
+mod remote_websocket;
 mod skills_market;
 mod storage;
 mod system_proxy;
@@ -123,6 +124,7 @@ pub fn run() {
         .manage(codex_gui::git::GitState::default())
         .manage(codex_gui::web::WebEventState::default())
         .manage(codex_gui::model_settings::ModelSettingsState::default())
+        .manage(codex_gui::context_settings::ContextSettingsState::default())
         .manage(ccs_import::ImportState::default())
         .manage(main_window::MainWindowStateCache::default())
         .manage(main_window::CloseBehaviorState::default())
@@ -137,6 +139,8 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(move |app| {
+            #[cfg(windows)]
+            app.manage(system_tray::quick_menu::QuickMenuState::default());
             #[cfg(windows)]
             installer_lifecycle::setup(app.handle())?;
             storage::migrate_app_settings_for_version(app.handle())?;
@@ -203,6 +207,9 @@ pub fn run() {
             }
             codex_gui::scheduled_tasks::start(app.handle());
             remote_control::start(app.handle().clone());
+            if !launch_options.headless {
+                remote_chat::start(app.handle().clone());
+            }
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -246,20 +253,37 @@ pub fn run() {
                 }
             }
             floating_bubble::handle_window_event(window, event);
+            #[cfg(windows)]
+            system_tray::quick_menu::handle_window_event(window, event);
         })
         .invoke_handler(tauri::generate_handler![
+            #[cfg(windows)]
+            system_tray::quick_menu::quick_menu_snapshot,
+            #[cfg(windows)]
+            system_tray::quick_menu::quick_menu_present,
+            #[cfg(windows)]
+            system_tray::quick_menu::quick_menu_dismiss,
+            #[cfg(windows)]
+            system_tray::quick_menu::quick_menu_activate,
             codex_gui::codex_gui_connect,
             codex_gui::scheduled_tasks::codex_gui_scheduled_tasks,
             codex_gui::clipboard::codex_gui_clipboard_files,
+            codex_gui::image_actions::codex_gui_image_action,
             codex_gui::account_selection::codex_gui_account_selection,
             codex_gui::account_selection::codex_gui_switch_account,
             codex_gui::model_settings::codex_gui_model_settings,
+            codex_gui::context_settings::codex_gui_context_settings,
+            codex_gui::context_settings::codex_gui_set_context_settings,
             codex_gui::model_settings::codex_gui_set_model_settings,
             codex_gui::auto_switch_settings::codex_gui_auto_switch_settings,
             codex_gui::auto_switch_settings::codex_gui_set_auto_switch_settings,
             gui_terminal::codex_gui_terminal_open,
             gui_terminal::codex_gui_terminal_command,
-            remote_chat::remote_chat_config,
+            remote_chat::remote_chat_attach,
+            remote_chat::remote_chat_send,
+            remote_chat::remote_chat_ack,
+            remote_chat::remote_chat_reconnect,
+            remote_chat::remote_chat_detach,
             codex_gui::releases::codex_gui_cli_status,
             codex_gui::releases::codex_gui_cli_release,
             codex_gui::releases::codex_gui_cli_install,

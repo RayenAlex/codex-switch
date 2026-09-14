@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import type { ChatController } from './controller';
@@ -12,6 +12,7 @@ interface Props {
 }
 
 export function ChatThreads({ state, controller, newChat, openSearch, select, profileMenu }: Props) {
+  const [footerHeight, setFooterHeight] = useState(0);
   return <View style={styles.fill}>
     <View style={styles.padded}>
       <View style={styles.row}>
@@ -19,14 +20,15 @@ export function ChatThreads({ state, controller, newChat, openSearch, select, pr
         <Pressable accessibilityRole="button" accessibilityLabel="搜索聊天" onPress={openSearch}
           style={listStyles.search}><Feather name="search" size={23} color={palette.ink} /></Pressable>
       </View>
-      <Pressable accessibilityRole="button" style={listStyles.filter} disabled={!state.ready || state.loading}
+      <Pressable accessibilityRole="button" style={listStyles.filter} disabled={state.loading}
         onPress={() => { void controller.list({ archived: !state.archived }); }}>
         <Text style={styles.subtitle}>{state.archived ? '已归档 ▾' : '最近聊天 ▾'}</Text>
       </Pressable>
     </View>
-    <ChatThreadList state={state} newChat={newChat} select={select}
+    <ChatThreadList state={state} newChat={newChat} select={select} bottomInset={footerHeight}
       refresh={() => { void controller.list(); }} loadMore={() => { void controller.list({ more: true }); }} />
-    <View style={listStyles.footer}>
+    <View style={listStyles.footer} pointerEvents="box-none"
+      onLayout={(event) => setFooterHeight(event.nativeEvent.layout.height)}>
       <Pressable accessibilityRole="button" accessibilityLabel="新聊天" disabled={state.sending}
         style={[listStyles.newChat, state.sending && styles.disabled]} onPress={() => newChat()}>
         <Feather name="edit" size={21} color="#fff" /><Text style={listStyles.newChatText}>新聊天</Text>
@@ -37,8 +39,9 @@ export function ChatThreads({ state, controller, newChat, openSearch, select, pr
 }
 
 const listStyles = StyleSheet.create({
-  footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16,
-    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20, backgroundColor: '#fff' },
+  footer: { position: 'absolute', bottom: 0, left: 0, right: 0,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16,
+    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20 },
   search: { width: 48, height: 48, borderRadius: 24, backgroundColor: palette.background,
     alignItems: 'center', justifyContent: 'center' },
   filter: { minHeight: 36, justifyContent: 'center' },

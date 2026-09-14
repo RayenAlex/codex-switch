@@ -1,6 +1,6 @@
 export type {
   AccessMode, ApprovalReply, GuiEvent, Item, ListResponse, Model, Request,
-  Skill, SkillReference, SkillsResponse, Thread, Turn,
+  Skill, SkillReference, SkillsResponse, Thread, ThreadTokenUsage, Turn,
 } from '../../../apps/desktop/src/pages/codexGui/types';
 import type { GuiEvent, Model, SkillReference, Thread } from '../../../apps/desktop/src/pages/codexGui/types';
 import type { AttachmentReference } from '../../../apps/desktop/src/pages/codexGui/attachmentTypes';
@@ -10,6 +10,7 @@ import { emptySidebar, type SidebarSnapshot } from '../sidebar';
 import { emptyQueue, type QueueSnapshot } from '../queue';
 
 export interface SendInput {
+  goalMode?: boolean;
   text: string;
   images?: string[];
   skills?: SkillReference[];
@@ -22,6 +23,11 @@ export interface SendInput {
 export interface ChatProject { cwd: string; label: string }
 
 export interface ChatState {
+  cachedThreadIds?: string[];
+  historyOffline?: boolean;
+  cacheError?: string;
+  goals?: Record<string, import('../../../apps/desktop/src/pages/codexGui/goalTypes').ThreadGoal | null>;
+  goalBusy?: boolean;
   mode: ConnectionMode;
   ready: boolean;
   connecting: boolean;

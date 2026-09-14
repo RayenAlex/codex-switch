@@ -1,10 +1,12 @@
 import { resolveModelSelection, type ModelSelection } from "./modelSelection";
 import type { GuiState } from "./types";
+import { appendModelChange, type PendingModelChange } from "./liveModelNotice";
 
 export interface ModelSettingsSnapshot {
   threadId: string | null;
   selection: ModelSelection | null;
   revision: number;
+  liveUpdate?: "applied" | "nextTurn" | "failed";
 }
 export interface ModelSettingsApi {
   read: (threadId: string | null) => Promise<ModelSettingsSnapshot>;
@@ -33,7 +35,32 @@ export class ThreadModelSettings {
   private dirty = new Map<string | null, ModelSelection>();
   private deferred = new Map<string | null, ModelSettingsSnapshot>();
   private failed = new Set<string | null>();
+  private listeners = new Set<() => void>();
+  private notifying = new Map<string | null, PendingModelChange>();
   constructor(private host: Host) {}
+
+  watch(listener: () => void) {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
+
+  loading(threadId: string | null): boolean {
+    return Boolean(this.api && !this.stopSubscription) || this.reading.has(threadId)
+      || this.writing.has(threadId) || this.dirty.has(threadId) || this.failed.has(threadId);
+  }
+
+  /** Remote callers wait for the same persisted selection without switching the PC's conversation. */
+  async ready(threadId: string | null): Promise<ModelSelection> {
+    const generation = this.generation;
+    try { await this.subscribe(); } catch { throw new Error(SYNC_ERROR); }
+    if (this.failed.has(threadId) && this.dirty.has(threadId)) {
+      this.failed.delete(threadId); this.save(threadId);
+    }
+    await this.load(threadId);
+    while (this.writing.has(threadId)) await this.writing.get(threadId);
+    if (generation !== this.generation || this.loading(threadId)) throw new Error(SYNC_ERROR);
+    return this.selection(threadId);
+  }
 
   selection(threadId: string | null): ModelSelection {
     const selection = this.entries.get(threadId)?.selection ?? EMPTY_SELECTION;
@@ -45,10 +72,9 @@ export class ThreadModelSettings {
     const selection = this.selection(threadId);
     const state = this.host.getSnapshot();
     if (state.selected === threadId) this.host.patch({ settings: { ...state.settings, ...selection },
-      modelSettingsLoading: Boolean(this.api && !this.stopSubscription)
-        || this.reading.has(threadId) || this.writing.has(threadId) || this.dirty.has(threadId)
-        || this.failed.has(threadId) });
+      modelSettingsLoading: this.loading(threadId) });
     if (threadId && updateQueue) this.host.updateQueue(threadId, selection);
+    for (const listener of this.listeners) listener();
   }
 
   catalogChanged() { this.show(undefined, true); }
@@ -59,6 +85,14 @@ export class ThreadModelSettings {
     if (patch.model && patch.model !== previous.model && patch.effort === undefined) selection.effort = "";
     const models = this.host.getSnapshot().models;
     const normalized = models.length ? resolveModelSelection(models, selection) : selection;
+    if (threadId && this.host.getSnapshot().conversations[threadId]?.activeTurn
+      && (normalized.model !== previous.model || normalized.effort !== previous.effort)) {
+      const pending = this.notifying.get(threadId);
+      const label = (model: string) => models.find((entry) => entry.model === model)?.displayName || model;
+      this.notifying.set(threadId, { turnId: this.host.getSnapshot().conversations[threadId].activeTurn!,
+        fromModel: pending?.fromModel ?? label(previous.model), toModel: label(normalized.model),
+        modelChanged: Boolean(pending?.modelChanged) || normalized.model !== previous.model });
+    }
     this.entries.set(threadId, { threadId, selection: normalized,
       revision: this.entries.get(threadId)?.revision ?? 0 });
     this.edits.set(threadId, (this.edits.get(threadId) ?? 0) + 1);
@@ -68,7 +102,7 @@ export class ThreadModelSettings {
   }
 
   /** A newly allocated thread keeps the draft's latest choice, separate from future drafts. */
-  created(threadId: string) { this.change(this.selection(null), threadId); }
+  created(threadId: string, selection = this.selection(null)) { this.change(selection, threadId); }
 
   select(threadId: string | null): Promise<void> {
     const pending = this.load(threadId);
@@ -135,7 +169,13 @@ export class ThreadModelSettings {
       this.dirty.delete(threadId);
       try {
         const snapshot = await api.write(threadId, selection);
-        if (!this.dirty.has(threadId)) this.entries.set(threadId, snapshot);
+        if (!this.dirty.has(threadId)) {
+          this.entries.set(threadId, snapshot);
+          if (this.notifying.has(threadId)) {
+            this.host.patch(appendModelChange(this.host.getSnapshot(), snapshot, this.notifying.get(threadId)!));
+            this.notifying.delete(threadId);
+          }
+        }
       } catch (error) {
         if (!this.dirty.has(threadId)) this.dirty.set(threadId, selection);
         throw error;

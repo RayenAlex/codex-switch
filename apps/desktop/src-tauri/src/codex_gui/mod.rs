@@ -8,6 +8,7 @@ pub(crate) mod auto_switch_settings;
 mod client;
 pub(crate) mod clipboard;
 mod computer_use_setup;
+pub(crate) mod context_settings;
 pub(crate) mod deletion;
 mod error;
 pub(crate) mod file_actions;
@@ -16,10 +17,12 @@ mod goals;
 mod home;
 mod icons;
 mod identity;
+pub(crate) mod image_actions;
 mod image_download;
 mod image_preview;
 mod image_thumbnail;
 mod images;
+mod mcp_approval;
 mod message_edit;
 pub(crate) mod model_settings;
 mod platform;
@@ -35,6 +38,7 @@ mod tests;
 mod text_preview;
 pub(crate) mod undo;
 pub(crate) mod usage;
+mod video_stream;
 pub(crate) mod web;
 mod workspaces;
 
@@ -52,6 +56,7 @@ use protocol::{ApprovalReply, GuiEvent, GuiRequest, GuiResponse};
 #[derive(Default)]
 pub(crate) struct GuiState {
     client: Mutex<Option<Arc<Client>>>,
+    videos: Arc<video_stream::VideoStreams>,
 }
 
 async fn prepare_paths(app: AppHandle) -> Result<(PathBuf, PathBuf)> {
@@ -134,8 +139,21 @@ pub(crate) async fn codex_gui_request(
 /// Share request validation and typed failures with background GUI operations.
 async fn execute_request(state: &GuiState, request: GuiRequest) -> Result<GuiResponse> {
     let client = connected(state).await?;
-    if let GuiRequest::TextPreview { thread_id, path } = request {
-        return text_preview::preview(&client, thread_id, path).await;
+    match request {
+        GuiRequest::VideoOpen(options) => {
+            return Arc::clone(&state.videos).open(&client, options).await
+        }
+        GuiRequest::VideoRead(options) => return Arc::clone(&state.videos).read(options).await,
+        GuiRequest::VideoClose(options) => return Arc::clone(&state.videos).close(options).await,
+        _ => {}
+    }
+    if let GuiRequest::TextPreview {
+        thread_id,
+        path,
+        max_bytes,
+    } = request
+    {
+        return text_preview::preview(&client, thread_id, path, max_bytes).await;
     }
     if let GuiRequest::ProjectFiles(options) = request {
         return project_files::list(&client, options).await;
@@ -150,9 +168,16 @@ async fn execute_request(state: &GuiState, request: GuiRequest) -> Result<GuiRes
         thread_id,
         source,
         variant,
+        max_bytes,
     } = request
     {
-        return image_preview::preview(&client, thread_id, source, variant).await;
+        return image_preview::preview(
+            &client,
+            thread_id,
+            source,
+            image_preview::PreviewOptions { variant, max_bytes },
+        )
+        .await;
     }
     let projectless_root = client.projectless_root.clone();
     let response_root = projectless_root.clone();

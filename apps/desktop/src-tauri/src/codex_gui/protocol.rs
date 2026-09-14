@@ -10,6 +10,7 @@ use super::prompt::{
 };
 
 const PAGE_SIZE: u32 = 50;
+const MAX_PAGE_SIZE: u32 = 100;
 
 #[derive(Debug, Deserialize)]
 #[serde(
@@ -18,9 +19,13 @@ const PAGE_SIZE: u32 = 50;
     rename_all_fields = "camelCase"
 )]
 pub(crate) enum GuiRequest {
+    VideoOpen(super::video_stream::VideoOpen),
+    VideoRead(super::video_stream::VideoRead),
+    VideoClose(super::video_stream::VideoClose),
     TextPreview {
         thread_id: String,
         path: String,
+        max_bytes: Option<u64>,
     },
     ProjectFiles(super::project_files::ProjectFilesRequest),
     ProjectDirectories {
@@ -32,6 +37,7 @@ pub(crate) enum GuiRequest {
         source: String,
         #[serde(default)]
         variant: super::image_thumbnail::ImageVariant,
+        max_bytes: Option<u64>,
     },
     Models {
         cursor: Option<String>,
@@ -54,6 +60,7 @@ pub(crate) enum GuiRequest {
         thread_id: String,
     },
     List {
+        limit: Option<u32>,
         cursor: Option<String>,
         archived: bool,
         search: Option<String>,
@@ -191,6 +198,9 @@ impl GuiRequest {
     // Only this closed set of methods is exposed to the WebView.
     pub(super) fn into_rpc(self) -> Result<(&'static str, Value)> {
         match self {
+            Self::VideoOpen(_) | Self::VideoRead(_) | Self::VideoClose(_) => {
+                Err(GuiError::InvalidRequest)
+            }
             Self::ProjectFiles(_) => Err(GuiError::InvalidRequest),
             Self::ProjectDirectories { .. } => Err(GuiError::InvalidRequest),
             Self::TextPreview { .. } => Err(GuiError::InvalidRequest),
@@ -226,13 +236,15 @@ impl GuiRequest {
                 Ok(("model/list", json!({"limit": PAGE_SIZE, "cursor": cursor})))
             }
             Self::List {
+                limit,
                 cursor,
                 archived,
                 search,
             } => Ok((
                 "thread/list",
                 json!({
-                    "limit": PAGE_SIZE, "cursor": cursor, "archived": archived, "searchTerm": search,
+                    "limit": limit.unwrap_or(PAGE_SIZE).clamp(1, MAX_PAGE_SIZE),
+                    "cursor": cursor, "archived": archived, "searchTerm": search,
                     "sortKey": "updated_at", "modelProviders": []
                 }),
             )),
@@ -356,6 +368,9 @@ impl GuiRequest {
 
 pub(super) fn approval_response(event: &GuiEvent, reply: ApprovalReply) -> Result<Value> {
     match event.method.as_str() {
+        super::mcp_approval::METHOD => {
+            super::mcp_approval::response(event, reply.decision.ok_or(GuiError::InvalidRequest)?)
+        }
         "item/commandExecution/requestApproval" | "item/fileChange/requestApproval" => {
             let decision = reply.decision.ok_or(GuiError::InvalidRequest)?;
             if let Some(available) = event.params["availableDecisions"].as_array() {

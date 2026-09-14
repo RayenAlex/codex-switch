@@ -2,7 +2,7 @@ import { forwardRef, useId, useImperativeHandle, useLayoutEffect, useRef, useSta
   type ClipboardEvent, type KeyboardEvent } from "react";
 import type { ComposerText, Skill } from "./types";
 import { insertSkill, readEditor, skillTrigger, writeEditor } from "./skillEditorDom";
-import { composerOptions, type CompactCommand, type ComposerOption } from "./composerOptions";
+import { composerOptions, type CompactCommand, type ComposerOption, type GoalCommand } from "./composerOptions";
 import type { SkillTrigger } from "./skillEditorDom";
 import { useComposerSkills } from "./useComposerSkills";
 import { SkillMenu } from "./SkillMenu";
@@ -24,11 +24,13 @@ function focusEditor(node: HTMLDivElement, saved: Range | null): Range {
 export const SkillInput = forwardRef<SkillInputHandle, {
   value: ComposerText; draftKey: string; cwd: string; active: boolean; connected: boolean; disabled: boolean;
   placeholder: string; onChange: (value: ComposerText) => void;
-  compact: CompactCommand;
+  compact?: CompactCommand;
+  goal?: GoalCommand;
+  editing?: { onCancel: () => void; className: string };
   onPaste: (event: ClipboardEvent<HTMLElement>) => void; onSend: () => void;
   onPasteKeyDown?: (event: KeyboardEvent<HTMLElement>) => void;
 }>(function SkillInput({ value, draftKey, cwd, active, connected, disabled, placeholder,
-  compact, onChange, onPaste, onPasteKeyDown, onSend }, ref) {
+  compact, goal, editing, onChange, onPaste, onPasteKeyDown, onSend }, ref) {
   const editor = useRef<HTMLDivElement>(null);
   const savedCaret = useRef<Range | null>(null);
   const composing = useRef(false);
@@ -38,7 +40,7 @@ export const SkillInput = forwardRef<SkillInputHandle, {
   const open = Boolean(trigger) && active && !disabled;
   const catalog = useComposerSkills({ cwd, active: open, connected });
   const query = trigger?.query.toLocaleLowerCase() ?? "";
-  const options = composerOptions(catalog.skills, query, compact);
+  const options = composerOptions(catalog.skills, query, compact, goal);
   const selectedIndex = Math.min(selected, Math.max(0, options.length - 1));
 
   useLayoutEffect(() => {
@@ -80,7 +82,7 @@ export const SkillInput = forwardRef<SkillInputHandle, {
     else trigger.range.deleteContents();
     change();
     setTrigger(null);
-    if (option.kind === "compact") option.command.run();
+    if (option.kind !== "skill") option.command.run();
   };
   const keyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (disabled || !active) return;
@@ -96,9 +98,12 @@ export const SkillInput = forwardRef<SkillInputHandle, {
       } else if (options[selectedIndex]?.enabled) choose(options[selectedIndex]);
       return;
     }
+    if (event.key === "Escape" && editing) { event.preventDefault(); editing.onCancel(); return; }
     if (event.key !== "Enter") return;
     event.preventDefault();
-    if (event.shiftKey) { document.execCommand("insertLineBreak"); change(); }
+    if (event.shiftKey || (editing && !event.ctrlKey && !event.metaKey)) {
+      document.execCommand("insertLineBreak"); change();
+    }
     else onSend();
   };
   const paste = (event: ClipboardEvent<HTMLDivElement>) => {
@@ -112,11 +117,14 @@ export const SkillInput = forwardRef<SkillInputHandle, {
   };
   return <div className={styles.inputWrap}>
     {open && <SkillMenu id={listId} options={options} selected={selectedIndex}
-      loading={catalog.loading} error={catalog.error} onChoose={choose} />}
-    <div ref={editor} role="textbox" aria-label="消息" aria-multiline="true" aria-disabled={disabled}
+      loading={catalog.loading} error={catalog.error} onChoose={choose} below={Boolean(editing)}
+      skillsOnly={!compact && !goal} />}
+    <div ref={editor} role="textbox" aria-label={editing ? "编辑消息内容" : "消息"}
+      aria-multiline="true" aria-disabled={disabled}
       aria-autocomplete="list" aria-controls={open ? listId : undefined}
       aria-activedescendant={open && options.length ? `${listId}-${selectedIndex}` : undefined}
-      className={styles.editor} contentEditable={!disabled} suppressContentEditableWarning
+      className={`${styles.editor} ${editing?.className ?? ""}`} contentEditable={!disabled}
+      suppressContentEditableWarning
       data-placeholder={placeholder} data-empty={!value.text} onInput={change} onKeyDown={keyDown}
       onKeyUp={(event) => { if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) inspect(); }}
       onClick={inspect} onBlur={() => {

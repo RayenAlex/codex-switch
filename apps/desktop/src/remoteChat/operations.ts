@@ -1,8 +1,10 @@
+import { getChatPolicy, MIB, videoByteLimit } from '../../../../shared/remote-chat/policy';
 import { guiApi } from '../pages/codexGui/api';
 import type { ApprovalReply, GuiEvent, ListResponse, Request, SkillsResponse, Thread } from '../pages/codexGui/types';
 import { object, type RpcRequest, type RpcResponse } from '../../../../shared/remote-chat/protocol';
 import { chunks } from '../../../../shared/remote-chat/framing';
 import { guiComposer } from '../pages/codexGui/composerBridge';
+import { composerThreadId } from '../../../../shared/remote-chat/composer';
 import { guiSidebar } from '../pages/codexGui/sidebarBridge';
 import { historyDelta, parseHistoryVersion } from '../../../../shared/remote-chat/historySync';
 import { RemoteImages } from './images';
@@ -15,8 +17,15 @@ import { readGuiAccounts, selectGuiAccount } from './guiAccounts';
 import { acknowledgedMessages } from './acknowledgedMessages';
 import { chatHandshake, validateChatHandshake } from '../../../../shared/remote-chat/handshake';
 import { guiConnectionError } from '../../../../shared/remote-chat/connectionErrors';
+import { invoke } from '../api/backend';
+import type { UsageSummary } from '../../../../shared/remote-chat/usage';
+import { TOKEN_SUMMARY_OPERATION } from '../../../../shared/remote-chat/tokenSummary';
+import { readTokenSummary } from './tokenSummary';
+import { CONTEXT_READ_OPERATION, CONTEXT_WRITE_OPERATION } from '../../../../shared/remote-chat/contextSettings';
+import { contextSettingsRequest } from './contextSettings';
 
 const OPERATIONS = new Set([
+  'videoOpen', 'videoRead', 'videoClose',
   'projectDirectories',
   'models', 'list', 'read', 'start', 'resume', 'send', 'steer', 'interrupt', 'rename', 'archive', 'unarchive',
   'compact', 'skills', 'projectFiles', 'imagePreview', 'textPreview', 'goalGet', 'goalSet', 'goalClear',
@@ -26,7 +35,11 @@ interface Cached {
   fingerprint: string; result: Promise<RpcResponse>; expires: number; completed: boolean; readOnly: boolean;
 }
 const READ_OPERATIONS = new Set([
+  CONTEXT_READ_OPERATION,
+  TOKEN_SUMMARY_OPERATION,
+  'usageSummary',
   'projectDirectories',
+  'videoOpen', 'videoRead', 'videoClose',
   'textPreview',
   'guiAccountsRead', 'syncHistory', 'imageChunk', 'imagePreview', 'models', 'list', 'read', 'goalGet', 'skills', 'projectFiles', 'queueRead',
 ]);
@@ -66,13 +79,27 @@ export class ChatOperations {
     const readOnly = request.method === 'request' && READ_OPERATIONS.has(operation ?? '');
     const entry: Cached = { fingerprint, result, expires: Date.now() + CACHE_TTL_MS, completed: false, readOnly };
     this.cache.set(request.id, entry);
-    void result.then(() => { entry.completed = true; });
+    void result.then(() => {
+      entry.completed = true;
+      // Video reads are repeatable; retaining their payloads would buffer an entire video in the retry cache.
+      if (operation === 'videoRead') this.cache.delete(request.id);
+    });
     return result;
   }
 
   private async run(request: RpcRequest): Promise<unknown> {
     if (request.method === 'connect') return this.connect(request.body);
-    const body = object(request.body);
+    const body = { ...object(request.body) };
+    if (request.method === 'request'
+      && [CONTEXT_READ_OPERATION, CONTEXT_WRITE_OPERATION].includes(String(body.operation))) {
+      return contextSettingsRequest(body);
+    }
+    if (request.method === 'request' && body.operation === TOKEN_SUMMARY_OPERATION) {
+      return readTokenSummary(body.weeks);
+    }
+    if (request.method === 'request' && body.operation === 'usageSummary') {
+      return invoke<UsageSummary>('codex_gui_usage_summary');
+    }
     if (request.method === 'request' && body.operation === 'guiAccountsRead') return readGuiAccounts();
     if (request.method === 'request' && body.operation === 'guiAccountSelect') return selectGuiAccount(body.selection);
     if (request.method === 'request' && QUEUE_OPERATIONS.has(String(body.operation))) {
@@ -89,10 +116,12 @@ export class ChatOperations {
       const sliced = sliceHistory(acknowledgedMessages.merge(this.liveHistory.merge(thread)), window);
       return { ...historyDelta(this.images.prepare(sliced.thread, thread.id), known), page: sliced.page };
     }
-    if (request.method === 'request' && body.operation === 'composerSet') return guiComposer.update(body.settings);
+    if (request.method === 'request' && body.operation === 'composerSet') {
+      return guiComposer.update(body.settings, composerThreadId(body.threadId));
+    }
     if (request.method === 'request' && body.operation === 'threadRead') return guiSidebar.markRead(body);
     if (request.method === 'request' && body.operation === 'models') {
-      const composer = await guiComposer.read();
+      const composer = await guiComposer.read(composerThreadId(body.threadId));
       return { data: composer.models, nextCursor: null, composer };
     }
     if (request.method === 'respond') {
@@ -104,6 +133,11 @@ export class ChatOperations {
     }
     // The existing typed Rust boundary validates directories, thread ids, inputs and approval replies.
     const sidebarVersion = guiSidebar.version();
+    if (body.operation === 'list') body.limit = getChatPolicy().threadPageSize;
+    if (body.operation === 'textPreview') body.maxBytes = getChatPolicy().filePreviewMaxMb * MIB;
+    if (body.operation === 'videoOpen' || body.operation === 'videoRead') {
+      body.maxBytes = videoByteLimit();
+    }
     const result = await guiApi.request(body as unknown as Request);
     if (body.operation === 'skills') return composerCatalog(result as SkillsResponse, body);
     if (body.operation === 'list') {

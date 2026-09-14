@@ -1,5 +1,5 @@
-import { createContext, useEffect, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Text } from 'react-native';
+import { createContext, useCallback, useEffect, useState, type ReactNode } from 'react';
+import { ActivityIndicator, Keyboard, Text } from 'react-native';
 import type { FileReference } from '../../../../shared/chat/fileReference';
 import type { TextPreview } from '../../../../shared/remote-chat/textPreview';
 import { BottomSheet } from '../components/BottomSheet';
@@ -8,12 +8,16 @@ import { ChatCodeBlock } from './ChatCodeBlock';
 import { fileLanguage } from './ChatCodeHighlight';
 import { styles } from './styles';
 
+import { isVideoPath, type VideoClient } from '../../../../shared/remote-chat/video';
+import { VideoViewer } from './video/VideoViewer';
+
 export const ChatFileContext = createContext<((file: FileReference) => void) | null>(null);
 interface Props {
   threadId: string | null;
   ready: boolean;
   load: (threadId: string, path: string) => Promise<TextPreview>;
   children: ReactNode;
+  videos: VideoClient;
 }
 
 function FilePreview({ file, threadId, ready, load, close }: Omit<Props, 'children'> & {
@@ -27,7 +31,7 @@ function FilePreview({ file, threadId, ready, load, close }: Omit<Props, 'childr
     let cancelled = false;
     setError(''); setResult(undefined);
     void load(threadId, file.path).then((value) => { if (!cancelled) setResult(value); }, () => {
-      if (!cancelled) setError('文件暂时无法读取，请确认文件仍在当前项目中，且为不超过 2 MB 的文本文件。');
+      if (!cancelled) setError('文件暂时无法读取，请确认文件仍在当前项目中，且大小未超过查看上限。');
     });
     return () => { cancelled = true; };
   }, [threadId, ready, load, file.path, attempt]);
@@ -48,8 +52,12 @@ function FilePreview({ file, threadId, ready, load, close }: Omit<Props, 'childr
 
 export function ChatFileProvider({ children, ...options }: Props) {
   const [file, setFile] = useState<FileReference | null>(null);
-  return <ChatFileContext.Provider value={setFile}>
+  const open = useCallback((value: FileReference) => { Keyboard.dismiss(); setFile(value); }, []);
+  return <ChatFileContext.Provider value={open}>
     {children}
-    {file && <FilePreview key={file.path} {...options} file={file} close={() => setFile(null)} />}
+    {file && (isVideoPath(file.path)
+      ? <VideoViewer key={file.path} path={file.path} threadId={options.threadId}
+        ready={options.ready} client={options.videos} close={() => setFile(null)} />
+      : <FilePreview key={file.path} {...options} file={file} close={() => setFile(null)} />)}
   </ChatFileContext.Provider>;
 }
