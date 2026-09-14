@@ -202,14 +202,20 @@ async fn receive_first_frame(client: &mut WebSocket) -> Result<ClientMessage, (u
 pub(super) fn response_create_body(text: &str) -> Result<Value, String> {
     let value: Value = serde_json::from_str(text)
         .map_err(|error| format!("invalid response.create JSON: {error}"))?;
-    if value.get("type").and_then(Value::as_str) != Some("response.create") {
+    let Value::Object(mut payload) = value else {
+        return Err("response.create payload must be an object".to_string());
+    };
+    if payload.get("type").and_then(Value::as_str) != Some("response.create") {
         return Err("first frame must be response.create".to_string());
     }
-    value
-        .get("response")
-        .filter(|response| response.is_object())
-        .cloned()
-        .ok_or_else(|| "response.create must contain a response object".to_string())
+    if let Some(response) = payload.remove("response") {
+        return response
+            .is_object()
+            .then_some(response)
+            .ok_or_else(|| "response.create response must be an object".to_string());
+    }
+    payload.remove("type");
+    Ok(Value::Object(payload))
 }
 
 pub(super) fn websocket_upstream_url(

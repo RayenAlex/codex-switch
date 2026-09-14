@@ -76,8 +76,7 @@ async fn gateway_forwards_codex_websocket_frames_to_provider() {
         tokio_tungstenite::connect_async(format!("ws://{gateway_addr}/v1/responses"))
             .await
             .unwrap();
-    let first =
-        r#"{"type":"response.create","response":{"model":"gpt-5.6-sol","input":"hello"}}"#;
+    let first = r#"{"type":"response.create","model":"gpt-5.6-sol","input":"hello"}"#;
     client
         .send(UpstreamMessage::Text(first.into()))
         .await
@@ -219,6 +218,19 @@ fn response_create_requires_object_payload() {
     );
     assert!(response_create_body(r#"{"type":"response.create","response":[]}"#).is_err());
     assert!(response_create_body(r#"{"type":"response.cancel"}"#).is_err());
+}
+
+#[test]
+fn response_create_accepts_flattened_codex_payload() {
+    let body = response_create_body(
+        r#"{"type":"response.create","model":"gpt-5.6-sol","input":"hello","stream":true}"#,
+    )
+    .unwrap();
+
+    assert_eq!(body["model"], "gpt-5.6-sol");
+    assert_eq!(body["input"], "hello");
+    assert_eq!(body["stream"], true);
+    assert!(body.get("type").is_none());
 }
 
 #[test]
