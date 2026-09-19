@@ -1,7 +1,21 @@
 import { REQUEST_TIMEOUT_MS, type RpcMessage, type RpcRequest } from './protocol';
 import { CONNECTION_ERRORS } from './connectionErrors';
+import { chatMessageCharLimit } from './framing';
+import type { TransferProgress } from './uploadProgress';
+
+const TRANSFER_CHARS_PER_SECOND = 128 * 1024;
+const SMALL_REQUEST_CHARS = 1024 * 1024;
+const MAX_TIMER_MS = 2_147_483_647;
+function requestTimeout(body: unknown) {
+  const operation = (body as { operation?: unknown } | null)?.operation;
+  // The direct size allowance is not a transfer estimate and must not turn a timeout into a multi-day wait.
+  const chars = operation === 'queueEdit' ? chatMessageCharLimit('relay') : (JSON.stringify(body)?.length ?? 0);
+  const transferMs = Math.ceil(Math.max(0, chars - SMALL_REQUEST_CHARS) / TRANSFER_CHARS_PER_SECOND) * 1000;
+  return Math.min(MAX_TIMER_MS, REQUEST_TIMEOUT_MS + transferMs);
+}
 
 interface Pending {
+  progress?: TransferProgress;
   request: RpcRequest;
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
@@ -12,12 +26,12 @@ export class ChatRpc {
   private sequence = 0;
   private readonly pending = new Map<string, Pending>();
   constructor(private readonly options: {
-    send: (message: RpcMessage) => Promise<void>;
+    send: (message: RpcMessage, progress?: TransferProgress) => Promise<void>;
     event: (event: unknown) => void;
     prefix: string;
   }) {}
 
-  request<T>(method: RpcRequest['method'], body?: unknown): Promise<T> {
+  request<T>(method: RpcRequest['method'], body?: unknown, progress?: TransferProgress): Promise<T> {
     if (this.pending.size >= 32) return Promise.reject(new Error('请求较多，请稍后重试。'));
     const id = `${this.options.prefix}:${++this.sequence}`;
     const request: RpcRequest = { kind: 'request', id, method, body };
@@ -26,9 +40,11 @@ export class ChatRpc {
         this.pending.delete(id);
         reject(new Error(method === 'connect' ? CONNECTION_ERRORS.guiTimeout
           : '电脑暂未确认结果，请刷新对话后再试，避免重复发送。'));
-      }, REQUEST_TIMEOUT_MS);
-      this.pending.set(id, { request, resolve: (value) => resolve(value as T), reject, timer });
-      void this.options.send(request).catch((error: unknown) => this.fail(id, error));
+      }, requestTimeout(body));
+      const report: TransferProgress | undefined = progress
+        ? (fraction) => { if (this.pending.has(id)) progress(fraction); } : undefined;
+      this.pending.set(id, { request, resolve: (value) => resolve(value as T), reject, timer, progress: report });
+      void this.options.send(request, report).catch((error: unknown) => this.fail(id, error));
     });
   }
 
@@ -45,8 +61,8 @@ export class ChatRpc {
 
   retry() {
     // Same ids survive a path switch; the PC caches completed and in-flight operations.
-    for (const { request } of this.pending.values()) {
-      void this.options.send(request).catch((error: unknown) => this.fail(request.id, error));
+    for (const { request, progress } of this.pending.values()) {
+      void this.options.send(request, progress).catch((error: unknown) => this.fail(request.id, error));
     }
   }
 

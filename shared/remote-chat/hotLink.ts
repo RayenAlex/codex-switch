@@ -1,7 +1,11 @@
 import { SessionCipher } from './cipher';
 import { ReliableDelivery, deliveryFrame } from './delivery';
-import { Assembler, chunks } from './framing';
+import { Assembler } from './framing';
+import { SendQueue } from './sendQueue';
+import type { TransferProgress } from './uploadProgress';
 import { HotPeer } from './hotPeer';
+import { Acknowledgements } from './acknowledgements';
+import { DirectPackets, directPackets } from './directPackets';
 import type { LinkOptions } from './linkOptions';
 import { MAX_BUFFER_BYTES, type Channel, type ConnectionMode, type RpcMessage, type Signal } from './protocol';
 
@@ -11,18 +15,24 @@ const PROBE_MS = 1000;
 const PATH_TIMEOUT_MS = 3000;
 const DIRECT_STABLE_MS = 3000;
 const OUTAGE_TIMEOUT_MS = 60_000;
-const MAX_QUEUE = 512;
-const SEND_PACE_MS = 8;
 
 /** Both paths stay open. Authenticated acknowledgements cover every fragment, including events. */
 export class HotLink {
   private readonly peer: HotPeer;
   private readonly delivery: ReliableDelivery;
+  private readonly acknowledgements = new Acknowledgements();
   // Reliable ordered fragments have already been acknowledged. Keep them until completion or session close.
   private readonly assembler = new Assembler(false);
   private readonly timer: ReturnType<typeof setInterval>;
   private cipher?: SessionCipher;
   private channel?: Channel;
+  private readonly directPackets = new DirectPackets({
+    send: (payload) => {
+      if (this.channel?.readyState !== 'open') throw new Error('Direct path unavailable');
+      this.channel.send(payload);
+    },
+    failed: () => this.fallback(),
+  });
   private relay = true;
   private closed = false;
   private mode: ConnectionMode = 'connecting';
@@ -34,14 +44,18 @@ export class HotLink {
   private relaySince = Date.now();
   private readonly lastPong = { direct: 0, relay: 0 };
   private readonly probes = new Map<number, { path: Path; at: number }>();
-  private serial = 0;
-  private queued = 0;
-  private outgoing = Promise.resolve();
+  private readonly outgoing = new SendQueue({ capacity: () => this.capacity(),
+    mode: () => this.mode,
+    send: (part, delivered) => this.delivery.enqueue(part, delivered) });
+  private readonly capacityWaiters = new Set<() => void>();
 
   constructor(private readonly options: LinkOptions) {
     this.delivery = new ReliableDelivery({
       send: (frame) => this.selected ? this.transmit(this.selected, frame) : false,
-      accept: (text) => { const message = this.assembler.accept(text); if (message) options.message(message); },
+      accept: (text, mode) => {
+        const message = this.assembler.accept(text, mode);
+        if (message) options.message(message);
+      },
     });
     if (options.publicKey) this.setKey(options.publicKey);
     this.peer = new HotPeer({ ...options,
@@ -52,6 +66,7 @@ export class HotLink {
   }
 
   get resumable() { return !this.closed && Boolean(this.cipher); }
+  get connectionMode() { return this.mode; }
   offer() { return this.peer.offer(); }
 
   private setKey(key: string) {
@@ -74,6 +89,7 @@ export class HotLink {
   private attach(channel: Channel) {
     if (this.closed) { channel.close(); return; }
     const previous = this.channel;
+    this.directPackets.clear();
     this.channel = channel;
     previous?.close();
     this.lastPong.direct = 0;
@@ -86,14 +102,15 @@ export class HotLink {
 
   private transmit(path: Path, frame: object): boolean {
     if (!this.cipher || this.closed) return false;
-    const buffered = path === 'relay' ? this.options.relayBuffered() : this.channel?.bufferedAmount;
+    const buffered = path === 'relay' ? this.options.relayBuffered()
+      : (this.channel?.bufferedAmount ?? MAX_BUFFER_BYTES) + this.directPackets.bufferedAmount;
     if (buffered === undefined || buffered >= MAX_BUFFER_BYTES) return false;
     if (path === 'direct' && this.channel?.readyState !== 'open') return false;
     if (path === 'relay' && !this.relay) return false;
     const payload = this.cipher.encrypt(JSON.stringify(frame));
     try {
       if (path === 'relay') return this.signal({ type: 'relay', payload });
-      this.channel!.send(payload);
+      this.directPackets.send(payload, 'kind' in frame && frame.kind === 'data');
       return true;
     } catch { this.lastPong[path] = 0; return false; }
   }
@@ -101,22 +118,36 @@ export class HotLink {
   private probe(path: Path) {
     const id = ++this.probeId;
     this.probes.set(id, { path, at: Date.now() });
-    if (!this.transmit(path, { kind: 'ping', id })) this.probes.delete(id);
+    if (!this.transmit(path, { kind: 'ping', id, packetBatching: true })) this.probes.delete(id);
   }
 
   receive(payload: string, path: Path = 'relay') {
     if (this.closed || !this.cipher) return;
     try {
-      const text = this.cipher.decrypt(payload);
-      if (text === null) return;
-      const frame = deliveryFrame(text);
-      if (frame.kind === 'close') { this.close(false); return; }
-      if (frame.kind === 'ping') {
-        if (!Number.isSafeInteger(frame.id)) throw new Error('Invalid probe');
-        this.transmit(path, { kind: 'pong', id: frame.id });
-      } else if (frame.kind === 'pong') this.pong(frame.id, path);
-      else this.delivery.accept(frame, (ack) => { this.transmit(path, ack); });
+      const packets = path === 'direct' ? directPackets(payload) : [payload];
+      for (const packet of packets) this.receivePacket(packet, path);
     } catch { this.fail('连接校验失败，请重新连接电脑。'); }
+  }
+
+  private receivePacket(payload: string, path: Path) {
+    if (this.closed || !this.cipher) return;
+    const text = this.cipher.decrypt(payload);
+    if (text === null) return;
+    const frame = deliveryFrame(text);
+    if (frame.kind === 'close') { this.close(false); return; }
+    if (frame.kind === 'ping') {
+      if (!Number.isSafeInteger(frame.id)) throw new Error('Invalid probe');
+      if (path === 'direct' && frame.packetBatching === true) this.directPackets.enable();
+      this.transmit(path, { kind: 'pong', id: frame.id, packetBatching: true });
+    } else if (frame.kind === 'pong') {
+      if (path === 'direct' && frame.packetBatching === true) this.directPackets.enable();
+      this.pong(frame.id, path);
+    } else {
+      this.delivery.accept(frame, (ack) => {
+        this.acknowledgements.schedule(ack, (latest) => { this.transmit(path, latest); });
+      }, path);
+      if (!this.delivery.full) this.releaseCapacity();
+    }
   }
 
   private pong(id: unknown, path: Path) {
@@ -142,6 +173,7 @@ export class HotLink {
     if (direct && (stable || this.selected === 'direct' || !relay)) path = 'direct';
     else if (relay) path = 'relay';
     const changed = path !== this.selected;
+    if (changed) this.directPackets.clear();
     this.selected = path;
     if (path) this.outageSince = Date.now();
     const mode = path ?? 'connecting';
@@ -182,24 +214,20 @@ export class HotLink {
     this.choose();
   }
 
-  send(message: RpcMessage): Promise<void> {
-    if (this.closed || this.queued >= MAX_QUEUE) return Promise.reject(new Error('连接繁忙，请稍后重试。'));
-    this.queued += 1;
-    const id = String(++this.serial);
-    const result = this.outgoing.then(async () => {
-      for (const part of chunks(message, id)) {
-        await this.capacity();
-        this.delivery.enqueue(part);
-        await new Promise<void>((resolve) => setTimeout(resolve, SEND_PACE_MS));
-      }
-    }).finally(() => { this.queued -= 1; });
-    this.outgoing = result.catch(() => undefined);
-    return result;
+  send(message: RpcMessage, progress?: TransferProgress): Promise<void> {
+    return this.outgoing.send(message, progress);
   }
 
   private async capacity() {
-    while (!this.closed && this.delivery.full) await new Promise<void>((resolve) => setTimeout(resolve, TICK_MS));
+    while (!this.closed && this.delivery.full) {
+      await new Promise<void>((resolve) => this.capacityWaiters.add(resolve));
+    }
     if (this.closed) throw new Error('电脑已断开连接。');
+  }
+
+  private releaseCapacity() {
+    for (const resolve of this.capacityWaiters) resolve();
+    this.capacityWaiters.clear();
   }
 
   private fail(message: string) { this.options.error(message); this.close(); }
@@ -208,11 +236,15 @@ export class HotLink {
     if (this.closed) return;
     if (notify) { this.transmit('direct', { kind: 'close' }); this.transmit('relay', { kind: 'close' }); }
     this.closed = true;
+    this.outgoing.close();
+    this.directPackets.clear();
+    this.releaseCapacity();
     clearInterval(this.timer);
     this.peer.close();
     this.channel?.close();
     this.cipher?.destroy();
     this.delivery.clear();
+    this.acknowledgements.clear();
     this.assembler.clear();
     this.probes.clear();
     this.options.mode('offline');

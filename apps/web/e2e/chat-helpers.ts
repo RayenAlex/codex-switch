@@ -24,6 +24,11 @@ export async function navigate(page: Page, label: string) {
   const mobile = (page.viewportSize()?.width ?? 0) <= 860;
   await click(page.locator(mobile ? '.mobile-tabbar' : '.desktop-sidebar nav').getByText(label, { exact: true }));
 }
+export async function openChatList(page: Page) {
+  const toggle = page.getByRole('button', { name: '打开聊天列表', exact: true });
+  if (await toggle.isVisible()) await click(toggle);
+  await expect(page.locator('.chat-drawer, .chat-sidebar')).toBeVisible();
+}
 export async function connect(page: Page) {
   await navigate(page, '聊天');
   await expect(page.getByRole('textbox', { name: '聊天消息' })).toBeVisible();
@@ -39,6 +44,7 @@ export async function settled(page: Page) {
   await expect(page.getByRole('textbox', { name: '聊天消息' })).toHaveValue('');
 }
 export async function openChatSettings(page: Page) {
+  if ((page.viewportSize()?.width ?? 0) > 860) return;
   await page.getByRole('textbox', { name: '聊天消息' }).click();
   const emulateKeyboard = !beforeClick.has(page);
   if (emulateKeyboard) await page.evaluate(() => {
@@ -54,6 +60,7 @@ export async function openChatSettings(page: Page) {
   });
 }
 export async function screenshot(page: Page, info: TestInfo, name: string) {
+  await expect(page.locator('.adm-toast-mask')).toHaveCount(0);
   const path = info.outputPath(`${name}.png`);
   await page.screenshot({ path, animations: 'disabled' });
   await info.attach(name, { path, contentType: 'image/png' });

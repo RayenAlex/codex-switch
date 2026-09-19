@@ -5,7 +5,6 @@ import { ChatApproval } from './ChatApprovals';
 import { ChatAsyncQuestions } from './ChatAsyncQuestions';
 import { ChatComposer } from './ChatComposer';
 import { ChatOverlay } from './ChatOverlay';
-import { ChatQueue } from './ChatQueue';
 import { queueProps } from '../../../../shared/remote-chat/client/queueProps';
 import { ChatMessages } from './ChatMessages';
 import { ChatQuotesProvider } from './ChatQuotes';
@@ -32,7 +31,7 @@ import type { ChatProject } from './types';
 import { compactUnavailableReason } from '../../../../shared/remote-chat/client/composerCommands';
 
 interface Props {
-  session: AuthSession; devices: RemoteDevice[]; active: boolean;
+  session: AuthSession; devices: RemoteDevice[]; devicesLoaded: boolean; active: boolean;
   notification: ChatNotificationTarget | null; notificationError: string;
   notificationHandled: (id: string) => void;
   tokenSummary: boolean; openTokenSummary: () => void; closeTokenSummary: () => void;
@@ -40,7 +39,7 @@ interface Props {
 
 export function ChatPage(props: Props) {
   const { session, active, notification, notificationError, notificationHandled } = props;
-  const devices = useOfflineDevices(session, props.devices);
+  const devices = useOfflineDevices(session, props.devices, props.devicesLoaded);
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const requestedId = notification?.deviceId ?? deviceId;
   const device = requestedId ? devices.find((entry) => entry.deviceId === requestedId)
@@ -151,14 +150,15 @@ function ConnectedChat({ session, device, devices, active: pageActive, chooseDev
       load: controller.imagePreview }}>
       <ChatImagePreviewProvider key={state.selected?.id ?? 'new'}>
       <ChatFileProvider key={state.selected?.id ?? 'new'} threadId={state.selected?.id ?? null}
-        ready={ready} load={controller.textPreview} videos={controller.videos}>
+        ready={ready} load={controller.textPreview} videos={controller.videos} files={controller.files}>
       <ChatMessages key={state.selected?.id ?? 'new'} thread={state.selected} offline={!ready}
         loading={state.historyLoading} loadingMore={state.historyLoadingMore} hasMore={state.historyHasMore}
         loadOlder={() => controller.loadOlder()} />
       </ChatFileProvider>
       </ChatImagePreviewProvider>
     </ChatImageContext.Provider>
-    {runningTurn && <ChatProcessing key={runningTurn.id} turn={runningTurn} active={active && ready} />}
+    {runningTurn && <ChatProcessing key={runningTurn.id} turn={runningTurn}
+      processing={state.processing} active={active && ready && foreground} />}
     {ready && state.approvals.some((event) => event.params.threadId === state.selected?.id) &&
       <ScrollView style={{ maxHeight: 280 }} contentContainerStyle={styles.padded} keyboardShouldPersistTaps="handled">
         {state.approvals.filter((event) => event.params.threadId === state.selected?.id).map((event) =>
@@ -168,9 +168,9 @@ function ConnectedChat({ session, device, devices, active: pageActive, chooseDev
       disabled={!ready || state.sending || state.settingsBusy || state.selectedArchived || state.queueBusy
         || state.compacting === state.selected?.id}
       answer={controller.answerAsyncQuestion} />
-    <ChatQueue {...queueProps(state, controller)} />
-    <ChatComposer threadId={state.selected?.id ?? null} models={state.models} selection={state.settings}
+    <ChatComposer queue={queueProps(state, controller)}
       goals={controller.goals} goal={state.selected ? state.goals?.[state.selected.id] : null} goalBusy={state.goalBusy}
+      threadId={state.selected?.id ?? null} models={state.models} selection={state.settings}
       contextSettings={controller.contextSettings}
       readUsage={controller.readUsage} usageActive={foreground && ready} tokenUsage={state.selected?.tokenUsage}
       loadCatalog={controller.loadComposerCatalog} loadFiles={controller.loadProjectFiles}
@@ -180,6 +180,7 @@ function ConnectedChat({ session, device, devices, active: pageActive, chooseDev
       settingsBusy={state.settingsBusy} settingsError={state.settingsError}
       updateSettings={(settings) => controller.setSettings(settings)}
       active={active} ready={ready} sending={state.sending} running={running}
+      upload={state.upload} reconnecting={state.mode === 'connecting' || state.mode === 'offline'}
       send={(input) => controller.send(input)} interrupted={state.selected?.turns?.at(-1)?.status === 'interrupted'}
       interrupt={() => controller.interrupt()} />
     {pickingDevice && <ChatDevices devices={devices} onClose={() => setPickingDevice(false)}

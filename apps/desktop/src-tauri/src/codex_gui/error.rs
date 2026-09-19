@@ -4,16 +4,18 @@ pub(super) enum GuiError {
     ContextSettings,
     #[error("视频暂时无法读取，请确认文件仍在当前项目中，且格式为 MP4、MOV 或 WebM。")]
     VideoPreview,
-    #[error("视频超过管理员设置的播放大小上限。")]
-    VideoTooLarge,
-    #[error("视频已更改，请重新打开。")]
-    VideoChanged,
-    #[error("视频连接已过期，请重新打开。")]
-    VideoExpired,
-    #[error("正在查看的视频较多，请关闭其他视频后重试。")]
-    VideoBusy,
+    #[error("文件超过当前传输大小上限。")]
+    FileTooLarge,
+    #[error("文件已更改，请重新打开。")]
+    FileChanged,
+    #[error("文件连接已过期，请重新打开。")]
+    FileExpired,
+    #[error("正在传输的文件较多，请稍后重试。")]
+    FileBusy,
     #[error("文件暂时无法读取，请确认文件仍在当前项目中，且大小未超过查看上限。")]
     TextPreview,
+    #[error("文件暂时无法下载，请确认文件仍在当前项目中。")]
+    FileRead,
     #[error("文件暂时无法添加，请确认单个文件不超过 2 MB 后重试。")]
     Attachment,
     #[error("暂时无法读取当前项目文件，请确认项目仍可访问。")]
@@ -40,6 +42,8 @@ pub(super) enum GuiError {
     Timeout,
     #[error("Codex 未能完成操作，请检查当前账户、模型和 Codex 配置。")]
     Rpc,
+    #[error("对话正在准备，请稍后重试。")]
+    ThreadNotReady,
     #[error("Codex 暂时无法启动，请检查 Codex 配置后重试。")]
     Startup,
     #[error("暂时无法访问 GitHub，请检查网络后重试。")]
@@ -50,6 +54,21 @@ pub(super) enum GuiError {
     Install,
     #[error("Codex 正在下载，请稍候。")]
     Installing,
+}
+
+impl GuiError {
+    pub(super) fn from_rpc(error: &serde_json::Value) -> Self {
+        let message = error["message"].as_str().unwrap_or_default();
+        // A first turn can be acknowledged before the CLI flushes its rollout metadata.
+        if message.starts_with("failed to read thread:")
+            && message.contains("rollout at ")
+            && message.ends_with(" is empty")
+        {
+            Self::ThreadNotReady
+        } else {
+            Self::Rpc
+        }
+    }
 }
 
 pub(super) type Result<T> = std::result::Result<T, GuiError>;

@@ -1,11 +1,14 @@
 import { test, expect } from '@playwright/test';
-import { connect, navigate, send, settled, screenshot, state, fixtureUrl, openChatSettings } from './chat-helpers';
+import { openChatList, connect, navigate, send, settled, screenshot, state, fixtureUrl, openChatSettings } from './chat-helpers';
 import { chatJourney } from './chat-journey';
 import { historyJourney } from './chat-history';
 import { attachmentJourney } from './chat-attachments';
 import { imageEditorJourney } from './chat-image-editor';
-import { composerLayout } from './chat-composer';
+import { composerLayout, desktopComposer } from './chat-composer';
 import { projectPickerJourney } from './chat-project-picker';
+import { clipboardJourney } from './chat-clipboard';
+import { backgroundJourney } from './chat-background';
+import { modelPickerJourney } from './chat-model-picker';
 
 test.beforeEach(async ({ page, request }, info) => {
   // Login can open chat immediately; install the network fault before any peer is created.
@@ -23,10 +26,22 @@ test.beforeEach(async ({ page, request }, info) => {
   await page.getByPlaceholder('输入登录密码').fill('local-test');
   await page.getByRole('button', { name: '登录并查看' }).click();
   await expect(page.locator('.app-shell')).toBeVisible();
+  // The shell appears before sign-in finishes loading dashboard data; reloading then cancels login.
+  await expect(page.getByText('欢迎回来', { exact: true })).toBeVisible();
 });
 
 
 test('keeps composer icons below single and multiline drafts', async ({ page }) => composerLayout(page));
+test('uses the PC model picker and keeps the mobile settings unchanged', async ({ page, request }, info) => {
+  test.skip(info.project.name !== 'desktop', 'Desktop model picker interaction');
+  await modelPickerJourney(page, request, info);
+});
+test('uses desktop composer controls and Enter shortcuts while streaming', async ({ page, request }, info) => {
+  test.skip(info.project.name !== 'desktop', 'Desktop composer interaction');
+  await desktopComposer(page, request, info);
+});
+test('pastes text, images and files without replacing the draft',
+  async ({ page, request }) => clipboardJourney(page, request));
 
 test('annotates photos before sending and preserves cancelled edits',
   async ({ page, request }, info) => imageEditorJourney({ page, request, info }));
@@ -56,11 +71,20 @@ for (const [code, message] of [[4004, '电脑的聊天连接尚未就绪。'], [
 test('syncs request speed with the PC and shows a lightning indicator only in fast mode', async ({ page, request }) => {
   await connect(page);
   await expect(page.getByRole('status').filter({ hasText: /P2P|Relay/ })).toBeVisible({ timeout: 16_000 });
+  if (page.viewportSize()!.width > 860) {
+    const speed = page.getByRole('switch', { name: '快速模式' });
+    await speed.click();
+    await expect.poll(async () => (await state(request)).composer.settings.speed).toBe('fast');
+    await expect(speed).toBeChecked();
+    await request.post(`${fixtureUrl}/test/composer`, { data: { speed: 'normal' } });
+    await expect(speed).not.toBeChecked();
+    return;
+  }
   await openChatSettings(page);
   await page.getByRole('button', { name: '设置速度模式', exact: true }).click();
   await page.getByRole('radio', { name: '快速模式', exact: true }).click();
   await expect.poll(async () => (await state(request)).composer.settings.speed).toBe('fast');
-  await page.getByRole('button', { name: '完成', exact: true }).click();
+  await page.getByRole('button', { name: '关闭', exact: true }).last().click();
   await page.getByRole('textbox', { name: '聊天消息' }).focus();
   await page.evaluate(() => {
     // This web composer shows its model control while the keyboard is open.
@@ -69,9 +93,9 @@ test('syncs request speed with the PC and shows a lightning indicator only in fa
     window.visualViewport.dispatchEvent(new Event('resize'));
   });
   const settings = page.getByRole('button', { name: /聊天设置/ });
-  await expect(settings).toContainText('⚡');
+  await expect(settings).toHaveAccessibleName(/快速模式/);
   await request.post(`${fixtureUrl}/test/composer`, { data: { speed: 'normal' } });
-  await expect(settings).not.toContainText('⚡');
+  await expect(settings).not.toHaveAccessibleName(/快速模式/);
   await openChatSettings(page);
   await expect(page.getByRole('button', { name: '设置速度模式', exact: true })).toContainText('普通模式');
 });
@@ -80,6 +104,8 @@ test('syncs PC chats over direct transport, supports actions and reconnects with
   async ({ page, request }, info) => chatJourney({ page, request, info }));
 
 for (const relay of [false, true]) {
+  test(`keeps chat connected across browser tabs and app pages over ${relay ? 'relay' : 'direct'}`,
+    async ({ page, request }) => backgroundJourney(page, request, relay));
   test(`selects a computer folder for a new chat over ${relay ? 'relay' : 'direct'}`,
     async ({ page, request }) => projectPickerJourney({ page, request, relay }));
   test(`sends album photos over ${relay ? 'relay' : 'direct'}`,
@@ -91,10 +117,10 @@ for (const relay of [false, true]) {
 test('keeps the PC chat after login renewal and disconnects on logout', async ({ page, request }) => {
   await connect(page);
   await expect(page.getByRole('status').filter({ hasText: 'P2P' })).toBeVisible({ timeout: 15_000 });
-  await page.getByRole('button', { name: '打开聊天列表' }).click();
+  await openChatList(page);
   await page.getByRole('button', { name: /移动端聊天体验/ }).click();
   await navigate(page, '账号');
-  await expect.poll(async () => (await state(request)).connectedMobiles).toBe(0);
+  await expect.poll(async () => (await state(request)).connectedMobiles).toBe(1);
   let expired = false;
   await page.route('**/auth/me', (route) => {
     if (expired) return route.continue();
@@ -102,6 +128,7 @@ test('keeps the PC chat after login renewal and disconnects on logout', async ({
     return route.fulfill({ status: 401, json: {} });
   });
   const refreshed = page.waitForResponse((response) => response.url().endsWith('/auth/refresh'));
+  await request.post(`${fixtureUrl}/test/disconnect`);
   await navigate(page, '聊天');
   expect((await refreshed).status()).toBe(200);
   await expect(page.getByRole('status').filter({ hasText: 'P2P' })).toBeVisible({ timeout: 15_000 });
@@ -109,8 +136,8 @@ test('keeps the PC chat after login renewal and disconnects on logout', async ({
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('codex-switch.web.session.v1') ?? '{}').accessToken))
     .toBe('renewed-test-token');
   await navigate(page, '设置');
-  await page.locator('.settings-list').getByText('退出登录').click();
   await page.getByRole('button', { name: '退出登录', exact: true }).click();
+  await page.locator('.adm-dialog').getByRole('button', { name: '退出登录', exact: true }).click();
   await expect(page.getByRole('button', { name: '登录并查看' })).toBeVisible();
   await expect.poll(async () => (await state(request)).connectedMobiles).toBe(0);
 });
@@ -126,7 +153,7 @@ test('falls back after direct discovery fails and keeps the composer within a sm
     await connect(page);
     await expect(page.getByRole('status').filter({ hasText: 'Relay' })).toBeVisible({ timeout: 16_000 });
     expect(Date.now() - started).toBeGreaterThanOrEqual(10_000);
-    await page.getByRole('button', { name: '打开聊天列表' }).click();
+    await openChatList(page);
     await page.getByRole('button', { name: /移动端聊天体验/ }).click();
     await send(page, 'encrypted relay from H5');
     await settled(page);

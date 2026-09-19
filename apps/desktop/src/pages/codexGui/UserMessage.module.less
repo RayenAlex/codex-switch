@@ -1,7 +1,16 @@
 .bubble {
-  --message-image-max-width: 96px;
-  --message-image-max-height: 96px;
-  font-size: 14px;
+  font-size: var(--gui-font-size, 14px);
+}
+
+.attachments {
+  --message-image-max-width: 80px;
+  --message-image-max-height: 80px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 8px;
+  > button, > span { margin: 0; }
 }
 
 .editingMessage.editingMessage {
@@ -17,7 +26,7 @@
   .bubble {
     padding: 18px;
     border-radius: 28px;
-    background: var(--edit-background);
+    background: color-mix(in srgb, var(--edit-background) 78%, transparent);
     color: var(--edit-text);
   }
 }
@@ -44,7 +53,8 @@
   }
 }
 
-.editorError { margin: 0; max-width: 400px; color: #b74b2b; font-size: 12px; white-space: normal; }
+.editorError { margin: 0; max-width: 400px; color: #b74b2b; font-size: calc(var(--gui-font-size, 14px) - 2px);
+  white-space: normal; }
 
 .editorActions {
   display: flex;

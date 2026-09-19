@@ -6,6 +6,29 @@ fn request(value: serde_json::Value) -> GuiRequest {
 }
 
 #[test]
+fn p2p_prompts_and_images_bypass_size_caps_but_keep_input_validation() {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let mut image = vec![0; 21 * 1024 * 1024];
+    image[..8].copy_from_slice(b"\x89PNG\r\n\x1a\n");
+    let url = format!("data:image/png;base64,{}", STANDARD.encode(image));
+    for (text, images) in [("x".repeat(300_000), vec![]), (String::new(), vec![url])] {
+        for operation in ["send", "steer"] {
+            let mut body = json!({"operation": operation, "threadId": "thread-1", "turnId": "turn-1",
+                "text": text, "images": images});
+            assert!(request(body.clone()).into_rpc().is_err());
+            body["transferMode"] = json!("direct");
+            assert!(request(body).into_rpc().is_ok());
+        }
+    }
+    assert!(request(
+        json!({"operation": "send", "threadId": "thread-1", "transferMode": "direct",
+        "text": "", "images": ["data:image/png;base64,invalid"]})
+    )
+    .into_rpc()
+    .is_err());
+}
+
+#[test]
 fn only_supported_operations_cross_the_boundary() {
     assert!(serde_json::from_value::<GuiRequest>(
         json!({"operation": "execute", "command": "whoami"})
@@ -46,6 +69,24 @@ fn reads_include_history_and_lists_include_all_providers() {
         .unwrap();
     assert_eq!(params["archived"], true);
     assert_eq!(params["modelProviders"], json!([]));
+}
+
+#[test]
+fn list_page_sizes_are_forwarded_without_an_upper_cap() {
+    for (limit, expected) in [
+        (0_u64, 1_u64),
+        (101, 101),
+        (1000, 1000),
+        (9_007_199_254_740_991, 9_007_199_254_740_991),
+    ] {
+        let (method, params) = request(json!({"operation": "list", "archived": false,
+            "limit": limit, "cursor": "next-page"}))
+        .into_rpc()
+        .unwrap();
+        assert_eq!(method, "thread/list");
+        assert_eq!(params["limit"], expected);
+        assert_eq!(params["cursor"], "next-page");
+    }
 }
 
 #[test]

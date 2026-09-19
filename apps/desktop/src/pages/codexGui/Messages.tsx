@@ -8,7 +8,6 @@ import { useFollowScroll } from "./useFollowScroll";
 import { useMessageWindow } from "./useMessageWindow";
 import { WorkingStatus } from "./WorkingStatus";
 import type { PendingRequest } from "./processing";
-import { SECOND_MS } from "./turnTiming";
 import { useQuoteSelection } from "./useQuoteSelection";
 import { QuoteSelectionButton } from "./QuoteSelectionButton";
 import { selectedQuote } from "./selectedQuote";
@@ -19,20 +18,19 @@ import { FileThreadContext } from "./fileApi";
 import { MessageEditContext } from "./messageEditContext";
 
 export function Messages({ value, selected, active = true, footer, pendingRequest, onQuote,
-  onEdit, editDisabled, editCwd }: {
+  onEdit, editDisabled, editCwd, onFork, forkDisabled }: {
   value?: Conversation; selected: string | null; active?: boolean; footer?: ReactNode;
   pendingRequest?: PendingRequest;
   onQuote?: (quote: ReplyQuote) => boolean;
   onEdit?: EditMessage; editDisabled?: boolean; editCwd?: string;
+  onFork?: (threadId: string, turnId: string) => Promise<boolean>; forkDisabled?: boolean;
 }) {
   const last = lastUserMessage(value);
   const { viewport, content, away, onScroll, jumpToLatest, pauseFollowing } = useFollowScroll(selected, active);
   const history = useMessageWindow({ turns: value?.turns, selected, active, viewport, pauseFollowing });
   const quote = useQuoteSelection({ root: content, selected, enabled: active && Boolean(onQuote) });
-  const turn = value?.turns.find((entry) => entry.id === value.activeTurn);
   const sending = pendingRequest && pendingRequest.threadId === selected && !value?.activeTurn;
   const processing = value?.processing;
-  const startedAtMs = processing?.startedAtMs ?? (turn?.startedAt == null ? undefined : turn.startedAt * SECOND_MS);
   return <MessageEditContext.Provider value={{ cwd: editCwd ?? value?.thread.cwd ?? "", active }}>
     <FileThreadContext.Provider value={selected}>
     <ImageThreadContext.Provider value={selected}><div className={styles.messageArea}>
@@ -62,6 +60,8 @@ export function Messages({ value, selected, active = true, footer, pendingReques
           {history.entries.map(({ turn, items, followsInterruption }) => <TurnMessage
             key={`${selected}:${turn.id}`} turn={turn} visibleItems={items}
             threadId={selected ?? undefined}
+            onFork={onFork && selected ? () => { void onFork(selected, turn.id); } : undefined}
+            forkDisabled={forkDisabled}
             editableItemId={last?.turnId === turn.id ? last.item.id : undefined}
             editDisabled={editDisabled || Boolean(value?.activeTurn || pendingRequest || last?.item.localEcho)}
             onEdit={onEdit && selected && last ? (content) => onEdit({ threadId: selected,
@@ -70,9 +70,8 @@ export function Messages({ value, selected, active = true, footer, pendingReques
             running={value?.activeTurn === turn.id} active={active} />)}
           {value?.error && <p className={styles.turnError} role="status">{value.error}</p>}
           {value?.activeTurn && <WorkingStatus key={`${selected}:${value.activeTurn}`} active={active}
-            phase={processing?.phase ?? "request"} startedAtMs={startedAtMs} />}
-          {sending && <WorkingStatus key={`sending:${selected}`} active={active} phase="sending"
-            startedAtMs={pendingRequest.startedAtMs} />}
+            phase={processing?.phase ?? "request"} />}
+          {sending && <WorkingStatus key={`sending:${selected}`} active={active} phase="sending" />}
         </div>
         <div className={styles.messageFooter}>
           {away && <button type="button" className={styles.jumpToLatest} onClick={jumpToLatest}>

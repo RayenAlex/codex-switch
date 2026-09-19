@@ -1,5 +1,5 @@
 import { expect, type APIRequestContext, type Page, type TestInfo } from '@playwright/test';
-import { connect, fixtureUrl, screenshot, state } from './chat-helpers';
+import { openChatList, connect, fixtureUrl, screenshot, state } from './chat-helpers';
 
 export async function historyJourney({ page, request, info, relay }: {
   page: Page; request: APIRequestContext; info: TestInfo; relay: boolean;
@@ -14,7 +14,7 @@ export async function historyJourney({ page, request, info, relay }: {
     .toBeVisible({ timeout: 16_000 });
   await request.post(`${fixtureUrl}/test/sidebar`, { data: { action: 'history-pages' } });
   await request.post(`${fixtureUrl}/test/history-delay`, { data: { milliseconds: 600 } });
-  await page.getByRole('button', { name: '打开聊天列表' }).click();
+  await openChatList(page);
   await page.getByRole('button', { name: /移动端聊天体验/ }).click();
   const items = page.locator('[data-message-id]');
   await expect(items).toHaveCount(10);
@@ -34,8 +34,9 @@ export async function historyJourney({ page, request, info, relay }: {
   await page.locator('.chat-messages').evaluate((node) => { node.scrollTop = node.scrollHeight; });
   await request.post(`${fixtureUrl}/test/sidebar`, { data: { action: 'start' } });
   await expect(page.getByRole('button', { name: '暂停生成' })).toBeVisible();
-  const processing = page.getByRole('status').filter({ hasText: '正在处理' });
-  await expect(processing).toContainText(/正在处理 · [2-9]秒/, { timeout: 10_000 });
+  const processing = page.locator('.chat-processing-status');
+  await expect(processing).toHaveAttribute('data-processing-phase', 'response');
+  await expect(processing).toContainText(/正在生成回复 · [2-9]秒/, { timeout: 10_000 });
   const response = items.last();
   await expect(response).toContainText('处理中…');
   const firstText = await response.textContent();

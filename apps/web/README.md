@@ -3,6 +3,14 @@
 面向手机浏览器的 Codex Switch Web 客户端，同时提供宽屏桌面布局。移动交互使用
 Ant Design Mobile，桌面增强使用 Ant Design，应用状态由 Redux Toolkit 管理。
 
+## 在线使用
+
+访问 [Codex Web](https://codex.onepiper.cloud/web/)。
+
+使用前，请先安装 [Codex Switch PC 端](https://github.com/piperhex/codex-switch/releases)，
+再打开 **Codex GUI**，按页面提示完成安装。
+保持 PC 端运行并联网，在网页端登录与 PC 端相同的云端账号，即可连接电脑开始使用。
+
 ## 本地运行
 
 先启动后端，再从仓库根目录运行：
@@ -33,6 +41,22 @@ npm run build:backend
 npm run test:chat:e2e -w @codex-switch/web
 ```
 
+## 账号与设置页面回归
+
+账号卡片、分组详情、2FA 搜索与排序、设置和关于页与移动端保持一致，并提供桌面布局。
+账号详情可查看动态验证码和重置卡；2FA 云端同步开关位于设置页。网页版由服务端更新，
+关于页提供当前版本与历史版本入口，不显示手机安装包更新操作。
+
+```bash
+npm run test:management:e2e -w @codex-switch/web
+```
+
+测试使用本机样例账号和设备，不连接真实云端账号。覆盖 320px、390px 和桌面宽度，
+检查详情返回、重置卡确认、验证码复制与排序、设置保存，以及请求未完成时的页面操作。
+报告与截图保存在 `.codex-tmp/web-management-report` 和 `.codex-tmp/web-management-playwright`。
+
+## 浏览器与 Android 聊天验证
+
 浏览器回归在手机尺寸和桌面尺寸下操作实际 H5 页面，连接本机 PC/admin 测试端，
 覆盖直连、加密中转、聊天操作及重连；不请求真实模型。需要本机 Edge，
 其他环境可设置 `CHAT_TEST_BROWSER=chromium` 并安装 Playwright Chromium。
@@ -60,3 +84,12 @@ API 请求保持同源并携带 `Authorization: Bearer <JWT>`；`/sync`、`/devi
 
 如果 Web 使用独立域名并从根路径发布，可在构建容器时设置
 `VITE_WEB_BASE_PATH=/`，并通过 Kong 的 Host 路由将该域名指向 Web 服务。
+
+## 搜索与分享信息
+
+`index.html` 包含页面标题、简介、规范网址、Open Graph / Twitter 分享信息及 `WebApplication`
+结构化数据。分享图使用 `public/codex-switch.png`，复用项目现有的 512px 应用图标。
+
+这些网址默认指向官方站点 `https://codex.onepiper.cloud/web/`。使用自己的域名或部署路径时，
+请在构建前同步修改 `index.html` 中的规范网址、`og:url`、分享图网址及结构化数据中的网址；
+`VITE_WEB_BASE_PATH` 只控制资源路径，不会改写这些绝对网址。

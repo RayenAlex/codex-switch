@@ -21,19 +21,19 @@ it('checks the current limit before starting a web download, including previousl
 
 it('applies changed history page sizes without moving the previously loaded boundary', () => {
   const thread = { id: 'chat', turns: [
-    { id: 'turn', items: Array.from({ length: 20 }, (_, id) => ({ id: `${id}` })) },
+    { id: 'turn', items: Array.from({ length: 500 }, (_, id) => ({ id: `${id}` })) },
   ] } as Thread;
-  setChatPolicy({ ...DEFAULT_CHAT_POLICY, historyPageSize: 3 });
+  setChatPolicy({ ...DEFAULT_CHAT_POLICY, historyPageSize: 150 });
   const first = sliceHistory(thread);
-  expect(first.thread.turns?.[0].items).toHaveLength(3);
-  setChatPolicy({ ...DEFAULT_CHAT_POLICY, historyPageSize: 5 });
+  expect(first.thread.turns?.[0].items).toHaveLength(150);
+  setChatPolicy({ ...DEFAULT_CHAT_POLICY, historyPageSize: 200 });
   const next = sliceHistory(thread, { start: first.page.start, older: true });
-  expect(next.thread.turns?.[0].items).toHaveLength(8);
+  expect(next.thread.turns?.[0].items).toHaveLength(350);
   expect(next.page.hasMore).toBe(true);
 });
 
 it('overrides client-supplied pagination and preview limits and preserves retried request bodies', async () => {
-  setChatPolicy({ ...DEFAULT_CHAT_POLICY, threadPageSize: 7, filePreviewMaxMb: 1 });
+  setChatPolicy({ ...DEFAULT_CHAT_POLICY, threadPageSize: 1000, filePreviewMaxMb: 1 });
   vi.mocked(guiApi.request).mockResolvedValue({ data: [], nextCursor: null });
   const operations = new ChatOperations();
   const request = { kind: 'request' as const, id: 'page', method: 'request' as const,
@@ -41,7 +41,7 @@ it('overrides client-supplied pagination and preview limits and preserves retrie
   await operations.execute(request);
   await operations.execute(request);
   expect(guiApi.request).toHaveBeenCalledTimes(1);
-  expect(guiApi.request).toHaveBeenCalledWith({ ...request.body, limit: 7 });
+  expect(guiApi.request).toHaveBeenCalledWith({ ...request.body, limit: 1000 });
   expect(request.body.limit).toBe(100);
   await operations.execute({ ...request, id: 'preview', body: {
     operation: 'textPreview', threadId: 'chat', path: 'text.txt', maxBytes: 99999999,
@@ -58,6 +58,24 @@ it('compresses actual bytes to the target and reduces dimensions when quality al
   await expect(compressChatImage(async () => ({ value: '', bytes: MIB }))).rejects.toThrow('32 KB');
 });
 
+it.each([100, Number.MAX_SAFE_INTEGER])('forwards larger text preview limits safely: %s MB', async (limit) => {
+  setChatPolicy({ ...DEFAULT_CHAT_POLICY, filePreviewMaxMb: limit });
+  vi.mocked(guiApi.request).mockResolvedValue({ path: 'text.txt', text: 'content' });
+  const result = await new ChatOperations().execute({ kind: 'request', id: 'large-preview', method: 'request',
+    body: { operation: 'textPreview', threadId: 'chat', path: 'text.txt', maxBytes: 1 } });
+  expect(result.error).toBeUndefined();
+  expect(guiApi.request).toHaveBeenCalledWith(expect.objectContaining({
+    maxBytes: Math.min(Number.MAX_SAFE_INTEGER, limit * MIB),
+  }));
+});
+
+it('allows downloads above the old cap and enforces the configured size', () => {
+  setChatPolicy({ ...DEFAULT_CHAT_POLICY, fileDownloadMaxMb: 100 });
+  expect(() => checkDownloadSize(21 * MIB)).not.toThrow();
+  expect(() => checkDownloadSize(100 * MIB)).not.toThrow();
+  expect(() => checkDownloadSize(100 * MIB + 1)).toThrow('100 MB');
+});
+
 it('counts base64 padding accurately and applies new download limits at the time of saving', () => {
   expect(base64Bytes('data:image/png;base64,YQ==')).toBe(1);
   expect(base64Bytes('YWI=')).toBe(2);
@@ -65,6 +83,15 @@ it('counts base64 padding accurately and applies new download limits at the time
   setChatPolicy({ ...DEFAULT_CHAT_POLICY, fileDownloadMaxMb: 1 });
   expect(() => checkDownloadSize(MIB)).not.toThrow();
   expect(() => checkDownloadSize(MIB + 1)).toThrow('1 MB');
+});
+
+it.each(['send', 'steer'])('checks uploads against host settings for direct %s requests', async (operation) => {
+  const body = { operation, threadId: 'chat', turnId: 'turn', text: '', images: [], fileUploadMaxMb: 100,
+    attachments: [{ kind: 'file', name: 'notes.txt', path: '', data: Buffer.alloc(MIB + 1).toString('base64') }] };
+  setChatPolicy({ ...DEFAULT_CHAT_POLICY, fileUploadMaxMb: 1 });
+  const result = await new ChatOperations().execute({ kind: 'request', id: operation, method: 'request', body });
+  expect(result.error).toContain('1 MB');
+  expect(guiApi.request).not.toHaveBeenCalled();
 });
 
 it('compresses large configured targets enough to fit the transport without changing the policy', async () => {

@@ -1,9 +1,10 @@
 import { expect, type Page, type APIRequestContext, type TestInfo } from '@playwright/test';
-import { click, connect, navigate, operationCount, send, settled, screenshot, state, fixtureUrl } from './chat-helpers';
+import { openChatList, click, connect, navigate, operationCount, send, settled, screenshot, state, fixtureUrl } from './chat-helpers';
 import { sidebarJourney } from './chat-sidebar';
 import { existingChatSettings } from './chat-existing-settings';
 import { groupPreviewJourney } from './chat-group-preview';
 import { openChatSettings } from './chat-helpers';
+import { chooseSetting, closeChatSettings, expectComposerSelection, isDesktop } from './chat-settings';
 
 interface Journey { page: Page; request: APIRequestContext; info: TestInfo; transport?: 'direct' | 'either' }
 const ready = (page: Page, transport?: Journey['transport']) => expect(page.getByRole('status')
@@ -15,7 +16,7 @@ async function initialChat({ page, request, info, transport }: Journey) {
   await ready(page, transport);
   await expect(page.getByText('欢迎回来', { exact: true })).toHaveCount(0);
   await screenshot(page, info, '00-new-chat');
-  await click(page.getByRole('button', { name: '打开聊天列表' }));
+  await openChatList(page);
   await expect(page.getByRole('region', { name: '演示项目', exact: true })).toBeVisible();
   await click(page.getByRole('button', { name: /移动端聊天体验/ }));
   await expect(page.getByText('帮我整理今天的工作计划。')).toBeVisible();
@@ -32,7 +33,7 @@ async function settingsAndContinue({ page, request }: Journey) {
   await chooseSetting(page, '模型', '测试模型');
   await chooseSetting(page, '推理强度', '高');
   await chooseSetting(page, '访问权限', '请求批准');
-  await click(page.getByRole('button', { name: '完成', exact: true }));
+  await closeChatSettings(page);
   await send(page, 'slow task');
   await expect(page.getByRole('button', { name: '暂停生成' })).toBeVisible();
   const input = page.getByRole('textbox', { name: '聊天消息' });
@@ -42,13 +43,6 @@ async function settingsAndContinue({ page, request }: Journey) {
   await settled(page);
   expect((await state(request)).operations.filter((entry) => entry.operation === 'send').at(-1))
     .toMatchObject({ text: '请继续完成刚才中断的任务。', model: 'test-model', effort: 'high', access: 'read-only' });
-}
-
-async function chooseSetting(page: Page, label: string, value: string) {
-  await click(page.getByRole('button', { name: `设置${label}`, exact: true }));
-  await click(page.getByRole('radio', { name: value, exact: true }));
-  await expect(page.getByRole('button', { name: `设置${label}`, exact: true })).toBeVisible();
-  await expect(page.getByRole('radio')).toHaveCount(0);
 }
 
 async function approvals({ page, request, info }: Journey) {
@@ -71,12 +65,14 @@ async function approvals({ page, request, info }: Journey) {
 }
 
 async function manageHistory({ page, request }: Journey) {
-  await click(page.getByRole('button', { name: '打开聊天列表', exact: true }));
+  await openChatList(page);
+  await click(page.getByRole('button', { name: '搜索聊天', exact: true }));
   await page.getByRole('textbox', { name: '搜索聊天' }).fill('不存在的任务');
   await click(page.getByRole('button', { name: '搜索', exact: true }));
-  await expect(page.getByText('暂时没有聊天')).toBeVisible();
+  await expect(page.getByText('没有找到相关聊天')).toBeVisible();
   await page.getByRole('textbox', { name: '搜索聊天' }).fill('');
   await click(page.getByRole('button', { name: '搜索', exact: true }));
+  await click(page.getByRole('button', { name: '关闭', exact: true }).last());
   await click(page.getByRole('button', { name: '在 演示项目 中新建对话', exact: true }));
   await expect(page.locator('.chat-header')).toContainText('演示项目');
   await send(page, 'new chat from H5');
@@ -86,7 +82,7 @@ async function manageHistory({ page, request }: Journey) {
   expect((await state(request)).operations.findLast((entry) => entry.operation === 'start'))
     .toMatchObject({ cwd: 'F:/projects/demo' });
   await expect(page.locator('.chat-header').getByRole('button', { name: '归档', exact: true })).toHaveCount(0);
-  await click(page.getByRole('button', { name: '打开聊天列表', exact: true }));
+  await openChatList(page);
   await expect(page.getByRole('region', { name: '演示项目', exact: true })
     .getByRole('button', { name: '手机新聊天', exact: true })).toBeVisible();
   await click(page.getByRole('button', { name: /移动端聊天体验/ }));
@@ -140,17 +136,20 @@ async function synchronizeComposer({ page, request, info }: Journey) {
   } });
   await expect.poll(async () => (await state(request)).composer.settings.model).toBe('second-model');
   await openChatSettings(page);
-  await expect(page.locator('.chat-setting-entry')).toHaveCount(4);
-  await expect(page.getByRole('button', { name: '设置速度模式', exact: true })).toBeVisible();
-  await expect(page.getByRole('radio')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '设置模型' })).toContainText('第二模型');
-  await expect(page.getByRole('button', { name: '设置推理强度' })).toContainText('极高');
-  await screenshot(page, info, '05-settings-menu');
-  await click(page.getByRole('button', { name: '设置模型' }));
-  await expect(page.getByRole('radio', { name: '第二模型', exact: true })).toBeChecked();
-  await screenshot(page, info, '06-model-drawer');
-  await click(page.getByRole('button', { name: '返回上一层' }));
-  await expect(page.getByRole('button', { name: '设置模型' })).toBeVisible();
+  if (isDesktop(page)) await expectComposerSelection(page);
+  else {
+    await expect(page.locator('.chat-setting-entry')).toHaveCount(4);
+    await expect(page.getByRole('button', { name: '设置速度模式', exact: true })).toBeVisible();
+    await expect(page.getByRole('radio')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '设置模型' })).toContainText('第二模型');
+    await expect(page.getByRole('button', { name: '设置推理强度' })).toContainText('极高');
+    await screenshot(page, info, '05-settings-menu');
+    await click(page.getByRole('button', { name: '设置模型' }));
+    await expect(page.getByRole('radio', { name: '第二模型', exact: true })).toBeChecked();
+    await screenshot(page, info, '06-model-drawer');
+    await click(page.getByRole('button', { name: '返回上一层' }));
+    await expect(page.getByRole('button', { name: '设置模型' })).toBeVisible();
+  }
   for (const [label, access] of [['请求批准', 'read-only'], ['帮我批准', 'workspace-write'],
     ['完全访问', 'danger-full-access']]) {
     await chooseSetting(page, '访问权限', label);
@@ -158,7 +157,7 @@ async function synchronizeComposer({ page, request, info }: Journey) {
   }
   await chooseSetting(page, '模型', '测试模型');
   await chooseSetting(page, '推理强度', '高');
-  await click(page.getByRole('button', { name: '完成', exact: true }));
+  await closeChatSettings(page);
   await send(page, 'send with synced settings');
   await settled(page);
   expect((await state(request)).operations.filter((entry) => entry.operation === 'send').at(-1))
@@ -175,10 +174,12 @@ async function recoverConnection({ page, request, info, transport }: Journey) {
   await ready(page, transport);
   await expect.poll(() => operationCount(request, 'syncHistory')).toBeGreaterThan(reads);
   expect(await operationCount(request, 'send')).toBe(sent);
+  const connections = (await state(request)).mobileConnections;
   await navigate(page, '账号');
-  await expect.poll(async () => (await state(request)).connectedMobiles).toBe(0);
+  await expect.poll(async () => (await state(request)).connectedMobiles).toBe(1);
   await navigate(page, '聊天');
   await ready(page, transport);
+  expect((await state(request)).mobileConnections).toBe(connections);
   await expect(page.getByRole('heading', { name: '移动端聊天体验', exact: true })).toBeVisible();
   await request.post(`${fixtureUrl}/test/fallback`);
   await expect(page.getByRole('status').filter({ hasText: 'Relay' })).toBeVisible();

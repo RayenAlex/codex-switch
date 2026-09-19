@@ -1,8 +1,11 @@
+import { copyText } from "../utils/clipboard";
 import { invoke as invokeTauri } from "@tauri-apps/api/core";
+import { hasDirectChatInput } from "../../../../shared/remote-chat/uploadMode";
 import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { exit as exitApp, relaunch } from "@tauri-apps/plugin-process";
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
+import { chooseBrowserAccountFile } from "./browserAccountImport";
 import { isAutoUpdateEnabled } from "./appUpdatePreferences";
 import type { CodexConnectionStatus, CodexConnectResult } from "./codexConnectionTypes";
 import { DEMO_ACCOUNTS, DEMO_INFO } from "../demo";
@@ -106,8 +109,7 @@ export const isHostedWebApp = document
   .querySelector('meta[name="codex-switch-runtime"]')
   ?.getAttribute("content") === "hosted";
 export const hasLocalBackend = isDesktopApp || isHostedWebApp;
-export const canManageCodexConnection = isDesktopApp || (isHostedWebApp
-  && ["localhost", "127.0.0.1", "[::1]", "::1"].includes(window.location.hostname));
+export const canManageCodexConnection = hasLocalBackend;
 
 export async function syncCodexNotification(message: string): Promise<boolean> {
   if (!isDesktopApp) return false;
@@ -188,6 +190,8 @@ export async function invoke<T = void>(command: string, args: Record<string, unk
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
+      ...(command === 'codex_gui_request' && hasDirectChatInput(args.request)
+        ? { "X-Codex-Chat-Transfer": "direct" } : {}),
       ...(apiKey ? { "X-API-Key": apiKey } : {}),
     },
     cache: "no-store",
@@ -1821,8 +1825,20 @@ export async function importCodexThreads(
   return invoke<CodexThreadBundleResult>("unpack_codex_threads", { homeId, importPath, sessionIds });
 }
 
-export function copyWebProxyLanApiKey(): Promise<void> {
+export async function copyWebProxyLanApiKey(): Promise<void> {
+  if (isHostedWebApp) {
+    const secret = await invoke<string>("copy_web_proxy_lan_api_key");
+    return copyText(secret);
+  }
   return invoke<void>("copy_web_proxy_lan_api_key");
+}
+
+export function migrateCodexThreadsToHome(request: {
+  homeId: string;
+  targetHomeId: string;
+  sessionIds: string[];
+}): Promise<CodexThreadMigrationReport> {
+  return invoke<CodexThreadMigrationReport>("migrate_codex_threads_to_home", { request });
 }
 
 export async function migrateCodexThreads(sessionIds: string[], homeId?: string): Promise<CodexThreadMigrationReport> {
@@ -2163,7 +2179,8 @@ export async function loadCloudAuthState(): Promise<CloudAuthState> {
 }
 
 export async function loadSavedCloudLogin(): Promise<SavedCloudLogin | null> {
-  if (!hasLocalBackend) return null;
+  // Saved passwords belong to the desktop credential store, not remote browsers.
+  if (!isDesktopApp) return null;
   return invoke<SavedCloudLogin | null>("get_saved_cloud_login");
 }
 
@@ -2696,7 +2713,17 @@ export async function chooseAndImportAuth(): Promise<ImportAuthResult> {
   return { status: "imported", id };
 }
 
+export async function importAccountJsonText(content: string): Promise<CompatibleJsonImportResult> {
+  if (!hasLocalBackend) return { status: "preview" };
+  const result = await invoke<{ importedIds: string[]; skipped: string[] }>("import_account_json_text", { content });
+  return { status: "imported", ids: result.importedIds, skipped: result.skipped };
+}
+
 export async function chooseAndImportAccountJson(): Promise<CompatibleJsonImportResult> {
+  if (isHostedWebApp) {
+    const content = await chooseBrowserAccountFile();
+    return content === null ? { status: "cancelled" } : importAccountJsonText(content);
+  }
   if (!isDesktopApp) return { status: "preview" };
   const selected = await open({
     multiple: false,

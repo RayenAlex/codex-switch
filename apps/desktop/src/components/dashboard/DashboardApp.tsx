@@ -1608,7 +1608,8 @@ export function DashboardApp() {
 
         {showLogin && <LoginModal onClose={() => setShowLogin(false)} onWebSession={startWebSessionLogin}
           onStart={startLogin}
-          onImport={importAccountJson} onImportClipboard={importAccountJsonFromClipboard} t={t} />}
+          onImport={importAccountJson} onImportClipboard={importAccountJsonFromClipboard}
+          onImportText={manager.importAccountJsonFromClipboard} t={t} />}
         {showMenuSearch && <MenuSearchModal items={menuItems.search} onClose={() => setShowMenuSearch(false)}
           onSelect={(action) => {
             setShowMenuSearch(false);
@@ -1644,7 +1645,8 @@ export function DashboardApp() {
           onDownload={() => void downloadUpdate(availableUpdate, true)}
           onInstall={() => void installUpdate()} downloading={downloadingUpdate}
           downloadRequested={installAfterDownloadRequested} downloaded={updateDownloaded}
-          installing={installingUpdate} progress={updateProgress} error={updateInstallError} t={t} />}
+          checking={appUpdate.checkingBeforeInstall} installing={installingUpdate}
+          progress={updateProgress} error={updateInstallError} t={t} />}
         <ProxySettingsModal open={showProxySettings} proxy={providerManager.localProxy}
           loading={providerManager.proxyBusy || chatGptOperation !== null}
           onClose={() => setShowProxySettings(false)}

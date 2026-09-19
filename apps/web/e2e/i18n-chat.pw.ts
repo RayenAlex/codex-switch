@@ -1,0 +1,52 @@
+import { expect, test } from '@playwright/test';
+import { connect, fixtureUrl, login, navigate, state } from './chat-helpers';
+
+test('switches language while keeping the chat connection, draft and user content', async ({ page, request }, info) => {
+  await request.post(`${fixtureUrl}/test/reset`);
+  await login(page);
+  await connect(page);
+  const connections = (await state(request)).mobileConnections;
+  const draft = '保留这条草稿 / keep this draft';
+  await page.getByRole('textbox', { name: '聊天消息' }).fill(draft);
+  await navigate(page, '设置');
+  await page.getByRole('button', { name: '语言 简体中文' }).click();
+  await page.getByRole('radio', { name: 'English' }).click();
+  await navigate(page, 'Chat');
+  await expect(page.getByRole('textbox', { name: 'Chat message' })).toHaveValue(draft);
+  await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
+  expect((await state(request)).mobileConnections).toBe(connections);
+  if (info.project.name === 'desktop') {
+    await page.getByRole('button', { name: /^Model and reasoning effort:/ }).click();
+    await expect(page.getByRole('slider', { name: 'Reasoning effort' })).toBeVisible();
+    await page.getByRole('button', { name: 'Choose model', exact: true }).click();
+    await expect(page.getByRole('menuitemradio', { name: '测试模型', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: /^Access:/ }).click();
+    await expect(page.getByRole('menuitemradio', { name: /Ask for approval/ })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'View context usage' }).click();
+    const context = page.getByRole('dialog', { name: 'Context window' });
+    await expect(context).toContainText('Select a chat to set its capacity');
+    await expect(context).not.toContainText(/[\p{Script=Han}]/u);
+    await page.keyboard.press('Escape');
+  } else {
+    await page.getByRole('button', { name: /chat settings/ }).click();
+    await expect(page.getByRole('button', { name: 'Set Reasoning effort', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Set Access', exact: true }).click();
+    await expect(page.getByRole('radio', { name: 'Ask for approval', exact: true })).toBeVisible();
+    await expect(page.getByRole('radio', { name: 'Full access', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Go back one level', exact: true }).click();
+    await expect(page.getByRole('group', { name: "Today's usage" })).toBeVisible();
+    await expect(page.getByRole('group', { name: "Today's usage" })).toContainText(/context/i);
+    await expect(page.getByRole('group', { name: "Today's usage" })).not.toContainText(/[\p{Script=Han}]/u);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath('chat-settings-english.png') });
+    await page.getByRole('button', { name: 'Close', exact: true }).last().click();
+  }
+  await navigate(page, 'Settings');
+  await page.getByRole('button', { name: 'Language English' }).click();
+  await page.getByRole('radio', { name: '简体中文' }).click();
+  await navigate(page, '聊天');
+  await expect(page.getByRole('textbox', { name: '聊天消息' })).toHaveValue(draft);
+  expect((await state(request)).mobileConnections).toBe(connections);
+});

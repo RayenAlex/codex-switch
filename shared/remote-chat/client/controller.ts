@@ -2,6 +2,7 @@ import type { ChatConnection, ConnectionEvents } from './connection';
 import type { RemoteComposerCatalog } from '../composerCatalog';
 import type { ProjectFilesRequest, ProjectFilesResponse } from '../projectFiles';
 import { applyChatEvent } from './events';
+import { syncChatProcessing } from './processing';
 import { mergeHistory } from './history';
 import { contentHash, HISTORY_CHANGED } from '../historySync';
 import type { HistoryPage } from '../historyPage';
@@ -11,6 +12,7 @@ import { ImageCache } from './imageCache';
 import { OfflineWriter, type OfflineHistoryStore } from './offline';
 import { offlineImage } from './offlineImages';
 import { validateChatImages } from '../attachments';
+import { hasUpload } from '../uploadProgress';
 import { compactUnavailableReason } from './composerCommands';
 import type { ConnectionMode } from '../protocol';
 import { chatApprovals, chatHandshake } from '../handshake';
@@ -26,6 +28,7 @@ import { createGuiAccountsClient } from './guiAccounts';
 import { createContextSettingsClient } from './contextSettings';
 import type { UsageSummary } from '../usage';
 import { TOKEN_SUMMARY_OPERATION, type ReadTokenSummary } from '../tokenSummary';
+import { decodeTokenSummary, QUOTA_HISTORY_FORMAT, type TokenSummaryResponse } from '../tokenSummaryCodec';
 import { initialChatState, type ApprovalReply, type ChatProject, type ChatState, type GuiEvent,
   type ListResponse, type Request, type SendInput, type SkillsResponse, type Thread } from './types';
 
@@ -85,6 +88,7 @@ export class ChatController {
       // Resuming the coordinator socket must not replace a pending GUI initialization deadline.
       retryAt: (retryAt) => { if (!this.transportConnected) this.update({ retryAt }); },
       event: (event) => this.receive(event as GuiEvent),
+      upload: (upload) => { if (this.state.sending) this.update({ upload }); },
     });
   }
 
@@ -93,7 +97,9 @@ export class ChatController {
   readonly contextSettings = createContextSettingsClient(<T>(body: unknown) =>
     this.connection.request<T>('request', body));
   readTokenSummary: ReadTokenSummary = (weeks) =>
-    this.connection.request('request', { operation: TOKEN_SUMMARY_OPERATION, weeks });
+    this.connection.request<TokenSummaryResponse>('request', {
+      operation: TOKEN_SUMMARY_OPERATION, weeks, quotaHistoryFormat: QUOTA_HISTORY_FORMAT,
+    }).then(decodeTokenSummary);
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => this.listeners.delete(listener); };
   subscribeEvents = (listener: (event: GuiEvent) => void) => {
     this.eventListeners.add(listener);
@@ -107,7 +113,10 @@ export class ChatController {
     }
     for (const listener of this.listeners) listener();
   }
-  private update(patch: Partial<ChatState>) { this.state = { ...this.state, ...patch }; this.emit(); }
+  private update(patch: Partial<ChatState>) {
+    this.state = syncChatProcessing({ ...this.state, ...patch }, this.state);
+    this.emit();
+  }
   private request<T>(body: Request) { return this.connection.request<T>('request', body); }
   private failure(error: unknown) {
     this.update({ error: error instanceof Error ? error.message : '操作未完成，请稍后重试。' });
@@ -301,6 +310,22 @@ export class ChatController {
     finally { this.update({ queueBusy: false }); }
   }
 
+  async takeQueuedMessage(id: string) {
+    const threadId = this.state.selected?.id;
+    if (!threadId || !this.state.ready || this.state.queueBusy || this.state.sending) return;
+    const generation = this.synchronization;
+    this.update({ queueBusy: true, error: '' });
+    try {
+      const result = await this.connection.request<import('../queue').QueueEditResult>('request', {
+        operation: 'queueEdit', threadId, id,
+      });
+      const { draft, ...queue } = result;
+      if (generation === this.synchronization) this.applyQueue(queue);
+      return draft;
+    } catch (error) { this.failure(error); }
+    finally { this.update({ queueBusy: false }); }
+  }
+
   setViewing(viewing: boolean) { this.viewing = viewing; this.markViewed(); }
 
   private markViewed() {
@@ -485,7 +510,8 @@ export class ChatController {
       effort: input.effort ?? this.state.settings.effort, access: input.access };
     const message = { ...input, ...(selection.model ? { model: selection.model } : {}),
       ...(selection.effort ? { effort: selection.effort } : {}) };
-    this.update({ sending: true, error: '' });
+    this.update({ sending: true, error: '',
+      upload: hasUpload(input) ? { phase: 'preparing', percent: 0 } : undefined });
     try {
       let thread = this.state.selected;
       const created = !thread;
@@ -508,7 +534,7 @@ export class ChatController {
       void this.refreshSelected();
       return true;
     } catch (error) { this.failure(error); return false; }
-    finally { this.update({ sending: false }); }
+    finally { this.update({ sending: false, upload: undefined }); }
   }
 
   answerAsyncQuestion = (item: import('./types').Item, answers: string[]) => this.asyncAnswers.submit(item, answers);
@@ -526,6 +552,12 @@ export class ChatController {
     open: (threadId, path) => this.connection.request('request', { operation: 'videoOpen', threadId, path }),
     read: (request) => this.connection.request('request', { operation: 'videoRead', ...request }),
     close: (threadId, id) => this.connection.request('request', { operation: 'videoClose', threadId, id }),
+  };
+
+  files: import('../fileDownload').FileClient = {
+    open: (threadId, path) => this.connection.request('request', { operation: 'fileOpen', threadId, path }),
+    read: (request) => this.connection.request('request', { operation: 'fileRead', ...request }),
+    close: (threadId, id) => this.connection.request('request', { operation: 'fileClose', threadId, id }),
   };
 
   textPreview = (threadId: string, path: string) =>

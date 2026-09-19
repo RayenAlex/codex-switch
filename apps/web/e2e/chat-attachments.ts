@@ -4,7 +4,7 @@ import { connect, send, settled, screenshot, state } from './chat-helpers';
 async function choosePhotos(page: Page, count: number) {
   await page.getByRole('button', { name: '添加内容', exact: true }).click();
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: '相册', exact: true }).click();
+  await page.getByRole('menuitem', { name: '相册', exact: true }).click();
   const picker = await chooser;
   expect(picker.isMultiple()).toBe(true);
   await picker.setFiles(Array.from({ length: count }, () => '../desktop/src-tauri/icons/128x128.png'));
@@ -38,7 +38,8 @@ export async function attachmentJourney({ page, request, info, relay }: {
     .toBe(1);
   const sent = (await state(request)).operations.find((item) => item.operation === 'send')!;
   expect(sent.text).toBe('');
-  expect(sent.images).toEqual([expect.stringMatching(/^data:image\/jpeg;base64,/)]);
+  const imageType = relay ? /^data:image\/jpeg;base64,/ : /^data:image\/png;base64,/;
+  expect(sent.images).toEqual([expect.stringMatching(imageType)]);
 
   await settled(page);
   await send(page, 'slow image conversation');

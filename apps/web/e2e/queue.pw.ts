@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { connect, send, state, fixtureUrl, operationCount } from './chat-helpers';
+import { openChatList, connect, send, state, fixtureUrl, operationCount } from './chat-helpers';
 
 test('queues supplements on the PC, sends one immediately and restores the rest after reconnecting',
   async ({ page, request }) => {
@@ -9,7 +9,9 @@ test('queues supplements on the PC, sends one immediately and restores the rest 
     await page.getByPlaceholder('输入登录密码').fill('local-test');
     await page.getByRole('button', { name: '登录并查看' }).click();
     await connect(page);
-    await page.getByRole('button', { name: '打开聊天列表' }).click();
+    await expect(page.getByRole('status').filter({ hasText: /P2P|Relay/ }))
+      .toBeVisible({ timeout: 20_000 });
+    await openChatList(page);
     await page.getByRole('button', { name: /移动端聊天体验/ }).click();
     await send(page, 'slow queue test');
     await expect(page.getByRole('button', { name: '暂停生成' })).toBeVisible();
@@ -17,6 +19,28 @@ test('queues supplements on the PC, sends one immediately and restores the rest 
     await send(page, '再补充回归测试');
     const queue = page.getByRole('region', { name: '待发送消息', exact: true });
     await expect(queue.getByRole('listitem')).toHaveCount(2);
+    const composerBounds = (await page.locator('.chat-composer').boundingBox())!;
+    const queueBounds = (await queue.boundingBox())!;
+    expect(queueBounds.x).toBeCloseTo(composerBounds.x, 0);
+    expect(queueBounds.width).toBeCloseTo(composerBounds.width, 0);
+    const first = queue.getByRole('listitem').first();
+    await expect(queue.getByRole('button', { name: '上移待发送消息' })).toBeDisabled();
+    await queue.getByRole('button', { name: '下移待发送消息' }).click();
+    await expect(first).toContainText('再补充回归测试');
+    await queue.getByRole('button', { name: '上移待发送消息' }).click();
+    await expect(first).toContainText('先检查边界情况');
+    await page.getByRole('textbox', { name: '聊天消息' }).fill('已有草稿');
+    await expect(queue.getByRole('button', { name: '编辑待发送消息' })).toBeDisabled();
+    await page.getByRole('textbox', { name: '聊天消息' }).fill('');
+    await queue.getByRole('button', { name: '编辑待发送消息' }).click();
+    await expect(page.getByRole('textbox', { name: '聊天消息' })).toHaveValue('先检查边界情况');
+    await expect(queue.getByRole('listitem')).toHaveCount(1);
+    await send(page, '先检查边界情况（已编辑）');
+    await expect(queue.getByRole('listitem')).toHaveCount(2);
+    await queue.getByRole('button', { name: '选择待发送消息：先检查边界情况（已编辑）', exact: true }).click();
+    await queue.getByRole('button', { name: '上移待发送消息' }).click();
+    await expect(first).toContainText('先检查边界情况（已编辑）');
+    await page.screenshot({ path: test.info().outputPath('queue-controls.png') });
     const streamed = await page.locator('.chat-markdown').last().innerText();
     await expect.poll(() => page.locator('.chat-markdown').last().innerText()).not.toBe(streamed);
     expect(await operationCount(request, 'steer')).toBe(0);

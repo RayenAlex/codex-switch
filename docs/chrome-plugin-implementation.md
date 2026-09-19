@@ -6,17 +6,32 @@ The plugin is available in the desktop application's community marketplace for t
 
 ## Installation and use
 
-1. Select the intended Codex Home in the plugin marketplace and install the Chrome browser assistant.
+1. Open the plugin marketplace for the intended Codex Home. The built-in Chrome assistant is prepared automatically.
 2. Follow the setup dialog to load the exported extension through Chrome's normal extension interface.
 3. Confirm that the card reports a connected browser, then send a message using that home.
    Existing GUI conversations reload changed MCP configuration before their next turn.
 4. Accept Chrome's website permissions when installing the extension. All HTTP(S) websites are allowed
    by default. Turn off "Allow all websites" in the popup to use per-site session or remembered grants.
 5. Use the extension popup to pause control, revoke a site's permission, rename the browser profile,
-   or reconnect. The marketplace provides repair, disable and uninstall actions for each home.
+   or reconnect. The card shows connection settings and disable/enable controls together on one row.
+   Explicitly disabled installations remain disabled when the card is reopened or the app is upgraded.
 
 Controlled webpages display a green cursor favicon. Pausing control, revoking access or navigating
 restores the website's icon. Focusing a minimized Chrome window also restores the window.
+Unless the user explicitly requests an already-open page, the browser instructions require opening
+a new background tab in the dedicated Codex group and continuing in task-created tabs. New tabs
+automatically join a group belonging to the requesting home in their window; existing user tabs and
+same-named user groups are left in place. Opening returns the tab, window and group IDs. A grouping
+failure closes only the newly created tab and reports an error. Bringing a page forward requires
+an explicit user request in the browser instructions. This is an agent instruction, not an access
+restriction on existing tabs; users can still request operations on their own open pages.
+The debugger session prepares background input with Chrome's focus emulation without activating a
+tab or bringing a window forward. A selected tab created in a minimized window can have a zero-sized
+viewport; only that session receives temporary viewport dimensions. The window remains minimized.
+Input-driven rendering is allowed to settle before detaching, with a one-second limit so background
+animation callbacks do not leave the tool waiting indefinitely. All overrides end with the session.
+This fixes the case where input commands acknowledged a click but the background page received no
+mouse event. A fresh snapshot is still required to verify the site's actual response.
 GUI conversations support the upstream MCP tool confirmation form with single-use allow/deny choices;
 site access and tool approval remain separate controls. Chrome webpage tasks prefer the Chrome skill,
 which explicitly checks tool availability instead of assuming that an installed skill provides tools.
@@ -25,10 +40,30 @@ The setup button copies `chrome://extensions/` and opens Chrome. Paste into the 
 press Enter to reach extension management. Chrome rejects that internal address in external startup
 arguments, even when the browser process launches successfully. Copy or launch failures remain visible
 inside the setup dialog, and the address is also displayed for manual entry.
+The setup dialog is 680 pixels wide and adapts to narrow windows. Click the extension directory path
+to copy it before selecting the unpacked extension folder in Chrome.
 
-Chrome 125 or newer is required. The extension has not been published to the Chrome Web Store;
-the current setup therefore includes a manual Chrome loading step. Exporting the files alone does
+Chrome 125 or newer is required. The desktop supplies an unpacked extension, so its first-time setup
+includes a manual Chrome loading step. Exporting the files alone does
 not mean the browser extension has been installed. No browser installation policies are changed.
+
+## Desktop upgrades and unpacked extension updates
+
+On application startup, a blocking worker refreshes the exported extension, native-host registration,
+managed MCP configuration and enabled homes' skill instructions. The export directory stays the same.
+Existing credentials and disabled states are preserved; deleted homes and foreign configuration are
+not replaced. This also works without opening the plugin marketplace.
+
+The exporter replaces each changed asset atomically, then publishes `bundle-ready.json` after the
+whole bundle is available. A fingerprint baked into `bundle-version.js` identifies the loaded code,
+including asset changes that do not change the displayed version. Unpacked extensions check at
+startup and once per minute, wait until active browser operations finish, release controlled tabs,
+and call `chrome.runtime.reload()` when the completed bundle differs. Chrome storage preferences
+are retained. Store installations continue to use Chrome Web Store updates and skip this mechanism.
+
+The automatic reload mechanism starts with extension 1.2.1. Existing 1.2.0 and earlier installations
+need one manual reload in Chrome after the first desktop upgrade that supplies this mechanism;
+reinstalling or selecting the extension directory again is unnecessary. Later upgrades reload automatically.
 
 ## Supported operations
 
@@ -74,6 +109,14 @@ webpage content as untrusted, preserve user tabs and respect permission decision
 are masked in accessible snapshots; screenshots can still contain visible page content.
 
 ## Verification
+
+### 2026-09-16 default grouped pages
+
+The skill, MCP initialization instructions and tool descriptions now require new grouped background
+tabs unless the user explicitly requests an already-open page. Extension tests cover default grouping,
+concurrent opens, separate homes/windows, worker restart, closed/moved groups, foreground requests,
+failure cleanup, cancellation, denied website access and preserving an existing page's group.
+These checks use mocked Chrome APIs; this change has not been verified in a live Chrome session.
 
 ### 2026-09-14 extension setup launch regression
 
@@ -158,8 +201,8 @@ connection errors and narrow/wide viewports retained the same outer dimensions w
 
 The tested Windows release replaced the user's installed application and restarted successfully.
 Its SHA-256 is `FD7E3A3A6F9D80E0A0DEE1382696A342884C43FA02A73D564844D1E941B9D34F`.
-The exported extension assets match the committed sources. Browser extension installation/refresh
-remains a user action through Chrome's normal workflow.
+This earlier release required a manual browser refresh. The automatic upgrade behavior described above
+replaces that refresh step once extension 1.2.1 or newer has been loaded.
 
 ## Repeatable checks
 
@@ -169,6 +212,10 @@ cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
 cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test codex_switch_lib_tests
 node --test scripts/chrome-plugin.test.mjs scripts/chrome-plugin-snapshot.test.mjs scripts/chrome-plugin-frames.test.mjs
+node scripts/chrome-plugin-tab-groups.test.mjs
+node scripts/chrome-plugin-tab-indicator.test.mjs
+node --test scripts/chrome-plugin-update.test.mjs
+node --test scripts/chrome-plugin-driver.test.mjs
 cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --bin csw
 node --test scripts/chrome-plugin-protocol.test.mjs
 ```
@@ -178,3 +225,11 @@ library harness and fail before running tests. For a release STDIO check, set `C
 to the release executable and run `node scripts/chrome-plugin-protocol.test.mjs --initialize-only`.
 Release builds intentionally ignore the debug-only `CSW_CHROME_TEST_ROOT` override. The full debug
 protocol fixture uses temporary credentials and a simulated extension without changing Chrome registration.
+
+`node scripts/chrome-plugin-background.e2e.mjs` tests real extension input in an isolated Chrome profile.
+Install a Playwright Chromium build or set `CSW_CHROME_TEST_BROWSER` to a Chrome for Testing executable.
+On Windows the fixture creates its own unfocused window and minimizes it, testing both selected and
+unselected tabs, trusted clicks, animation updates, input, checkboxes, and same/cross-origin frames.
+It asserts that window state and tab selection are unchanged. The harness attaches raw CDP only to
+the extension worker: Playwright page setup would otherwise supply its own focus emulation and hide
+the original bug. The test does not connect to the user's native host or touch existing browser profiles.

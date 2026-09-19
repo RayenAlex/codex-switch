@@ -70,6 +70,21 @@ fn isolated_config(config: &str, target: &Path) -> Result<String> {
     Ok(document.to_string())
 }
 
+/// Naming uses only the GUI model route, without user MCP servers, plugins or project instructions.
+pub(super) fn prepare_title_home(gui_home: &Path) -> Result<PathBuf> {
+    let target = gui_home.join("title-generator");
+    fs::create_dir_all(&target).map_err(|_| GuiError::Startup)?;
+    let mut config = isolated_config("", &target)?
+        .parse::<DocumentMut>()
+        .map_err(|_| GuiError::Startup)?;
+    config["model_providers"][GUI_PROVIDER_ID]["http_headers"]
+        [crate::codex_config::LOCAL_PROXY_REQUEST_PURPOSE_HEADER] =
+        value(crate::codex_config::TITLE_GENERATION_REQUEST_PURPOSE);
+    crate::storage::write_text_if_changed(&target.join("config.toml"), &config.to_string())
+        .map_err(|_| GuiError::Startup)?;
+    Ok(target)
+}
+
 fn configure_gui_proxy(document: &mut DocumentMut) -> Result<()> {
     use toml_edit::{Item, Table};
     document["model_provider"] = value(GUI_PROVIDER_ID);

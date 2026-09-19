@@ -1,4 +1,5 @@
 import { guiApi } from "./api";
+import { canForkConversation } from "./forkConversation";
 import { GuiMessageEditor } from "./editMessage";
 import { GuiGoals } from "./goals";
 import { GuiProjects } from "./projectActions";
@@ -16,6 +17,7 @@ import { restoreProcessing } from "./processing";
 import { trackProcessingApproval } from "./processingApprovals";
 import { initialState, savePreferences } from "./preferences";
 import { ThreadModelSettings } from "./threadModelSettings";
+import { GuiThreadTitles } from "./threadTitles";
 import type { ApprovalReply, GuiEvent, GuiState, ListResponse, Model, Settings, Thread, Turn } from "./types";
 import type { Item, SkillReference } from "./types";
 
@@ -36,6 +38,9 @@ export class GuiController {
   private streamTimer?: ReturnType<typeof setTimeout>;
   private remoteReads = new Map<string, Promise<void>>();
   private remoteTurnEvents = new Map<string, GuiEvent[]>();
+  readonly titles = new GuiThreadTitles({ active: () => !this.disposed, receive: (event) => this.receive(event),
+    currentName: (id) => this.state.conversations[id]?.thread.name
+      ?? this.state.threads.find((thread) => thread.id === id)?.name });
   getSnapshot = () => this.state;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => this.listeners.delete(listener); };
   private patch = (patch: Partial<GuiState>, notify = true) => {
@@ -250,6 +255,31 @@ export class GuiController {
     } catch (error) { if (generation === this.selectionGeneration) this.report(error); }
   };
 
+  forkConversation = async (threadId: string, turnId: string): Promise<boolean> => {
+    const state = this.state;
+    const turn = state.conversations[threadId]?.turns.find((entry) => entry.id === turnId);
+    if (!canForkConversation(state) || state.selected !== threadId || !turn || turn.status === "inProgress") {
+      return false;
+    }
+    const generation = this.selectionGeneration;
+    const { model, effort, access } = state.settings;
+    this.patch({ forking: threadId, error: "" });
+    try {
+      const { thread } = await guiApi.request<{ thread: Thread }>({ operation: "fork", threadId, turnId,
+        access, cwd: state.projectOverrides[threadId] });
+      this.patch({ conversations: { ...this.state.conversations, [thread.id]: conversation(thread) },
+        threads: [thread, ...this.state.threads.filter((entry) => entry.id !== thread.id)] });
+      this.modelSettings.created(thread.id, { model, effort });
+      if (generation === this.selectionGeneration) {
+        this.patch({ archived: false, search: "" });
+        await this.select(thread.id);
+      }
+      void this.refresh();
+      return true;
+    } catch (error) { this.report(error); return false; }
+    finally { this.patch({ forking: undefined }); }
+  };
+
   /** Load the phone's conversation without changing the conversation selected on the PC. */
   loadRemoteThread = (threadId: string): Promise<void> => {
     const pending = this.remoteReads.get(threadId);
@@ -320,6 +350,7 @@ export class GuiController {
         effort: settings.effort || undefined, cwd: projectOverride, access: settings.access });
       // Completion can arrive before the request promise resolves. Never resurrect a completed turn.
       this.acceptTurn(thread.id, turn);
+      void this.titles.generate(thread, text);
       void this.refresh();
       return true;
     } catch (error) { this.report(error); return false; }

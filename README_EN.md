@@ -10,6 +10,15 @@ and mobile companion to manage accounts across devices.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE) [![Release](https://img.shields.io/github/v/release/piperhex/codex-switch)](https://github.com/piperhex/codex-switch/releases)
 
+## Codex Web
+
+Open [Codex Web](https://codex.onepiper.cloud/web/) to connect to your computer and use Codex in your browser.
+
+Before using it, install the [Codex Switch desktop app](https://github.com/piperhex/codex-switch/releases),
+then open **Codex GUI** and follow the installation prompts.
+Keep the desktop app running and your computer online. Sign in to the web app with the same cloud account
+as the desktop app, then connect to your computer to get started.
+
 ## Screenshots
 
 ### Codex GUI coding assistant
@@ -96,7 +105,31 @@ Includes 300+ presets and integrates with [Fei-Away/Codex-Dream-Skin](https://gi
 
 ## Getting started
 
+### Linux packages
+
+Download the Linux x64 `.deb` from [Releases](https://github.com/piperhex/codex-switch/releases).
+Replace the filename below with the downloaded package name:
+
+```bash
+sudo apt update
+sudo apt install "./codex-switch.deb"
+csw
+```
+
+On an Ubuntu server without a desktop, provide a virtual display:
+
+```bash
+sudo apt install xvfb xauth dbus-x11 xdg-utils
+xvfb-run -a dbus-run-session -- csw --headless --port=18080
+```
+
+The web UI listens on `127.0.0.1:18080` by default. Package users do not need Node.js or Rust.
+See the [Linux installation and usage guide (Chinese)](docs/linux.md) for systemd, startup at boot,
+SSH access, LAN listening, proxy keys, backups, and troubleshooting.
+
 ### Prerequisites
+
+These prerequisites are for developing and building from source.
 
 - Node.js 18 or later
 - npm
@@ -150,7 +183,16 @@ csw.exe --headless --port=18080
 
 Open `http://127.0.0.1:18080` after startup. `--headless` requires `--port`, whose valid range is `1-65535`.
 
+Linux uses `csw`; servers without a desktop require the virtual-display command above.
+When LAN access is enabled, the web access key grants full management permissions.
+Model clients use a separate proxy API key.
+
 The **Providers** page manages OpenAI Responses or Chat Completions-compatible endpoints, API keys, models, and model-control policy. Third-party Providers can be used only while the local proxy is running. The proxy listens on `127.0.0.1:15722`, directs Codex to it, and enables hot switching.
+
+To share the model proxy, start it, open **Proxy settings**, click **Add key**, enter a name, and save.
+Leaving the key blank generates one automatically. **Listen on LAN** stays disabled until at least one
+enabled key has been saved. Then enable listening and copy the proxy API key from its row; it is separate
+from the web access key. In the browser, copying writes to the clipboard on the computer viewing the page.
 
 The **Skills** page can browse, search, and install community Skills locally. Publishing or updating a versioned Skill package requires a signed-in cloud account. The **One-click themes** page provides 300+ bundled Dream Skin presets plus custom-background and restore controls.
 
@@ -166,6 +208,7 @@ The custom cloud server setting is hidden by default. Self-hosted users can set
 
 ## More documentation
 
+- [Linux installation and usage (Chinese)](docs/linux.md)
 - [Architecture and data flow](docs/architecture.md)
 - [Development and debugging](docs/development.md)
 - [Contributing guide](CONTRIBUTING.md)

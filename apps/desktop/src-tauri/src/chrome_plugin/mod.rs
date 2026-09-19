@@ -1,7 +1,9 @@
 //! Independent Chrome automation: install lifecycle, native messaging, and STDIO MCP.
+mod automatic;
 pub(crate) mod commands;
 mod config;
 mod extension;
+mod identity;
 mod install;
 mod mcp;
 mod native;
@@ -10,11 +12,13 @@ mod protocol;
 mod registration;
 mod transport;
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Mutex};
+
+pub(crate) use automatic::refresh_on_startup;
+static INSTALL_CHANGES: Mutex<()> = Mutex::new(());
 
 const HOST_NAME: &str = "dev.codex_switch.chrome";
-const EXTENSION_ID: &str = include_str!("../../resources/chrome-extension/extension-id.txt");
-const PLUGIN_VERSION: &str = "1.1.1";
+const PLUGIN_VERSION: &str = "1.2.2";
 const MCP_SERVER: &str = "codex_switch_chrome";
 
 #[derive(Debug, thiserror::Error)]
@@ -36,7 +40,7 @@ enum BrowserError {
     Timeout,
     #[error("浏览器请求无效，请刷新页面后重试。")]
     InvalidRequest,
-    #[error("连接验证失败，请重新安装浏览器插件。")]
+    #[error("连接验证失败，请停用后重新启用浏览器助手。")]
     Unauthorized,
     #[error("当前系统暂不支持浏览器插件。")]
     Unsupported,
@@ -65,11 +69,13 @@ fn bridge_root() -> Result<PathBuf> {
 /// Native Messaging and MCP are separate process modes and never initialize a WebView.
 pub(crate) fn run_helper() -> bool {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
-    let expected_origin = format!("chrome-extension://{}/", EXTENSION_ID.trim());
+    let is_native = args
+        .first()
+        .is_some_and(|arg| identity::is_allowed_origin(arg));
     #[cfg(windows)]
     if args
         .first()
-        .is_some_and(|arg| arg == &expected_origin || arg.starts_with("--chrome-mcp="))
+        .is_some_and(|arg| is_native || arg.starts_with("--chrome-mcp="))
     {
         // STDIO helpers have no message loop and can be blocked waiting for their client.
         if let Err(error) = crate::installer_lifecycle::watch(|| std::process::exit(0)) {
@@ -77,7 +83,7 @@ pub(crate) fn run_helper() -> bool {
             return true;
         }
     }
-    let result = if args.first() == Some(&expected_origin) {
+    let result = if is_native {
         bridge_root().and_then(native::run)
     } else if let Some(client_id) = args
         .first()

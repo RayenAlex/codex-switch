@@ -20,6 +20,7 @@ import { demoGuiAccounts } from './demo-gui-accounts';
 import { demoTokenSummary } from './demo-token-summary';
 import { detailText, seedDemoDetails } from './demo-details';
 import { demoVideoResponse, seedDemoVideo } from './demo-videos';
+import { demoChatParityOperation, seedChatParity, seedAsyncQuestion } from './demo-chat-parity';
 
 const images = new RemoteImages();
 const synchronization: { bytes: number; changedItems: number; text: string }[] = [];
@@ -57,6 +58,8 @@ export function demoResponse(request: RpcRequest, link: ChatLink): unknown {
   if (request.method === 'connect') return [...approvals.values()].map(({ event }) => event);
   const input = (request.body ?? {}) as Record<string, unknown>;
   operations.push({ ...input, method: request.method });
+  if (input.operation === 'usageSummary') return { totalTokens: 123456, estimatedCostUsd: 1.25,
+    primaryRemainingPercent: 75, primaryRemainingAggregated: false, providerEstimatedCost: null };
   if (input.operation === 'tokenSummary') return demoTokenSummary(input);
   if (request.method === 'respond') return respond(input);
   if (input.operation === 'models') return { data: demoComposer().models, nextCursor: null, composer: demoComposer() };
@@ -85,6 +88,8 @@ export function demoResponse(request: RpcRequest, link: ChatLink): unknown {
 }
 
 function threadOperation(thread: Thread, input: Record<string, unknown>, link: ChatLink) {
+  const parity = demoChatParityOperation(thread, input);
+  if (parity) return parity.value;
   if (['videoOpen', 'videoRead', 'videoClose'].includes(String(input.operation))) return demoVideoResponse(input);
   if (input.operation === 'textPreview') return { path: String(input.path), text: detailText };
   if (String(input.operation).startsWith('queue')) return demoQueueRequest(input, queueHost(thread, link));
@@ -179,6 +184,13 @@ function queueHost(thread: Thread, link: ChatLink) {
 
 export function changeDemoSidebar(action: string, link: ChatLink) {
   sidebarLink = link;
+  if (action === 'context-usage') {
+    const tokens = { totalTokens: 14550, inputTokens: 14000, cachedInputTokens: 0,
+      outputTokens: 550, reasoningOutputTokens: 0 };
+    welcome.tokenUsage = { total: tokens, last: tokens, modelContextWindow: 258400 };
+    notify(link, { method: 'thread/tokenUsage/updated',
+      params: { threadId: welcome.id, tokenUsage: welcome.tokenUsage } });
+  }
   if (action === 'group-preview') seedThreadGroups(link);
   if (action === 'history-pages') seedDemoHistory(welcome);
   if (action === 'history-compact') seedDemoCompactHistory(welcome);
@@ -187,6 +199,8 @@ export function changeDemoSidebar(action: string, link: ChatLink) {
   if (action === 'history-footer') seedDemoFooterHistory(welcome);
   if (action === 'message-details') seedDemoDetails(welcome);
   if (action === 'video-preview') seedDemoVideo(welcome);
+  if (action === 'web-parity') seedChatParity(welcome);
+  if (action === 'async-parity') seedAsyncQuestion(welcome);
   if (action === 'start' && welcome.turns?.some((turn) => turn.status === 'inProgress')) {
     throw new Error('Wait for the current demo turn before starting a background turn');
   }

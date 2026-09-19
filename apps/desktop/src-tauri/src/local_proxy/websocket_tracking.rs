@@ -112,7 +112,12 @@ impl WebSocketTurn {
                 self.guard.request_id(),
                 &mut self.capture,
             );
-            record_token_usage_entry(app, &self.usage_context, self.usage.clone(), true);
+            record_token_usage_entry(
+                app,
+                &self.usage_context,
+                self.usage.clone(),
+                LanUsageAccounting::Complete,
+            );
             self.complete = true;
         }
     }

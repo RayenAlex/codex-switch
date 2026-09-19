@@ -1,5 +1,7 @@
 import { SessionCipher } from './cipher';
-import { Assembler, chunks } from './framing';
+import { Assembler } from './framing';
+import { SendQueue } from './sendQueue';
+import type { TransferProgress } from './uploadProgress';
 import {
   DIRECT_TIMEOUT_MS, RELAY_START_GRACE_MS, MAX_BUFFER_BYTES, type Channel, type ConnectionMode,
   type Peer, type RpcMessage, type Signal,
@@ -17,9 +19,15 @@ class LegacyChatLink {
   private mode: ConnectionMode = 'connecting';
   private relay = false;
   private closed = false;
-  private serial = 0;
-  private queued = 0;
-  private outgoing: Promise<void> = Promise.resolve();
+  private readonly outgoing = new SendQueue({ capacity: () => this.waitForCapacity(),
+    mode: () => this.mode,
+    send: (part, delivered) => {
+      if (!this.cipher) throw new Error('正在连接电脑。');
+      const payload = this.cipher.encrypt(part);
+      if (this.relay) this.signal({ type: 'relay', payload });
+      else this.channel!.send(payload);
+      delivered?.();
+    } });
   private readonly startedAt = Date.now();
   private readonly fallbackTimer: ReturnType<typeof setTimeout>;
 
@@ -39,6 +47,8 @@ class LegacyChatLink {
   async offer() {
     try { await this.peer?.offer(); } catch { this.fallback(); }
   }
+
+  get connectionMode() { return this.mode; }
 
   private signal(message: object) {
     if (!this.closed) this.options.signal({ ...message, sessionId: this.options.sessionId });
@@ -106,7 +116,7 @@ class LegacyChatLink {
     try {
       const text = this.cipher.decrypt(payload);
       if (text === null) return;
-      const message = this.assembler.accept(text);
+      const message = this.assembler.accept(text, this.mode);
       if (message) this.options.message(message);
     } catch {
       this.options.error('连接校验失败，请重新连接电脑。');
@@ -114,23 +124,8 @@ class LegacyChatLink {
     }
   }
 
-  send(message: RpcMessage): Promise<void> {
-    if (this.closed || this.queued >= 512) return Promise.reject(new Error('连接繁忙，请重新连接。'));
-    this.queued += 1;
-    const id = String(++this.serial);
-    const result = this.outgoing.then(async () => {
-      for (const part of chunks(message, id)) {
-        await this.waitForCapacity();
-        if (!this.cipher) throw new Error('正在连接电脑。');
-        const payload = this.cipher.encrypt(part);
-        if (this.relay) this.signal({ type: 'relay', payload });
-        else this.channel!.send(payload);
-        // Pace large histories and image payloads; do not monopolize the UI or the gateway.
-        await new Promise<void>((resolve) => setTimeout(resolve, 8));
-      }
-    }).finally(() => { this.queued -= 1; });
-    this.outgoing = result.catch(() => undefined);
-    return result;
+  send(message: RpcMessage, progress?: TransferProgress): Promise<void> {
+    return this.outgoing.send(message, progress);
   }
 
   private async waitForCapacity() {
@@ -148,6 +143,7 @@ class LegacyChatLink {
   close() {
     if (this.closed) return;
     this.closed = true;
+    this.outgoing.close();
     clearTimeout(this.fallbackTimer);
     this.peer?.close();
     this.channel?.close();
@@ -164,12 +160,13 @@ export class ChatLink {
     this.implementation = options.transportVersion === 2 ? new HotLink(options) : new LegacyChatLink(options);
   }
   get resumable() { return this.implementation instanceof HotLink && this.implementation.resumable; }
+  get connectionMode() { return this.implementation.connectionMode; }
   offer() { return this.implementation.offer(); }
   acceptSignal(signal: Signal) { return this.implementation.acceptSignal(signal); }
   enableRelay() { this.implementation.enableRelay(); }
   fallback() { this.implementation.fallback(); }
   receive(payload: string) { this.implementation.receive(payload); }
-  send(message: RpcMessage) { return this.implementation.send(message); }
+  send(message: RpcMessage, progress?: TransferProgress) { return this.implementation.send(message, progress); }
   setRelayAvailable(available: boolean) {
     if (this.implementation instanceof HotLink) this.implementation.setRelayAvailable(available);
     else if (!available) this.implementation.close();

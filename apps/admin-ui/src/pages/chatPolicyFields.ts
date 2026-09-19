@@ -1,8 +1,16 @@
-import type { ChatPolicy } from '../../../../shared/remote-chat/policy';
+import { CHAT_POLICY_FIELDS } from '../../../../shared/remote-chat/policy';
 type Copy = [string, string];
-export interface PolicyField { key: keyof ChatPolicy; label: Copy; hint: Copy; unit: Copy }
+export interface PolicyField { key: keyof typeof CHAT_POLICY_FIELDS; label: Copy; hint: Copy; unit: Copy }
 export interface PolicySection { key: string; title: Copy; hint: Copy; fields: PolicyField[] }
 export const POLICY_SECTIONS: PolicySection[] = [
+  { key: 'relay', title: ['Relay 传输', 'Relay transfer'],
+    hint: ['默认不限。填 -1 表示不限，填正整数可设置每个连接的上限。',
+      'Unlimited by default. Enter -1 for no limit, or a positive whole number for each connection.'], fields: [
+    { key: 'relayMaxMbPerSecond', label: ['每秒传输量上限', 'Transfer limit per second'],
+      hint: ['-1 表示不限', '-1 means unlimited'], unit: ['MiB/秒', 'MiB/s'] },
+    { key: 'relayMaxFramesPerSecond', label: ['每秒帧数上限', 'Frames per second limit'],
+      hint: ['-1 表示不限', '-1 means unlimited'], unit: ['帧/秒', 'frames/s'] },
+  ] },
   { key: 'images', title: ['图片', 'Images'], hint: ['分别设置添加、查看和压缩图片的限制，数值不设上限。',
     'Set image upload, viewing and compression limits. Values have no upper cap.'], fields: [
     { key: 'imageSourceMaxMb', label: ['添加图片上限', 'Image upload limit'],
@@ -19,18 +27,25 @@ export const POLICY_SECTIONS: PolicySection[] = [
     { key: 'videoPreviewMaxMb', label: ['视频播放上限', 'Video playback limit'],
       hint: ['允许播放的最大视频文件大小', 'Maximum video file size for playback'], unit: ['MB', 'MB'] },
   ] },
-  { key: 'history', title: ['聊天记录', 'Chat history'], hint: ['调整每次加载的内容数量。',
-    'Choose how much content to load at a time.'], fields: [
+  { key: 'history', title: ['聊天记录', 'Chat history'], hint: ['调整每次加载的数量，数值不设上限。',
+    'Choose how many items to load at a time, with no upper limit.'], fields: [
     { key: 'threadPageSize', label: ['会话数量', 'Conversations per page'],
-      hint: ['每次加载 1–100 个会话', 'Load 1–100 conversations at a time'], unit: ['个', 'items'] },
+      hint: ['每次加载的会话数，至少 1 个', 'Conversations to load at a time; at least 1'], unit: ['个', 'items'] },
     { key: 'historyPageSize', label: ['历史消息数量', 'History messages per page'],
-      hint: ['每次加载 1–100 条历史消息', 'Load 1–100 older messages at a time'], unit: ['条', 'items'] },
+      hint: ['每次加载的历史消息数，至少 1 条', 'Older messages to load at a time; at least 1'], unit: ['条', 'items'] },
   ] },
-  { key: 'files', title: ['文件', 'Files'], hint: ['设置文本预览和文件下载的大小限制。',
-    'Set size limits for text previews and downloads.'], fields: [
+  { key: 'files', title: ['文件', 'Files'], hint: ['设置文件上传、文本预览和下载的大小限制。',
+    'Set size limits for file uploads, text previews and downloads.'], fields: [
+    { key: 'fileUploadMaxMb', label: ['单个文件上传上限', 'File upload limit'],
+      hint: ['从手机添加文件时，单个文件不能超过此大小', 'Maximum size of each file added from a phone'],
+      unit: ['MB', 'MB'] },
+    { key: 'fileUploadTotalMaxMb', label: ['文件合计上传上限', 'Total file upload limit'],
+      hint: ['每次发送的文件合计大小，包括一起发送的待发消息',
+        'Maximum combined file size per send, including queued messages sent together'],
+      unit: ['MB', 'MB'] },
     { key: 'filePreviewMaxMb', label: ['文本查看上限', 'Text preview limit'],
-      hint: ['支持 1–2 MB 的文本文件', 'Allow text files up to 1–2 MB'], unit: ['MB', 'MB'] },
+      hint: ['允许查看的最大文本文件大小', 'Maximum text file size for preview'], unit: ['MB', 'MB'] },
     { key: 'fileDownloadMaxMb', label: ['文件下载上限', 'File download limit'],
-      hint: ['支持设置为 1–20 MB', 'Choose a limit from 1–20 MB'], unit: ['MB', 'MB'] },
+      hint: ['允许下载的最大文件大小', 'Maximum file size for download'], unit: ['MB', 'MB'] },
   ] },
 ];

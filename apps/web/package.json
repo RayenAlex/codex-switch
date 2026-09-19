@@ -9,6 +9,7 @@
     "build": "vite build",
     "check": "tsc --noEmit -p tsconfig.json && npm run build",
     "preview": "vite preview",
+    "test:management:e2e": "playwright test --config playwright.management.config.ts",
     "test:chat:e2e": "playwright test --config playwright.chat.config.ts",
     "test:chat:android": "playwright test --config playwright.android.config.ts"
   },
@@ -19,6 +20,7 @@
     "@reduxjs/toolkit": "^2.8.2",
     "antd": "^5.29.3",
     "antd-mobile": "^5.41.1",
+    "lowlight": "^3.3.0",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

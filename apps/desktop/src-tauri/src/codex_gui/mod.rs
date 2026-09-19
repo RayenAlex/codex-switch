@@ -1,5 +1,6 @@
 mod access;
 pub(crate) mod account_selection;
+pub(crate) mod attachment_preview;
 #[cfg(test)]
 mod attachment_tests;
 mod attachment_uploads;
@@ -12,6 +13,9 @@ pub(crate) mod context_settings;
 pub(crate) mod deletion;
 mod error;
 pub(crate) mod file_actions;
+mod file_stream;
+#[cfg(test)]
+mod fork_tests;
 pub(crate) mod git;
 mod goals;
 mod home;
@@ -36,9 +40,12 @@ pub(crate) mod scheduled_tasks;
 #[cfg(test)]
 mod tests;
 mod text_preview;
+mod title_generation;
+mod title_read;
+mod title_worker;
 pub(crate) mod undo;
+pub(crate) mod upload_policy;
 pub(crate) mod usage;
-mod video_stream;
 pub(crate) mod web;
 mod workspaces;
 
@@ -55,8 +62,17 @@ use protocol::{ApprovalReply, GuiEvent, GuiRequest, GuiResponse};
 
 #[derive(Default)]
 pub(crate) struct GuiState {
+    pub(crate) upload_policy: Arc<upload_policy::UploadPolicyStore>,
     client: Mutex<Option<Arc<Client>>>,
-    videos: Arc<video_stream::VideoStreams>,
+    videos: Arc<file_stream::FileStreams>,
+    downloads: DownloadStreams,
+}
+
+struct DownloadStreams(Arc<file_stream::FileStreams>);
+impl Default for DownloadStreams {
+    fn default() -> Self {
+        Self(Arc::new(file_stream::FileStreams::downloads()))
+    }
 }
 
 async fn prepare_paths(app: AppHandle) -> Result<(PathBuf, PathBuf)> {
@@ -140,6 +156,14 @@ pub(crate) async fn codex_gui_request(
 async fn execute_request(state: &GuiState, request: GuiRequest) -> Result<GuiResponse> {
     let client = connected(state).await?;
     match request {
+        GuiRequest::GenerateTitle(options) => return client.generate_title(options).await,
+        GuiRequest::FileOpen(options) => {
+            return Arc::clone(&state.downloads.0).open(&client, options).await
+        }
+        GuiRequest::FileRead(options) => return Arc::clone(&state.downloads.0).read(options).await,
+        GuiRequest::FileClose(options) => {
+            return Arc::clone(&state.downloads.0).close(options).await
+        }
         GuiRequest::VideoOpen(options) => {
             return Arc::clone(&state.videos).open(&client, options).await
         }
@@ -181,9 +205,16 @@ async fn execute_request(state: &GuiState, request: GuiRequest) -> Result<GuiRes
     }
     let projectless_root = client.projectless_root.clone();
     let response_root = projectless_root.clone();
+    let upload_policy = Arc::clone(&state.upload_policy);
     let (method, params) = tauri::async_runtime::spawn_blocking(move || {
         let mut request = request;
-        workspaces::prepare_request(&mut request, &projectless_root)?;
+        workspaces::prepare_request_with_upload_policy(
+            &mut request,
+            &projectless_root,
+            upload_policy
+                .snapshot()
+                .map_err(|_| GuiError::InvalidRequest)?,
+        )?;
         request.into_rpc()
     })
     .await

@@ -1,5 +1,9 @@
 fn dispatch_command(app: AppHandle, command: &str, args: Value) -> Result<Value, String> {
     match command {
+        "import_account_json_text" => serialize(block_on(crate::commands::import_account_json_text(
+            app,
+            argument(&args, "content")?,
+        ))),
         "list_error_logs" => serialize(block_on(crate::error_logs::list_error_logs(
             argument(&args, "limit")?,
             argument(&args, "beforeId")?,
@@ -84,7 +88,10 @@ fn dispatch_command(app: AppHandle, command: &str, args: Value) -> Result<Value,
         "set_web_proxy_listen_on_all_interfaces" => serialize(block_on(
             set_web_proxy_listen_on_all_interfaces(app, argument(&args, "enabled")?),
         )),
-        "copy_web_proxy_lan_api_key" => serialize(block_on(copy_web_proxy_lan_api_key(app))),
+        "copy_web_proxy_lan_api_key" => serialize(
+            stored_web_lan_api_key(&app)?
+                .ok_or_else(|| "LAN access key is not available".to_string()),
+        ),
         "set_network_proxy" => serialize(block_on(crate::network_proxy::set_network_proxy(
             app,
             argument(&args, "settings")?,
@@ -309,6 +316,9 @@ fn dispatch_command(app: AppHandle, command: &str, args: Value) -> Result<Value,
                 argument(&args, "sessionIds")?,
             ))
         }
+        "migrate_codex_threads_to_home" => serialize(block_on(
+            crate::conversation_hub::migrate_codex_threads_to_home(app, argument(&args, "request")?),
+        )),
         "migrate_codex_threads" => serialize(
             crate::conversation_hub::migrate_codex_threads_blocking(
                 crate::conversation_hub::ThreadContext::new(app, argument(&args, "homeId")?)?,

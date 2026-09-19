@@ -1,7 +1,7 @@
-import { ActivityIndicator, Pressable, Text, TextInput } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BottomSheet } from '../components/BottomSheet';
 import { SheetScrollView } from '../components/SheetScrollView';
-import type { ContextSettingsApi } from '../../../../shared/remote-chat/contextSettings';
+import { CONTEXT_CAPACITY_PRESETS_K, type ContextSettingsApi } from '../../../../shared/remote-chat/contextSettings';
 import { useContextSettings } from '../../../../shared/remote-chat/client/useContextSettings';
 import { styles } from './styles';
 
@@ -18,15 +18,26 @@ export function ChatContextSettings({ threadId, api, onClose }: {
         disabled: editor.loading || !editor.loaded },
     ]}>
     <SheetScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.settings}>
-      <Text style={styles.subtitle}>仅用于当前对话。保存后，请在电脑上重新连接 Codex。</Text>
+      <Text style={styles.subtitle}>仅用于当前对话。保存后立即应用；正在回复时会先暂停，修改后自动继续。</Text>
       {editor.loading && <ActivityIndicator accessibilityLabel="正在读取上下文设置" />}
       {editor.loaded && <>
         <Text style={styles.title}>上下文容量（K Token）</Text>
         <TextInput accessibilityLabel="上下文容量（K Token）" keyboardType="decimal-pad"
           value={editor.value} onChangeText={editor.setValue} editable={!editor.saving}
-          placeholder="使用默认容量" style={[styles.input, styles.questionInput]}
+          placeholder="选择或输入容量" style={[styles.input, styles.questionInput]}
           onSubmitEditing={() => { void save(); }} />
+        <View style={presetStyles.options}>
+          {CONTEXT_CAPACITY_PRESETS_K.map((capacity) => <Pressable key={capacity}
+            accessibilityRole="button" accessibilityLabel={`${capacity}K`} disabled={editor.saving}
+            accessibilityState={{ selected: Number(editor.value) === capacity, disabled: editor.saving }}
+            style={[styles.choice, presetStyles.option, Number(editor.value) === capacity && styles.chosen,
+              editor.saving && styles.disabled]}
+            onPress={() => editor.setValue(String(capacity))}>
+            <Text style={styles.buttonText}>{capacity}K</Text>
+          </Pressable>)}
+        </View>
         <Text style={styles.subtitle}>1 K = 1000 Token；留空使用默认容量。</Text>
+        <Text style={styles.subtitle}>用量会在收到回复后更新。程序会预留部分空间，显示的可用容量可能略小。</Text>
         <Pressable accessibilityRole="button" accessibilityLabel="恢复默认" disabled={editor.saving}
           accessibilityState={{ disabled: editor.saving }} style={styles.button} onPress={() => editor.setValue('')}>
           <Text style={styles.buttonText}>恢复默认</Text>
@@ -38,3 +49,8 @@ export function ChatContextSettings({ threadId, api, onClose }: {
     </SheetScrollView>
   </BottomSheet>;
 }
+
+const presetStyles = StyleSheet.create({
+  options: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  option: { minHeight: 44, justifyContent: 'center' },
+});

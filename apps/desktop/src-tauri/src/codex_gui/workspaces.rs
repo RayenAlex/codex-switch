@@ -27,6 +27,14 @@ pub(super) fn prepare_root(app: &AppHandle) -> Result<PathBuf> {
 }
 
 pub(super) fn prepare_request(request: &mut GuiRequest, root: &Path) -> Result<()> {
+    prepare_request_with_upload_policy(request, root, super::upload_policy::UploadLimits::default())
+}
+
+pub(super) fn prepare_request_with_upload_policy(
+    request: &mut GuiRequest,
+    root: &Path,
+    limits: super::upload_policy::UploadLimits,
+) -> Result<()> {
     match request {
         GuiRequest::Skills { cwd } if cwd.as_ref().is_none_or(|value| value.trim().is_empty()) => {
             *cwd = Some(execution_path(root));
@@ -35,6 +43,11 @@ pub(super) fn prepare_request(request: &mut GuiRequest, root: &Path) -> Result<(
             *cwd = Some(resolve_directory(cwd.as_deref(), root, None)?)
         }
         GuiRequest::Resume {
+            cwd: Some(cwd),
+            thread_id,
+            ..
+        }
+        | GuiRequest::Fork {
             cwd: Some(cwd),
             thread_id,
             ..
@@ -48,7 +61,7 @@ pub(super) fn prepare_request(request: &mut GuiRequest, root: &Path) -> Result<(
         }
         _ => {}
     }
-    super::attachment_uploads::prepare_request(request, root)
+    super::attachment_uploads::prepare_request(request, root, limits)
 }
 
 fn resolve_directory(cwd: Option<&str>, root: &Path, thread_id: Option<&str>) -> Result<String> {

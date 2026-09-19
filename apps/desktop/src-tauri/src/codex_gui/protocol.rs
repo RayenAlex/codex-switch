@@ -9,8 +9,7 @@ use super::prompt::{
     batch_params, send_params, AttachmentInput, PromptInput, SkillInput, TurnOptions,
 };
 
-const PAGE_SIZE: u32 = 50;
-const MAX_PAGE_SIZE: u32 = 100;
+const PAGE_SIZE: u64 = 50;
 
 #[derive(Debug, Deserialize)]
 #[serde(
@@ -19,9 +18,13 @@ const MAX_PAGE_SIZE: u32 = 100;
     rename_all_fields = "camelCase"
 )]
 pub(crate) enum GuiRequest {
-    VideoOpen(super::video_stream::VideoOpen),
-    VideoRead(super::video_stream::VideoRead),
-    VideoClose(super::video_stream::VideoClose),
+    GenerateTitle(super::title_generation::TitleRequest),
+    FileOpen(super::file_stream::StreamOpen),
+    FileRead(super::file_stream::StreamRead),
+    FileClose(super::file_stream::StreamClose),
+    VideoOpen(super::file_stream::StreamOpen),
+    VideoRead(super::file_stream::StreamRead),
+    VideoClose(super::file_stream::StreamClose),
     TextPreview {
         thread_id: String,
         path: String,
@@ -60,7 +63,7 @@ pub(crate) enum GuiRequest {
         thread_id: String,
     },
     List {
-        limit: Option<u32>,
+        limit: Option<u64>,
         cursor: Option<String>,
         archived: bool,
         search: Option<String>,
@@ -81,7 +84,15 @@ pub(crate) enum GuiRequest {
         access: AccessMode,
         cwd: Option<String>,
     },
+    Fork {
+        thread_id: String,
+        turn_id: String,
+        access: AccessMode,
+        cwd: Option<String>,
+    },
     Send {
+        #[serde(default)]
+        transfer_mode: super::upload_policy::TransferMode,
         thread_id: String,
         access: Option<AccessMode>,
         text: String,
@@ -99,6 +110,8 @@ pub(crate) enum GuiRequest {
         turn_id: String,
     },
     Steer {
+        #[serde(default)]
+        transfer_mode: super::upload_policy::TransferMode,
         thread_id: String,
         turn_id: String,
         text: String,
@@ -198,9 +211,13 @@ impl GuiRequest {
     // Only this closed set of methods is exposed to the WebView.
     pub(super) fn into_rpc(self) -> Result<(&'static str, Value)> {
         match self {
-            Self::VideoOpen(_) | Self::VideoRead(_) | Self::VideoClose(_) => {
-                Err(GuiError::InvalidRequest)
-            }
+            Self::GenerateTitle(_) => Err(GuiError::InvalidRequest),
+            Self::VideoOpen(_)
+            | Self::VideoRead(_)
+            | Self::VideoClose(_)
+            | Self::FileOpen(_)
+            | Self::FileRead(_)
+            | Self::FileClose(_) => Err(GuiError::InvalidRequest),
             Self::ProjectFiles(_) => Err(GuiError::InvalidRequest),
             Self::ProjectDirectories { .. } => Err(GuiError::InvalidRequest),
             Self::TextPreview { .. } => Err(GuiError::InvalidRequest),
@@ -243,7 +260,7 @@ impl GuiRequest {
             } => Ok((
                 "thread/list",
                 json!({
-                    "limit": limit.unwrap_or(PAGE_SIZE).clamp(1, MAX_PAGE_SIZE),
+                    "limit": limit.unwrap_or(PAGE_SIZE).max(1),
                     "cursor": cursor, "archived": archived, "searchTerm": search,
                     "sortKey": "updated_at", "modelProviders": []
                 }),
@@ -273,7 +290,26 @@ impl GuiRequest {
                 params["includeTurns"] = json!(true);
                 Ok(("thread/read", params))
             }
+            Self::Fork {
+                thread_id,
+                turn_id,
+                access,
+                cwd,
+            } => {
+                id(&turn_id)?;
+                let mut params = thread_params(thread_id)?;
+                params["lastTurnId"] = json!(turn_id);
+                // Forking opens a draft; an inherited goal must wait for the user's next message.
+                params["deferGoalContinuation"] = json!(true);
+                if let Some(cwd) = cwd {
+                    directory(&cwd)?;
+                    params["cwd"] = json!(cwd);
+                }
+                access.apply_to_thread(&mut params);
+                Ok(("thread/fork", params))
+            }
             Self::Send {
+                transfer_mode,
                 thread_id,
                 access,
                 text,
@@ -286,6 +322,7 @@ impl GuiRequest {
             } => send_params(
                 thread_id,
                 PromptInput {
+                    transfer_mode,
                     text,
                     images,
                     skills,
@@ -305,6 +342,7 @@ impl GuiRequest {
                 Ok(("turn/interrupt", params))
             }
             Self::Steer {
+                transfer_mode,
                 thread_id,
                 turn_id,
                 text,
@@ -316,6 +354,7 @@ impl GuiRequest {
                 let (_, mut params) = send_params(
                     thread_id,
                     PromptInput {
+                        transfer_mode,
                         text,
                         images,
                         skills,

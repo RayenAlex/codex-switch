@@ -107,6 +107,7 @@ export interface ThreadTokenUsage {
   modelContextWindow?: number | null;
 }
 export interface EventParams {
+  threadName?: string | null;
   serverName?: string;
   _meta?: { tool_params?: Record<string, unknown> };
   userMessageIndex?: number;
@@ -173,6 +174,7 @@ export interface GuiState {
   loading: boolean;
   sending: boolean;
   deleting?: string;
+  forking?: string;
   compacting?: string;
   archived: boolean;
   search: string;
@@ -192,6 +194,7 @@ export type ApprovalReply = {
 };
 export type Request =
   | import("../../../../../shared/remote-chat/video").VideoRequest
+  | import("../../../../../shared/remote-chat/fileDownload").FileRequest
   | { operation: "textPreview"; threadId: string; path: string; maxBytes?: number }
   | ({ operation: "projectFiles" } & import('../../../../../shared/remote-chat/projectFiles').ProjectFilesRequest)
   | { operation: "projectDirectories"; directory: string }
@@ -205,19 +208,25 @@ export type Request =
   | { operation: "sendBatch"; threadId: string; messages: MessageInput[]; model?: string; effort?: string;
       access: AccessMode }
   | { operation: "steer"; threadId: string; turnId: string; text: string; images: string[];
-      skills: SkillReference[]; attachments?: AttachmentReference[] }
+      skills: SkillReference[]; attachments?: AttachmentReference[]; transferMode?: 'direct' | 'relay' }
   | { operation: "skills"; cwd?: string }
   | { operation: "models"; cursor?: string }
   | { operation: "list"; cursor?: string; archived: boolean; search?: string; limit?: number }
   | { operation: "start"; cwd?: string; model?: string; access: AccessMode }
+  | { operation: "fork"; threadId: string; turnId: string; access: AccessMode; cwd?: string }
   | { operation: "resume"; threadId: string; access: AccessMode; cwd?: string }
   | { operation: "send"; threadId: string; text: string; images: string[]; access: AccessMode;
+      transferMode?: 'direct' | 'relay';
       model?: string; effort?: string; cwd?: string; skills?: SkillReference[]; attachments?: AttachmentReference[] }
   | { operation: "read" | "archive" | "unarchive" | "compact"; threadId: string }
   | { operation: "rename"; threadId: string; name: string }
+  | { operation: "generateTitle"; threadId: string; prompt: string;
+      settings: import('../../../../../shared/chat/titleSettings').TitleSettings }
   | { operation: "interrupt"; threadId: string; turnId: string };
 
 export interface MessageInput {
+  /** Assigned by the desktop host when it accepts a remote message. */
+  transferMode?: 'direct' | 'relay';
   text: string; images: string[]; skills: SkillReference[]; attachments?: AttachmentReference[];
 }
 export interface QueuedMessage extends MessageInput {

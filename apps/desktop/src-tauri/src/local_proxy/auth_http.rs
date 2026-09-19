@@ -103,6 +103,7 @@ fn should_skip_header(name: &str, skip_auth: bool) -> bool {
             | "x-forwarded-host"
             | "x-forwarded-proto"
             | LOCAL_PROXY_ACTOR_AUTHORIZATION_HEADER
+            | crate::codex_config::LOCAL_PROXY_REQUEST_PURPOSE_HEADER
     ) || (skip_auth
         && matches!(
             name,
@@ -367,6 +368,7 @@ fn attach_first_response_capture(
 }
 
 fn respond_payload(request: Request, payload: UpstreamPayload) {
+    let payload = restore_stream_content_type(&request, payload);
     let payload = attach_proxy_error_capture(attach_diagnostic_response(payload));
     let UpstreamPayload {
         status,
@@ -404,6 +406,27 @@ fn respond_payload(request: Request, payload: UpstreamPayload) {
             }
         }
     }
+}
+
+fn restore_stream_content_type(request: &Request, mut payload: UpstreamPayload) -> UpstreamPayload {
+    if payload.content_type.is_some()
+        || !status_ok(payload.status)
+        || !matches!(payload.body, UpstreamBody::Streaming(_))
+    {
+        return payload;
+    }
+    let accepts_sse = request.headers().iter().any(|header| {
+        header.field.equiv("Accept")
+            && header.value.as_str().split(',').any(|value| {
+                value.trim().eq_ignore_ascii_case("text/event-stream")
+            })
+    });
+    if accepts_sse {
+        // Some upstreams omit Content-Type. The client's explicit SSE request still needs
+        // immediate flushes and a terminated response on read failure, not a five-minute idle wait.
+        payload.content_type = Some("text/event-stream".to_owned());
+    }
+    payload
 }
 
 fn add_content_type<R: Read>(response: &mut Response<R>, content_type: Option<&str>) {

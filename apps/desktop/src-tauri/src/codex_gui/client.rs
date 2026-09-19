@@ -1,5 +1,10 @@
+mod completion_notifications;
+mod context_capacity;
+mod context_change;
 mod live_settings;
 mod plugin_refresh;
+#[path = "title_service.rs"]
+mod title_service;
 
 use std::{
     collections::HashMap,
@@ -28,9 +33,13 @@ use super::{
 };
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+const MAX_CONCURRENT_TITLE_JOBS: usize = 2;
 type Pending = HashMap<u64, oneshot::Sender<Result<Value>>>;
 
 pub(super) struct Client {
+    title_jobs: Mutex<std::collections::HashSet<String>>,
+    title_writes: Mutex<()>,
+    title_slots: tokio::sync::Semaphore,
     pub(super) home: PathBuf,
     pub(super) projectless_root: PathBuf,
     writer: Mutex<ChildStdin>,
@@ -38,6 +47,8 @@ pub(super) struct Client {
     pending: Mutex<Pending>,
     approvals: Mutex<HashMap<String, GuiEvent>>,
     active_turns: Mutex<HashMap<String, String>>,
+    completion_notifications: Mutex<completion_notifications::CompletionNotifications>,
+    context_capacity: context_capacity::ContextCapacity,
     plugin_revision: Mutex<Option<String>>,
     next_id: AtomicU64,
     pub(super) alive: AtomicBool,
@@ -77,6 +88,9 @@ impl Client {
         let writer = process.stdin.take().ok_or(GuiError::Startup)?;
         let stdout = process.stdout.take().ok_or(GuiError::Startup)?;
         let client = Arc::new(Self {
+            title_jobs: Mutex::default(),
+            title_writes: Mutex::default(),
+            title_slots: tokio::sync::Semaphore::new(MAX_CONCURRENT_TITLE_JOBS),
             home,
             projectless_root,
             writer: Mutex::new(writer),
@@ -84,6 +98,8 @@ impl Client {
             pending: Mutex::new(HashMap::new()),
             approvals: Mutex::new(HashMap::new()),
             active_turns: Mutex::new(HashMap::new()),
+            completion_notifications: Mutex::default(),
+            context_capacity: context_capacity::ContextCapacity::default(),
             plugin_revision: Mutex::new(None),
             next_id: AtomicU64::new(1),
             alive: AtomicBool::new(true),
@@ -115,12 +131,19 @@ impl Client {
     }
 
     pub(super) async fn request(&self, method: &str, mut params: Value) -> Result<Value> {
+        if method == "thread/name/set" {
+            let _guard = self.title_writes.lock().await;
+            return self.request_raw(method, params).await;
+        }
         super::home::scope_thread_request(method, &mut params);
-        super::context_settings::apply(self.app.clone(), method, &mut params)
-            .await
-            .map_err(|_| GuiError::ContextSettings)?;
+        if method == "turn/interrupt" {
+            return self.interrupt_with_context(params).await;
+        }
         if method == "turn/start" {
             self.refresh_plugins().await?;
+        }
+        if matches!(method, "thread/resume" | "turn/start") {
+            return self.request_with_context(method, params).await;
         }
         self.request_raw(method, params).await
     }
@@ -172,7 +195,11 @@ impl Client {
             if matches!(method, "turn/started" | "turn/completed") {
                 self.track_live_turn(&event).await;
             }
+            if method == "thread/tokenUsage/updated" {
+                crate::local_proxy::gui_context::record_usage(&event.params).await;
+            }
             if method == "turn/completed" {
+                self.notify_completion(&event).await;
                 if let Some(id) = event.params["turn"]["id"].as_str() {
                     self.approvals
                         .lock()
@@ -214,7 +241,7 @@ impl Client {
         } else if let Some(id) = value["id"].as_u64() {
             if let Some(sender) = self.pending.lock().await.remove(&id) {
                 let result = if value.get("error").is_some() {
-                    Err(GuiError::Rpc)
+                    Err(GuiError::from_rpc(&value["error"]))
                 } else {
                     Ok(value["result"].clone())
                 };

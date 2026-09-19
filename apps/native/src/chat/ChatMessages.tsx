@@ -6,9 +6,10 @@ import { useHistoryRefresh } from './useHistoryRefresh';
 import { ChatMessage } from './ChatMessage';
 import { ChatToolDetails } from './ChatToolDetails';
 import { ChatWorkDrawer } from './ChatWorkDrawer';
+import { ChatProcessSummary } from './ChatProcessSummary';
 import { ChatTurnDuration, ChatTurnSummary, type TurnPanel } from './ChatTurnSummary';
 import { ChatTurnDetails } from './ChatTurnDetails';
-import { findWorkEntry, type TurnEntry, type WorkEntry } from './turnPresentation';
+import { findWorkEntry, type TurnEntry } from './turnPresentation';
 import { useConversationEntries } from './useConversationEntries';
 import type { ChatMessagesProps } from '../../../../shared/remote-chat/client/messageProps';
 import { palette, styles } from './styles';
@@ -23,28 +24,18 @@ function MessageSeparator({ leadingItem }: { leadingItem?: TurnEntry }) {
   return <View style={process ? PROCESS_SEPARATOR_STYLE : styles.messageSeparator} />;
 }
 
-function WorkSummary({ entry, onOpen }: { entry: WorkEntry; onOpen: () => void }) {
-  if (entry.inline) return <View style={[styles.row, { paddingVertical: 5 }]}>
-    <Text style={styles.subtitle}>{entry.turn.status === 'inProgress' ? '正在处理' : '处理过程'}</Text>
-    <Text style={styles.subtitle}>{entry.items.length} 项活动</Text>
-  </View>;
-  const label = entry.turn.status === 'inProgress' ? '正在处理' : '查看处理过程';
-  return <Pressable accessibilityRole="button" accessibilityLabel={`${label}，${entry.items.length} 项活动`}
-    style={[styles.row, { paddingVertical: 5 }]} onPress={onOpen}>
-    <Text style={styles.subtitle}>{label}</Text>
-    <Text style={[styles.subtitle, styles.fill]}>{entry.items.length} 项活动</Text>
-    <Ionicons name="chevron-forward" size={15} color={palette.muted} />
-  </Pressable>;
-}
-
-const TimelineEntry = memo(function TimelineEntry({ entry, open }: {
-  entry: TurnEntry; open: (selection: Selection) => void;
+const TimelineEntry = memo(function TimelineEntry({ entry, open, onInline }: {
+  entry: TurnEntry; open: (selection: Selection) => void; onInline: (turnId: string, inline: boolean) => void;
 }) {
-  const openItem = useCallback((id: string) => open({ type: 'item', id }), [open]);
+  const openItem = useCallback((id: string) => {
+    if (entry.kind === 'process') onInline(entry.turn.id, true);
+    open({ type: 'item', id });
+  }, [open, onInline, entry.kind, entry.turn.id]);
   if (entry.kind === 'duration') return <ChatTurnDuration turn={entry.turn} />;
   if (entry.kind === 'summary') return <ChatTurnSummary turn={entry.turn}
     onOpen={(id, panel) => open({ type: 'turn', id, panel })} />;
-  if (entry.kind === 'work') return <WorkSummary entry={entry} onOpen={() => open({ type: 'work', id: entry.id })} />;
+  if (entry.kind === 'work') return <ChatProcessSummary entry={entry} onInline={onInline}
+    onOpen={() => open({ type: 'work', id: entry.id })} />;
   return <ChatMessage item={entry.item} process={entry.kind === 'process'}
     onOpen={openItem}
     running={entry.turn.status === 'inProgress' && entry.item.status !== 'completed'} />;
@@ -53,12 +44,14 @@ const TimelineEntry = memo(function TimelineEntry({ entry, open }: {
 export function ChatMessages({ thread, loading, loadingMore, hasMore, loadOlder, offline }: ChatMessagesProps) {
   const turns = useMemo(() => (thread?.turns ?? []).map((turn) => offline && turn.status === 'inProgress'
     ? { ...turn, status: 'cached' } : turn), [thread?.turns, offline]);
-  const { entries, hasObservedLiveTurn } = useConversationEntries(turns);
+  const { entries, hasObservedLiveTurn, setInline } = useConversationEntries(turns);
   const { list, more, preservePosition, historyBottomSpace, initializing, onItemLayout, onFooterLayout,
     showScrollToBottom, scrollToBottom, ...scrollHandlers }
     = useChatScroll<TurnEntry>({ hasMore, loading, loadingMore, loadOlder,
       latestItemId: entries.at(-1)?.id, bottomPadding: styles.messages.padding });
   const refresh = useHistoryRefresh(more, loadingMore);
+  // Expanded group headers can be replaced when an older page extends the group; anchor a message instead.
+  const firstMessageIndex = entries[0]?.kind === 'work' && entries[0].inline ? 1 : 0;
   // Keep live messages visible through completion, including replies that never call tools.
   const showInitialLoading = (!hasObservedLiveTurn && initializing) || (loading && !loadingMore && !entries.length);
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -76,7 +69,7 @@ export function ChatMessages({ thread, loading, loadingMore, hasMore, loadOlder,
     importantForAccessibility={showInitialLoading ? 'no-hide-descendants' : 'auto'}
     contentContainerStyle={entries.length ? styles.messages : styles.empty}
     renderItem={({ item: entry }) => <View collapsable={false} onLayout={() => onItemLayout(entry.id)}>
-      <TimelineEntry entry={entry} open={open} />
+      <TimelineEntry entry={entry} open={open} onInline={setInline} />
     </View>}
     ItemSeparatorComponent={MessageSeparator}
     keyboardShouldPersistTaps="handled" initialNumToRender={10}
@@ -85,8 +78,8 @@ export function ChatMessages({ thread, loading, loadingMore, hasMore, loadOlder,
     alwaysBounceVertical
     refreshControl={<RefreshControl {...refresh} colors={[palette.green]} tintColor={palette.green}
       progressBackgroundColor={palette.background} />}
-    // FlatList accounts for the header itself; anchor the first message even in a one-message conversation.
-    maintainVisibleContentPosition={preservePosition ? { minIndexForVisible: 0 } : undefined}
+    // FlatList accounts for the list header itself, including in one-message conversations.
+    maintainVisibleContentPosition={preservePosition ? { minIndexForVisible: firstMessageIndex } : undefined}
     {...scrollHandlers} scrollEventThrottle={100}
     ListHeaderComponent={<View style={hasMore && [styles.historyStatus, styles.messageHeader]}>
       {hasMore && (loadingMore ? <>

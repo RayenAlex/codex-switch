@@ -22,6 +22,7 @@ import { ProjectPicker } from "./ProjectPicker";
 import { SkillInput, type SkillInputHandle } from "./SkillInput";
 import { compactCommand } from "./composerOptions";
 import { QueuedMessages } from "./QueuedMessages";
+import { RunningChangesSummary } from "./RunningChangesSummary";
 import styles from "./styles.module.less";
 
 export interface ComposerHandle { addQuote: (quote: ReplyQuote) => boolean }
@@ -81,6 +82,7 @@ export const Composer = forwardRef<ComposerHandle, {
     if (restored) skillInput.current?.focus();
   };
   return <div className={styles.composerWrap}>
+    <RunningChangesSummary value={current} />
     {state.selected && <QueuedMessages threadId={state.selected} messages={queuedMessages}
       running={running} connected={state.connection === "ready"} queue={controller.queue}
       editDisabled={disabled || reading || !active} onEdit={editQueuedMessage} />}
@@ -89,9 +91,10 @@ export const Composer = forwardRef<ComposerHandle, {
       onBusyChange={controller.setWorkspaceBusy}
       onChange={controller.setProject} onError={controller.report} />}
     <div ref={composer} className={`${styles.composer} ${attachedQueue ? styles.composerAttached : ""}`}>
-      <ImageAttachments key={key} images={draft.images} active={active}
+      <ImageAttachments key={`images:${key}`} images={draft.images} active={active}
         disabled={state.sending} onRemove={removeImage} />
-      <ComposerReferences items={draft.attachments ?? []} disabled={disabled} onRemove={removeAttachment} />
+      <ComposerReferences key={`references:${key}`} items={draft.attachments ?? []} disabled={disabled}
+        active={active} onRemove={removeAttachment} />
       <ComposerQuotes quotes={draft.quotes ?? []} draftKey={key} active={active} disabled={disabled}
         onRemove={removeQuote} onClear={() => { clearQuotes(); skillInput.current?.focus(); }} />
       <input ref={fileInput} type="file" accept={IMAGE_TYPES.join(",")} multiple hidden disabled={disabled}

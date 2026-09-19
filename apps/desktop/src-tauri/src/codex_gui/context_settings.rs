@@ -24,10 +24,28 @@ pub(crate) enum ContextSettingsError {
 }
 type Result<T> = std::result::Result<T, ContextSettingsError>;
 
-#[derive(Clone, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct ContextSettings {
     capacity: Option<u64>,
+}
+
+/// Reports whether a running conversation continued after applying its capacity.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum ContextUpdate {
+    Applied,
+    Continued,
+    Paused,
+    ResumeFailed,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ContextUpdateResult {
+    #[serde(flatten)]
+    pub(super) settings: ContextSettings,
+    pub(super) update: ContextUpdate,
 }
 
 /// The guard covers each complete read or atomic write on a blocking worker.
@@ -116,27 +134,41 @@ pub(crate) async fn codex_gui_set_context_settings(
     app: AppHandle,
     thread_id: String,
     settings: ContextSettings,
-) -> std::result::Result<ContextSettings, String> {
-    access(app, thread_id, Some(settings))
-        .await
-        .map_err(|error| error.to_string())
+) -> std::result::Result<ContextUpdateResult, String> {
+    validate(&settings).map_err(|error| error.to_string())?;
+    settings_path(Path::new(""), &thread_id).map_err(|error| error.to_string())?;
+    let update = match super::connected(&app.state::<super::GuiState>()).await {
+        Ok(client) => client
+            .change_context(&thread_id, &settings)
+            .await
+            .map_err(|_| "未能应用上下文设置，请重试；若对话已暂停，可点击继续。".to_owned())?,
+        Err(_) => {
+            persist(app, thread_id, settings.clone())
+                .await
+                .map_err(|error| error.to_string())?;
+            ContextUpdate::Applied
+        }
+    };
+    Ok(ContextUpdateResult { settings, update })
 }
 
-/// Loaded threads ignore config overrides; reconnecting loads the saved value without interrupting a turn.
-pub(super) async fn apply(app: AppHandle, method: &str, params: &mut Value) -> Result<()> {
-    if method != "thread/resume" {
-        return Ok(());
+pub(super) async fn persist(
+    app: AppHandle,
+    thread_id: String,
+    settings: ContextSettings,
+) -> Result<ContextSettings> {
+    access(app, thread_id, Some(settings)).await
+}
+
+pub(super) async fn for_thread(app: AppHandle, thread_id: String) -> Result<ContextSettings> {
+    access(app, thread_id, None).await
+}
+
+pub(super) fn apply_capacity(params: &mut Value, settings: &ContextSettings) {
+    // An explicit empty config resets a previous override when rejoining an unsubscribed thread.
+    if !params["config"].is_object() {
+        params["config"] = serde_json::json!({});
     }
-    let thread_id = params["threadId"]
-        .as_str()
-        .ok_or(ContextSettingsError::InvalidThread)?
-        .to_owned();
-    let settings = access(app, thread_id, None).await?;
-    apply_capacity(params, &settings);
-    Ok(())
-}
-
-fn apply_capacity(params: &mut Value, settings: &ContextSettings) {
     if let Some(capacity) = settings.capacity {
         params["config"]["model_context_window"] = capacity.into();
     }

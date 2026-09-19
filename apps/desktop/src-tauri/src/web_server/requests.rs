@@ -54,18 +54,15 @@ fn handle_invoke_request(app: AppHandle, mut request: Request, security: &WebReq
         respond_text(request, StatusCode(405), "Method not allowed");
         return;
     }
-    let access = match security.authorize(&request) {
-        Ok(access) => access,
-        Err(status) => {
-            let message = if status == StatusCode(403) {
-                "Request origin is not allowed"
-            } else {
-                "A valid LAN access key is required"
-            };
-            respond_text(request, status, message);
-            return;
-        }
-    };
+    if let Err(status) = security.authorize(&request) {
+        let message = if status == StatusCode(403) {
+            "Request origin is not allowed"
+        } else {
+            "A valid LAN access key is required"
+        };
+        respond_text(request, status, message);
+        return;
+    }
     if !request.headers().iter().any(|header| {
         header.field.equiv("Content-Type") && header.value.as_str().starts_with("application/json")
     }) {
@@ -76,9 +73,26 @@ fn handle_invoke_request(app: AppHandle, mut request: Request, security: &WebReq
         );
         return;
     }
+    use tauri::Manager;
+    // Authentication above grants access to the desktop host. P2P uploads must also fit through
+    // its hosted HTTP adapter; the GUI worker still validates each message's upload provenance.
+    let direct_upload = request.headers().iter().any(|header| {
+        header.field.equiv("X-Codex-Chat-Transfer") && header.value.as_str() == "direct"
+    });
+    let max_body_bytes = if direct_upload {
+        usize::MAX
+    } else {
+        match app.state::<crate::codex_gui::GuiState>().upload_policy.snapshot() {
+            Ok(limits) => limits.message_bytes(),
+            Err(_) => {
+                respond_text(request, StatusCode(503), "Please try again later");
+                return;
+            }
+        }
+    };
     if request
         .body_length()
-        .is_some_and(|length| length > MAX_INVOKE_BODY_BYTES)
+        .is_some_and(|length| length > max_body_bytes)
     {
         respond_text(request, StatusCode(413), "Request body is too large");
         return;
@@ -87,9 +101,9 @@ fn handle_invoke_request(app: AppHandle, mut request: Request, security: &WebReq
     let mut body = String::new();
     let read_result = request
         .as_reader()
-        .take((MAX_INVOKE_BODY_BYTES + 1) as u64)
+        .take(max_body_bytes.saturating_add(1) as u64)
         .read_to_string(&mut body);
-    if read_result.is_err() || body.len() > MAX_INVOKE_BODY_BYTES {
+    if read_result.is_err() || body.len() > max_body_bytes {
         respond_text(request, StatusCode(400), "Could not read the request body");
         return;
     }
@@ -104,14 +118,6 @@ fn handle_invoke_request(app: AppHandle, mut request: Request, security: &WebReq
             return;
         }
     };
-    if !access.allows_command(&invocation.command) {
-        respond_text(
-            request,
-            StatusCode(403),
-            "This action is not available over LAN access",
-        );
-        return;
-    }
     let response = match dispatch_command(app, &invocation.command, invocation.args) {
         Ok(result) => WebInvokeResponse {
             ok: true,

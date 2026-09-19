@@ -1,13 +1,15 @@
-import { CHAT_POLICY_MESSAGE, setChatPolicy } from '../policy';
+import { CHAT_POLICY_MESSAGE, setChatConnectionMode, setChatPolicy } from '../policy';
 import { keyPair } from '../cipher';
 import { ChatLink } from '../link';
 import { ChatRpc } from '../rpc';
+import { hasUpload, uploadProgress, type UploadProgress } from '../uploadProgress';
 import { authorizationError, CONNECTION_ERRORS, socketConnectionError } from '../connectionErrors';
 import {
   chatSocketUrl, parseMessage, type ConnectionMode, type IceServer, type RpcRequest, type Signal,
 } from '../protocol';
 
 export interface ConnectionEvents {
+  upload?: (progress: UploadProgress) => void;
   mode: (mode: ConnectionMode) => void;
   ready: () => void;
   event: (event: unknown) => void;
@@ -45,6 +47,7 @@ export class ChatConnection {
   start() {
     if (this.active) return;
     this.active = true;
+    setChatConnectionMode('connecting');
     void this.connect();
   }
 
@@ -162,7 +165,7 @@ export class ChatConnection {
   }) {
     if (this.link) throw new Error('Already paired');
     this.rpc = new ChatRpc({ prefix: input.keys.publicKey.slice(0, 24),
-      send: (message) => this.link!.send(message), event: this.options.event });
+      send: (message, progress) => this.link!.send(message, progress), event: this.options.event });
     this.link = new ChatLink({
       sessionId: input.id, desktop: false, secret: input.keys.secret, iceServers: input.iceServers,
       transportVersion: input.transportVersion, reconnectRelay: () => this.fail(CONNECTION_ERRORS.network, true),
@@ -175,6 +178,7 @@ export class ChatConnection {
       message: (message) => this.rpc?.receive(message), error: this.options.error,
       mode: (mode) => {
         if (!this.active) return;
+        setChatConnectionMode(mode);
         this.options.mode(mode);
         if (mode === 'offline') { if (this.link) this.disconnected(); return; }
         if (mode !== 'direct' && mode !== 'relay') return;
@@ -192,7 +196,13 @@ export class ChatConnection {
 
   request<T>(method: RpcRequest['method'], body?: unknown): Promise<T> {
     if (!this.rpc) return Promise.reject(new Error('请先连接电脑。'));
-    return this.rpc.request<T>(method, body);
+    let lastPercent = -1;
+    return this.rpc.request<T>(method, body, method === 'request' && hasUpload(body) ? (fraction) => {
+      const progress = uploadProgress(fraction);
+      if (progress.percent === lastPercent) return;
+      lastPercent = progress.percent;
+      this.options.upload?.(progress);
+    } : undefined);
   }
 
   private disconnected() {
@@ -217,6 +227,7 @@ export class ChatConnection {
     this.rpc?.close();
     this.rpc = undefined;
     this.options.mode('offline');
+    setChatConnectionMode('offline');
     this.schedule();
   }
 

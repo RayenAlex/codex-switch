@@ -53,29 +53,47 @@ mod tests {
         assert_eq!(html.matches(HOSTED_RUNTIME_MARKER).count(), 1);
     }
 
+    fn remote_request() -> tiny_http::TestRequest {
+        tiny_http::TestRequest::new()
+            .with_remote_addr("192.168.1.10:54321".parse().unwrap())
+            .with_method(Method::Post)
+            .with_header(header("Host", "192.168.1.20:18080"))
+            .with_header(header("Origin", "http://192.168.1.20:18080"))
+    }
+
     #[test]
-    fn lan_requests_allow_gui_conversations_but_restrict_host_administration() {
-        for command in ["codex_gui_connect", "codex_gui_request", "codex_gui_respond",
-            "codex_gui_events", "codex_gui_cli_status", "codex_gui_cli_release",
-            "codex_gui_cli_install", "codex_gui_usage_summary", "codex_gui_delete_thread",
-            "codex_gui_model_settings", "codex_gui_set_model_settings"] {
-            assert!(WebRequestAccess::Lan.allows_command(command));
+    fn authenticated_remote_requests_can_administer_the_host() {
+        let security = WebRequestSecurity { lan_api_key: Some(Arc::from("test-key")) };
+        for body in [
+            r#"{"command":"save_provider"}"#,
+            r#"{"command":"set_local_proxy_listen_on_all_interfaces"}"#,
+            r#"{"command":"delete_account"}"#,
+            r#"{"command":"codex_gui_scheduled_tasks"}"#,
+        ] {
+            let request = remote_request().with_body(body)
+                .with_header(header("X-API-Key", "test-key")).into();
+            assert_eq!(security.authorize(&request), Ok(()));
         }
-        assert!(LAN_COMMAND_ALLOWLIST.contains(&"list_accounts"));
-        assert!(LAN_COMMAND_ALLOWLIST.contains(&"get_app_settings"));
-        assert!(LAN_COMMAND_ALLOWLIST.contains(&"get_codex_connection_status"));
-        assert!(!LAN_COMMAND_ALLOWLIST.contains(&"connect_codex"));
-        assert!(!LAN_COMMAND_ALLOWLIST.contains(&"restart_chatgpt"));
-        assert!(!LAN_COMMAND_ALLOWLIST.contains(&"cloud_login"));
-        assert!(!LAN_COMMAND_ALLOWLIST.contains(&"delete_account"));
-        assert!(!LAN_COMMAND_ALLOWLIST.contains(&"discard_codex_threads"));
-        assert!(!LAN_COMMAND_ALLOWLIST.contains(&"recover_codex_threads"));
-        assert!(!LAN_COMMAND_ALLOWLIST.contains(&"save_provider"));
-        assert!(!LAN_COMMAND_ALLOWLIST.contains(&"launch_chatgpt"));
-        assert!(!LAN_COMMAND_ALLOWLIST.contains(&"codex_gui_scheduled_tasks"));
-        assert!(!LAN_COMMAND_ALLOWLIST.contains(&"codex_gui_file_action"));
-        assert!(!LAN_COMMAND_ALLOWLIST.contains(&"codex_gui_image_action"));
-        assert!(!LAN_COMMAND_ALLOWLIST.contains(&"codex_gui_file_applications"));
+        let bearer = remote_request()
+            .with_header(header("Authorization", "Bearer test-key")).into();
+        assert_eq!(security.authorize(&bearer), Ok(()));
+    }
+
+    #[test]
+    fn remote_administration_still_requires_a_valid_key_and_matching_origin() {
+        let security = WebRequestSecurity { lan_api_key: Some(Arc::from("test-key")) };
+        assert_eq!(security.authorize(&remote_request().into()), Err(StatusCode(401)));
+        let wrong = remote_request().with_header(header("X-API-Key", "wrong-key")).into();
+        assert_eq!(security.authorize(&wrong), Err(StatusCode(401)));
+        let foreign = tiny_http::TestRequest::new()
+            .with_remote_addr("192.168.1.10:54321".parse().unwrap())
+            .with_header(header("Host", "192.168.1.20:18080"))
+            .with_header(header("Origin", "http://attacker.invalid"))
+            .with_header(header("X-API-Key", "test-key")).into();
+        assert_eq!(security.authorize(&foreign), Err(StatusCode(403)));
+        let no_key = WebRequestSecurity { lan_api_key: None };
+        assert_eq!(no_key.authorize(&remote_request().into()), Err(StatusCode(401)));
+        assert!(security.authorize(&tiny_http::TestRequest::new().into()).is_ok());
     }
 
     #[test]

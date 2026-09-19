@@ -136,6 +136,7 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(move |app| {
@@ -161,6 +162,7 @@ pub fn run() {
                 main_window::restore_or_set_default(app)?;
             }
             commands::initialize_local_state(app.handle());
+            chrome_plugin::refresh_on_startup();
             #[cfg(any(target_os = "linux", all(debug_assertions, windows)))]
             if let Err(error) = app.deep_link().register_all() {
                 eprintln!("failed to register desktop import links: {error}");
@@ -268,6 +270,7 @@ pub fn run() {
             codex_gui::codex_gui_connect,
             codex_gui::scheduled_tasks::codex_gui_scheduled_tasks,
             codex_gui::clipboard::codex_gui_clipboard_files,
+            codex_gui::attachment_preview::codex_gui_attachment_preview,
             codex_gui::image_actions::codex_gui_image_action,
             codex_gui::account_selection::codex_gui_account_selection,
             codex_gui::account_selection::codex_gui_switch_account,
@@ -356,6 +359,7 @@ pub fn run() {
             conversation_hub::inspect_codex_thread_import,
             conversation_hub::unpack_codex_threads,
             conversation_hub::migrate_codex_threads,
+            conversation_hub::home_migration::migrate_codex_threads_to_home,
             conversation_hub::reconcile_codex_thread_visibility,
             conversation_hub::rebuild_codex_thread_index,
             conversation_hub::open_codex_thread_file,

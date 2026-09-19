@@ -8,7 +8,7 @@ import { useImageOrientation } from './useImageOrientation';
 import { useImageGestures } from './useImageGestures';
 import { useSaveImage } from './useSaveImage';
 
-interface Props { thumbnail: string; description: string; load: () => Promise<string>; close: () => void }
+interface Props { thumbnail?: string; description: string; load: () => Promise<string>; close: () => void }
 
 export function ImageViewer({ thumbnail, description, load, close }: Props) {
   const image = useImageViewer(load);
@@ -16,6 +16,7 @@ export function ImageViewer({ thumbnail, description, load, close }: Props) {
   const { gesture, animatedStyle } = useImageGestures(close, orientation.displayed);
   const saving = useSaveImage(image.error ? undefined : image.url);
   const message = saving.message || orientation.error;
+  const source = image.url ?? thumbnail;
   return <Modal visible animationType="fade" onRequestClose={close} statusBarTranslucent
     navigationBarTranslucent supportedOrientations={['portrait', 'portrait-upside-down',
       'landscape-left', 'landscape-right']}>
@@ -23,10 +24,10 @@ export function ImageViewer({ thumbnail, description, load, close }: Props) {
       <GestureHandlerRootView style={styles.overlay}>
         <GestureDetector gesture={gesture}>
           <View style={styles.stage} collapsable={false} onAccessibilityEscape={close}>
-            <Animated.Image source={{ uri: image.url ?? thumbnail }} accessibilityLabel={description}
+            {source && <Animated.Image source={{ uri: source }} accessibilityLabel={description}
               accessibilityHint="轻点关闭，双指缩放" accessibilityActions={[{ name: 'activate', label: '关闭预览' }]}
               onAccessibilityAction={close} resizeMode="contain" onError={image.fail}
-              fadeDuration={0} style={[styles.image, animatedStyle]} />
+              fadeDuration={0} style={[styles.image, animatedStyle]} />}
           </View>
         </GestureDetector>
         <SafeAreaView pointerEvents="box-none" style={styles.controls}>
@@ -36,7 +37,7 @@ export function ImageViewer({ thumbnail, description, load, close }: Props) {
                 disabled={orientation.rotating} onPress={orientation.rotate} style={styles.rotate}>
                 <MaterialCommunityIcons name="screen-rotation" size={28} color="#fff" />
               </Pressable>}
-              <Pressable accessibilityRole="button" accessibilityLabel="保存到相册"
+              <Pressable accessibilityRole="button" accessibilityLabel="下载图片到相册"
                 accessibilityState={{ disabled: !image.url || image.error || saving.saving, busy: saving.saving }}
                 disabled={!image.url || image.error || saving.saving} onPress={saving.save}
                 style={[styles.save, (!image.url || image.error) && styles.disabled]}>

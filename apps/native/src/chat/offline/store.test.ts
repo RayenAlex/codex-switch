@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import initSqlJs from 'sql.js';
 import type { BindParams, Database } from 'sql.js';
 import { accountScope, SqliteHistoryStore } from './store';
@@ -6,6 +6,7 @@ import { readDevices, saveDevices } from './devices';
 import { THREAD_COUNT_LIMIT, THREAD_CHAR_LIMIT, HISTORY_CHAR_LIMIT, IMAGE_CHAR_LIMIT } from './records';
 import type { Thread } from '../types';
 import { sliceHistory } from '../../../../../shared/remote-chat/historyPage';
+import { DEFAULT_CHAT_POLICY, setChatPolicy } from '../../../../../shared/remote-chat/policy';
 
 const state = vi.hoisted(() => ({ db: null as Database | null, reads: [] as string[] }));
 vi.mock('expo-sqlite', () => {
@@ -53,8 +54,24 @@ beforeEach(() => {
   state.db.exec('PRAGMA foreign_keys = ON'); state.reads = [];
 });
 afterAll(() => state.db?.close());
+afterEach(() => setChatPolicy(DEFAULT_CHAT_POLICY));
 
 describe('persistent chat cache using SQLite', () => {
+  it('loads more than 100 messages per page and applies updated settings to older history', async () => {
+    await store().save({ thread: history('chat', 500), page: { hasMore: false }, archived: false });
+    setChatPolicy({ ...DEFAULT_CHAT_POLICY, historyPageSize: 150 });
+    const recent = await store().read('chat', {});
+    expect(items(recent)).toHaveLength(150);
+    expect(recent?.page.hasMore).toBe(true);
+    setChatPolicy({ ...DEFAULT_CHAT_POLICY, historyPageSize: 200 });
+    const older = await store().read('chat', { start: recent?.page.start, older: true });
+    expect(items(older)).toHaveLength(350);
+    expect(older?.page.hasMore).toBe(true);
+    const first = await store().read('chat', { start: older?.page.start, older: true });
+    expect(items(first)).toHaveLength(500);
+    expect(first?.page.hasMore).toBe(false);
+  });
+
   it('survives reopening and reads only the newest page before loading older records', async () => {
     await store().save({ ...sliceHistory(history(), { start: { turnId: 'turn', itemId: '5' } }), archived: false });
     const bytes = state.db!.export();
@@ -179,6 +196,44 @@ describe('persistent chat cache using SQLite', () => {
     expect(devices[0]).toMatchObject({ deviceId: 'pc', online: false, localProxyRunning: false });
     expect(devices[0].activeAccountId).toBeUndefined();
     expect(await readDevices(accountScope({ ...account, email: 'other' }))).toEqual([]);
+  });
+
+  it('replaces device metadata without restoring removed computers after reopening', async () => {
+    const device = { deviceId: 'pc', name: 'computer', platform: 'Windows',
+      online: false, localProxyRunning: false, capabilities: [], lastSeenAt: 'today' };
+    const scope = accountScope(account);
+    await saveDevices(scope, [device, { ...device, deviceId: 'deleted' }]);
+    await saveDevices(scope, [device]);
+    const bytes = state.db!.export();
+    state.db!.close(); state.db = new SQL.Database(bytes); state.db.exec('PRAGMA foreign_keys = ON');
+    expect((await readDevices(scope)).map((entry) => entry.deviceId)).toEqual(['pc']);
+  });
+
+  it('clears the final device without deleting another account or cached conversations', async () => {
+    const device = { deviceId: 'pc', name: 'computer', platform: 'Windows',
+      online: false, localProxyRunning: false, capabilities: [], lastSeenAt: 'today' };
+    const scope = accountScope(account);
+    const other = accountScope({ ...account, email: 'other' });
+    await store().save({ thread: history(), page: { hasMore: false }, archived: false });
+    await saveDevices(scope, [device]);
+    await saveDevices(other, [device]);
+    await saveDevices(scope, []);
+    expect(await readDevices(scope)).toEqual([]);
+    expect(await readDevices(other)).toHaveLength(1);
+    expect(await store().read('chat', {})).not.toBeNull();
+  });
+
+  it('rolls back device cache replacement if saving the new list fails', async () => {
+    const device = { deviceId: 'pc', name: 'computer', platform: 'Windows',
+      online: false, localProxyRunning: false, capabilities: [], lastSeenAt: 'today' };
+    const scope = accountScope(account);
+    await saveDevices(scope, [device]);
+    state.db!.exec("CREATE TRIGGER fail_devices BEFORE INSERT ON devices BEGIN SELECT RAISE(ABORT, 'full'); END");
+    await expect(saveDevices(scope, [{ ...device, deviceId: 'new' }])).rejects.toThrow();
+    expect((await readDevices(scope)).map((entry) => entry.deviceId)).toEqual(['pc']);
+    state.db!.exec('DROP TRIGGER fail_devices');
+    await saveDevices(scope, []);
+    expect(await readDevices(scope)).toEqual([]);
   });
 
   it('enforces the global history budget across computer scopes', async () => {
