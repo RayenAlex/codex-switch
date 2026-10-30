@@ -27,6 +27,7 @@ async fn gateway_forwards_codex_websocket_frames_to_provider() {
     let paths = crate::storage::resolve_paths(app.handle()).unwrap();
     std::fs::create_dir_all(&paths.providers).unwrap();
     let provider = ProviderProfile {
+        account_alias: None,
         id: "headroom".to_string(),
         kind: ProviderKind::Custom,
         name: "Headroom".to_string(),
@@ -46,6 +47,8 @@ async fn gateway_forwards_codex_websocket_frames_to_provider() {
         websocket_enabled: true,
         api_format: ProviderApiFormat::OpenaiResponses,
         request_options: None,
+        balance_script: None,
+        market_source: None,
         balance_platform: None,
         balance_query_url: None,
         balance_query_token: None,
