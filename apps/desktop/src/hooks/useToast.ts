@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { translateBackendMessage } from "../../../../shared/i18n/backend/translateBackendMessage";
+import { formatRemoteError } from "../../../../shared/localization/errors";
 import { syncCodexNotification } from "../api/backend";
 import { recordToastLog } from "../api/errorLogs";
-import { guiLanguage } from "../i18n/guiText";
+import { guiLanguage } from "../i18n/uiText";
 import { useGuiLanguage } from "../i18n/useGuiLanguage";
 
 /**
@@ -22,14 +22,14 @@ export function useToast() {
     window.clearTimeout(timer.current);
     setRawMessage(nextMessage);
     timer.current = window.setTimeout(() => setRawMessage(null), 3400);
-    void syncCodexNotification(translateBackendMessage(guiLanguage(), nextMessage)).catch(() => {
+    void syncCodexNotification(formatRemoteError(guiLanguage(), nextMessage)).catch(() => {
       console.debug("Codex notification mirror is unavailable.");
     });
   }, []);
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
   const message = useMemo(
-    () => (rawMessage === null ? null : translateBackendMessage(language, rawMessage)),
+    () => (rawMessage === null ? null : formatRemoteError(language, rawMessage)),
     [language, rawMessage],
   );
   return { message, notify };

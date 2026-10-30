@@ -2,8 +2,8 @@ import type { AttachmentReference } from '../../apps/desktop/src/pages/codexGui/
 import type { ConnectionMode } from './protocol';
 import { base64Bytes, checkFileUploadSize, fileUploadTotalByteLimit, getChatPolicy, MIB,
   UploadPolicyError } from './policy';
-import { getInterfaceLanguage } from '../i18n/interfaceLanguage';
-import { translateText } from '../i18n/translate';
+import { getInterfaceLanguage } from "../localization/interfaceLanguage";
+import { translateMessage } from "../localization/messages";
 
 export const MAX_CHAT_FILES = 8;
 const DEFAULT_ATTACHMENT_DATA = 6 * MIB;
@@ -27,8 +27,8 @@ export function validateUploadedFiles(attachments: readonly AttachmentReference[
     checkFileUploadSize(bytes, mode);
     total += bytes;
     if (total > fileUploadTotalByteLimit(mode)) {
-      throw new UploadPolicyError(translateText(getInterfaceLanguage(),
-        '每次发送的文件合计不能超过 {value1} MB，请减少文件。', { value1: getChatPolicy().fileUploadTotalMaxMb }));
+      throw new UploadPolicyError(translateMessage(getInterfaceLanguage(),
+        "client.runtimeErrors.filesSentAtOnceCannotExceedMbInTotalRemove", { value1: getChatPolicy().fileUploadTotalMaxMb }));
     }
   }
 }

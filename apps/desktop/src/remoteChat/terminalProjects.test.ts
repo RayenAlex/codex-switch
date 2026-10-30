@@ -12,6 +12,25 @@ beforeEach(() => vi.resetAllMocks());
 const list = (cwd: string) => ({ operation: 'guiTerminalList', cwd });
 const open = (cwd: string) => ({ operation: 'guiTerminalOpen', cwd, size: { cols: 80, rows: 24 } });
 
+it('forwards npm scripts and restores their original directory and completed state', async () => {
+  const terminals = new RemoteTerminals();
+  let receive!: Parameters<typeof terminalApi.open>[2];
+  vi.mocked(terminalApi.open).mockImplementation(async (_cwd, _size, onEvent, options) => {
+    receive = onEvent;
+    return { id: 'script', cwd: '/resolved/package', shell: 'npm', ...options };
+  });
+  await terminals.request({ ...open('/project/package'), projectCwd: '/project', npmScript: 'dev' }, 'owner');
+  expect(terminalApi.open).toHaveBeenCalledWith('/project/package', { cols: 80, rows: 24 },
+    expect.any(Function), { npmScript: 'dev' });
+  expect(await terminals.request(list('/project'), 'owner')).toMatchObject([
+    { npmScript: 'dev', npmScriptCwd: '/project/package' },
+  ]);
+  receive({ type: 'exit', code: 0 });
+  expect(await terminals.request(list('/project'), 'owner')).toMatchObject([{ npmScript: 'dev', exited: true }]);
+  await expect(terminals.request({ ...open('/project'), npmScript: { name: 'dev' } }, 'owner'))
+    .rejects.toThrow('client.npmScripts.invalid');
+});
+
 it('keeps project shells and their output separate across reconnects and explicit closes', async () => {
   const terminals = new RemoteTerminals();
   let sequence = 0;
@@ -49,6 +68,23 @@ it('retains project identity when Rust resolves a symlink or chooses the default
   expect(await terminals.request(list(''), 'account')).toEqual([unassigned]);
   expect(await terminals.request(list('/home/user'), 'account')).toEqual([]);
   await expect(terminals.request({ operation: 'guiTerminalList', cwd: 1 }, 'account')).rejects.toThrow('项目目录');
+});
+
+it('retains new directory shells with the active project across list requests', async () => {
+  const terminals = new RemoteTerminals();
+  let sequence = 0;
+  vi.mocked(terminalApi.open).mockImplementation(async cwd => ({ id: `shell-${++sequence}`, cwd, shell: 'bash' }));
+  const client = createGuiToolsClient(<T>(body: object) =>
+    terminals.request(body as Record<string, unknown>, 'account') as Promise<T>);
+  const size = { cols: 80, rows: 24 };
+  const first = await client.terminal.open('/project', size);
+  const second = await client.terminal.open('/project/sub', size, '/project');
+  const third = await client.terminal.open('/project/sub', size, '/project');
+  expect(second).toMatchObject({ cwd: '/project/sub', projectCwd: '/project' });
+  expect(await client.terminal.list('/project')).toEqual([first, second, third]);
+  expect(await client.terminal.list('/project/sub')).toEqual([]);
+  await expect(terminals.request({ ...open('/project'), projectCwd: 1 }, 'account')).rejects.toThrow('项目目录');
+  expect(terminalApi.open).toHaveBeenCalledTimes(3);
 });
 
 it.each([

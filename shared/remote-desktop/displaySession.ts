@@ -25,7 +25,7 @@ export class DesktopDisplaySession {
   private muted = false;
   private switching = false;
   private closing?: Promise<void>;
-  constructor(private readonly options: ReceiverOptions) {}
+  constructor(private readonly options: ReceiverOptions, private readonly privacyRestore = { failed: false }) {}
 
   get displayId() { return this.selected?.displays.displayId; }
   async security(change: DesktopSecurityChange) {
@@ -53,6 +53,15 @@ export class DesktopDisplaySession {
     const entry = this.create(settings);
     this.select(entry);
     await entry.receiver.start(settings);
+    if (this.stopped || entry.receiver.closed || this.privacyRestore.failed || !entry.displays.security?.privacyScreen
+      || entry.displays.privacyScreen || entry.capabilities.control !== true || !entry.capabilities.privacyScreen) return;
+    try { await entry.receiver.privacy(true); }
+    catch (error) {
+      // A broken privacy driver must not cause repeated locking through automatic reconnects.
+      this.privacyRestore.failed = true;
+      if (!this.stopped) this.options.status(typeof error === 'string' ? error
+        : error instanceof Error ? error.message : 'client.remoteDesktop.privacyFailed');
+    }
   }
 
   private create(settings: DesktopSettings): DisplaySession {

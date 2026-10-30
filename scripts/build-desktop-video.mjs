@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifyWindowsRuntime } from './verify-windows-runtime.mjs';
 import { resolveCmakeTool } from './resolve-cmake-tool.mjs';
+import { resolveVisualStudioGenerator } from './resolve-visual-studio-generator.mjs';
 
 const source = fileURLToPath(new URL('../apps/desktop/src-tauri/desktop-video/', import.meta.url));
 
@@ -10,7 +11,7 @@ export function buildDesktopVideo({ sdk, cache, destination }) {
   const directory = resolve(cache, 'native-build');
   const cmake = resolveCmakeTool('cmake');
   const ctest = resolveCmakeTool('ctest');
-  run(cmake, ['-S', source, '-B', directory, '-G', 'Visual Studio 17 2022', '-A', 'x64',
+  run(cmake, ['-S', source, '-B', directory, '-G', resolveVisualStudioGenerator(cmake), '-A', 'x64',
     '-DCMAKE_SYSTEM_VERSION=10.0.26100.0', `-DFFMPEG_SDK=${sdk}`, `-DVIDEO_OUTPUT=${destination}`]);
   run(cmake, ['--build', directory, '--config', 'Release', '--parallel']);
   run(ctest, ['--test-dir', directory, '-C', 'Release', '--output-on-failure']);

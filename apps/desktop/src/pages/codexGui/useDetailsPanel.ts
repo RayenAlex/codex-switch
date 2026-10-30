@@ -1,10 +1,10 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { DiffPanelEntry } from "./detailsContext";
 import { usePreviewHistory } from "./filePreview/usePreviewHistory";
 import type { WorkspaceTabs } from "../../../../../shared/chat/workspaceDrawer";
 
-const EMPTY_CHANGES: DiffPanelEntry = { id: "conversation-changes", get title() { return guiText("文件更改"); }, files: [] };
+const EMPTY_CHANGES: DiffPanelEntry = { id: "conversation-changes", get title() { return uiText("client.chat.fileChanges.049e14"); }, files: [] };
 
 export function useDetailsPanel({ selected, enabled, remoteFiles = false, drawer }: {
   selected: string | null; enabled: boolean; remoteFiles?: boolean; drawer: WorkspaceTabs;

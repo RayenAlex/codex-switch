@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { setLanguage, translate } from "../i18n";
+import { displayText, setLanguage, formatRemoteError } from "../i18n";
 import { defaultGraph, type Graph } from "../types";
 import { toEdges } from "./flowAdapter";
 import { connectionError } from "./graphEditing";
@@ -20,16 +20,16 @@ describe("canvas copy", () => {
   it("labels condition edges in the UI language", () => {
     const labels = (edges: ReturnType<typeof toEdges>) => edges.map((edge) => edge.label);
     expect(labels(toEdges(branch))).toEqual(["成立", "不成立"]);
-    expect(labels(toEdges(branch, (source, values) => translate("ru", source, values)))).toEqual(["Да", "Нет"]);
+    expect(labels(toEdges(branch, (source, values) => displayText(source, values, "ru")))).toEqual(["Да", "Нет"]);
     setLanguage("en");
     expect(labels(toEdges(branch))).toEqual(["True", "False"]);
   });
 
   it("keeps connection errors as Chinese sources and translates them for display", () => {
     const error = connectionError(branch, { source: "answer", target: "answer" });
-    expect(error).toBe("不能连接节点自身。");
-    expect(translate("en", error!)).toBe("A node can't connect to itself.");
-    expect(translate("ru", error!)).toBe("Нельзя связать узел с самим собой.");
+    expect(error).toBe("coze.index.aNodeCanTConnectToItself");
+    expect(formatRemoteError("en", error!)).toBe("A node can't connect to itself.");
+    expect(formatRemoteError("ru", error!)).toBe("Нельзя связать узел с самим собой.");
   });
 });
 

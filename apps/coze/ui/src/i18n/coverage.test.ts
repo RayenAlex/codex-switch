@@ -1,9 +1,10 @@
+import { resources } from '@remoteai/i18n/coze';
 import { readdirSync, readFileSync } from "node:fs";
-import { basename, join, relative, sep } from "node:path";
+import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
-import { dictionaries, dictionaryAreas, kindCopy, type Dictionary } from "./index";
+import { dictionaries, kindCopy, type Dictionary } from "./index";
 
 const SRC = fileURLToPath(new URL("..", import.meta.url));
 const HAN = /\p{Script=Han}/u;
@@ -59,8 +60,7 @@ function scan(file: string, text: string): Scan {
 }
 
 const scans = sourceFiles(SRC).map((path) => scan(posix(relative(SRC, path)), readFileSync(path, "utf8")));
-const areas = (["en", "ru"] as const).flatMap((language) => Object.entries(dictionaryAreas[language])
-  .map(([path, dictionary]) => ({ language, area: basename(path), dictionary })));
+const areas = (["en", "ru"] as const).map(language => ({ language, area: 'coze', dictionary: resources[language] }));
 
 describe("Coze UI dictionaries", () => {
   it("finds keys and loose Chinese literals", () => {
@@ -87,7 +87,7 @@ describe("Coze UI dictionaries", () => {
     const problems = areas.flatMap(({ language, area, dictionary }) => Object.entries(dictionary).flatMap(([key, value]) => {
       if (typeof value !== "string") return [`${language}/${area}: ${key} is not a string`];
       return [
-        ...(placeholders(key) === placeholders(value) ? [] : [`${language}/${area}: placeholders differ in ${key}`]),
+        ...(placeholders(resources.zh[key as keyof typeof resources.zh]) === placeholders(value) ? [] : [`${language}/${area}: placeholders differ in ${key}`]),
         ...(HAN.test(value) ? [`${language}/${area}: Chinese in the value of ${key}`] : []),
       ];
     }));

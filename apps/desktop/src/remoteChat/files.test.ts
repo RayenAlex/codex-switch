@@ -55,7 +55,8 @@ it('releases a late preview after disconnect and never reassigns it to a new own
 it('forwards file actions intact to host validation and does not open a remote save dialog', async () => {
   const files = new RemoteFiles();
   const target = { threadId: 'remote-thread', path: 'F:/remote/a.ts', line: 18, column: 4 };
-  for (const action of [{ type: 'open', application: 'vscode' }, { type: 'copyContents' }, { type: 'reveal' }]) {
+  for (const action of [{ type: 'open', application: 'vscode' }, { type: 'copyContents' },
+    { type: 'reveal' }, { type: 'metadata' }]) {
     await files.request({ operation: 'guiFileAction', target, action }, 'one');
     expect(invoke).toHaveBeenLastCalledWith('codex_gui_file_action', { request: { target, action } });
   }

@@ -1,8 +1,9 @@
+import { displayText } from '../../i18n/index';
 import { useThemeColor } from '../../theme/store';
 import type { ReactNode } from 'react';
 import { Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { t } from '../../i18n';
+
 import { useDisplaySettingsStyles as useS } from './displaySettingsStyles';
 
 export function DisplaySettingsSection({ icon, title, description, children }: {
@@ -14,8 +15,8 @@ export function DisplaySettingsSection({ icon, title, description, children }: {
   return <View style={s.section}>
     <View style={s.sectionHeading}>
       <MaterialCommunityIcons name={icon} size={21} color={color("#83b1ff", 'info')} />
-      <View style={s.headerCopy}><Text style={s.sectionTitle}>{t(title)}</Text>
-        <Text style={s.description}>{t(description)}</Text></View>
+      <View style={s.headerCopy}><Text style={s.sectionTitle}>{displayText(title)}</Text>
+        <Text style={s.description}>{displayText(description)}</Text></View>
     </View>{children}
   </View>;
 }

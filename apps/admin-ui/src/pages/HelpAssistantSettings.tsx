@@ -1,3 +1,4 @@
+import inlineCopy from '@remoteai/i18n/copy/inline/admin/pages/HelpAssistantSettings';
 import { Button, Card, Input, Select, Space, Typography } from "antd";
 import { useHelpSettings } from "../hooks/useHelpSettings";
 import type { OfficialModelsProps } from "../hooks/useOfficialModels";
@@ -23,31 +24,30 @@ export function HelpAssistantSettings({ api, canManage, catalog, zh }: OfficialM
   const busy = settings.loading || settings.saving;
   const editable = canManage && !busy && Boolean(settings.draft);
   const validModel = options.some((option) => option.value === settings.draft?.model);
-  return <Card title={zh ? "问题解答助手" : "Help assistant"} loading={settings.loading}
-    extra={<Button disabled={busy} onClick={settings.reload}>{zh ? "重新加载" : "Reload"}</Button>}>
+  return <Card title={zh ? inlineCopy["text_6c11196b"] : inlineCopy["Help_assistant_03ad1405"]} loading={settings.loading}
+    extra={<Button disabled={busy} onClick={settings.reload}>{zh ? inlineCopy["text_7bdd5ce1"] : inlineCopy["Reload_bdc090ec"]}</Button>}>
     <Typography.Paragraph type="secondary">{zh
-      ? "统一设置助手的模型、推理强度和回答方式。用户使用 Codex 中所选账户；三方账户不支持指定模型时会提示错误，不会自动换模型。"
-      : "Set the assistant’s model, reasoning effort and instructions. It uses the account selected in Codex "
-        + "and reports unsupported models without switching."}
+      ? inlineCopy["Codex_57a711d3"]
+      : inlineCopy.descriptionEn}
     </Typography.Paragraph>
     <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-      <div><Typography.Paragraph>{zh ? "助手模型" : "Assistant model"}</Typography.Paragraph>
-        <Select aria-label={zh ? "助手模型" : "Assistant model"} showSearch optionFilterProp="label"
+      <div><Typography.Paragraph>{zh ? inlineCopy["text_3a3ab887"] : inlineCopy["Assistant_model_7c8dbb91"]}</Typography.Paragraph>
+        <Select aria-label={zh ? inlineCopy["text_3a3ab887"] : inlineCopy["Assistant_model_7c8dbb91"]} showSearch optionFilterProp="label"
           style={{ width: "100%", maxWidth: 400 }} disabled={!editable} options={options}
           value={settings.draft?.model || undefined}
-          placeholder={zh ? "从已缓存的官方模型中选择" : "Choose a cached official model"}
+          placeholder={zh ? inlineCopy["text_583db158"] : inlineCopy["Choose_a_cached_official_model_ac768bb4"]}
           onChange={(model: string) => settings.setDraft((draft) => draft && { ...draft, model })} />
         {!options.length && <Typography.Paragraph type="secondary">{zh
-          ? "暂无可用模型，请先更新下方的官方模型列表。" : "Update the official model list below first."}</Typography.Paragraph>}
+          ? inlineCopy["text_9b673254"] : inlineCopy["Update_the_official_model_list_cfe00d84"]}</Typography.Paragraph>}
         {settings.draft?.model && !validModel && <Typography.Paragraph type="warning">{zh
-          ? "已保存的模型不在当前列表中，请重新选择。"
-          : "The saved model is no longer listed. Choose another model."}
+          ? inlineCopy["text_bfef7f51"]
+          : inlineCopy["The_saved_model_is_no_253b2155"]}
         </Typography.Paragraph>}
       </div>
       <HelpReasoningField value={settings.draft?.effort} disabled={!editable} zh={zh}
         onChange={(effort) => settings.setDraft((draft) => draft && { ...draft, effort })} />
-      <div><Typography.Paragraph>{zh ? "系统提示词" : "System instructions"}</Typography.Paragraph>
-        <Input.TextArea aria-label={zh ? "系统提示词" : "System instructions"}
+      <div><Typography.Paragraph>{zh ? inlineCopy["text_0894b78b"] : inlineCopy["System_instructions_f83a6ca7"]}</Typography.Paragraph>
+        <Input.TextArea aria-label={zh ? inlineCopy["text_0894b78b"] : inlineCopy["System_instructions_f83a6ca7"]}
           value={settings.draft?.systemPrompt ?? ""}
           readOnly={!canManage} disabled={busy || !settings.draft} maxLength={16000} autoSize={{ minRows: 5, maxRows: 12 }}
           onChange={(event) => settings.setDraft((draft) => draft && { ...draft, systemPrompt: event.target.value })} />
@@ -58,7 +58,7 @@ export function HelpAssistantSettings({ api, canManage, catalog, zh }: OfficialM
         disabled={!editable || !validModel || !settings.draft?.systemPrompt.trim()
           || settings.draft.questions.some((question) => !question.zh.trim() && !question.en.trim())}
         onClick={() => void settings.save()}>
-        {zh ? "保存助手设置" : "Save assistant settings"}</Button>}
+        {zh ? inlineCopy["text_d074a286"] : inlineCopy["Save_assistant_settings_5f60f7df"]}</Button>}
     </Space>
   </Card>;
 }

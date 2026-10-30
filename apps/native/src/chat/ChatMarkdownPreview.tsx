@@ -7,8 +7,9 @@ import { ChatCodeBlock } from './ChatCodeBlock';
 import { CopyTextButton } from './CopyTextButton';
 import { ChatMarkdown } from './Markdown';
 import { palette, useStyles } from './styles';
+import { textMetrics } from '../theme/text';
 
-const PREVIEW_MODES = [{ value: 'preview', get label() { return t("预览"); } }, { value: 'source', get label() { return t("原文"); } }] as const;
+const PREVIEW_MODES = [{ value: 'preview', get label() { return t("client.chat.preview"); } }, { value: 'source', get label() { return t("client.chat.source"); } }] as const;
 
 export function ChatMarkdownPreview({ text, line }: { text: string; line?: number }) {
   const previewStyles = usePreviewStyles();
@@ -24,24 +25,25 @@ export function ChatMarkdownPreview({ text, line }: { text: string; line?: numbe
           <Text style={previewStyles.tabText}>{item.label}</Text>
         </Pressable>)}
       </View>
-      <CopyTextButton text={text} label={t("复制原文")} variant="labeled" />
+      <CopyTextButton text={text} label={t("client.chat.copySource")} variant="labeled" />
     </SheetInset>
-    <SheetScrollView key={mode} contentContainerStyle={previewStyles.content}>
-      {!!line && <Text style={styles.subtitle}>{t('引用位置：第 {line} 行', { line })}</Text>}
-      {mode === 'source' && <ChatCodeBlock text={text} label={t("原文")} language="markdown"
-        lineNumbers copyLabel={t("复制原文")} />}
+    <SheetScrollView key={mode} style={previewStyles.scroll} contentContainerStyle={previewStyles.content}>
+      {!!line && <Text style={styles.subtitle}>{t("client.shared.referencedLine", { line })}</Text>}
+      {mode === 'source' && <ChatCodeBlock text={text} label={t("client.chat.source")} language="markdown"
+        lineNumbers copyLabel={t("client.chat.copySource")} />}
       {mode === 'preview' && (text.trim()
-        ? <ChatMarkdown text={text} /> : <Text style={styles.subtitle}>{t("（空文件）")}</Text>)}
+        ? <ChatMarkdown text={text} /> : <Text style={styles.subtitle}>{t("client.chat.emptyFile")}</Text>)}
     </SheetScrollView>
   </View>;
 }
 
 const usePreviewStyles = createThemedStyles((color) => ({
-  container: { flexShrink: 1 },
+  container: { flex: 1, minHeight: 0 },
+  scroll: { flex: 1 },
   toolbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 },
   tabs: { flexDirection: 'row', gap: 4 },
   tab: { minHeight: 44, paddingHorizontal: 16, justifyContent: 'center', borderRadius: 12 },
   selectedTab: { backgroundColor: color('#e3f3ed', 'canvas') },
-  tabText: { color: color(palette.green, 'accent'), fontSize: 14, fontWeight: '700' },
+  tabText: { ...textMetrics(14, 21), color: color(palette.green, 'accent'), fontWeight: '700' },
   content: { paddingTop: 12, paddingBottom: 20 },
 }));

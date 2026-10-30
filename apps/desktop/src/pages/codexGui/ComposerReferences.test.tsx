@@ -49,16 +49,17 @@ it("shows local image thumbnails alongside ordinary file pills before any conver
   expect(remove).toHaveBeenCalledWith(photo.path);
 });
 
-it("loads the original on demand and closes the preview when leaving the composer", async () => {
+it("loads the local original when opening the preview and closes it when leaving the composer", async () => {
   await render();
-  vi.mocked(invoke).mockResolvedValue({ url: original });
+  let resolveOriginal!: (value: { url: string }) => void;
+  vi.mocked(invoke).mockReturnValue(new Promise(resolve => { resolveOriginal = resolve; }));
   await click(`放大查看：${photo.name}`);
   expect(window.document.querySelector("dialog img")?.getAttribute("src")).toBe(thumbnail);
-  expect(invoke).toHaveBeenCalledTimes(1);
-  await act(async () => host.querySelector<HTMLButtonElement>('.cs-image-original')!.click());
+  expect(invoke).toHaveBeenCalledTimes(2);
   expect(invoke).toHaveBeenLastCalledWith("codex_gui_attachment_preview", {
     request: { path: photo.path, variant: "original" },
   });
+  await act(async () => resolveOriginal({ url: original }));
   expect(window.document.querySelector("dialog img")?.getAttribute("src")).toBe(original);
   await render(undefined, false);
   expect(window.document.querySelector("dialog")).toBeNull();

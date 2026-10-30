@@ -4,6 +4,7 @@ import { guiApi } from "./api";
 import { testModels } from "./testModels";
 import { GuiController } from "./controller";
 import type { GuiEvent, Thread } from "./types";
+import { saveMessageQueueEnabled } from "../../../../../shared/chat/messageQueueSettings";
 
 vi.mock("./api", () => ({ guiApi: { connect: vi.fn(), request: vi.fn(), subscribe: vi.fn() } }));
 const thread: Thread = { id: "one", cwd: "", preview: "hello", updatedAt: 1, turns: [] };
@@ -37,7 +38,53 @@ beforeEach(async () => {
   receive({ method: "turn/started", params: { threadId: "one",
     turn: { id: "live", status: "inProgress", items: [] } } });
 });
-afterEach(() => controller.dispose());
+afterEach(() => { controller.dispose(); localStorage.clear(); });
+
+it("sends immediately with all content when queuing is disabled and leaves waiting messages intact", async () => {
+  await controller.send("already queued", []);
+  saveMessageQueueEnabled(false);
+  vi.mocked(guiApi.request).mockClear();
+  const images = ["data:image/png;base64,aW1hZ2U="];
+  const skills = [{ name: "review", path: "/skills/review" }];
+  const attachments = [{ kind: "file" as const, name: "notes.md", path: "/notes.md" }];
+  expect(await controller.send("right now", images, skills, attachments)).toBe(true);
+  expect(guiApi.request).toHaveBeenCalledExactlyOnceWith({ operation: "steer", threadId: "one", turnId: "live",
+    text: "right now", images, skills, attachments });
+  expect(messages().map(message => message.text)).toEqual(["already queued"]);
+  const userMessages = controller.getSnapshot().conversations.one.turns[0].items;
+  expect(userMessages).toEqual([expect.objectContaining({ type: "userMessage", content: [
+    { type: "text", text: "right now" }, { type: "image", url: images[0] },
+    { type: "mention", ...skills[0] }, { type: "mention", name: "notes.md", path: "/notes.md" },
+  ] })]);
+  saveMessageQueueEnabled(true);
+  await controller.send("queue again", []);
+  expect(messages().map(message => message.text)).toEqual(["already queued", "queue again"]);
+});
+
+it("does not queue or duplicate an immediate send that fails or is still pending", async () => {
+  saveMessageQueueEnabled(false);
+  let reject!: (error: Error) => void;
+  vi.mocked(guiApi.request).mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
+  const first = controller.send("first", []);
+  expect(controller.getSnapshot().sending).toBe(true);
+  expect(await controller.send("duplicate", [])).toBe(false);
+  reject(new Error("send failed"));
+  expect(await first).toBe(false);
+  expect(controller.getSnapshot()).toMatchObject({ sending: false, error: "send failed" });
+  expect(messages()).toEqual([]);
+});
+
+it("starts a normal turn when queuing is disabled and the conversation is idle", async () => {
+  saveMessageQueueEnabled(false);
+  await finish();
+  const original = vi.mocked(guiApi.request).getMockImplementation()!;
+  vi.mocked(guiApi.request).mockImplementation(async request => request.operation === "send"
+    ? { turn: { id: "direct", status: "inProgress", items: [] } } : original(request));
+  expect(await controller.send("next turn", [])).toBe(true);
+  expect(guiApi.request).toHaveBeenCalledWith(expect.objectContaining({ operation: "send", text: "next turn" }));
+  expect(messages()).toEqual([]);
+  expect(controller.getSnapshot().conversations.one.activeTurn).toBe("direct");
+});
 
 it("sends queued turns with the access saved when queued, including after switching conversations", async () => {
   controller.settings({ access: "danger-full-access" });

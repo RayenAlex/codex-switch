@@ -4,7 +4,8 @@ import type { DownloadConnection } from '../../../web/src/downloads/types';
 import { guiApi } from '../pages/codexGui/api';
 import { localGitClient } from '../pages/codexGui/localGitClient';
 import { fileDownloadByteLimit } from '../../../../shared/remote-chat/policy';
-import { guiText } from '../i18n/guiText';
+import { uiText } from "../i18n/uiText";
+import { sshApi } from '../pages/codexGui/terminal/sshApi';
 
 export const LOCAL_DOWNLOAD_OWNER = 'desktop-local';
 const client: DownloadConnection['client'] = {
@@ -22,7 +23,7 @@ const files: DownloadConnection['files'] = {
 export function useLocalGitDownloads() {
   useEffect(() => {
     if (downloadManager.connectionForGit(localGitClient)) return;
-    downloadManager.register({ owner: LOCAL_DOWNLOAD_OWNER, deviceId: 'local', deviceName: guiText('本机'),
-      ready: true, mode: 'direct', client, files, git: localGitClient });
+    downloadManager.register({ owner: LOCAL_DOWNLOAD_OWNER, deviceId: 'local', deviceName: uiText("client.composer.thisComputer"),
+      ready: true, mode: 'direct', client, files, git: localGitClient, ssh: sshApi });
   }, []);
 }

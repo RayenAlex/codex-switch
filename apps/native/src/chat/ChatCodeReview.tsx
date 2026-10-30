@@ -19,13 +19,13 @@ export function ChatCodeReview({ comment, copy }: { comment: ReviewComment; copy
   const openFile = useContext(ChatFileContext);
   const { label, reference } = reviewLocation(comment);
   const open = reference && openFile ? () => openFile(reference) : undefined;
-  return <View style={reviewStyles.comment} accessibilityLabel={t("代码审查意见")}>
+  return <View style={reviewStyles.comment} accessibilityLabel={t("client.mobile.codeReviewComments")}>
     <View style={reviewStyles.title}>
       <MaterialCommunityIcons name="file-search-outline" size={16} color={color("#b07824", 'warning')} />
       <Text selectable style={[reviewStyles.text, reviewStyles.titleText, styles.fill]}>{comment.title}</Text>
     </View>
     <Text selectable style={[reviewStyles.text, reviewStyles.body]}>{comment.body}</Text>
-    <SelectableChatText style={reviewStyles.text} copy={copy}>
+    <SelectableChatText style={reviewStyles.text} copy={copy} layoutKey={label}>
       <Text accessibilityRole={open ? 'link' : undefined} onPress={open}
         style={open && reviewStyles.link}>{label}</Text>
     </SelectableChatText>

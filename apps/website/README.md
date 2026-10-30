@@ -12,11 +12,11 @@ React 18 + Ant Design 5 + Vite 的静态多页官网。源码位于 `apps/websit
   Dream Skin、2FA、悬浮用量球。
 - 每个功能页包含配图、适用场景、三组详细说明、操作步骤、使用条件、
   常见问题、相关功能和仓库资料链接。
-- 功能文案位于 `src/content/features-*.ts`，通用文案位于 `src/content/copy.ts`。
+- 功能文案位于 `../../packages/i18n/src/website-content/features-*.ts`，通用文案位于 `../../packages/i18n/src/website-content/copy.ts`。
   修改功能时同步维护中文和英文，核对该条目 `source` 指向的项目文档。
-- 俄文文案单独存放：通用文案在 `src/content/copy-ru.ts`，功能文案按 slug 存放在
-  `src/content/features-ru.ts`。俄文缺失的条目在页面中显示英文，构建时输出警告，不会阻止发布。
-- 导航、示意图和页面元信息中的短文案集中在 `src/lib/ui-text.ts`，每条包含中文、英文和俄文。
+- 俄文文案单独存放：通用文案在 `../../packages/i18n/src/website-content/copy-ru.ts`，功能文案按 slug 存放在
+  `../../packages/i18n/src/website-content/features-ru.ts`。俄文缺失的条目在页面中显示英文，构建时输出警告，不会阻止发布。
+- 导航、示意图和页面元信息中的短文案集中在 `../../packages/i18n/src/website-content/ui-text.ts`，每条包含中文、英文和俄文。
 
 配图复用 `docs/assets/codex-switch-*.png` 中的产品截图。构建时由 Sharp 生成
 WebP 和窄屏版本；小尺寸图片不会放大。跨设备和电脑助手使用代码绘制的流程示意，
@@ -101,8 +101,8 @@ Agent 与扩展、评测与学习资料。入口位于页脚的“资源 → AI 
 页面继承纯白 / 深色主题，并生成 canonical、语言链接、ItemList 结构化数据和 Markdown 文本版，
 自动加入 sitemap 与 llms.txt。
 
-链接以及中文、英文用途说明统一维护在 `src/content/resources.ts`，页面文案位于
-`src/content/resources-copy.ts`。俄文页面文案、分类和用途说明位于 `src/content/resources-ru.ts`，
+链接以及中文、英文用途说明统一维护在 `../../packages/i18n/src/website-content/resources.ts`，页面文案位于
+`../../packages/i18n/src/website-content/resources-copy.ts`。俄文页面文案、分类和用途说明位于 `../../packages/i18n/src/website-content/resources-ru.ts`，
 用途说明按资源名称存放；缺失的条目显示英文，构建时输出警告。本次链接核对日期：2026-10-22。
 新增或更新资源时检查官网归属、链接目标和用途描述；保留官方入口，避免中转站与推广链接。
 模型版本、价格和榜单会变化，不在此复制这些数值；目录收录也不代表 Remote AI 的兼容性承诺。

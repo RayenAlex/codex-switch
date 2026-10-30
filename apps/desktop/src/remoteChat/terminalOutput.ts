@@ -10,6 +10,15 @@ export class TerminalOutput {
   private readonly entries: Entry[] = [];
   private sequence = 0;
   private bytes = 0;
+  private delivered = 0;
+  coalesceOutput = false;
+
+  get cursor() { return this.sequence; }
+
+  acknowledgedBytes(from: number, to: number) {
+    return this.entries.reduce((total, entry) =>
+      total + (entry.sequence > from && entry.sequence <= to ? entry.bytes : 0), 0);
+  }
 
   push(event: TerminalEvent) {
     if (event.type !== 'output') { this.append(event, 0); return; }
@@ -20,7 +29,11 @@ export class TerminalOutput {
   }
 
   private append(event: TerminalEvent, bytes: number) {
-    this.entries.push({ sequence: ++this.sequence, event, bytes });
+    const previous = this.entries.at(-1);
+    if (this.coalesceOutput && event.type === 'output' && previous?.event.type === 'output'
+      && previous.sequence > this.delivered && previous.bytes + bytes <= MAX_READ_BYTES) {
+      previous.event.data.push(...event.data); previous.bytes += bytes;
+    } else this.entries.push({ sequence: ++this.sequence, event, bytes });
     this.bytes += bytes;
     while (this.bytes > MAX_OUTPUT_BYTES || this.entries.length > MAX_EVENTS) {
       this.bytes -= this.entries.shift()!.bytes;
@@ -38,6 +51,7 @@ export class TerminalOutput {
       events.push(entry.event); next = entry.sequence; bytes += entry.bytes;
       if (bytes >= MAX_READ_BYTES) break;
     }
+    this.delivered = Math.max(this.delivered, next);
     return { found: true, events, cursor: next, truncated };
   }
 }

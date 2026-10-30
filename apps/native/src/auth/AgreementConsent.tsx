@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Keyboard, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { agreementCopy, getUserAgreement } from '../../../../shared/legal/agreement';
+import { agreementCopy, getUserAgreement } from '@remoteai/i18n/legal/agreement';
 import type { AgreementConsent as Consent } from '../../../../shared/legal/useAgreementConsent';
 import { useStyles } from './agreementStyles';
 import { useLanguage } from '../i18n';
@@ -28,6 +28,7 @@ export function AgreementConsent({ consent, disabled }: { consent: Consent; disa
       <Pressable accessibilityRole="button" onPress={read} style={styles.linkButton}>
         <Text style={styles.link}>{copy.link}</Text>
       </Pressable>
+      {copy.suffix ? <Text style={styles.checkText}>{copy.suffix}</Text> : null}
     </View>
     <Modal transparent visible={reading || consent.pendingAction !== null} animationType="fade"
       supportedOrientations={['portrait', 'landscape-left', 'landscape-right']}

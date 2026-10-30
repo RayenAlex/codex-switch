@@ -72,7 +72,7 @@ export function titleBackend(settingsStatus = 200) {
         reset: false, events: args.cursor ? events.slice(args.cursor.sequence) : [] };
       if (command === 'codex_gui_usage_summary') {
         await new Promise<void>((resolve) => usage.push(resolve));
-        result = { totalTokens: 123 };
+        result = { totalTokens: 123, estimatedCostUsd: 0 };
       }
       await route.fulfill({ json: { ok: true, result } });
     });

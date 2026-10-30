@@ -38,7 +38,6 @@ afterEach(async () => {
 async function render(load = async () => original) {
   await act(async () => root.render(<ImagePreview thumbnail="thumbnail" description="截图"
     load={load} close={() => {}} />));
-  await act(async () => container.querySelector<HTMLButtonElement>('.cs-image-original')?.click());
 }
 
 async function openMenu() {
@@ -94,12 +93,21 @@ it("does not start overlapping actions while copying or saving", async () => {
 
 it("keeps actions unavailable while the original is loading or has failed", async () => {
   let fail: (reason: Error) => void = () => {};
-  await render(() => new Promise((_, reject) => { fail = reject; }));
+  const load = vi.fn().mockImplementationOnce(() => new Promise((_, reject) => { fail = reject; }))
+    .mockResolvedValue(original);
+  await render(load);
+  expect(container.querySelector('.cs-image-original')).toBeNull();
   await openMenu();
   expect(Menu.new).not.toHaveBeenCalled();
   await act(async () => fail(new Error("missing")));
   await openMenu();
   expect(Menu.new).not.toHaveBeenCalled();
+  expect(load).toHaveBeenCalledOnce();
+  await act(async () => container.querySelector<HTMLButtonElement>('.cs-image-original')!.click());
+  expect(load).toHaveBeenCalledTimes(2);
+  expect(container.querySelector('dialog img')?.getAttribute('src')).toBe(original);
+  await openMenu();
+  expect(Menu.new).toHaveBeenCalledOnce();
 });
 
 it("does not capture right-button drags and preserves browser context menus", async () => {

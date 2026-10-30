@@ -10,6 +10,7 @@ macro_rules! log_proxy_error {
     }};
 }
 
+mod aggregate_capacity;
 mod anthropic_reasoning;
 mod anthropic_stream;
 mod anthropic_upstream;
@@ -52,6 +53,7 @@ mod quota_sse;
 mod request_error;
 pub(crate) mod response_header_timeout;
 mod responses_lite;
+mod session_cost;
 pub(crate) mod session_metrics;
 mod session_titles;
 pub(crate) mod sse_idle_timeout;
@@ -134,6 +136,7 @@ include!("sse.rs");
 #[cfg(test)]
 mod tests {
     include!("tests/aggregate_failover.rs");
+    include!("tests/aggregate_recovery.rs");
     include!("tests/aggregate_official.rs");
     include!("tests/shared_groups.rs");
     include!("tests/provider_request_options.rs");
@@ -153,6 +156,7 @@ mod tests {
     include!("tests/part_07.rs");
     include!("tests/chat_bridge_headers.rs");
     include!("tests/provider_api_fallback.rs");
+    include!("tests/provider_responses_tools.rs");
     include!("tests/part_08.rs");
     include!("tests/part_09.rs");
     include!("tests/conversation.rs");

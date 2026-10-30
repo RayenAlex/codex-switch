@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import { t } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import type { AttachmentReference, ComposerPlugin } from '../../../desktop/src/pages/codexGui/attachmentTypes';
@@ -17,7 +18,7 @@ function validated<T>(step: () => T): T {
 }
 
 export function attachmentErrorMessage(cause: unknown) {
-  return cause instanceof AttachmentRejection ? t(cause.message) : t("文件添加失败，请重新选择。");
+  return cause instanceof AttachmentRejection ? displayError(cause.message) : t("client.chat.couldNotAddTheFilePleaseChooseItAgain");
 }
 
 export function useComposerAttachments({ threadId, sending }: { threadId: string | null; sending: boolean }) {
@@ -59,7 +60,7 @@ export function useComposerAttachments({ threadId, sending }: { threadId: string
     try {
       setItems(remoteAttachments([...items.filter(entry => entry.path !== item.path), item])); setError('');
       return true;
-    } catch { setError(t('每条消息最多添加 8 个附件或对话引用。')); return false; }
+    } catch { setError(t("client.chat.eachMessageCanHaveUpTo8AttachmentsOrConversation")); return false; }
   };
   return { items, busy, error, pick, add,
     addPlugin: (plugin: ComposerPlugin) => add({ kind: 'plugin', name: plugin.interface?.displayName || plugin.name,

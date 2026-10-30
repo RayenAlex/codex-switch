@@ -4,7 +4,8 @@ import type { AuthSession } from '../types';
 import { downloadManager, downloadOwner } from './manager';
 
 export function useDownloadConnection(options: {
-  session: AuthSession; deviceId: string; deviceName: string; controller: ChatController; enabled?: boolean;
+  session: AuthSession; deviceId: string; deviceName: string; enabled?: boolean;
+  controller: Pick<ChatController, 'snapshot' | 'subscribe' | 'downloads' | 'files' | 'guiTools'>;
 }) {
   const { session, deviceId, deviceName, controller, enabled = true } = options;
   useEffect(() => {
@@ -15,7 +16,7 @@ export function useDownloadConnection(options: {
       downloadManager.bind({ owner: downloadOwner(session), deviceId, deviceName, ready: state.ready, mode: state.mode,
         threadId: state.selected?.id, cwd: state.selected?.cwd ?? state.draftProject?.cwd,
         client: controller.downloads, files: controller.files, git: controller.guiTools.git,
-        projectBrowser: controller.guiTools.projectBrowser });
+        projectBrowser: controller.guiTools.projectBrowser, ssh: controller.guiTools.terminal.ssh });
     };
     update();
     const unsubscribe = controller.subscribe(update);

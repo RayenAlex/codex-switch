@@ -31,6 +31,11 @@ export function createGitFixture(): SyncGitClient {
     { path: 'docs/工具说明.md', originalPath: 'docs/旧说明.md', status: 'R' },
   ]]]);
   return {
+    conflict: (_cwd, path) => ({ path, version: 'conflict-v1', base: 'base\n', ours: 'left\n',
+      theirs: 'right\n', result: '<<<<<<< HEAD\nleft\n=======\nright\n>>>>>>> incoming\n', markerSize: 7 }),
+    resolveConflict: input => { files = files.map(file => file.path === input.path
+      ? { ...file, conflict: false, status: 'M ', version: `${file.version}-resolved` } : file); },
+    continueIntegration: () => undefined,
     settings: autoMessage => {
       if (autoMessage !== undefined) settings = { autoMessage, revision: settings.revision + 1 };
       return { ...settings };
@@ -83,6 +88,9 @@ export function createGitFixture(): SyncGitClient {
 export function createAsyncGitFixture(): GitClient {
   const git = createGitFixture();
   return { repository: async cwd => git.repository(cwd), action: async input => git.action(input),
+    conflict: async (cwd, path) => git.conflict(cwd, path),
+    resolveConflict: async input => git.resolveConflict(input),
+    continueIntegration: async (cwd, version) => git.continueIntegration(cwd, version),
     settings: async autoMessage => git.settings(autoMessage),
     generateMessage: async input => git.generateMessage(input),
     revision: async input => git.revision(input),

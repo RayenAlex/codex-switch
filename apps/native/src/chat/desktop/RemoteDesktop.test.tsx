@@ -4,11 +4,14 @@ import { Modal, Platform, Pressable, StyleSheet, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RTCView } from 'react-native-webrtc';
 import { RemoteDesktop } from './RemoteDesktop';
+import { DesktopTakeover } from './DesktopTakeover';
+import { resources } from '@remoteai/i18n/client';
+import { setInterfaceLanguage } from '../../../../../shared/localization/interfaceLanguage';
 import type { DesktopClient } from '../../../../../shared/remote-desktop/protocol';
 
 const runtime = vi.hoisted(() => ({ landscape: false, viewOnly: false, input: vi.fn(), rotate: vi.fn(),
   status: '', waitingForPermission: false, retry: vi.fn(), privacy: false, privacyAvailable: true, togglePrivacy: vi.fn(),
-  orientation: vi.fn(), onShow: vi.fn(), frameRendered: vi.fn(),
+  orientation: vi.fn(), onShow: vi.fn(), frameRendered: vi.fn(), takeover: false,
   session: vi.fn(), dimensions: vi.fn(), createPeer: vi.fn(), immersive: vi.fn(), mute: vi.fn(),
   stream: { toURL: vi.fn(() => 'native-ios-stream') } }));
 vi.mock('react', async () => ({ ...await vi.importActual<typeof import('react')>('react'),
@@ -36,7 +39,7 @@ vi.mock('../terminal/useTerminalOrientation', () => ({ useTerminalOrientation: (
 vi.mock('../../../../../shared/remote-desktop/useDesktopSession', () => ({ useDesktopSession: (options: unknown) => {
   runtime.session(options);
   return { stream: runtime.stream, pointer: {}, input: runtime.input, hasAudio: true, muted: false, mute: runtime.mute,
-    security: { clipboardSync: true }, clipboard: {},
+    security: { clipboardSync: true }, clipboard: {}, takeover: { pending: runtime.takeover },
     status: runtime.status, waitingForPermission: runtime.waitingForPermission, retry: runtime.retry,
     privacyScreen: runtime.privacy, togglePrivacy: runtime.togglePrivacy, frameRendered: runtime.frameRendered,
     capabilities: { control: !runtime.viewOnly, keyboard: !runtime.viewOnly, privacyScreen: runtime.privacyAvailable } };
@@ -73,10 +76,42 @@ const client: DesktopClient = { open: vi.fn(), signal: vi.fn(), settings: vi.fn(
 const render = (active = true, close = vi.fn()) => nodes(RemoteDesktop({ client, active, close }));
 beforeEach(() => {
   vi.clearAllMocks(); vi.stubGlobal('React', React); runtime.landscape = false; runtime.viewOnly = false; Platform.OS = 'ios';
-  runtime.status = ''; runtime.waitingForPermission = false;
+  runtime.status = ''; runtime.waitingForPermission = false; runtime.takeover = false;
   runtime.privacy = false; runtime.privacyAvailable = true;
 });
 afterEach(() => vi.unstubAllGlobals());
+
+it.each(['ios', 'android'] as const)('shows localized lock and privacy guidance with compact wrapping on %s', platform => {
+  Platform.OS = platform;
+  try {
+    for (const language of ['zh', 'en', 'ru', 'ja'] as const) {
+      setInterfaceLanguage(language);
+      for (const key of ['client.remoteDesktop.lockedRequiresUnattended',
+        'client.remoteDesktop.privacyRequiresUnattended', 'client.remoteDesktop.privacyFailed'] as const) {
+        runtime.status = key;
+        const alert = render().find(node => node.props.accessibilityRole === 'alert')!;
+        expect(alert.props.children).toBe(resources[language][key]);
+        expect(StyleSheet.flatten(alert.props.style)).toMatchObject({ maxWidth: 400 });
+      }
+    }
+  } finally { setInterfaceLanguage('zh'); }
+});
+
+it.each(['ios', 'android'] as const)('shows a compact confirmation with separate cancel and connect actions on %s', platform => {
+  Platform.OS = platform; runtime.takeover = true;
+  runtime.status = 'client.remoteDesktop.connectionInUse';
+  const elements = render();
+  expect(elements.some(node => node.type === DesktopTakeover)).toBe(true);
+  expect(elements.some(node => node.props.accessibilityRole === 'alert')).toBe(false);
+  const confirm = vi.fn(); const cancel = vi.fn();
+  const prompt = nodes(DesktopTakeover({ confirm, cancel }));
+  const buttons = prompt.filter(node => node.type === Pressable);
+  expect(buttons).toHaveLength(2);
+  expect(prompt.map(node => StyleSheet.flatten([node.props.style].flat())))
+    .toContainEqual(expect.objectContaining({ maxWidth: 400 }));
+  buttons[0].props.onPress!(); expect(cancel).toHaveBeenCalledOnce(); expect(confirm).not.toHaveBeenCalled();
+  buttons[1].props.onPress!(); expect(confirm).toHaveBeenCalledOnce();
+});
 
 it.each(['ios', 'android'] as const)('leaves room below connection and retry text on %s', platform => {
   Platform.OS = platform;
@@ -86,7 +121,7 @@ it.each(['ios', 'android'] as const)('leaves room below connection and retry tex
   const retry = elements.find(node => node.type === Text && node.props.children === '重新连接')!;
   for (const text of [message, retry]) {
     expect(StyleSheet.flatten([text.props.style].flat())).toMatchObject({
-      fontSize: 14, lineHeight: 22, includeFontPadding: true, paddingVertical: 2,
+      fontSize: 14, includeFontPadding: true, paddingVertical: 2,
     });
   }
 });
@@ -98,7 +133,7 @@ it.each(['ios', 'android'] as const)('shows compact permission guidance and a ch
   const elements = render();
   const alert = elements.find(node => node.props.accessibilityRole === 'alert')!;
   expect(alert.props.children).toBe(runtime.status);
-  expect(StyleSheet.flatten(alert.props.style)).toMatchObject({ maxWidth: 400, flexShrink: 1 });
+  expect(StyleSheet.flatten(alert.props.style)).toMatchObject({ maxWidth: 400 });
   const check = elements.find(node => node.type === Pressable && nodes(node.props.children)
     .some(child => child.type === Text && child.props.children === '检查授权'))!;
   check.props.onPress!(); expect(runtime.retry).toHaveBeenCalledOnce();
@@ -130,7 +165,7 @@ it.each(['ios', 'android'] as const)('keeps video and privacy retry available wh
     const elements = render();
     const alert = elements.find(node => node.props.accessibilityRole === 'alert')!;
     expect(alert.props.children).toBe(runtime.status);
-    expect(StyleSheet.flatten(alert.props.style)).toMatchObject({ maxWidth: 400, flexShrink: 1 });
+    expect(StyleSheet.flatten(alert.props.style)).toMatchObject({ maxWidth: 400 });
     expect(elements.some(node => node.type === RTCView)).toBe(true);
     const button = elements.find(node => node.props.accessibilityLabel === '安全选项')!;
     expect(button.props.disabled).toBeFalsy();

@@ -25,12 +25,12 @@ export function StopCozeButton() {
     if (desktop) window.parent.postMessage(COZE_DESKTOP_STOP_READY, desktop.origin);
   }, [desktop]);
   if (!desktop) return null;
-  return <Popconfirm title={t("停止 Coze？已保存的内容会保留。")} placement="topLeft"
-    okText={t("停止")} cancelText={t("取消")} disabled={desktop.busy} styles={{ root: { maxWidth: 400 } }}
+  return <Popconfirm title={t("coze.core.stopCozeYourSavedContentWillBeKept")} placement="topLeft"
+    okText={t("coze.core.stop")} cancelText={t("coze.core.cancel")} disabled={desktop.busy} styles={{ root: { maxWidth: 400 } }}
     onConfirm={() => window.parent.postMessage(COZE_DESKTOP_STOP, desktop.origin)}>
-    <button type="button" className="studio-nav-button" aria-label={t("停止 Coze")}
+    <button type="button" className="studio-nav-button" aria-label={t("coze.core.stopCoze")}
       disabled={desktop.busy} aria-busy={desktop.busy}>
-      <Power size={18} /><span>{desktop.busy ? t("正在停止…") : t("停止 Coze")}</span>
+      <Power size={18} /><span>{desktop.busy ? t("coze.core.stopping") : t("coze.core.stopCoze")}</span>
     </button>
   </Popconfirm>;
 }

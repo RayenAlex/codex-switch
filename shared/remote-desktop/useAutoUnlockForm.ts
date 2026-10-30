@@ -8,11 +8,11 @@ export function useAutoUnlockForm(props: Pick<SecuritySettingsProps, 'connected'
   const [password, setPassword] = useState('');
   const cancel = () => { setEditing(false); setUsername(''); setPassword(''); };
   useEffect(() => { if (!props.connected || !props.control) cancel(); }, [props.connected, props.control]);
-  const save = () => {
+  const save = async () => {
     if (!username.trim() || !password) return;
     const change = { enabled: true as const, username: username.trim(), password };
-    cancel();
-    void props.update({ autoUnlock: change });
+    setPassword('');
+    if (await props.update({ autoUnlock: change })) cancel();
   };
   const toggle = () => {
     if (props.value.autoUnlock?.enabled) { cancel(); void props.update({ autoUnlock: { enabled: false } }); }

@@ -4,6 +4,8 @@ use serde::Serialize;
 use std::{fs::File, io::Read, path::Path};
 
 const MAX_TEXT_BYTES: u64 = 2 * 1024 * 1024;
+// Matches the largest selectable JSON highlight limit in shared/file-preview/jsonHighlightLimit.ts.
+const MAX_JSON_BYTES: u64 = 100 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,6 +27,8 @@ pub(crate) struct PreviewData {
     pub(super) name: String,
     pub(super) kind: PreviewKind,
     pub(super) text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) size: Option<u64>,
     pub(super) url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) line: Option<u32>,
@@ -41,16 +45,16 @@ pub(super) fn load(path: &Path) -> Result<Option<PreviewData>> {
     } else {
         kind(path)
     };
-    let text = if matches!(
+    let (text, size) = if matches!(
         kind,
         PreviewKind::Html | PreviewKind::Markdown | PreviewKind::Text
     ) {
-        let Some(text) = read_text(path)? else {
+        let Some((text, size)) = read_text(path)? else {
             return Ok(None);
         };
-        Some(text)
+        (Some(text), Some(size))
     } else {
-        None
+        (None, None)
     };
     Ok(Some(PreviewData {
         session_id: String::new(),
@@ -62,6 +66,7 @@ pub(super) fn load(path: &Path) -> Result<Option<PreviewData>> {
             .into_owned(),
         kind,
         text,
+        size,
         url: String::new(),
         line: None,
         column: None,
@@ -93,17 +98,22 @@ fn is_transport_stream(path: &Path) -> Result<bool> {
     )
 }
 
-fn read_text(path: &Path) -> Result<Option<String>> {
+fn read_text(path: &Path) -> Result<Option<(String, u64)>> {
+    let limit = match extension(path).as_str() {
+        "json" | "jsonc" | "json5" | "geojson" | "ipynb" => MAX_JSON_BYTES,
+        _ => MAX_TEXT_BYTES,
+    };
     let file = File::open(path)?;
-    if file.metadata()?.len() > MAX_TEXT_BYTES {
+    if file.metadata()?.len() > limit {
         return Ok(None);
     }
     let mut bytes = Vec::new();
-    file.take(MAX_TEXT_BYTES + 1).read_to_end(&mut bytes)?;
-    if bytes.len() as u64 > MAX_TEXT_BYTES {
+    file.take(limit + 1).read_to_end(&mut bytes)?;
+    let size = bytes.len() as u64;
+    if size > limit {
         return Ok(None);
     }
-    Ok(decode_text(&bytes))
+    Ok(decode_text(&bytes).map(|text| (text, size)))
 }
 
 fn decode_text(bytes: &[u8]) -> Option<String> {
@@ -145,6 +155,10 @@ pub(super) fn extension(path: &Path) -> String {
         .unwrap_or_default()
         .to_ascii_lowercase()
 }
+
+#[cfg(test)]
+#[path = "content_tests.rs"]
+mod file_tests;
 
 #[cfg(test)]
 mod tests {

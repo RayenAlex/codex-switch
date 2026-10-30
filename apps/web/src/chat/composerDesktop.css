@@ -25,10 +25,9 @@
   .chat-composer .chat-model:hover { background: var(--chat-pale); color: var(--chat-ink); }
   .chat-model span { direction: ltr; }
   .chat-model .chat-model-effort { flex-shrink: 0; }
-  .chat-composer-status { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 10px;
+  .chat-composer-status { display: flex; align-items: center; flex-shrink: 0;
     min-width: 0; font-size: 12px; line-height: 20px; }
-  .chat-composer-usage { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-  .chat-composer-usage strong { cursor: help; }
+  .chat-composer-usage { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
   .chat-composer-access { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px;
     border: 0; border-radius: 999px; background: transparent; color: var(--chat-muted);
     font: inherit; font-size: 12px; line-height: 20px; }
@@ -43,8 +42,7 @@
   @container chat-composer-dock (max-width: 640px) {
     .chat-composer-actions { flex-wrap: nowrap; }
     .chat-composer-trailing { flex-basis: 0; flex-wrap: nowrap; gap: 6px; }
-    .chat-composer-status,
-    .chat-composer-hint .chat-conversation-metrics { display: none; }
+    .chat-composer-status { display: none; }
     .chat-composer-access { flex-shrink: 0; }
     .chat-composer-access > span { display: none; }
   }

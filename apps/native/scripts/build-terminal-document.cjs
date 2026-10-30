@@ -1,9 +1,13 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const esbuild = require('esbuild');
 const root = path.resolve(__dirname, '../../..');
 const read = file => fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
 const packageFile = (name, file) => path.join(path.dirname(require.resolve(`${name}/package.json`)), file);
-const scripts = [read(packageFile('@xterm/xterm', 'lib/xterm.js')),
+const appearance = esbuild.buildSync({ entryPoints: [path.join(root, 'shared/terminal/theme.ts')],
+  bundle: true, minify: true, format: 'iife', globalName: 'remoteTerminalAppearance',
+  target: ['chrome100', 'safari16'], write: false }).outputFiles[0].text;
+const scripts = [appearance, read(packageFile('@xterm/xterm', 'lib/xterm.js')),
   read(packageFile('@xterm/addon-fit', 'lib/addon-fit.js')),
   read(path.join(root, 'shared/terminal/webviewTouch.js')), read(path.join(root, 'shared/terminal/webview.js'))];
 const keys = [['Ctrl+C', '\x03'], ['Tab', '\t'], ['Esc', '\x1b'], ['↑', '\x1b[A'],
@@ -15,17 +19,19 @@ const html = `<!doctype html><!-- Bundled xterm licenses:\n${licenses}\n-->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline';
   style-src 'unsafe-inline'">
 <style>${read(packageFile('@xterm/xterm', 'css/xterm.css'))}
-*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;background:#fff}
+*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;
+  background:var(--terminal-background,#fff);color:var(--terminal-foreground,#242424)}
 body{display:flex;flex-direction:column}
 #viewport{flex:1;min-height:0;min-width:0;padding:8px;overflow-x:auto;overflow-y:hidden;
   overscroll-behavior:none;touch-action:pan-x pinch-zoom}
 #terminal{width:100%;height:100%}
 #viewport::-webkit-scrollbar{height:4px}
-#viewport::-webkit-scrollbar-thumb{background:#b7c4bd;border-radius:2px}
+#viewport::-webkit-scrollbar-thumb{background:var(--terminal-scrollbar,#b7c4bd);border-radius:2px}
 .xterm{height:100%}.xterm-helper-textarea{font-size:16px}
-.xterm .xterm-viewport{background:#fff}
-nav{display:flex;gap:4px;padding:6px;flex-shrink:0;border-top:1px solid #dfe5df}
-button{flex:1;min-width:0;min-height:44px;border:0;border-radius:8px;background:#eef4f1;color:#17211b}
+.xterm .xterm-viewport{background:var(--terminal-background,#fff)}
+nav{display:flex;gap:4px;padding:6px;flex-shrink:0;border-top:1px solid var(--terminal-border,#dfe5df)}
+button{flex:1;min-width:0;min-height:44px;border:0;border-radius:8px;
+  background:var(--terminal-key-background,#eef4f1);color:var(--terminal-key-foreground,#17211b)}
 nav[hidden]{display:none}
 @media(max-height:200px){#viewport{padding:4px 8px}nav{padding:4px 6px}button{min-height:32px}}
 </style></head><body><main id="viewport" aria-label="终端"><div id="terminal"></div></main>

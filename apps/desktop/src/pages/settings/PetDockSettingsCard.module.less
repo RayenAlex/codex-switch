@@ -1,0 +1,23 @@
+.controls {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 12px;
+  max-width: 100%;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  label {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  :global(.ant-switch) {
+    flex-shrink: 0;
+  }
+}

@@ -49,13 +49,14 @@
 .rd-stats button { width: 32px; height: 32px; flex-shrink: 0; display: grid; place-items: center;
   padding: 0; background: transparent; pointer-events: auto; border-radius: 6px; }
 .rd-status { position: absolute; top: 45px; left: 50%; transform: translateX(-50%); padding: 14px; border-radius: 12px;
-  background: #222b3aee; width: max-content; max-width: calc(100% - 24px);
-  display: flex; align-items: center; gap: 12px; font-size: 14px; line-height: 22px; }
+  background: #222b3aee; width: max-content; max-width: min(400px, calc(100% - 24px));
+  display: flex; flex-direction: column; align-items: stretch; gap: 12px; font-size: 14px; line-height: 1.6; }
 .rd-status > span { min-width: 0; max-width: 400px; padding-block: 2px; overflow-wrap: anywhere; }
-.rd-status button { flex-shrink: 0; white-space: nowrap; }
+.rd-status button { align-self: flex-end; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .rd-status button, .rd-settings button { background: #333d50; padding: 10px 12px; border-radius: 9px; }
 .rd-status-empty { top: 50%; transform: translate(-50%, -50%); flex-direction: column;
   max-width: min(400px, calc(100% - 24px)); padding: 24px; text-align: center; line-height: 1.6; }
+.rd-status-empty button { align-self: center; }
 .rd-fallback { align-items: center; justify-content: center; }
 .rd-fallback-card { width: min(400px, calc(100% - 32px)); padding: 24px; text-align: center;
   overflow-wrap: anywhere; background: #202634; border-radius: 16px; }

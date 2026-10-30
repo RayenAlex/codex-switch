@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PreviewImageLoader, PreviewProgress } from '../remote-chat/previewProgress';
 
-export function useImageViewer(load: PreviewImageLoader) {
+export function useImageViewer(load: PreviewImageLoader, autoLoadOriginal = false) {
   const loader = useRef(load);
   loader.current = load;
   const [url, setUrl] = useState<string>();
   const [error, setError] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(autoLoadOriginal);
   const [progress, setProgress] = useState<PreviewProgress>();
   const observer = useRef<AbortController>();
   const current = useRef<string>();
@@ -40,6 +40,10 @@ export function useImageViewer(load: PreviewImageLoader) {
     });
     return pending.current;
   }, []);
+  useEffect(() => {
+    // Local previews open at full quality; failures remain available for manual retry.
+    if (autoLoadOriginal) void loadOriginal().catch(() => undefined);
+  }, [autoLoadOriginal, loadOriginal]);
   const fail = () => { current.current = undefined; setUrl(undefined); setError(true); };
   // The error is presented by the viewer; event handlers must not leak rejected promises.
   const request = () => { void loadOriginal().catch(() => undefined); };

@@ -17,7 +17,7 @@ export interface ConnectionHealth {
 }
 
 export const healthStatusLabels: Record<HealthStatus, string> = {
-  ok: '正常', waiting: '待确认', blocked: '需要处理',
+  ok: "client.mobile.active", waiting: "client.chatReliability.awaitingConfirmation", blocked: "client.chatReliability.needsAttention",
 };
 // Longer translations move below the description to keep the card readable on narrow screens.
 export const HEALTH_INLINE_STATUS_MAX_CHARACTERS = 6;
@@ -51,28 +51,28 @@ function stepStatus(ok: boolean, blocked: boolean): HealthStep['status'] {
 
 function loginStep(facts: Facts): HealthStep {
   const status = stepStatus(facts.loginOk, facts.loginBlocked);
-  const details = { ok: '登录验证已通过。', blocked: '请重新登录，并确认两端使用同一账号。', waiting: '正在验证登录状态。' };
-  return { id: 'login', label: '账号登录', status, detail: details[status] };
+  const details = { ok: "client.chatReliability.signInVerified", blocked: "client.chatReliability.signInAgainAndUseTheSameAccountOnBoth", waiting: "client.chatReliability.checkingSignIn" };
+  return { id: 'login', label: "client.chatReliability.accountSignIn", status, detail: details[status] };
 }
 
 function computerStep(facts: Facts): HealthStep {
   const contacted = facts.path || (!facts.computerBlocked && facts.state.connectionStage === 'path');
   const status = stepStatus(contacted, facts.computerBlocked);
-  const details = { ok: '已联系到电脑。', blocked: '请唤醒电脑、连接网络，并保持 Remote AI 运行。',
-    waiting: '正在联系电脑，请确认电脑已开机。' };
-  return { id: 'computer', label: '电脑在线', status, detail: details[status] };
+  const details = { ok: "client.chatReliability.computerReached", blocked: "client.chatReliability.wakeYourComputerConnectItToTheInternetAndKeep",
+    waiting: "client.chatReliability.contactingYourComputerMakeSureItIsTurnedOn" };
+  return { id: 'computer', label: "client.chatReliability.computerAvailability", status, detail: details[status] };
 }
 
 function pathStep(facts: Facts): HealthStep {
-  let detail = '尚未建立可用连接，正在尝试直连和中转。';
-  if (facts.path) detail = facts.state.mode === 'direct' ? '已直连电脑。' : '正在通过中转连接，聊天可正常使用。';
-  return { id: 'path', label: '连接线路', status: stepStatus(facts.path, false), detail };
+  let detail = "client.chatReliability.tryingDirectAndRelayConnections";
+  if (facts.path) detail = facts.state.mode === 'direct' ? "client.chatReliability.connectedDirectlyToYourComputer" : "client.chatReliability.connectedThroughARelayChatIsAvailable";
+  return { id: 'path', label: "client.chatReliability.connectionRoute", status: stepStatus(facts.path, false), detail };
 }
 
 function chatStep(facts: Facts): HealthStep {
   const ready = facts.ready && !facts.state.desktopOnly;
-  return { id: 'chat', label: '电脑聊天', status: stepStatus(ready, CHAT_ERRORS.includes(facts.issue)),
-    detail: ready ? '聊天已就绪。' : '连接后将同步任务、消息和待确认事项。' };
+  return { id: 'chat', label: "client.chatReliability.chatOnComputer", status: stepStatus(ready, CHAT_ERRORS.includes(facts.issue)),
+    detail: ready ? "client.chatReliability.chatIsReady" : "client.chatReliability.tasksMessagesAndApprovalsWillSyncOnceConnected" };
 }
 
 /** Live transport evidence takes precedence over potentially stale presence records. */
@@ -81,12 +81,12 @@ export function connectionHealth(state: ChatState, device?: { online: boolean })
   const steps = [loginStep(facts), computerStep(facts), pathStep(facts), chatStep(facts)];
   const status = healthStatus(facts, steps);
   const description = {
-    ok: '当前连接正常，聊天和任务可正常使用。',
-    waiting: '正在检查连接，请稍候。',
-    blocked: '连接尚未就绪，请查看下方提示。',
+    ok: "client.chatReliability.yourConnectionIsWorkingChatAndTasksAreAvailable",
+    waiting: "client.chatReliability.checkingYourConnectionPleaseWait",
+    blocked: "client.chatReliability.theConnectionIsNotReadySeeTheGuidanceBelow",
   }[status];
   return { ...healthSummary(facts), description, status, steps,
-    nextTitle: status === 'ok' ? '连接正常，可以发送任务' : '接下来可以这样做',
+    nextTitle: status === 'ok' ? "client.chatReliability.connectedYouCanSendTasks" : "client.chatReliability.whatYouCanDoNext",
     reconnect: Boolean(device) && !facts.ready && !state.connecting };
 }
 
@@ -101,21 +101,21 @@ function healthStatus(facts: Facts, steps: HealthStep[]): HealthStatus {
 
 function healthSummary(input: Facts) {
   const { state, issue, loginBlocked } = input;
-  if (!input.device) return { title: '尚未选择电脑', next: '请先选择要连接的电脑。' };
-  if (loginBlocked) return { title: '需要重新登录', next: '请返回账号页重新登录，再连接电脑。' };
-  if (issue === HOST_IDENTITY_CHANGED) return { title: '需要核对电脑身份', next: '请关闭体检，点击“核对电脑身份”后继续。' };
-  if (state.desktopOnly) return { title: '电脑尚未登录', next: '请打开远程桌面，登录电脑后再连接聊天。' };
+  if (!input.device) return { title: "client.chatReliability.noComputerSelected", next: "client.chatReliability.chooseAComputerToConnectTo" };
+  if (loginBlocked) return { title: "client.chatReliability.signInAgain", next: "client.chatReliability.returnToYourAccountPageSignInAgainThenConnect" };
+  if (issue === HOST_IDENTITY_CHANGED) return { title: "client.chatReliability.verifyComputerIdentity", next: "client.chatReliability.closeThisCheckAndChooseVerifyComputerIdentityToContinue" };
+  if (state.desktopOnly) return { title: "client.chatReliability.computerSignInRequired", next: "client.chatReliability.openRemoteDesktopSignInToTheComputerThenConnect" };
   return transportSummary(input);
 }
 
 function transportSummary({ state, issue, ready, path, computerBlocked }: Facts) {
-  if (ready) return { title: state.mode === 'direct' ? '已直连电脑' : '已通过中转连接',
-    next: state.mode === 'direct' ? '聊天和任务可正常使用。' : '中转不会阻止 AI 执行。' };
-  if (computerBlocked) return { title: '暂时联系不到电脑', next: '请唤醒电脑并打开 Remote AI，然后点击“重新连接”。' };
-  if (path) return { title: '正在恢复电脑上的聊天', next: CHAT_ERRORS.includes(issue)
-    ? issue : '请稍候；若长时间未完成，请在电脑上打开聊天并检查账号和模型。' };
+  if (ready) return { title: state.mode === 'direct' ? "client.chatReliability.connectedDirectly" : "client.chatReliability.connectedThroughRelay",
+    next: state.mode === 'direct' ? "client.chatReliability.chatAndTasksAreAvailable" : "client.chatReliability.aiCanRunThroughARelayConnection" };
+  if (computerBlocked) return { title: "client.chatReliability.computerUnreachable", next: "client.chatReliability.wakeYourComputerOpenRemoteAiThenChooseReconnect" };
+  if (path) return { title: "client.chatReliability.restoringChatOnYourComputer", next: CHAT_ERRORS.includes(issue)
+    ? issue : "client.chatReliability.pleaseWaitIfThisPersistsOpenChatOnYourComputer" };
   if (issue === CONNECTION_ERRORS.network || issue === CONNECTION_ERRORS.server) {
-    return { title: '聊天服务暂时连不上', next: '请检查当前网络和服务器地址，然后重新连接。' };
+    return { title: "client.chatReliability.chatServiceUnreachable", next: "client.chatReliability.checkYourNetworkAndServerAddressThenReconnect" };
   }
-  return { title: '正在建立连接', next: '请保持两端联网；仍未连接时，可点击“重新连接”再试。' };
+  return { title: "client.chatReliability.connecting", next: "client.chatReliability.keepBothDevicesOnlineChooseReconnectToTryAgain" };
 }

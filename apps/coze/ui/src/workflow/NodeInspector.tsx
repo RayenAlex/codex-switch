@@ -1,3 +1,4 @@
+import { displayText } from '../i18n/index';
 import { useEffect, useState, type ReactNode } from "react";
 import { Button, Checkbox, Input, InputNumber, Select } from "antd";
 import { X } from "lucide-react";
@@ -30,116 +31,116 @@ export function NodeInspector({ node, graph, resources, models, onChange, onClos
     value={node[key]} onChange={(value) => update(key, value)} />;
   const workflows = resources.filter((item) => item.kind === "workflow").map((item) => ({ value: item.id, label: item.name }));
   const dataProcessingHint = node.language === "python" || node.entrypoint
-    ? t("在 main(args) 中用 args.params 读取输入，再返回处理结果。仅支持数据处理，不支持网络和文件操作。")
-    : t("使用 input 读取输入，用 return 返回结果。仅支持数据处理，不支持网络和文件操作。");
+    ? t("coze.index.inMainArgsReadTheInputFromArgsParamsAnd")
+    : t("coze.index.readTheInputFromInputAndReturnTheResultWith");
   const label = nodeLabels[node.type] as string | undefined;
-  return <aside className="node-inspector"><header><h3>{label && t(label)}</h3>
-    <Button type="text" aria-label={t("关闭节点配置")} icon={<X size={16} />} onClick={onClose} /></header>
-    <label>{t("名称")}<Input value={node.name} onChange={(event) => update("name", event.target.value)} /></label>
-    <small>{withCode(t("引用输入：{code}"), <code>{"{{input.text}}"}</code>)}<br />
-      {withCode(t("此节点结果：{code}"), <code>{`{{${node.id}.output}}`}</code>)}</small>
-    {node.type === "start" && <><h4>{t("输入参数")}</h4>{(graph.inputs ?? []).map((field, index) => <div key={index}>
-      <Input aria-label={t("参数名")} placeholder={t("参数名")} value={field.name} onChange={(event) => onChange({ ...graph,
+  return <aside className="node-inspector"><header><h3>{label && displayText(label)}</h3>
+    <Button type="text" aria-label={t("coze.index.closeNodeSettings")} icon={<X size={16} />} onClick={onClose} /></header>
+    <label>{t("coze.core.name")}<Input value={node.name} onChange={(event) => update("name", event.target.value)} /></label>
+    <small>{withCode(t("coze.index.referenceTheInput"), <code>{"{{input.text}}"}</code>)}<br />
+      {withCode(t("coze.index.thisNodeSResult"), <code>{`{{${node.id}.output}}`}</code>)}</small>
+    {node.type === "start" && <><h4>{t("coze.index.inputParameters")}</h4>{(graph.inputs ?? []).map((field, index) => <div key={index}>
+      <Input aria-label={t("coze.index.parameterName")} placeholder={t("coze.index.parameterName")} value={field.name} onChange={(event) => onChange({ ...graph,
         inputs: graph.inputs?.map((item, cursor) => cursor === index ? { ...item, name: event.target.value } : item) })} />
-      <Input aria-label={t("参数说明")} placeholder={t("说明")} value={field.description} onChange={(event) => onChange({ ...graph,
+      <Input aria-label={t("coze.index.parameterDescription")} placeholder={t("coze.index.description")} value={field.description} onChange={(event) => onChange({ ...graph,
         inputs: graph.inputs?.map((item, cursor) => cursor === index ? { ...item, description: event.target.value } : item) })} />
       <Select className="full" value={field.kind} options={["string", "number", "integer", "boolean", "object", "array"]
         .map((value) => ({ value }))} onChange={(kind) => onChange({ ...graph,
           inputs: graph.inputs?.map((item, cursor) => cursor === index ? { ...item, kind } : item) })} />
       <Checkbox checked={field.required} onChange={(event) => onChange({ ...graph,
         inputs: graph.inputs?.map((item, cursor) => cursor === index ? { ...item, required: event.target.checked } : item) })}>
-        {t("必填")}</Checkbox><Button type="text" danger onClick={() => onChange({ ...graph,
-          inputs: graph.inputs?.filter((_, cursor) => cursor !== index) })}>{t("移除")}</Button>
+        {t("coze.index.required")}</Checkbox><Button type="text" danger onClick={() => onChange({ ...graph,
+          inputs: graph.inputs?.filter((_, cursor) => cursor !== index) })}>{t("coze.index.remove")}</Button>
     </div>)}<Button onClick={() => onChange({ ...graph, inputs: [...(graph.inputs ?? []), {
       name: `input${(graph.inputs?.length ?? 0) + 1}`, description: "", kind: "string", required: false,
-    }] })}>{t("添加参数")}</Button></>}
-    {node.type === "llm" && <><label>{t("模型")}<Select className="full" showSearch value={String(node.model || "") || undefined}
+    }] })}>{t("coze.index.addParameter")}</Button></>}
+    {node.type === "llm" && <><label>{t("coze.agents.model")}<Select className="full" showSearch value={String(node.model || "") || undefined}
       options={models.map((model) => ({ value: model.id, label: model.name }))} onChange={(value) => update("model", value)} />
-    </label>{text("system", t("角色提示词"))}{text("prompt", t("用户提示词"), 6)}
-      <label>{t("随机性")}<InputNumber min={0} max={2} step={0.1} value={Number(node.temperature ?? 0.7)}
+    </label>{text("system", t("coze.agents.systemPrompt"))}{text("prompt", t("coze.index.userPrompt"), 6)}
+      <label>{t("coze.index.randomness")}<InputNumber min={0} max={2} step={0.1} value={Number(node.temperature ?? 0.7)}
         onChange={(value) => update("temperature", value ?? 0.7)} /></label></>}
-    {node.type === "intent" && <><label>{t("模型")}<Select className="full" value={String(node.model || "") || undefined}
+    {node.type === "intent" && <><label>{t("coze.agents.model")}<Select className="full" value={String(node.model || "") || undefined}
       options={models.map((model) => ({ value: model.id, label: model.name }))} onChange={(value) => update("model", value)} />
-      </label>{text("query", t("待识别内容"))}{json("intents", t("候选意图"))}
+      </label>{text("query", t("coze.index.textToClassify"))}{json("intents", t("coze.index.candidateIntents"))}
       {/* The runtime returns this literal intent when nothing matches (advanced_nodes.rs): never translate it. */}
-      <small>{t("结果中的 intent 为匹配的意图；无法匹配时返回“{fallback}”。", { fallback: verbatim("其他") })}</small></>}
-    {node.type === "template" && text("template", t("文本模板"), 8)}
-    {node.type === "input" && <>{text("prompt", t("提问内容"))}{json("fields", t("需要填写的内容"))}
-      {json("choices", t("可选回答（留空表示自由填写）"))}</>}
-    {node.type === "output" && json("value", t("输出消息"))}
-    {node.type === "variable" && <>{text("variable_name", t("变量名称"), 1)}{json("value", t("变量内容"))}
-      <small>{withCode(t("后续节点可通过 {code} 读取。"), <code>{t("{{variables.变量名称}}")}</code>)}</small></>}
-    {node.type === "aggregate" && <>{json("values", t("按优先顺序填写候选值"))}
-      <small>{t("采用首个已生成且非空的值，可合并不同分支的结果。")}</small></>}
-    {node.type === "aggregate_groups" && json("groups", t("分组名称与候选值"))}
-    {node.type === "conversation" && <><label>{t("操作")}<Select className="full" value={String(node.operation)}
+      <small>{t("coze.index.theIntentFieldOfTheResultHoldsTheMatchedIntent", { fallback: verbatim("其他") })}</small></>}
+    {node.type === "template" && text("template", t("coze.index.textTemplate"), 8)}
+    {node.type === "input" && <>{text("prompt", t("coze.index.question"))}{json("fields", t("coze.index.fieldsToFillIn"))}
+      {json("choices", t("coze.index.answerOptionsLeaveEmptyForAFreeFormAnswer"))}</>}
+    {node.type === "output" && json("value", t("coze.index.outputMessage"))}
+    {node.type === "variable" && <>{text("variable_name", t("coze.index.variableName"), 1)}{json("value", t("coze.index.variableValue"))}
+      <small>{withCode(t("coze.index.laterNodesCanReadItWith"), <code>{t("coze.index.variablesVariableName")}</code>)}</small></>}
+    {node.type === "aggregate" && <>{json("values", t("coze.index.candidateValuesInPriorityOrder"))}
+      <small>{t("coze.index.usesTheFirstValueThatHasBeenProducedAndIsn")}</small></>}
+    {node.type === "aggregate_groups" && json("groups", t("coze.index.groupNamesAndCandidateValues"))}
+    {node.type === "conversation" && <><label>{t("coze.index.operation")}<Select className="full" value={String(node.operation)}
       onChange={(value) => update("operation", value)} options={[
-        { value: "create", label: t("创建会话") }, { value: "list", label: t("会话列表") },
-        { value: "rename", label: t("重命名会话") }, { value: "delete", label: t("删除会话") },
-        { value: "history", label: t("查询消息") }, { value: "append", label: t("添加消息") },
-        { value: "edit_message", label: t("修改消息") }, { value: "delete_message", label: t("删除消息") },
-        { value: "clear", label: t("清空消息") },
-      ]} /></label>{json("input", t("操作内容"))}
-      <small>{t("创建时填写 title；查询时填写 conversationId；添加消息还需 role 和 content。")}</small></>}
-    {node.type.startsWith("table_") && <><label>{t("数据表")}<Select className="full" value={String(node.table_id || "") || undefined}
+        { value: "create", label: t("coze.index.createConversation") }, { value: "list", label: t("coze.index.listConversations") },
+        { value: "rename", label: t("coze.index.renameConversation") }, { value: "delete", label: t("coze.index.deleteConversation") },
+        { value: "history", label: t("coze.index.getMessages") }, { value: "append", label: t("coze.index.addMessage") },
+        { value: "edit_message", label: t("coze.index.editMessage") }, { value: "delete_message", label: t("coze.index.deleteMessage") },
+        { value: "clear", label: t("coze.index.clearMessages") },
+      ]} /></label>{json("input", t("coze.index.operationInput"))}
+      <small>{t("coze.index.toCreateSetTitleToQuerySetConversationidToAdd")}</small></>}
+    {node.type.startsWith("table_") && <><label>{t("coze.index.table")}<Select className="full" value={String(node.table_id || "") || undefined}
       options={resources.filter((item) => item.kind === "table").map((item) => ({ value: item.id, label: item.name }))}
       onChange={(value) => update("table_id", value)} /></label>
-      {node.type === "table_query" && json("filter", t("匹配字段（JSON）"))}
-      {node.type === "table_write" && json("value", t("记录内容（JSON）"))}
-      {node.type === "table_update" && <>{text("row_id", t("记录 ID"), 2)}{json("value", t("更新后的完整记录"))}</>}
-      {node.type === "table_delete" && text("row_id", t("记录 ID"), 2)}</>}
-    {(node.type === "sql" || node.type === "nl2sql") && <><label>{t("数据表")}<Select mode="multiple"
+      {node.type === "table_query" && json("filter", t("coze.index.fieldsToMatchJson"))}
+      {node.type === "table_write" && json("value", t("coze.index.recordJson"))}
+      {node.type === "table_update" && <>{text("row_id", t("coze.index.recordId"), 2)}{json("value", t("coze.index.fullUpdatedRecord"))}</>}
+      {node.type === "table_delete" && text("row_id", t("coze.index.recordId"), 2)}</>}
+    {(node.type === "sql" || node.type === "nl2sql") && <><label>{t("coze.index.table")}<Select mode="multiple"
       className="full" value={node.table_ids as string[]} onChange={(value) => update("table_ids", value)}
       options={resources.filter((item) => item.kind === "table").map((item) => ({ value: item.id, label: item.name }))} />
-      </label>{node.type === "sql" ? text("sql", t("查询语句"), 8) : <>
-        <label>{t("模型")}<Select className="full" value={String(node.model || "") || undefined}
+      </label>{node.type === "sql" ? text("sql", t("coze.index.query"), 8) : <>
+        <label>{t("coze.agents.model")}<Select className="full" value={String(node.model || "") || undefined}
           options={models.map((model) => ({ value: model.id, label: model.name }))}
-          onChange={(value) => update("model", value)} /></label>{text("question", t("查询要求"), 4)}</>}
-      <small>{t("按选择顺序使用 t1、t2 等表名。仅查询所选数据表。")}</small></>}
-    {node.type === "plugin" && <><label>{t("工具")}<Select className="full" value={String(node.plugin_id || "") || undefined}
+          onChange={(value) => update("model", value)} /></label>{text("question", t("coze.index.queryDescription"), 4)}</>}
+      <small>{t("coze.index.tablesAreNamedT1T2AndSoOnInThe")}</small></>}
+    {node.type === "plugin" && <><label>{t("coze.index.tool")}<Select className="full" value={String(node.plugin_id || "") || undefined}
       options={resources.filter((item) => item.kind === "plugin").map((item) => ({ value: item.id, label: item.name }))}
-      onChange={(value) => update("plugin_id", value)} /></label>{json("input", t("调用参数（JSON）"))}</>}
-    {node.type === "code" && <><label>{t("语言")}<Select className="full" value={String(node.language || "javascript")}
+      onChange={(value) => update("plugin_id", value)} /></label>{json("input", t("coze.index.callParametersJson"))}</>}
+    {node.type === "code" && <><label>{t("coze.index.language")}<Select className="full" value={String(node.language || "javascript")}
       options={[{ value: "javascript", label: "JavaScript" }, { value: "typescript", label: "TypeScript" },
         { value: "python", label: "Python" }]} onChange={(value) => update("language", value)} /></label>
       {node.language !== "python" && <Checkbox checked={Boolean(node.entrypoint)}
-        onChange={(event) => update("entrypoint", event.target.checked)}>{t("使用 main 函数")}</Checkbox>}
-      {json("input", t("输入（JSON）"))}{text("code", t("代码"), 12)}
+        onChange={(event) => update("entrypoint", event.target.checked)}>{t("coze.index.useAMainFunction")}</Checkbox>}
+      {json("input", t("coze.index.inputJson"))}{text("code", t("coze.index.code"), 12)}
       <small>{dataProcessingHint}</small></>}
-    {node.type === "end" && json("value", t("输出内容（JSON）"))}
-    {node.type === "knowledge" && <><label>{t("知识库")}<Select className="full" mode="multiple"
+    {node.type === "end" && json("value", t("coze.index.outputJson"))}
+    {node.type === "knowledge" && <><label>{t("coze.index.knowledgeBase")}<Select className="full" mode="multiple"
       value={node.knowledge_ids as string[]} options={resources.filter((item) => item.kind === "knowledge")
         .map((item) => ({ value: item.id, label: item.name }))} onChange={(value) => update("knowledge_ids", value)} /></label>
-      {text("query", t("检索问题"))}<label>{t("结果数量")}<InputNumber min={1} max={20} value={Number(node.limit)}
+      {text("query", t("coze.index.searchQuery"))}<label>{t("coze.index.numberOfResults")}<InputNumber min={1} max={20} value={Number(node.limit)}
         onChange={(value) => update("limit", value ?? 6)} /></label></>}
-    {(node.type === "knowledge_write" || node.type === "knowledge_delete") && <><label>{t("知识库")}<Select
+    {(node.type === "knowledge_write" || node.type === "knowledge_delete") && <><label>{t("coze.index.knowledgeBase")}<Select
       className="full" value={String(node.knowledge_id || "") || undefined}
       options={resources.filter((item) => item.kind === "knowledge").map((item) => ({ value: item.id, label: item.name }))}
       onChange={(value) => update("knowledge_id", value)} /></label>
-      {node.type === "knowledge_write" ? <>{text("document_name", t("文档名称"), 1)}{text("text", t("文档内容"), 6)}</>
-        : json("document_ids", t("要删除的文档 ID 列表"))}</>}
-    {node.type === "condition" && <>{json("left", t("比较值（JSON）"))}
-      <label>{t("条件")}<Select className="full" value={String(node.operator)} onChange={(value) => update("operator", value)}
-        options={[{ value: "equal", label: t("等于") }, { value: "not_equal", label: t("不等于") },
-          { value: "contains", label: t("包含") }, { value: "greater", label: t("大于") },
-          { value: "less", label: t("小于") }, { value: "empty", label: t("为空") }]} /></label>{json("right", t("目标值（JSON）"))}</>}
-    {node.type === "http" && <>{text("url", t("HTTPS 地址"), 2)}<label>{t("请求方式")}<Select className="full"
+      {node.type === "knowledge_write" ? <>{text("document_name", t("coze.index.documentName"), 1)}{text("text", t("coze.index.documentContent"), 6)}</>
+        : json("document_ids", t("coze.index.idsOfDocumentsToDelete"))}</>}
+    {node.type === "condition" && <>{json("left", t("coze.index.valueToCompareJson"))}
+      <label>{t("coze.index.condition.16bb1d")}<Select className="full" value={String(node.operator)} onChange={(value) => update("operator", value)}
+        options={[{ value: "equal", label: t("coze.index.equals") }, { value: "not_equal", label: t("coze.index.doesnTEqual") },
+          { value: "contains", label: t("coze.index.contains") }, { value: "greater", label: t("coze.index.greaterThan") },
+          { value: "less", label: t("coze.index.lessThan") }, { value: "empty", label: t("coze.index.isEmpty") }]} /></label>{json("right", t("coze.index.targetValueJson"))}</>}
+    {node.type === "http" && <>{text("url", t("coze.index.httpsUrl"), 2)}<label>{t("coze.index.requestMethod")}<Select className="full"
       value={String(node.method)} options={["GET", "POST", "PUT", "DELETE"].map((value) => ({ value }))}
-      onChange={(value) => update("method", value)} /></label>{json("body", t("请求内容（JSON）"))}</>}
-    {node.type === "json_parse" && text("text", t("待解析文本"))}
-    {node.type === "json_stringify" && json("value", t("待转换内容（JSON）"))}
-    {["subworkflow", "loop", "repeat"].includes(node.type) && <><label>{t("工作流")}<Select className="full"
+      onChange={(value) => update("method", value)} /></label>{json("body", t("coze.index.requestBodyJson"))}</>}
+    {node.type === "json_parse" && text("text", t("coze.index.textToParse"))}
+    {node.type === "json_stringify" && json("value", t("coze.index.valueToConvertJson"))}
+    {["subworkflow", "loop", "repeat"].includes(node.type) && <><label>{t("coze.index.workflow")}<Select className="full"
       value={String(node.workflow_id || "") || undefined} options={workflows}
       onChange={(value) => update("workflow_id", value)} /></label>
-      {node.type === "loop" && json("items", t("待处理列表（JSON）"))}
-      {node.type === "repeat" && json("count", t("循环次数"))}
-      {node.type === "subworkflow" && json("input", t("输入（JSON）"))}
-      {node.type !== "subworkflow" && <small>{t("循环内可读取 input.item、input.index 和 variables 中的变量。")}</small>}</>}
-    {["break", "continue"].includes(node.type) && <small>{t("用于循环体工作流，在当前分支到达此处时立即生效。")}</small>}
+      {node.type === "loop" && json("items", t("coze.index.listToProcessJson"))}
+      {node.type === "repeat" && json("count", t("coze.index.numberOfIterations"))}
+      {node.type === "subworkflow" && json("input", t("coze.index.inputJson"))}
+      {node.type !== "subworkflow" && <small>{t("coze.index.insideTheLoopYouCanReadInputItemInputIndex")}</small>}</>}
+    {["break", "continue"].includes(node.type) && <small>{t("coze.index.forLoopBodyWorkflowsTakesEffectAsSoonAsThe")}</small>}
     {!isTerminal(node.type) && <ConnectionEditor node={node} graph={graph} onChange={onChange} />}
     {node.type !== "start" && <Button danger disabled={node.type === "end"
       && graph.nodes.filter((item) => item.type === "end").length === 1}
-      onClick={() => { onChange(removeSelection(graph, [node.id], [])); onClose(); }}>{t("删除节点")}</Button>}
+      onClick={() => { onChange(removeSelection(graph, [node.id], [])); onClose(); }}>{t("coze.index.deleteNode")}</Button>}
   </aside>;
 }
 
@@ -160,5 +161,5 @@ function JsonInput({ value, onChange, label }: { value: Json; onChange: (value: 
     onChange={(event) => {
       const next = event.target.value; setText(next);
       try { onChange(JSON.parse(next) as Json); setInvalid(false); } catch { setInvalid(true); }
-    }} />{invalid && <small className="error-text">{t("请填写有效的 JSON。")}</small>}</label>;
+    }} />{invalid && <small className="error-text">{t("coze.index.enterValidJson")}</small>}</label>;
 }

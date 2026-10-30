@@ -1,6 +1,15 @@
 /* Bundled locally with xterm; terminal output is data and never becomes HTML. */
+function applyAppearance(mode) {
+  const dark = mode === 'dark';
+  const appearance = remoteTerminalAppearance.terminalAppearance(dark);
+  const root = document.documentElement;
+  root.dataset.theme = dark ? 'dark' : 'light';
+  root.style.colorScheme = root.dataset.theme;
+  for (const [name, value] of Object.entries(appearance.variables)) root.style.setProperty(name, value);
+  return appearance.theme;
+}
 const terminal = new Terminal({ cursorBlink: true, fontSize: 14, scrollback: 5000,
-  theme: { background: '#ffffff', foreground: '#242424', cursor: '#14806f' } });
+  theme: applyAppearance(document.documentElement.dataset.theme) });
 const fit = new FitAddon.FitAddon();
 terminal.loadAddon(fit);
 const viewport = document.getElementById('viewport');
@@ -19,6 +28,7 @@ window.remoteTerminal = event => {
   if (event.type === 'output') terminal.write(new Uint8Array(event.data));
   if (event.type === 'exit') terminal.options.disableStdin = true;
   if (event.type === 'display') {
+    if (event.theme === 'dark' || event.theme === 'light') terminal.options.theme = applyAppearance(event.theme);
     wrap = event.wrap;
     document.querySelector('nav').hidden = event.shortcuts === false;
     fitTerminal();

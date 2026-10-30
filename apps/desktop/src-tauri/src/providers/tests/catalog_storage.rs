@@ -48,13 +48,13 @@ fn catalog_write_preserves_custom_fields_and_updates_managed_capabilities() {
     write_provider_model_catalog(&paths, &provider).unwrap();
 
     let catalog = read_json(&path).unwrap();
-    let model = &catalog["models"][1];
+    let model = &catalog["models"][0];
     assert_custom_catalog_fields(model);
     assert_eq!(catalog["custom_metadata"], json!({ "note": "keep me" }));
-    assert_eq!(catalog["models"][0]["slug"], "new-model");
-    assert_eq!(catalog["models"][0]["apply_patch_tool_type"], Value::Null);
+    assert_eq!(catalog["models"][1]["slug"], "new-model");
+    assert_eq!(catalog["models"][1]["apply_patch_tool_type"], Value::Null);
     assert_eq!(model["slug"], "gpt-4.1");
-    assert_eq!(model["priority"], 1001);
+    assert_eq!(model["priority"], 1000);
     assert_eq!(model["context_window"], 400_000);
     assert_eq!(model["max_context_window"], 400_000);
     assert_eq!(model["default_reasoning_level"], "low");

@@ -5,7 +5,7 @@ import { aggregateEntries, calendarDateKeys, startOfCalendar } from '../componen
 import { loadLongContextCostSettings } from '../utils/tokenCostLongContext';
 import { MAX_SUMMARY_WEEKS, MIN_SUMMARY_WEEKS, type TokenSummary } from '../../../../shared/remote-chat/tokenSummary';
 import { loadOfficialUsage } from '../api/officialUsage';
-import { guiText } from '../i18n/guiText';
+import { uiText } from "../i18n/uiText";
 
 const DEFAULT_WEEKS = 10;
 const DEFAULT_REFRESH_SECONDS = 60;
@@ -38,7 +38,7 @@ export async function readTokenSummary(requestedWeeks: unknown): Promise<TokenSu
       providers: aggregateEntries(recent, (entry) => entry.provider),
       models: aggregateEntries(recent, (entry) => entry.model),
       accounts: aggregateEntries(recent, (entry) => entry.accountEmail?.trim()
-        || entry.accountId?.trim() || guiText('未识别账户')),
+        || entry.accountId?.trim() || uiText("client.usage.unidentifiedAccount")),
     },
     entryCount: recent.length,
     errors: { usage: entries.status === 'rejected' || daily.status === 'rejected',

@@ -1,5 +1,5 @@
 import { desktopPermission, DesktopPermissionWait } from './permissionWait';
-import { desktopFailure } from './diagnostics';
+import { desktopFailure, requiresDesktopSetup } from './diagnostics';
 import type { DesktopPermissionStatus } from './protocol';
 
 const RETRY_DELAYS = [1000, 2000, 4000, 8000, 15_000, 15_000];
@@ -37,6 +37,12 @@ export class DesktopRecovery {
   failed(message: string) {
     clearTimeout(this.stableTimer);
     if (this.stopped) return;
+    if (requiresDesktopSetup(message)) {
+      clearTimeout(this.retryTimer); this.retryTimer = undefined;
+      this.permissionWait?.stop(); this.permissionWait = undefined;
+      this.pendingFailure = message; this.status(message);
+      return;
+    }
     const permission = desktopPermission(message);
     if (permission) {
       clearTimeout(this.retryTimer); this.retryTimer = undefined;
@@ -69,6 +75,10 @@ export class DesktopRecovery {
     if (this.stopped || this.available === available) return;
     this.available = available;
     if (!this.pendingFailure) return;
+    if (requiresDesktopSetup(this.pendingFailure)) {
+      this.status(this.pendingFailure);
+      return;
+    }
     if (desktopPermission(this.pendingFailure)) {
       this.permissionWait?.setAvailable(available);
       if (!available) this.status(DESKTOP_OFFLINE_STATUS);

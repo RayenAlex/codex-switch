@@ -1,5 +1,5 @@
-import { guiText } from "../../i18n/guiText";
-import { backendText } from "../../../../../shared/i18n/backend/translateBackendMessage";
+import { uiText } from "../../i18n/uiText";
+import { remoteErrorText } from "../../../../../shared/localization/errors";
 import { useContext, useEffect, useRef, useState } from "react";
 import { Button, Popconfirm } from "antd";
 import type { Content, SkillReference } from "./types";
@@ -41,23 +41,23 @@ export function UserMessageEditor({ text, images, skills, disabled, onSubmit, on
       onRemove={draft.remove} />
     <SkillInput ref={editor} value={draft.draft} draftKey="message-edit" cwd={cwd} active={active}
       connected={!disabled} disabled={saving || disabled} editing={{ onCancel, className: styles.editorInput }}
-      placeholder={guiText("输入消息，或输入 / 选择技能…")} onChange={draft.setDraft} onPaste={draft.paste}
+      placeholder={uiText("client.workspaceActions.typeAMessageOrToChooseASkill")} onChange={draft.setDraft} onPaste={draft.paste}
       onSend={() => void submit()} />
-    {draft.error && <p className={styles.editorError} role="status">{backendText(draft.error)}</p>}
+    {draft.error && <p className={styles.editorError} role="status">{remoteErrorText(draft.error)}</p>}
     <div className={styles.editorActions}>
-      {onDelete && <Popconfirm title={guiText("删除这条消息？")}
-        description={guiText("这条消息及之后的所有消息都会删除，无法撤销。")}
-        overlayStyle={{ maxWidth: 400 }} okText={guiText("删除")} cancelText={guiText("取消")}
+      {onDelete && <Popconfirm title={uiText("client.messageEditing.deleteThisMessage")}
+        description={uiText("client.messageEditing.thisMessageAndAllFollowingMessagesWillBeDeletedThis")}
+        overlayStyle={{ maxWidth: 400 }} okText={uiText("client.projectBrowser.deleted")} cancelText={uiText("client.accounts.cancel")}
         okButtonProps={{ danger: true, autoInsertSpace: false }} cancelButtonProps={{ autoInsertSpace: false }}
         disabled={saving || disabled || !active} onConfirm={remove}>
         <Button danger className={styles.deleteButton} autoInsertSpace={false}
-          disabled={saving || disabled || !active}>{guiText("删除消息")}</Button>
+          disabled={saving || disabled || !active}>{uiText("client.messageEditing.deleteMessage")}</Button>
       </Popconfirm>}
-      <Button className={styles.cancelButton} autoInsertSpace={false} aria-label={guiText("取消编辑")}
-        disabled={saving} onClick={onCancel}>{guiText("取消")}</Button>
+      <Button className={styles.cancelButton} autoInsertSpace={false} aria-label={uiText("client.workspaceActions.cancelEditing")}
+        disabled={saving} onClick={onCancel}>{uiText("client.accounts.cancel")}</Button>
       <Button className={styles.sendButton} autoInsertSpace={false} type="primary"
         loading={saving} disabled={disabled || draft.reading || !draft.draft.text.trim()}
-        onClick={() => void submit()}>{guiText("发送")}</Button>
+        onClick={() => void submit()}>{uiText("client.conversation.sent")}</Button>
     </div>
   </div>;
 }

@@ -16,5 +16,5 @@ export function reviewLocation(comment: ReviewComment) {
   const location = comment.start ? `${comment.file}:${comment.start}` : comment.file;
   const end = comment.end && comment.start && comment.end > comment.start ? `–${comment.end}` : '';
   return { reference: parseFileReference(location),
-    label: `${comment.file}${comment.start ? t(" · 第 {value1}{value2} 行", { value1: comment.start, value2: end }) : ''}` };
+    label: `${comment.file}${comment.start ? t("client.mobile.lines", { value1: comment.start, value2: end }) : ''}` };
 }

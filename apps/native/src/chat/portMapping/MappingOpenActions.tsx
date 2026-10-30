@@ -1,3 +1,4 @@
+import { displayError } from '../../i18n/index';
 import { useState } from 'react';
 import { Linking, Platform, Pressable, Text, View } from 'react-native';
 import { t } from '../../i18n';
@@ -23,14 +24,14 @@ export function MappingOpenActions({ port, preview, opened }: {
   return <View style={{ gap: 10, paddingBottom: 16 }}>
     <Pressable accessibilityRole="button" disabled={opening} onPress={preview}
       style={[styles.button, styles.primary, opening && styles.disabled]}>
-      <Text style={[styles.buttonText, styles.primaryText]}>{t('在 Remote AI 中预览')}</Text>
+      <Text style={[styles.buttonText, styles.primaryText]}>{t("client.portForwarding.previewInRemoteAi")}</Text>
     </Pressable>
     <Pressable accessibilityRole="button" disabled={opening} onPress={() => { void openBrowser(); }}
       style={[styles.button, opening && styles.disabled]}>
-      <Text style={styles.buttonText}>{t('在浏览器中打开')}</Text>
+      <Text style={styles.buttonText}>{t("client.workspaceActions.openInBrowser")}</Text>
     </Pressable>
     {Platform.OS === 'ios' && <Text style={styles.subtitle}>
-      {t('切到其他应用后，映射可能中断，建议在此预览。')}</Text>}
-    {!!error && <Text accessibilityRole="alert" style={styles.error}>{t(error)}</Text>}
+      {t("client.portForwarding.switchingAppsMayInterruptTheMappingPreviewHereForA")}</Text>}
+    {!!error && <Text accessibilityRole="alert" style={styles.error}>{displayError(error)}</Text>}
   </View>;
 }

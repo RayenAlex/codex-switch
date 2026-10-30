@@ -13,7 +13,16 @@ the previous provider; uninstall removes registration and schedules deletion of 
 Only a live, control-authorized desktop lease can save credentials or request a login. Credentials are bound to the
 installed service identity, device and Windows owner SID. Passwords use machine DPAPI inside the existing SYSTEM/admin
 only service data directory, are never returned in snapshots, and are removed when disabled or uninstalled. The viewer
-uses the existing encrypted remote RPC and retains form values only until submission, cancellation or disconnection.
+uses the existing encrypted remote RPC. The password is cleared on submission, cancellation or disconnection;
+failed saves keep the account field and show an error in the fixed panel footer. A successful save is acknowledged
+independently of the immediate sign-in attempt, so an unavailable console cannot make saved credentials appear disabled.
+
+Every new connection reads the controlled computer's stored configuration. Non-secret security preferences
+(disconnect locking, speaker muting, clipboard sync and privacy mode) live in `remote-desktop-security.json` alongside
+host settings, or in the protected service data directory for unattended hosts. They survive capture and service worker
+restarts. Audio and privacy cleanup restores the physical devices without deleting preferences. Privacy restoration
+uses the existing authorized display transaction; a failed restoration is not repeated by automatic reconnection.
+Changing the installed service identity resets these preferences as well as deleting the bound credentials.
 
 Each login request is DPAPI protected, targets the current console session, expires after ten seconds, and has a unique
 nonce. The provider atomically claims it before serialization. The host persists a blocked marker before dispatch,

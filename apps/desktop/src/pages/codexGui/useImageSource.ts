@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { createContext, useContext, useEffect, useState } from "react";
 import { guiApi } from "./api";
 import { isInlineImage, localImageSource } from "./imageSources";
@@ -12,7 +12,7 @@ function loadImage(threadId: string, source: string, variant: "thumbnail" | "ori
   if (existing) return existing;
   const request = guiApi.request<{ url: string }>({ operation: "imagePreview", threadId, source, variant })
     .then(({ url }) => {
-      if (!isInlineImage(url)) throw new Error(guiText("图片暂时无法显示。"));
+      if (!isInlineImage(url)) throw new Error(uiText("client.workspaceActions.thisImageCannotBeDisplayedRightNow"));
       return url;
     }).finally(() => pending.delete(key));
   pending.set(key, request);

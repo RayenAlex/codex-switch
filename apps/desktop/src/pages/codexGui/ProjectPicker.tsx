@@ -1,11 +1,15 @@
-import { guiText } from '../../i18n/guiText';
+import { uiText, guiLocale } from "../../i18n/uiText";
+import { ProjectExplorer } from '../../../../../shared/project-explorer/ProjectExplorer';
+import { loadProjectExplorer, mutateProjectExplorer } from './projectExplorerClient';
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { isDesktopApp } from '../../api/backend';
 import { CreateProjectDialog } from './CreateProjectDialog';
 import { folderName, projectName, readProjects, saveProject, type SavedProject } from './projectCatalog';
 import { ProjectFolderPicker } from './ProjectFolderPicker';
 import { WorkspacePicker } from './WorkspacePicker';
+import { ConversationWorkspaceStatus } from './ConversationWorkspaceStatus';
 import { useProjectFolderDrop } from './useProjectFolderDrop';
+import { ProjectBar } from './ProjectBar';
 import dropStyles from './ProjectPicker.module.less';
 import layout from './styles.module.less';
 
@@ -21,39 +25,54 @@ export function ProjectPicker({ value, projects, disabled, onChange, onError,
   gitEnabled, onBusyChange, hostPicker, actions, running = false, active = true,
   dropTarget, dropState }: ProjectPickerProps) {
   const [creating, setCreating] = useState(false);
+  const [browsing, setBrowsing] = useState(false);
   const [saved, setSaved] = useState(readProjects);
   const trigger = useRef<HTMLButtonElement>(null);
   const bar = useRef<HTMLDivElement>(null);
-  const close = () => { setCreating(false); trigger.current?.focus(); };
-  useEffect(() => { if (disabled || !active) setCreating(false); }, [disabled, active]);
+  const close = () => { setCreating(false); setBrowsing(false); trigger.current?.focus(); };
+  useEffect(() => {
+    if (disabled || !active || running) { setCreating(false); setBrowsing(false); }
+  }, [disabled, active, running]);
   const create = (project: SavedProject) => {
     if (disabled) return;
     try {
       setSaved(saveProject(project)); onChange(project.path); close();
-    } catch { onError(new Error(guiText('项目未能保存，请重试。'))); }
+    } catch { onError(new Error(uiText("client.conversation.couldNotSaveTheProjectPleaseTryAgain"))); }
   };
   const folderDrop = useProjectFolderDrop({ target: dropTarget ?? bar,
     allowFileAttachments: true,
-    enabled: !dropState && active && Boolean(gitEnabled) && !disabled && !creating,
+    enabled: !dropState && active && Boolean(gitEnabled) && !disabled && !creating && !browsing,
     onFolder: path => create({ path, name: projectName(path) }), onError });
   const drop = dropState ?? folderDrop;
-  return <div ref={bar} className={layout.projectBar}>
-    {(drop.dragging || drop.reading) && <div className={dropStyles.dropHint} role="status">
-      <span>{drop.reading ? guiText('正在添加附件…') : guiText('松开以添加文件或文件夹')}</span>
-    </div>}
-    {!running && <ProjectFolderPicker value={value} disabled={disabled} triggerRef={trigger}
-      projects={[...saved, ...projects.map(path => ({ path, name: folderName(path) }))]}
-      onChange={onChange} onClear={() => onChange('')} onOpen={() => setSaved(readProjects())}
-      onAdd={() => setCreating(true)} addLabel={guiText('新建项目')} />}
-    <div className={layout.projectBarActions}>
-      {!running && gitEnabled && onBusyChange && <WorkspacePicker key={value} cwd={value} disabled={disabled}
-        onChange={onChange} onBusyChange={onBusyChange} localLabel={hostPicker ? guiText('工作树') : undefined} />}
-      {actions}
-    </div>
+  const trailing = <>
     {!running && !(gitEnabled && onBusyChange) && !hostPicker && <span className={layout.localLabel}>
-      {isDesktopApp ? guiText('本地') : guiText('Remote AI 主机')}</span>}
+      {isDesktopApp ? uiText("client.git.local") : uiText("client.conversation.remoteAiHost")}</span>}
     {hostPicker}
+  </>;
+  return <>
+    <ProjectBar barRef={bar} active={active} scope={value} trailing={trailing}
+      hint={(drop.dragging || drop.reading) && <div className={dropStyles.dropHint} role="status">
+        <span>{drop.reading ? uiText("client.chat.addingAttachments")
+          : uiText("client.composer.dropToAddFilesOrFolders")}</span>
+      </div>}>
+      <ProjectFolderPicker value={value} disabled={disabled || running} triggerRef={trigger}
+        projects={[...saved, ...projects.map(path => ({ path, name: folderName(path) }))]}
+        onChange={onChange} onClear={() => onChange('')} onOpen={() => setSaved(readProjects())}
+        onBrowse={() => setBrowsing(true)}
+        onAdd={() => setCreating(true)} addLabel={uiText("client.conversation.newProject")} />
+      {(gitEnabled === false || running) && <ConversationWorkspaceStatus key={value} cwd={value}
+        enabled={active} />}
+      {!running && gitEnabled && onBusyChange && <WorkspacePicker key={value} cwd={value} disabled={disabled}
+        onChange={onChange} onBusyChange={onBusyChange}
+        localLabel={hostPicker ? uiText("client.conversation.worktree") : undefined} />}
+      {actions}
+    </ProjectBar>
     {creating && <CreateProjectDialog disabled={disabled} onCreate={create} onError={onError}
       onClose={close} />}
-  </div>;
+    {browsing && <ProjectExplorer cwd={value} load={loadProjectExplorer} mutate={mutateProjectExplorer}
+      projects={[...saved.map(project => ({ cwd: project.path, label: project.name })),
+        ...projects.map(path => ({ cwd: path, label: folderName(path) }))]}
+      close={close} choose={project => create({ path: project.cwd, name: project.label })}
+      t={uiText} locale={guiLocale()} />}
+  </>;
 }

@@ -1,8 +1,9 @@
+import { SheetGestureScrollView as ScrollView } from '../components/SheetScrollGesture';
 import { createThemedStyles } from '../theme/styles';
 import { useThemeColor } from '../theme/store';
 import { t, useLanguage } from '../i18n';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
 import { consumeResetCredit } from '../api/client';
 import { BottomSheet } from '../components/BottomSheet';
 import { Toast } from '../components/AppToast';
@@ -14,7 +15,7 @@ const COLORS = { ink: '#111827', muted: '#738091', border: '#e6ebef', canvas: '#
   paleBlue: '#e8f8fb', paleGreen: '#e6f8f1', green: '#00aa96', danger: '#d95454' };
 
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : t("请稍后重试");
+  return error instanceof Error ? error.message : t("client.mobile.tryAgainLater");
 }
 
 export function ResetCreditsDrawer({ account, visible, privateMode, credits: creditState, onClose, onConsumed }: {
@@ -36,10 +37,10 @@ export function ResetCreditsDrawer({ account, visible, privateMode, credits: cre
     setConsuming(true);
     try {
       await consumeResetCredit(account);
-      Toast.success(t("重置卡使用成功"));
+      Toast.success(t("client.mobile.resetCreditApplied"));
       await Promise.all([loadCredits(), onConsumed()]);
     } catch (nextError) {
-      Toast.fail(t("使用失败：{value1}", { value1: errorMessage(nextError) }));
+      Toast.fail(t("client.mobile.couldNotUseCredit", { value1: errorMessage(nextError) }));
     } finally {
       setConsuming(false);
     }
@@ -48,11 +49,11 @@ export function ResetCreditsDrawer({ account, visible, privateMode, credits: cre
   const confirmUseCredit = useCallback(() => {
     if (!summary?.credits.length || consuming) return;
     Alert.alert(
-      t("确认使用重置卡？"),
-      t("使用一张重置卡，恢复当前可重置的用量额度。"),
+      t("client.accounts.useAResetCredit"),
+      t("client.accounts.useOneResetCreditToRestoreTheQuotaEligibleFor"),
       [
-        { text: t("取消"), style: 'cancel' },
-        { text: t("使用重置卡"), style: 'destructive', onPress: () => void useCredit() },
+        { text: t("client.accounts.cancel"), style: 'cancel' },
+        { text: t("client.accounts.useResetCredit"), style: 'destructive', onPress: () => void useCredit() },
       ],
     );
   }, [consuming, summary?.credits.length, useCredit]);
@@ -60,16 +61,15 @@ export function ResetCreditsDrawer({ account, visible, privateMode, credits: cre
   const credits = summary?.credits ?? [];
   return <BottomSheet
     visible={visible}
-    title={t("重置卡详情")}
+    title={t("client.accounts.resetCredits.277d04")}
     subtitle={privateMode ? maskEmail(account.email) : account.email}
     onClose={onClose}
     onBack={onClose}
     dismissible={!consuming}
-    dragFromHeaderOnly
     actions={[
-      { label: t("关闭"), onPress: onClose, disabled: consuming },
+      { label: t("client.projectBrowser.close"), onPress: onClose, disabled: consuming },
       {
-        label: t("使用重置卡"),
+        label: t("client.accounts.useResetCredit"),
         tone: 'primary',
         onPress: confirmUseCredit,
         loading: consuming,
@@ -79,11 +79,11 @@ export function ResetCreditsDrawer({ account, visible, privateMode, credits: cre
   >
     <View style={styles.resetCreditSummary}>
       <View>
-        <Text style={styles.resetCreditSummaryLabel}>{t("当前可用")}</Text>
-        <Text style={styles.resetCreditSummaryHint}>{t("使用前会再次确认可用数量")}</Text>
+        <Text style={styles.resetCreditSummaryLabel}>{t("client.accounts.availableNow")}</Text>
+        <Text style={styles.resetCreditSummaryHint}>{t("client.mobile.availableCreditsWillBeCheckedBeforeUse")}</Text>
       </View>
       <Text style={styles.resetCreditCount}>{loading || error ? '—' : credits.length}
-        <Text style={styles.resetCreditCountUnit}>{' '}{t("张")}</Text>
+        <Text style={styles.resetCreditCountUnit}>{' '}{t("client.accounts.credits.f56a04")}</Text>
       </Text>
     </View>
 
@@ -94,37 +94,37 @@ export function ResetCreditsDrawer({ account, visible, privateMode, credits: cre
     >
       {loading ? <View style={styles.resetCreditStatus}>
         <ActivityIndicator color={color(COLORS.green, 'accent')} />
-        <Text style={styles.resetCreditStatusText}>{t("正在读取重置卡…")}</Text>
+        <Text style={styles.resetCreditStatusText}>{t("client.mobile.loadingResetCredits")}</Text>
       </View> : error ? <View style={styles.resetCreditStatus}>
-        <Text style={styles.resetCreditErrorTitle}>{t("读取失败")}</Text>
+        <Text style={styles.resetCreditErrorTitle}>{t("client.mobile.couldNotLoad")}</Text>
         <Text style={styles.resetCreditStatusText}>{error}</Text>
         <Pressable
           accessibilityRole="button"
           onPress={() => void loadCredits()}
           style={({ pressed }) => [styles.resetCreditRetry, pressed && styles.pressed]}
         >
-          <Text style={styles.resetCreditRetryText}>{t("重新读取")}</Text>
+          <Text style={styles.resetCreditRetryText}>{t("client.accounts.reload")}</Text>
         </Pressable>
       </View> : credits.length === 0 ? <View style={styles.resetCreditStatus}>
         <Text style={styles.resetCreditEmptyIcon}>✓</Text>
-        <Text style={styles.resetCreditEmptyTitle}>{t("当前没有可用重置卡")}</Text>
-        <Text style={styles.resetCreditStatusText}>{t("获得新的重置卡后，可在这里查看和使用。")}</Text>
+        <Text style={styles.resetCreditEmptyTitle}>{t("client.accounts.noResetCreditsAvailable")}</Text>
+        <Text style={styles.resetCreditStatusText}>{t("client.mobile.newResetCreditsWillAppearHereForYouToUse")}</Text>
       </View> : credits.map((credit, index) => <View
         key={`${credit.issuedAt ?? 'unknown'}-${credit.expiresAt ?? 'unknown'}-${index}`}
         style={styles.resetCreditCard}
       >
         <View style={styles.resetCreditCardHeader}>
           <View style={styles.resetCreditCardIcon}><Text style={styles.resetCreditCardIconText}>↻</Text></View>
-          <Text style={styles.resetCreditCardTitle}>{t("重置卡")}{' '}{index + 1}</Text>
-          <View style={styles.resetCreditAvailableBadge}><Text style={styles.resetCreditAvailableText}>{t("可用")}</Text></View>
+          <Text style={styles.resetCreditCardTitle}>{t("client.accounts.resetCredits")}{' '}{index + 1}</Text>
+          <View style={styles.resetCreditAvailableBadge}><Text style={styles.resetCreditAvailableText}>{t("client.accounts.available")}</Text></View>
         </View>
         <View style={styles.resetCreditTimeRow}>
-          <Text style={styles.resetCreditTimeLabel}>{t("发放时间")}</Text>
+          <Text style={styles.resetCreditTimeLabel}>{t("client.accounts.issued")}</Text>
           <Text style={styles.resetCreditTimeValue}>{displayFullDate(credit.issuedAt)}</Text>
         </View>
         <View style={styles.resetCreditTimeDivider} />
         <View style={styles.resetCreditTimeRow}>
-          <Text style={styles.resetCreditTimeLabel}>{t("到期时间")}</Text>
+          <Text style={styles.resetCreditTimeLabel}>{t("client.accounts.expires")}</Text>
           <Text style={styles.resetCreditTimeValue}>{displayFullDate(credit.expiresAt)}</Text>
         </View>
       </View>)}

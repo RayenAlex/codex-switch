@@ -50,6 +50,7 @@ export function useTreeActions(options: {
       setPrompt({ entry, action: action as TreePrompt['action'] }); return;
     }
     if (action === 'copy' || action === 'cut') {
+      if (options.host.entryActions && !options.host.entryActions.includes(action === 'cut' ? 'move' : 'copy')) return;
       setClipboard({ entry, cut: action === 'cut' });
       setMessage(action === 'cut' ? '已剪切，请到目标文件夹粘贴。' : '已复制，请到目标文件夹粘贴。'); return;
     }
@@ -57,7 +58,8 @@ export function useTreeActions(options: {
     void run(async () => {
       if (action === 'reference') await options.host.reference?.(entry);
       if (action === 'copyPath') { await options.host.copyPath(entry.path); setMessage('路径已复制。'); }
-      if (action === 'explorer' || action === 'terminal') await options.host.open?.(entry, action);
+      if (action === 'explorer') await options.host.open?.(entry);
+      if (action === 'terminal') options.host.openTerminal?.(entry);
       if (action === 'download') {
         const text = await options.host.download?.({ cwd: options.cwd, path: entry.path });
         if (text) setMessage(text);

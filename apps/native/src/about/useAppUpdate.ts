@@ -23,7 +23,7 @@ export function useAppUpdate() {
       const result = await checkForAppUpdate();
       setUpdateCheck(result);
     } catch {
-      setError(t("暂时无法检查更新，请重试。"));
+      setError(t("client.mobile.couldNotCheckForUpdatesTryAgain"));
     } finally {
       checkingRef.current = false;
       setChecking(false);
@@ -32,10 +32,10 @@ export function useAppUpdate() {
   useEffect(() => { void checkForUpdate(); }, [checkForUpdate]);
   const installDownloaded = () => {
     if (downloadState.status !== 'downloaded') return;
-    void installDownloadedAndroidUpdate(downloadState.path).catch(() => Toast.fail(t("无法开始安装，请稍后重试")));
+    void installDownloadedAndroidUpdate(downloadState.path).catch(() => Toast.fail(t("client.mobile.couldNotStartInstallationTryAgainLater")));
   };
   const cancelDownload = () => {
-    void cancelAndroidUpdateDownload().catch(() => Toast.fail(t('未能取消更新，请重试。')));
+    void cancelAndroidUpdateDownload().catch(() => Toast.fail(t("client.mobile.couldNotCancelTheUpdatePleaseTryAgain")));
   };
   return { checking, updateCheck, downloadState, error, checkForUpdate,
     beginDownload: beginAppUpdateDownload, installDownloaded, cancelDownload };

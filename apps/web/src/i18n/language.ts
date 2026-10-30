@@ -1,23 +1,25 @@
+import { isAppLanguage, localeForLanguage, type AppLanguage } from '@remoteai/i18n';
 import { useSyncExternalStore } from 'react';
-import { setInterfaceLanguage } from '../../../../shared/i18n/interfaceLanguage';
-import { DEFAULT_LANGUAGE, deviceLanguage, isLanguage, type Language } from '../../../../shared/i18n/language';
+import {
+  getInterfaceLanguage, initializeInterfaceLanguage, setInterfaceLanguage, subscribeInterfaceLanguage,
+} from "../../../../shared/localization/interfaceLanguage";
+import { DEFAULT_LANGUAGE, deviceLanguage } from "../../../../shared/localization/language";
 
-export type { Language } from '../../../../shared/i18n/language';
+export type Language = AppLanguage<'web'>;
 export const LANGUAGE_KEY = 'codex-switch.web.language.v1';
 const listeners = new Set<() => void>();
 
 function readLanguage(): Language {
   try {
     const stored = localStorage.getItem(LANGUAGE_KEY);
-    if (isLanguage(stored)) return stored;
+    if (isAppLanguage('web', stored)) return stored;
   } catch { /* Language switching still works without browser storage. */ }
   return deviceLanguage();
 }
 
-let language = readLanguage();
-setInterfaceLanguage(language);
+let language = initializeInterfaceLanguage(readLanguage());
 export const getLanguage = () => language;
-export const getLocale = () => ({ en: 'en-US', zh: 'zh-CN', ru: 'ru-RU' })[language];
+export const getLocale = () => localeForLanguage(language);
 
 function publishLanguage(next: Language) {
   if (next === language) return;
@@ -26,8 +28,11 @@ function publishLanguage(next: Language) {
   listeners.forEach(listener => listener());
 }
 
+// Desktop embeds these chat views; follow its selection without writing Web preferences.
+subscribeInterfaceLanguage(() => publishLanguage(getInterfaceLanguage()));
+
 export function setLanguage(next: Language) {
-  if (next !== 'zh' && next !== 'en' && next !== 'ru') return;
+  if (!isAppLanguage('web', next)) return;
   try { localStorage.setItem(LANGUAGE_KEY, next); }
   catch { /* Keep the selected language for this visit if storage is unavailable. */ }
   publishLanguage(next);

@@ -43,3 +43,44 @@ npm run test:chat:e2e -w @codex-switch/web -- chat-terminal-display.pw.ts --proj
 
 iOS keyboard avoidance uses `KeyboardAvoidingView` and still needs device testing
 on a Mac; the Android regression does not validate iOS layout.
+
+## SSH and files
+
+The terminal fixture also simulates account SSH profiles and an SFTP directory.
+Build the same fixture with `-PreactNativeArchitectures=arm64-v8a` for a physical phone,
+install `terminal-fixture.apk`, then run:
+
+```powershell
+$env:ANDROID_SERIAL = '<device serial>'
+node apps/native/e2e/ssh-test.mjs
+```
+
+Run this alone on the device. It checks pulling saved connections, adding a connection,
+host confirmation, the shared expandable file tree, long-press rename/deletion, tabbed text/code
+editing, save-and-reopen round trips, retained drafts after closing the browser, and returning to the terminal at
+font scales 1.0 and 1.3, including landscape. Set `SSH_FILES_ONLY=1` to run the focused file checks.
+The fixture retains uploaded bytes so reopening a saved file verifies its content. It also checks each tab's
+close button and the overflow menu for hidden tabs. It restores the original
+font and rotation settings. Inspect `.codex-tmp/mobile-ssh-android/` screenshots for glyph
+clipping. Native transfer unit tests cover picker uploads and download publication;
+desktop `ssh.pw.ts` covers actual SSH/SFTP in local, remote, Web PC and phone layouts
+using the disposable WSL server. iOS presentation still requires device validation.
+
+Run `npm run test:chat:e2e -w @codex-switch/desktop -- ssh-project-browser-mobile.pw.ts`
+for the mobile Web entry point, including touch menus, search, save, draft restoration and landscape.
+`project-browser-native.pw.ts` checks the bundled offline editor and the regular native browser bridge.
+
+For SSH cloud sync, start the real Go profile API against a disposable PostgreSQL database:
+
+```powershell
+$env:SSH_PROFILES_TEST_DSN = 'host=127.0.0.1 port=15432 user=parity password=local-parity-only dbname=ssh_profiles_test sslmode=disable'
+go -C apps/admin-go run ./testsupport/ssh-profiles
+```
+
+In another terminal set `EXPO_PUBLIC_SSH_CLOUD_FIXTURE=1` before building the native fixture, then run
+`adb -s <device> reverse tcp:1499 tcp:1499` and set `SSH_CLOUD_FIXTURE=1` before running `ssh-test.mjs`.
+The script resets only fixture-owned profiles and verifies native saves in PostgreSQL at font scales 1.0 and 1.3.
+With the same Go fixture, set `SSH_CLOUD_FIXTURE=1` and run
+`npm run test:chat:e2e -w @codex-switch/desktop -- ssh-cloud.pw.ts`
+to verify desktop local/remote and Web wide/narrow layouts, migration, conflicts and deletion.
+The live WSL `ssh.pw.ts` regression also uses this profile fixture while terminal and SFTP traffic use port 1498.

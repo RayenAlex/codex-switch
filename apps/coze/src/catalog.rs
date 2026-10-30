@@ -267,6 +267,7 @@ fn replace(value: &mut Value, mapping: &BTreeMap<String, String>) {
     }
 }
 
+// i18n:builtin-template:start
 fn builtin_entries() -> Vec<Value> {
     vec![
         json!({"id":"builtin-knowledge-assistant","name":"知识问答助手",
@@ -334,6 +335,7 @@ fn builtin_copy(language: Option<&str>) -> &'static BuiltinCopy {
         _ => &BUILTIN_ZH,
     }
 }
+// i18n:builtin-template:end
 
 fn builtin(language: Option<&str>) -> Result<Bundle> {
     let copy = builtin_copy(language);

@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useEffect, useRef } from "react";
 import { File, Folder, GitBranch, MessageSquare, Target } from "lucide-react";
 import { ComposerSkillIcon } from "./ComposerSkillIcon";
@@ -6,16 +6,16 @@ import type { ComposerOption } from "./composerOptions";
 import styles from "./SkillInput.module.less";
 
 function menuLabels(kind: "coze" | "conversation" | "skill" | "command" | "file") {
-  if (kind === "file") return { heading: guiText("引用文件或文件夹"), label: guiText("项目文件"),
-    loading: guiText("正在搜索文件…"), empty: guiText("没有找到匹配的文件或文件夹") };
-  if (kind === "coze") return { heading: guiText("选择 Coze 内容"), label: "Coze",
-    loading: guiText("正在加载 Coze 内容…"), empty: guiText("没有匹配的已发布内容，请先在 Coze 中发布。") };
-  if (kind === "conversation") return { heading: guiText("引用对话 · 发送时带上近期内容"), label: guiText("对话"),
-    loading: guiText("正在加载对话…"), empty: guiText("没有找到其他对话，试试输入对话名称") };
-  if (kind === "skill") return { heading: guiText("选择技能"), label: guiText("技能"),
-    loading: guiText("正在加载技能…"), empty: guiText("没有找到匹配的技能") };
-  return { heading: guiText("选择命令或技能"), label: guiText("命令和技能"),
-    loading: guiText("正在加载技能…"), empty: guiText("没有找到匹配的命令或技能") };
+  if (kind === "file") return { heading: uiText("client.fileReferences.referenceAFileOrFolder"), label: uiText("client.projectBrowser.projectFiles"),
+    loading: uiText("client.fileReferences.searchingFiles"), empty: uiText("client.fileReferences.noMatchingFilesOrFolders") };
+  if (kind === "coze") return { heading: uiText("client.desktopComposerExtras.chooseCozeContent"), label: "Coze",
+    loading: uiText("client.desktopComposerExtras.loadingCozeContent"), empty: uiText("client.desktopComposerExtras.noMatchingPublishedContentPublishItInCozeFirst") };
+  if (kind === "conversation") return { heading: uiText("client.conversation.referenceAConversationIncludeRecentContentWhenSending"), label: uiText("client.chat.conversations"),
+    loading: uiText("client.chat.loadingConversations"), empty: uiText("client.workspaceActions.noOtherConversationsFoundTryEnteringAConversationName") };
+  if (kind === "skill") return { heading: uiText("client.workspaceActions.chooseASkill"), label: uiText("client.chat.skills"),
+    loading: uiText("client.chat.loadingSkills"), empty: uiText("client.workspaceActions.noMatchingSkills") };
+  return { heading: uiText("client.workspaceActions.chooseACommandOrSkill"), label: uiText("client.chat.commandsAndSkills"),
+    loading: uiText("client.chat.loadingSkills"), empty: uiText("client.chat.noMatchingCommandsOrSkills") };
 }
 
 function OptionIcon({ option }: { option: ComposerOption }) {
@@ -56,13 +56,13 @@ export function SkillMenu({ id, options, selected, loading, error, onChoose, bel
         aria-selected={selected === index} aria-disabled={!option.enabled}
         onClick={() => option.enabled && onChoose(option)}>
         <OptionIcon option={option} />
-        <span><strong>{option.label}{option.kind === "skill" && !option.enabled && guiText("（已停用）")}</strong>
+        <span><strong>{option.label}{option.kind === "skill" && !option.enabled && uiText("client.chat.disabled")}</strong>
           <small>{option.description}</small></span>
       </button>)}
     </div>
     {loading && <p role="status">{labels.loading}</p>}
     {error && <p role="status">{error}</p>}
-    {truncated && <p role="status">{guiText("仅显示部分结果，请输入更完整的名称或路径")}</p>}
+    {truncated && <p role="status">{uiText("client.fileReferences.showingPartialResultsEnterAMoreSpecificNameOrPath")}</p>}
     {!loading && !error && !options.length && <p role="status">{labels.empty}</p>}
   </div>;
 }

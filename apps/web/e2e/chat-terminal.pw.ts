@@ -6,6 +6,30 @@ import { openChatTool } from './chat-tool-actions';
 test.beforeEach(({}, info) => test.skip(info.project.name !== 'mobile' && !info.title.startsWith('desktop'),
   'Phone terminal drawer'));
 
+test('desktop and phone terminals keep their command and shell when the theme changes', async ({ page, request }, info) => {
+  await request.post(`${fixtureUrl}/test/reset`);
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.addInitScript(() => localStorage.setItem('codex-switch.web.theme.v1', 'dark'));
+  await login(page); await connect(page);
+  await openChatTool(page, '终端');
+  const input = page.locator('.xterm-helper-textarea');
+  await input.fill('theme_probe');
+  const command = page.locator('.xterm-rows').filter({ hasText: 'theme_probe' });
+  await expect(command).toBeVisible();
+  const opened = await operationCount(request, 'guiTerminalOpen');
+  for (const theme of ['dark', 'light', 'dark']) {
+    await page.evaluate(value => window.dispatchEvent(new StorageEvent('storage', {
+      key: 'codex-switch.web.theme.v1', newValue: value,
+    })), theme);
+    await expect(page.locator('.xterm-viewport')).toHaveCSS('background-color',
+      theme === 'dark' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)');
+    await expect(command).toBeVisible();
+    await screenshot(page, info, `terminal-theme-${theme}`);
+  }
+  expect(await operationCount(request, 'guiTerminalOpen')).toBe(opened);
+  expect(await operationCount(request, 'guiTerminalClose')).toBe(0);
+});
+
 test('opens a 90 percent terminal drawer, preserves its shell and draft, and sends input over P2P and Relay',
   async ({ page, request }, info) => {
     await request.post(`${fixtureUrl}/test/reset`);
@@ -72,17 +96,14 @@ test('keeps terminal controls and the current command visible when a phone rotat
   for (const viewport of [{ width: 844, height: 390 }, { width: 915, height: 412 },
     { width: 915, height: 250 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
-    const desktop = viewport.width > 860;
-    await expect(drawer.getByRole('button', {
-      name: desktop ? '最小化详情抽屉' : '收起终端', exact: true,
-    })).toBeInViewport({ ratio: 1 });
+    await expect(drawer.getByRole('button', { name: '收起终端', exact: true })).toBeInViewport({ ratio: 1 });
     await expect(drawer.getByRole('button', { name: '新建终端', exact: true })).toBeInViewport({ ratio: 1 });
     const keys = drawer.getByRole('button', { name: 'Ctrl+C', exact: true });
     await expect(keys).toBeInViewport({ ratio: 1 });
     await expect(command).toBeInViewport({ ratio: 1 });
     await expect.poll(async () => (await command.boundingBox())!.y + (await command.boundingBox())!.height)
       .toBeLessThanOrEqual((await keys.boundingBox())!.y);
-    if (viewport.width > viewport.height && !desktop) {
+    if (viewport.width > viewport.height) {
       await expect.poll(async () => Math.round((await drawer.boundingBox())!.width)).toBe(viewport.width);
       await expect.poll(async () => Math.round((await drawer.boundingBox())!.height)).toBe(viewport.height);
     }
@@ -186,24 +207,42 @@ test('bundled Android terminal renders output as text and forwards typing, short
   await expect.poll(async () => (await messages()).filter(value => value.type === 'resize').length).toBeGreaterThan(0);
 });
 
-test('desktop browser restores retained terminals in a wide drawer', async ({ page, request }, info) => {
-  test.skip(info.project.name !== 'desktop', 'Wide terminal drawer');
+test('desktop browser docks a resizable terminal below the composer and restores its shell',
+  async ({ page, request }, info) => {
+  test.skip(info.project.name !== 'desktop', 'Desktop terminal panel');
   await request.post(`${fixtureUrl}/test/reset`);
   await login(page); await connect(page);
   await openChatTool(page, '终端');
-  const drawer = page.getByRole('dialog', { name: '远程终端', exact: true });
-  await expect(drawer).toBeVisible();
+  const panel = page.getByRole('region', { name: '终端', exact: true });
+  await expect(panel).toBeVisible();
   await expect(page.locator('.xterm-rows')).toContainText('Remote shell ready');
-  const bounds = (await drawer.boundingBox())!;
-  expect(Math.round(bounds.width)).toBe(560);
+  await expect(page.locator('aside[data-details-panel]:visible')).toHaveCount(0);
+  const conversation = (await page.locator('.chat-conversation').boundingBox())!;
+  const bounds = (await panel.boundingBox())!;
+  expect(Math.round(bounds.width)).toBe(Math.round(conversation.width));
+  expect(Math.round(bounds.y + bounds.height)).toBe(Math.round(conversation.y + conversation.height));
+  expect(Math.round(bounds.height)).toBe(300);
+  const draft = page.getByRole('textbox', { name: '聊天消息', exact: true });
+  await draft.fill('终端打开时保留聊天草稿');
+  const composer = (await draft.boundingBox())!;
+  expect(composer.y + composer.height).toBeLessThanOrEqual(bounds.y);
+  await panel.getByRole('separator', { name: '调整终端高度', exact: true }).press('ArrowUp');
+  await expect.poll(async () => (await panel.boundingBox())!.height).toBeGreaterThan(bounds.height);
   const opened = await operationCount(request, 'guiTerminalOpen');
-  await drawer.getByRole('button', { name: '最小化详情抽屉', exact: true }).click();
+  await panel.getByRole('button', { name: '收起终端', exact: true }).click();
+  await expect(panel).toBeHidden();
+  await expect(draft).toHaveValue('终端打开时保留聊天草稿');
+  await openChatTool(page, '终端');
+  await expect(panel).toBeVisible();
+  expect(await operationCount(request, 'guiTerminalOpen')).toBe(opened);
+  await screenshot(page, info, 'bottom-terminal');
   await page.reload(); await connect(page);
+  await expect(panel).toBeHidden();
   await openChatTool(page, '终端');
   await expect(page.locator('.xterm-rows')).toContainText('Remote shell ready');
   expect(await operationCount(request, 'guiTerminalOpen')).toBe(opened);
   expect(await operationCount(request, 'guiTerminalClose')).toBe(0);
-  await screenshot(page, info, 'wide-retained-terminal');
+  await screenshot(page, info, 'bottom-retained-terminal');
 });
 
 test('desktop and mobile terminals are isolated by project and restored after reload', async ({ page, request }, info) => {
@@ -218,11 +257,11 @@ test('desktop and mobile terminals are isolated by project and restored after re
     await page.getByRole('button', { name: 'projects', exact: true }).click();
     await page.getByRole('button', { name: '选择此文件夹', exact: true }).click();
   };
-  const drawer = page.getByRole('dialog', { name: '远程终端', exact: true });
+  const drawer = info.project.name === 'desktop'
+    ? page.getByRole('region', { name: '终端', exact: true })
+    : page.getByRole('dialog', { name: '远程终端', exact: true });
   const rows = page.locator('.xterm-rows');
-  const hide = () => drawer.getByRole('button', {
-    name: info.project.name === 'desktop' ? '最小化详情抽屉' : '收起终端', exact: true,
-  }).click();
+  const hide = () => drawer.getByRole('button', { name: '收起终端', exact: true }).click();
   const type = async (text: string) => {
     const input = page.locator('.xterm-helper-textarea');
     await input.fill(text); await input.press('Enter');

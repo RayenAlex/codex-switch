@@ -103,3 +103,20 @@ cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test codex_switch
 目前只支持活动物理控制台会话，不提供多用户 RDP 会话选择。尚未实现安全注意序列
 Ctrl+Alt+Delete；强制要求该序列的登录策略不能据此承诺可远程登录。BitLocker 开机前解锁、
 UEFI、断电/关机状态不在 Windows 服务能力内。不会开启自动登录或降低 UAC。
+
+## 手动熄屏与远程连接
+
+设备管理中的手动熄屏状态由电脑端独立保留，远程连接、断开和隐私屏恢复显示布局时不会清除。
+连接清理只释放当前连接实际按下的键和鼠标按钮，避免空闲连接的多余释放事件唤醒显示器。
+保存的隐私屏设置在视频采集及自动解锁之前应用，初始连接结果直接携带已生效的显示状态。
+
+2026-10-27 在 Windows 11 Hyper-V 虚拟机的基本控制台会话验证：本机使用随 Playwright 安装的 Chromium
+通过真实 WebRTC 接收虚拟机桌面，分别完成关闭隐私屏、开启隐私屏的连接、断开和重连。
+两种场景均持续收到有效桌面画面；从手动熄屏到断开后，Windows 显示电源通知未出现亮屏事件。
+该结果针对虚拟机；未操作或测试开发机器的物理显示器，不替代不同物理显卡与显示器的兼容性验证。
+
+`tests/windows_screen_power.rs` 提供默认忽略的设备回归。`manual_off_during_remote_connection`
+只在指定测试设备运行：设置 `CSW_SCREEN_POWER_TEST_DIR` 为已有空目录，测试写出 `ready` 后再建立远程连接，
+完成连接及断开后写入 `finish`。测试同时检查熄屏所有权和期间的亮屏事件，退出时恢复显示。
+`manual_off_survives_windows_wake_requests` 验证系统意外唤醒后重新熄屏及主动恢复显示；
+它允许模拟唤醒产生电源事件，不作为连接过程无闪亮的证据。切勿在正在使用的本机运行这些设备测试。

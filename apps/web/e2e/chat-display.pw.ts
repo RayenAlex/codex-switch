@@ -232,6 +232,22 @@ test('shows one stop notice before the partial response and keeps the next respo
   await expect(page.getByText('后续对话正常')).toBeVisible();
 });
 
+test('keeps the first acknowledged message after stopping before history is saved', async ({ page }, info) => {
+  const text = '请检查项目，暂停后保留这条消息。';
+  const value = fixture([]);
+  value.turns![0] = { id: 'first-turn', status: 'interrupted', items: [
+    { id: 'sent-first-turn', type: 'userMessage', localEcho: true, content: [{ type: 'text', text }] },
+  ] };
+  await open(page, value);
+  await expect(page.getByText(text, { exact: true })).toBeVisible();
+  await page.evaluate(detail => window.dispatchEvent(new CustomEvent('display-history-snapshot', { detail })),
+    { ...value, turns: [] });
+  await expect(page.getByText(text, { exact: true })).toHaveCount(1);
+  await expect(page.getByText('已停止生成', { exact: true })).toBeVisible();
+  await expect(page.locator('.chat-processing-status')).toHaveCount(0);
+  await screenshot(page, info, 'interrupted-first-message');
+});
+
 async function checkSelectionQuoteDismissal(page: Page) {
   const paragraph = page.locator('.chat-assistant-message p').nth(10);
   await paragraph.evaluate(node => {

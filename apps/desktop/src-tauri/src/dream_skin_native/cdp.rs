@@ -322,12 +322,7 @@ fn is_codex_model_query_key(value: &Value) -> bool {
 }
 
 pub(crate) fn refresh_codex_models(
-    models: &[String],
-    fast_mode_models: &[String],
-    image_input_models: &[String],
-    model_reasoning_efforts: &crate::models::ModelReasoningEfforts,
-    selected_model: &str,
-    reasoning_profile: crate::providers::ReasoningEffortProfile,
+    request: &crate::codex_runtime::ModelRefreshRequest,
 ) -> Result<CodexModelRefreshResult, String> {
     let state = read_session();
     let Some(port) = state.port else {
@@ -340,14 +335,7 @@ pub(crate) fn refresh_codex_models(
         .into_iter()
         .find(|target| target.url == "app://-/index.html")
         .ok_or_else(|| "The Codex main window is not available.".to_string())?;
-    let expression = codex_model_refresh_expression(
-        models,
-        fast_mode_models,
-        image_input_models,
-        model_reasoning_efforts,
-        selected_model,
-        reasoning_profile,
-    )?;
+    let expression = codex_model_refresh_expression(request)?;
     let mut session = CdpSession::connect(&target, port)?;
     session.enable()?;
     let result = session.evaluate(&expression)?;

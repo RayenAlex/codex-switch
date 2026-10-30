@@ -52,7 +52,7 @@ function ModelOption({
     {loading
       ? <ActivityIndicator color={color("#14806f", 'accent')} size="small" />
       : current
-        ? <View style={styles.currentPill}><Text style={styles.currentText}>{t("当前")}</Text></View>
+        ? <View style={styles.currentPill}><Text style={styles.currentText}>{t("client.accounts.current")}</Text></View>
         : <Text style={styles.chevron}>›</Text>}
   </Pressable>;
 }
@@ -104,8 +104,8 @@ export function RemoteModelSwitchSheet({
 
   return <BottomSheet fullWidthContent
     visible={Boolean(device)}
-    title={t("切换模型")}
-    subtitle={device ? t("{value1} · 选择这台 PC 使用的模型来源", { value1: device.name }) : undefined}
+    title={t("client.app.switchModel")}
+    subtitle={device ? t("client.app.chooseTheModelSourceForThisComputer", { value1: device.name }) : undefined}
     onClose={onClose}
     dismissible={!busy}
     tall
@@ -117,22 +117,22 @@ export function RemoteModelSwitchSheet({
           disabled={busy} onPress={() => setTarget(value)}
           style={[styles.targetButton, target === value && styles.targetSelected]}>
           <Text style={[styles.targetText, target === value && styles.targetTextSelected]}>
-            {value === 'gui' ? t("Codex GUI 模型") : t("代理接口模型")}
+            {value === 'gui' ? t("client.app.codexGuiModel") : t("client.app.proxyApiModel")}
           </Text>
         </Pressable>)}
       </View>
       <Text style={styles.description}>{target === 'gui'
-        ? t("仅切换 Codex GUI 使用的模型来源。") : t("仅切换代理接口使用的模型来源。")}</Text>
+        ? t("client.app.changeTheModelSourceUsedByCodexGuiOnly") : t("client.app.changeTheModelSourceUsedByTheProxyApiOnly")}</Text>
       {target === 'gui' && !providerSupported
-        ? <Text style={styles.emptyText}>{t("请先更新 PC 端，再切换 Codex GUI 模型。")}</Text> : null}
-      <Text style={styles.sectionTitle}>{t("官方模型")}</Text>
-      {!accounts.length ? <Text style={styles.emptyText}>{t("暂无已同步的官方账号。")}</Text> : accounts.map((account) => {
+        ? <Text style={styles.emptyText}>{t("client.app.updateTheDesktopAppToSwitchTheCodexGuiModel")}</Text> : null}
+      <Text style={styles.sectionTitle}>{t("client.app.officialModel")}</Text>
+      {!accounts.length ? <Text style={styles.emptyText}>{t("client.app.noOfficialAccountsSyncedYet")}</Text> : accounts.map((account) => {
         const current = !options.providerId && !options.group && options.accountId === account.id;
         return <ModelOption
           key={`account:${account.id}`}
           badge="O"
           title={account.email}
-          subtitle={t("官方模型 · {value1}", { value1: account.plan || 'ChatGPT' })}
+          subtitle={t("client.mobile.officialModel", { value1: account.plan || 'ChatGPT' })}
           current={current}
           disabled={busy || !device?.online || !options.accountAvailable || current}
           loading={switchingAccountId === account.id}
@@ -141,19 +141,19 @@ export function RemoteModelSwitchSheet({
       })}
 
       <View style={styles.providerHeading}>
-        <Text style={styles.sectionTitle}>{t("第三方 Provider")}</Text>
+        <Text style={styles.sectionTitle}>{t("client.app.thirdPartyProvider")}</Text>
         {!providerSupported
-          ? <Text style={styles.hint}>{t("请先更新 PC 端")}</Text>
+          ? <Text style={styles.hint}>{t("client.app.updateTheDesktopAppFirst")}</Text>
           : !providerAvailable
-            ? <Text style={styles.hint}>{t("请先在 PC 端启动本地代理")}</Text>
+            ? <Text style={styles.hint}>{t("client.app.startTheLocalProxyOnYourComputerFirst")}</Text>
             : null}
       </View>
-      {!providers.length ? <Text style={styles.emptyText}>{t("暂无已同步的第三方 Provider。")}</Text> : <>
+      {!providers.length ? <Text style={styles.emptyText}>{t("client.app.noThirdPartyProvidersSyncedYet")}</Text> : <>
         {groups.map((group) => {
           const count = providers.filter((provider) => provider.group === group).length;
           const current = device?.activeProviderGroup === group;
           return <ModelOption key={`group:${group}`} badge="G" title={group}
-            subtitle={t("同时启用 {value1} 个 API", { value1: count })} current={current}
+            subtitle={t("client.mobile.enableApisTogether", { value1: count })} current={current}
             disabled={busy || !device?.online || !providerAvailable || !groupSupported || current}
             loading={switchingProviderId === `group:${group}`}
             onPress={() => void selectProviderGroup(group)} />;
@@ -166,7 +166,7 @@ export function RemoteModelSwitchSheet({
             key={`provider:${provider.id}`}
             badge={aggregate ? "A" : "P"}
             title={provider.name}
-            subtitle={unsupported ? t("请先更新 PC 端") : provider.model || t("由 Codex 选择模型")}
+            subtitle={unsupported ? t("client.app.updateTheDesktopAppFirst") : provider.model || t("client.app.letCodexChooseTheModel")}
             current={current}
             disabled={busy || !device?.online || !providerAvailable || unsupported || current}
             loading={switchingProviderId === provider.id}
@@ -175,8 +175,8 @@ export function RemoteModelSwitchSheet({
         })}
       </>}
       <Text style={styles.footerHint}>
-        {target === 'gui' ? t("切换后，Codex GUI 的后续请求将使用所选来源，无需重启。")
-          : t("在官方模型与第三方 Provider 之间切换后，需要重启 ChatGPT/Codex 才能加载当前模型。")}
+        {target === 'gui' ? t("client.app.futureCodexGuiRequestsWillUseTheSelectedSourceNo")
+          : t("client.app.restartChatgptCodexAfterSwitchingBetweenOfficialModelsAndThird")}
       </Text>
     </SheetScrollView>
   </BottomSheet>;

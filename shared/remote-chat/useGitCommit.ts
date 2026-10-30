@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getInterfaceLanguage } from '../i18n/interfaceLanguage';
+import { getInterfaceLanguage } from "../localization/interfaceLanguage";
 import type { GitChanges, GitClient, GitRepository } from './gitTypes';
 import { useGitSettings } from './useGitSettings';
 

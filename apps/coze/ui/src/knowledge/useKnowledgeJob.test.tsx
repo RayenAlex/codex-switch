@@ -59,6 +59,6 @@ it("treats a missing job (HTTP 404) as finished, whatever the error text", async
   vi.mocked(api).mockRejectedValueOnce(new ApiError("Not found", 404));
   await act(async () => root?.render(<Fixture key="restored" />));
   expect(sessionStorage.getItem("coze-import-kb")).toBeNull();
-  expect(onError).toHaveBeenLastCalledWith("上次导入已结束或连接已重启，请检查文档列表。");
+  expect(onError).toHaveBeenLastCalledWith("coze.index.theLastImportHasAlreadyEndedOrTheConnectionRestarted");
   expect(value.busy).toBe(false);
 });

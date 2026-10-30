@@ -1,3 +1,4 @@
+import { defaultText } from '../../../../shared/localization/messages';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ChatRpc } from '../../../../shared/remote-chat/rpc';
 import type { RpcMessage } from '../../../../shared/remote-chat/protocol';
@@ -74,32 +75,32 @@ it('never treats a previous completed turn as the result of a newly accepted mes
   const value = state();
   value.deliveries = { thread: { requestId: 'send', threadId: 'thread', phase: 'received',
     afterTurnId: 'old', afterUserCount: 1 } };
-  expect(taskStatus(value)?.label).toBe('电脑已收到');
+  expect(taskStatus(value)?.label).toBe("client.chatReliability.receivedByComputer");
   expect(taskIssue(value)).toBeUndefined();
   value.selected!.turns!.push({ id: 'new', status: 'inProgress', items: [] });
-  expect(taskStatus(value)?.label).toBe('AI 已开始处理');
+  expect(taskStatus(value)?.label).toBe("client.chatReliability.aiHasStarted");
   expect(taskIssue(value)).toBeUndefined();
   value.selected!.turns!.at(-1)!.status = 'completed';
-  expect(taskStatus(value)?.label).toBe('结果待确认');
+  expect(taskStatus(value)?.label).toBe("client.chatReliability.resultReadyForReview");
   expect(taskIssue(value)).toBeUndefined();
 });
 
 it('keeps an uncertain send visible even when unrelated history refreshes', () => {
   const value = state();
   value.deliveries = { thread: { requestId: 'send', threadId: 'thread', phase: 'unknown' } };
-  expect(taskStatus(value)?.label).toBe('发送结果待核实');
-  expect(taskIssue(value)?.label).toBe('发送结果待核实');
+  expect(taskStatus(value)?.label).toBe("client.chatReliability.deliveryNeedsVerification");
+  expect(taskIssue(value)?.label).toBe("client.chatReliability.deliveryNeedsVerification");
   value.selected!.turns!.push({ id: 'unrelated', status: 'completed', items: [] });
-  expect(taskStatus(value)?.label).toBe('发送结果待核实');
+  expect(taskStatus(value)?.label).toBe("client.chatReliability.deliveryNeedsVerification");
 });
 
 it('shows a queued message error as needing attention instead of successful receipt', () => {
   const value = state();
   value.queue.threads.thread = [{ id: 'queued', text: 'picture', imageCount: 1, attachmentCount: 0, busy: false,
     error: '图片无法读取，请重新选择后发送。' }];
-  expect(taskStatus(value)).toMatchObject({ label: '待发送消息需要处理', kind: 'issue' });
+  expect(taskStatus(value)).toMatchObject({ label: "client.chatReliability.queuedMessagesNeedAttention", kind: 'issue' });
   value.queue.threads.thread[0].error = undefined;
-  expect(taskStatus(value)).toMatchObject({ label: '电脑已收到', kind: 'progress' });
+  expect(taskStatus(value)).toMatchObject({ label: "client.chatReliability.receivedByComputer", kind: 'progress' });
 });
 
 it('shows stale running and approval state as unverified while reconnecting', () => {
@@ -107,10 +108,10 @@ it('shows stale running and approval state as unverified while reconnecting', ()
   value.selected!.turns![0].status = 'inProgress';
   value.mode = 'connecting'; // v2 may keep ready=true while both data paths are recovering.
   value.approvals = [{ id: 1, method: 'item/commandExecution/requestApproval', params: { threadId: 'thread' } }];
-  expect(taskStatus(value)?.label).toBe('任务状态待更新');
-  expect(taskIssue(value)?.label).toBe('任务状态待更新');
+  expect(taskStatus(value)?.label).toBe("client.chatReliability.taskStatusNeedsUpdating");
+  expect(taskIssue(value)?.label).toBe("client.chatReliability.taskStatusNeedsUpdating");
   value.mode = 'direct';
-  expect(taskStatus(value)?.label).toBe('等待你的确认');
+  expect(taskStatus(value)?.label).toBe("client.chatReliability.awaitingYourApproval");
   expect(taskIssue(value)).toBeUndefined();
 });
 
@@ -120,7 +121,7 @@ it.each([
   [CONNECTION_ERRORS.network, '聊天服务暂时连不上'],
 ])('explains the connection issue %s', (connectionIssue, title) => {
   const health = connectionHealth({ ...initialChatState(), connectionIssue }, { online: true });
-  expect(health.title).toBe(title);
+  expect(defaultText(health.title)).toBe(title);
   expect(health.status).toBe('blocked');
   expect(health.next).not.toBe('');
   expect(health.reconnect).toBe(true);
@@ -129,11 +130,11 @@ it.each([
 it('uses the live path over stale presence and separates chat errors from connection failures', () => {
   const value = state(); value.error = '任务失败';
   const health = connectionHealth(value, { online: false });
-  expect(health.title).toBe('已通过中转连接');
+  expect(health.title).toBe("client.chatReliability.connectedThroughRelay");
   expect(health.status).toBe('ok');
   expect(health.steps.every(step => step.status === 'ok')).toBe(true);
   value.ready = false; value.connectionIssue = CONNECTION_ERRORS.startup;
-  expect(connectionHealth(value, { online: true }).title).toBe('正在恢复电脑上的聊天');
+  expect(connectionHealth(value, { online: true }).title).toBe("client.chatReliability.restoringChatOnYourComputer");
   expect(connectionHealth(value, { online: true }).status).toBe('blocked');
 });
 

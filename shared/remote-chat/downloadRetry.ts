@@ -3,6 +3,7 @@ import { DownloadCancelled, DownloadValidationError } from './fileDownload';
 import { DownloadPolicyError } from './policy';
 
 const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000] as const;
+export const MAX_DOWNLOAD_RETRIES = RETRY_DELAYS_MS.length;
 
 export function canRetryDownload(error: unknown) {
   if (error instanceof DownloadCancelled || error instanceof DownloadPolicyError
@@ -23,4 +24,5 @@ export class DownloadRetry {
   }
 
   clear(id: string) { this.attempts.delete(id); }
+  attempt(id: string) { return this.attempts.get(id) ?? 0; }
 }

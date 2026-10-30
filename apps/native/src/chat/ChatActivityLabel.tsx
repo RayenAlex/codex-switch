@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useActivitySweep } from './useActivitySweep';
+import { textMetrics } from '../theme/text';
 import { palette, useStyles } from './styles';
 
 type LabelProps = { icon: React.ComponentProps<typeof Ionicons>['name']; text: string };
@@ -17,7 +18,7 @@ function Label({ icon, text, color = palette.muted, iconColor = color }: LabelPr
   const styles = useStyles();
   return <View style={labelStyles.row}>
     <Ionicons name={icon} size={15} color={iconColor} />
-    <Text numberOfLines={2} style={[styles.subtitle, styles.fill, { color }]}>{text}</Text>
+    <Text numberOfLines={2} style={[labelStyles.text, styles.fill, { color }]}>{text}</Text>
   </View>;
 }
 
@@ -58,6 +59,7 @@ function SweepingLabel({ icon, text }: LabelProps) {
 const useLabelStyles = createThemedStyles(() => ({
   container: { flex: 1, minWidth: 0, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  text: { ...textMetrics(13, 20) },
   // Overlapping bands soften the sweep without fading the readable base text or painting its background.
   band: { position: 'absolute', top: 0, bottom: 0, overflow: 'hidden', opacity: 0.15 },
 }));

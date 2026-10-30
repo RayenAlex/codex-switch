@@ -1,4 +1,4 @@
-import { guiText } from "../../../i18n/guiText";
+import { uiText } from "../../../i18n/uiText";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { RootContent } from "hast";
 import { renderToken } from "../CodeHighlight";
@@ -31,10 +31,10 @@ export function PreviewCode({ text, path, line }: { text: string; path: string; 
   }, [selectedLine, text]);
   return <section className={styles.code}>
     <div className={styles.codeInfo}>
-      <span>{language || guiText("文本")} · {lineCount}  {guiText("行")}{line && guiText(" · 第 {value1} 行", { value1: line })}</span>
-      {tail && <span>{guiText("文件较长，后半部分以纯文本显示")}</span>}
+      <span>{language || uiText("client.chat.text")} · {lineCount}  {uiText("client.chat.line")}{line && uiText("client.workspaceActions.line", { value1: line })}</span>
+      {tail && <span>{uiText("client.workspaceActions.thisFileIsLongTheRemainingContentIsShownAs")}</span>}
     </div>
-    <div className={styles.codeScroll} ref={scroll} tabIndex={0} aria-label={guiText("文件内容")}>
+    <div className={styles.codeScroll} ref={scroll} tabIndex={0} aria-label={uiText("client.workspaceActions.fileContent")}>
       <div className={styles.codeLines} style={{ lineHeight: `${LINE_HEIGHT}px` }}>
         {selectedLine && <div className={styles.selectedLine} aria-hidden="true"
           style={{ top: (selectedLine - 1) * LINE_HEIGHT, height: LINE_HEIGHT }} />}

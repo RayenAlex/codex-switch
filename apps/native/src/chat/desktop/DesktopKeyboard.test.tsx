@@ -17,7 +17,7 @@ vi.mock('react', async () => ({ ...await vi.importActual<typeof import('react')>
 vi.mock('react-native', () => ({ View: 'View', Pressable: 'Pressable', Text: 'Text', ScrollView: 'ScrollView',
   Keyboard: { dismiss: vi.fn() }, StyleSheet: { create: <T,>(styles: T) => styles } }));
 vi.mock('@expo/vector-icons', () => ({ Ionicons: 'Icon' }));
-vi.mock('../../i18n', () => ({ t: (text: string) => text, useLanguage: vi.fn() }));
+vi.mock('../../i18n', async () => ({ ...await vi.importActual<typeof import('../../i18n')>('../../i18n'), useLanguage: vi.fn() }));
 vi.mock('./DesktopIme', () => ({ DesktopIme: 'DesktopIme' }));
 
 interface Props {

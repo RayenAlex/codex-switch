@@ -182,8 +182,12 @@ it('opens a compact context menu without selecting the source and creates the re
   expect(controller.snapshot().selected).toBeNull();
   expect(request).not.toHaveBeenCalled();
   expect([...document.querySelectorAll('[role="menuitem"]')].map(entry => entry.textContent))
-    .toEqual(['置顶', '重命名', '创建分支', '归档', '删除']);
+    .toEqual(['置顶', '在资源管理器中打开', '重命名', '创建分支', '归档', '删除']);
   expect(document.querySelector<HTMLElement>('.ant-dropdown')!.style.maxWidth).toBe('400px');
+  await act(async () => menuItem('在资源管理器中打开').click());
+  expect(request).toHaveBeenCalledWith('request', { operation: 'guiFileAction',
+    target: { path: 'D:/project', threadId: null }, action: { type: 'open', application: 'default' } });
+  await openMenu();
   await act(async () => menuItem('创建分支').click());
   expect(request).toHaveBeenCalledWith('request', { operation: 'forkLatest', threadId: thread.id });
   expect(controller.snapshot().selected?.id).toBe('fork');

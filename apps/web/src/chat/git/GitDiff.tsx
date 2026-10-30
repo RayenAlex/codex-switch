@@ -1,3 +1,4 @@
+import { displayError } from '../../i18n/index';
 import { useContext, useEffect, useId, useMemo, useRef } from 'react';
 import { Spin } from 'antd';
 import { ArrowLeft } from 'lucide-react';
@@ -22,7 +23,7 @@ function GitDiffPreview({ value, detail }: { value: GitDiffValue; detail: DiffDe
     const empty: DiffFile = { path: detail.path, kind: 'update', raw: value.text, lines: [], added: 0, removed: 0 };
     return { id, files: parsed.length ? parsed : [empty],
       title: detail.commit ? `Git · ${detail.commit.hash.slice(0, 8)}` : 'Git',
-      status: value.truncated ? '差异较大，仅显示部分内容。' : undefined };
+      status: value.truncated ? "client.git.thisDiffIsLargeOnlyPartOfItIsShown" : undefined };
   }, [id, detail.path, detail.commit?.hash, value]);
   const open = panel?.open;
   const update = panel?.update;
@@ -41,15 +42,15 @@ export function GitDiff({ client, cwd, detail, enabled, desktop, onBack, version
   const diff = useGitDiff(client, cwd, detail, { enabled, version });
   return <>
     {!desktop && <button type="button" className="git-detail-title" onClick={onBack}
-      aria-label={detail.commit ? t('返回文件列表') : undefined}>
+      aria-label={detail.commit ? t("client.projectBrowser.backToFiles") : undefined}>
       <ArrowLeft size={18} /><span>{detail.title}</span></button>}
-    {diff.error && <p role="alert" className="git-error">{t(diff.error)}</p>}
+    {diff.error && <p role="alert" className="git-error">{displayError(diff.error)}</p>}
     {!diff.value && !diff.error && enabled && <div className="git-loading"><Spin /></div>}
     {diff.value && (desktop ? <GitDiffPreview value={diff.value} detail={detail} />
       : <div className="git-diff-scroll">
-        {diff.value.truncated && <p className="git-notice">{t('差异较大，仅显示部分内容。')}</p>}
+        {diff.value.truncated && <p className="git-notice">{t("client.git.thisDiffIsLargeOnlyPartOfItIsShown")}</p>}
         <pre className="git-diff">{diff.value.text ? diff.value.text.split('\n').map((line, index) =>
-          <span key={index} data-kind={line[0]}>{line}{'\n'}</span>) : t('没有可显示的文本差异。')}</pre>
+          <span key={index} data-kind={line[0]}>{line}{'\n'}</span>) : t("client.git.noTextDiffToDisplay")}</pre>
       </div>)}
   </>;
 }

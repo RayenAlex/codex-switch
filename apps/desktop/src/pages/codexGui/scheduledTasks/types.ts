@@ -1,3 +1,4 @@
+import { displayText } from '../../../i18n/uiText';
 export type Schedule =
   | { kind: "once"; at: number }
   | { kind: "interval"; minutes: number }
@@ -24,19 +25,19 @@ export type TaskRequest =
   | { operation: "delete" | "runNow"; id: string };
 
 export const TASK_FILTERS: { value: TaskFilter; label: string }[] = [
-  { value: "all", label: "全部" }, { value: "active", label: "已开启" },
-  { value: "paused", label: "已暂停" }, { value: "completed", label: "已完成" },
+  { value: "all", label: "client.configHelp.all" }, { value: "active", label: "client.settings.on" },
+  { value: "paused", label: "client.downloads.paused" }, { value: "completed", label: "client.chat.completed" },
 ];
-export const WEEKDAYS = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"];
+export const WEEKDAYS = ["client.interface.message.56451f", "client.interface.message.8621c0", "client.interface.message.23ae0a", "client.interface.message.478911", "client.interface.message.6e5969", "client.interface.message.7bb2f5", "client.interface.message.7e06f3"];
 
 export function scheduleLabel(schedule: Schedule): string {
   switch (schedule.kind) {
     case "once": return new Date(schedule.at).toLocaleString(guiLocale(), { month: "long", day: "numeric",
       hour: "2-digit", minute: "2-digit", hour12: false });
-    case "interval": return guiText("每 {minutes} 分钟", { minutes: schedule.minutes });
-    case "daily": return guiText("每天 {time}", { time: schedule.time });
-    case "weekdays": return guiText("工作日 {time}", { time: schedule.time });
-    case "weekly": return `${guiText(WEEKDAYS[schedule.weekday])} ${schedule.time}`;
+    case "interval": return uiText("client.scheduledTasks.everyMinutes", { minutes: schedule.minutes });
+    case "daily": return uiText("client.scheduledTasks.dailyAt", { time: schedule.time });
+    case "weekdays": return uiText("client.scheduledTasks.weekdaysAt", { time: schedule.time });
+    case "weekly": return `${displayText(WEEKDAYS[schedule.weekday])} ${schedule.time}`;
   }
 }
 
@@ -50,4 +51,4 @@ export function filterTasks(tasks: ScheduledTask[], filter: TaskFilter, search: 
 export function taskInput({ title, prompt, cwd, schedule }: TaskInput): TaskInput {
   return { title, prompt, cwd, schedule };
 }
-import { guiLocale, guiText } from "../../../i18n/guiText";
+import { guiLocale, uiText } from "../../../i18n/uiText";

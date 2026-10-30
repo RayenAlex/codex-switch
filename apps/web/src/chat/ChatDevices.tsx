@@ -14,21 +14,21 @@ export function ChatDevices({ devices, choose, chooseLocal, onClose, refresh }: 
   const [query, setQuery] = useState('');
   const keyword = desktop ? query.trim().toLocaleLowerCase() : '';
   const matches = devices.filter(device => device.name.toLocaleLowerCase().includes(keyword));
-  const showLocal = chooseLocal && t('本机').includes(keyword);
-  return <AdaptiveSheet open title={t("选择电脑")} width={400} onClose={onClose}>
+  const showLocal = chooseLocal && t("client.composer.thisComputer").toLocaleLowerCase().includes(keyword);
+  return <AdaptiveSheet open title={t("client.settings.chooseAComputer")} width={400} onClose={onClose}>
     <div className="chat-settings">
       {showLocal && <button type="button" className="chat-setting-entry" onClick={chooseLocal}>
-        <strong>本机</strong></button>}
+        <strong>{t("client.composer.thisComputer")}</strong></button>}
       {matches.map((device) => <button type="button" key={device.deviceId} className="chat-setting-entry"
         disabled={!device.online} onClick={() => choose(device.deviceId)}>
-        <strong>{device.name}</strong><span>{device.online ? t("在线") : t("离线")}</span>
+        <strong>{device.name}</strong><span>{device.online ? t("client.chat.online") : t("client.chat.offline")}</span>
       </button>)}
-      {!devices.length && <p className="chat-muted">{t("在电脑上打开 Remote AI 并登录同一账号，即可开始聊天。")}</p>}
+      {!devices.length && <p className="chat-muted">{t("client.chat.openRemoteAiOnYourComputerAndSignInWith")}</p>}
       {!!keyword && !showLocal && !matches.length
-        && <p className="chat-muted">{t('没有找到匹配的主机')}</p>}
+        && <p className="chat-muted">{t("client.workspaceSettings.noMatchingComputers")}</p>}
       {desktop && refresh?.error && <p className="chat-error" role="alert">{refresh.error}</p>}
       {desktop && <ComputerSearchBar query={query} onQueryChange={setQuery}
-        searchLabel={t('搜索主机')} refreshLabel={t('刷新主机列表')} refresh={refresh} />}
+        searchLabel={t("client.workspaceSettings.searchComputers")} refreshLabel={t("client.workspaceSettings.refreshComputerList")} refresh={refresh} />}
     </div>
   </AdaptiveSheet>;
 }

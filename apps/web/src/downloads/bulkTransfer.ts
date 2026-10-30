@@ -87,10 +87,8 @@ export async function transferBulkDownload(options: Options) {
     await storeBulkCheckpoint(task); update(task);
     await worker.initialize(client.cipher({ transferId: task.id, manifestId: opened.manifest.manifestId, epoch }));
     receiver = new BulkReceiver({ client, opened, signal, decoder: worker, metrics });
-    const started = performance.now(); const initial = task.received;
     store = new BulkBlockStore(task, value => {
-      task = { ...value, protocol: 'bulk', verified: false,
-        bytesPerSecond: (value.received - initial) * 1000 / Math.max(1, performance.now() - started) };
+      task = { ...value, protocol: 'bulk', verified: false };
       update(task);
     });
     await missingBlocks({ task, receiver, store, signal, mode: options.mode }); await store.close();

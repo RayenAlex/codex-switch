@@ -52,6 +52,23 @@ it('cancels without mutation and rolls back only checked files after confirmatio
   expect(panel.notice).toBe('已回退所选文件');
 });
 
+it('clears the previous task conflict when cancelling or selecting a different file action', async () => {
+  const [busyFile, independent] = panel.changes!.files;
+  vi.mocked(client.fileAction).mockRejectedValueOnce(new Error(JSON.stringify({
+    code: 'client.gitActivity.filesBusy', params: { details: `Task one → ${busyFile.path}` },
+  })));
+  await act(async () => panel.requestFileAction('rollback', busyFile));
+  await act(async () => panel.confirmFileAction());
+  expect(panel.error).toContain('Task one');
+  expect(panel.fileAction).not.toBeNull();
+  await act(async () => panel.cancelFileAction());
+  expect(panel.error).toBe('');
+  await act(async () => panel.requestFileAction('rollback', independent));
+  expect(panel.error).toBe('');
+  await act(async () => panel.confirmFileAction());
+  expect(panel.fileAction).toBeNull();
+});
+
 it('commits a context file independently of checkbox selection and keeps the main draft', async () => {
   const [selected, target] = panel.changes!.files;
   await act(async () => { panel.toggle(selected); panel.setMessage('main draft'); });

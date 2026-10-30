@@ -1,10 +1,10 @@
 import { useState, type KeyboardEvent } from 'react';
 import { ArrowUpRight, Check, Command, LockKeyhole } from 'lucide-react';
-import { copy } from '../content/copy';
-import { featureContent, featureImageAlt, features } from '../content/features';
-import type { Language } from '../content/types';
+import { copy } from '@remoteai/i18n/website-content/copy';
+import { featureContent, featureImageAlt, features } from '@remoteai/i18n/website-content/features';
+import type { Language } from '@remoteai/i18n/website-content/types';
 import { href } from '../lib/site';
-import { ui } from '../lib/ui-text';
+import { ui } from '@remoteai/i18n/website-content/ui-text';
 import { ProductImage } from './ProductFigure';
 import { FeatureIcon } from './FeatureIcon';
 

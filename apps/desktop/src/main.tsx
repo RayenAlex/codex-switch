@@ -1,6 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { ApplicationTypography } from '../../../shared/appearance/ApplicationTypography';
+import { installBrowserDefaultsGuard } from '../../../shared/browser/installBrowserDefaultsGuard';
 import { refreshTokenCostPresetsOnce, subscribeToTokenCostPresetStorage } from "./utils/tokenCostPresetStartup";
 import { RemoteChatHost } from "./remoteChat/useChatHost";
 import { startRemoteUpdateBridge } from "./remoteUpdate/bridge";
@@ -9,6 +11,8 @@ import "antd/dist/reset.css";
 import "./styles.css";
 
 applyThemeMode(loadThemeMode());
+const stopBrowserDefaultsGuard = installBrowserDefaultsGuard();
+if (import.meta.hot) import.meta.hot.dispose(stopBrowserDefaultsGuard);
 
 function normalizeWindowRoute(value: string | null) {
   return (value ?? "").replace(/^#\/?/, "").split(/[?#]/)[0];
@@ -35,6 +39,6 @@ document.documentElement.classList.toggle("token-usage-page", currentWindowRoute
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     {!currentWindowRoute && '__TAURI_INTERNALS__' in window && <RemoteChatHost />}
-    <App />
+    <ApplicationTypography><App /></ApplicationTypography>
   </React.StrictMode>,
 );

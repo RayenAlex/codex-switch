@@ -4,7 +4,9 @@ import { ChatConnection } from '../../../../../../shared/remote-chat/client/conn
 import { useActiveChatPolicy } from '../../../../../../shared/remote-chat/useActiveChatPolicy';
 import { createDesktopPeer } from '../../../remoteChat/peer';
 import { createDesktopNativePath } from '../../../remoteChat/nativePath';
+import { createDesktopPacketCompression } from '../../../remoteChat/packetCompression';
 import { NativeGuiSocket } from './nativeSocket';
+import { createDesktopSshProfiles } from '../../../api/sshProfiles';
 import { registerDesktopMappingStream } from '../portForwarding/streamBridge';
 import type { GuiCloudIdentity } from './types';
 import { browserTrustStore, trustedHost, trustScope } from '../../../../../../shared/remote-chat/trustedHost';
@@ -20,8 +22,9 @@ export function useRemoteGui(identity: GuiCloudIdentity, deviceId: string, activ
     createSocket: () => new NativeGuiSocket(identity),
     createPeer: createDesktopPeer,
     createNativePath: createDesktopNativePath,
+    createPacketCompression: createDesktopPacketCompression,
     registerMappingStream: registerDesktopMappingStream,
-  })), [identity.baseUrl, identity.userId, deviceId]);
+  }), undefined, undefined, createDesktopSshProfiles(identity)), [identity.baseUrl, identity.userId, deviceId]);
   const state = useSyncExternalStore(controller.subscribe, controller.snapshot);
   useActiveChatPolicy(active, state.mode);
   useEffect(() => { controller.start(); return () => controller.stop(); }, [controller]);

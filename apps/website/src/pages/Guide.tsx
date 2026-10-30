@@ -1,6 +1,6 @@
 import { ArrowUpRight } from 'lucide-react';
-import { copy, homeFaqs } from '../content/copy';
-import type { Language } from '../content/types';
+import { copy, homeFaqs } from '@remoteai/i18n/website-content/copy';
+import type { Language } from '@remoteai/i18n/website-content/types';
 import { href, LINKS } from '../lib/site';
 import { Faq } from '../components/Shared';
 

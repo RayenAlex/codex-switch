@@ -22,6 +22,7 @@ export interface NativeFileDrop {
 }
 
 export interface ComposerProps {
+  dictation?: import('../../../../shared/chat/dictation/client').DictationClient;
   recoveredEdit?: import('../../../../shared/remote-chat/queue').QueueDraft;
   consumeRecoveredEdit?: () => void;
   projectPicker?: ReactNode;

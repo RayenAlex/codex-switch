@@ -18,6 +18,8 @@ mod encoder;
 #[path = "macos_encoder.rs"]
 mod encoder;
 #[cfg(any(windows, target_os = "macos"))]
+mod failure;
+#[cfg(any(windows, target_os = "macos"))]
 mod feedback;
 mod model;
 #[cfg(any(windows, target_os = "macos"))]

@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import { useThemeColor } from '../theme/store';
 import { createThemedStyles } from '../theme/styles';
 import { t, useLanguage } from '../i18n';
@@ -35,7 +36,7 @@ export function ComposerPluginMenu({ catalog, query, load, chooseSkill, choosePl
   useEffect(() => {
     let cancelled = false;
     void load().then((value) => { if (!cancelled) { setResult(value); setError(value.pluginsError ?? ''); } })
-      .catch(() => { if (!cancelled) setError(t("暂时无法更新插件，可继续选择已有内容。")); })
+      .catch(() => { if (!cancelled) setError(t("client.chat.couldNotUpdatePluginsYouCanStillChooseExistingItems")); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [load]);
@@ -46,22 +47,22 @@ export function ComposerPluginMenu({ catalog, query, load, chooseSkill, choosePl
     ...skills.filter((skill) => skill.enabled).map((skill) => ({ key: skill.path, skill,
       label: skillLabel(skill), name: skill.name })),
   ].filter((entry) => `${entry.label} ${entry.name}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
-  return <View accessibilityLabel={t("插件列表")} style={pluginStyles.root}>
-    <Text style={pluginStyles.heading}>{t("插件")}</Text>
+  return <View accessibilityLabel={t("client.chat.pluginList")} style={pluginStyles.root}>
+    <Text style={pluginStyles.heading}>{t("client.chat.plugins")}</Text>
     <FlatList data={entries} keyExtractor={(entry) => entry.key} keyboardShouldPersistTaps="always"
       style={pluginStyles.list} nestedScrollEnabled
       renderItem={({ item, index }) => <Pressable accessibilityRole="menuitem"
-        accessibilityLabel={t("使用{value1} {value2}", { value1: item.skill ? '技能' : '插件', value2: item.label })}
+        accessibilityLabel={t(item.skill ? "client.chat.useSkill" : "client.chat.usePlugin", { value1: item.label })}
         onPress={() => { if (item.skill) chooseSkill(item.skill); else if (item.plugin) choosePlugin(item.plugin); }}
         style={({ pressed }) => [pluginStyles.option, (pressed || index === 0) && pluginStyles.highlight]}>
         <Feather name={entryIcon(item.name)} size={22} color={/image/i.test(item.name) ? resolveThemeColor('#41b8dc', 'info') : resolveThemeColor('#161616', 'ink')} />
         <Text numberOfLines={1} style={pluginStyles.label}>{item.label}</Text>
       </Pressable>}
       ListFooterComponent={<>
-        {loading && !entries.length && <Text style={pluginStyles.message}>{t("正在加载插件…")}</Text>}
+        {loading && !entries.length && <Text style={pluginStyles.message}>{t("client.chat.loadingPlugins")}</Text>}
         {!loading && !entries.length && !error && <Text style={pluginStyles.message}>
-          {query ? t("没有找到匹配的插件") : t("暂无可用插件或技能")}</Text>}
-        {!!error && <Text style={pluginStyles.message}>{t(error)}</Text>}
+          {query ? t("client.chat.noMatchingPlugins") : t("client.chat.noPluginsOrSkillsAvailable")}</Text>}
+        {!!error && <Text style={pluginStyles.message}>{displayError(error)}</Text>}
       </>} />
   </View>;
 }

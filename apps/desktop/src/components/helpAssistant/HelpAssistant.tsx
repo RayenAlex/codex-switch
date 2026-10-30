@@ -13,6 +13,8 @@ import { useHelpQuestions } from './useHelpQuestions';
 import { HelpMessages } from './HelpMessages';
 import { HelpSetupNotice } from './HelpSetupNotice';
 import { useHelpSetup } from './useHelpSetup';
+import { useHelpLauncherPosition } from './useHelpLauncherPosition';
+import { useHelpPanelPosition } from './useHelpPanelPosition';
 import assistantIcon from './assistant-icon.jpg';
 import styles from './helpAssistant.module.less';
 
@@ -28,6 +30,8 @@ export function HelpAssistant(props: { language: Language; page: DashboardPage; 
   const trigger = useRef<HTMLButtonElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const panel = useRef<HTMLElement>(null);
+  const placement = useHelpLauncherPosition(props.page);
+  const panelStyle = useHelpPanelPosition({ open, position: placement.position, trigger, panel });
   const ready = assistant.status === 'ready' && !setup.phase;
   const close = () => { setExpanded(false); trigger.current?.focus(); };
 
@@ -51,8 +55,9 @@ export function HelpAssistant(props: { language: Language; page: DashboardPage; 
 
   if (!visible) return null;
 
-  return createPortal(<div className={styles.root}>
-    {open && <section id="remote-ai-help" ref={panel} tabIndex={-1} className={styles.panel} role="dialog"
+  return createPortal(<div className={styles.root} style={placement.style}>
+    {open && <section id="remote-ai-help" ref={panel} tabIndex={-1}
+      className={styles.panel} style={panelStyle} role="dialog"
       aria-label={copy.title} onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); close(); } }}>
       <header className={styles.header}>
         <span className={styles.avatar}><img src={assistantIcon} alt="" /></span>
@@ -81,7 +86,7 @@ export function HelpAssistant(props: { language: Language; page: DashboardPage; 
         disabled={!ready || Boolean(assistant.pending)} attachments={assistant.attachments} send={assistant.send}
         pending={Boolean(assistant.pending)} stop={assistant.stop} />
     </section>}
-    <HelpLauncher copy={copy} open={open} unread={assistant.unread} trigger={trigger}
+    <HelpLauncher copy={copy} open={open} unread={assistant.unread} trigger={trigger} placement={placement}
       onToggle={() => open ? close() : setExpanded(true)}
       onHide={() => {
         if (!setVisible(false)) void message.error({ content: copy.visibilitySaveError,

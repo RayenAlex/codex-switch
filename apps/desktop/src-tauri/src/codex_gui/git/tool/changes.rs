@@ -14,6 +14,7 @@ pub(crate) struct Changes {
     pub branch: Option<String>,
     pub head: Option<String>,
     pub files: Vec<Change>,
+    pub integration: Option<super::integration::Integration>,
 }
 
 #[derive(Serialize)]
@@ -73,6 +74,7 @@ pub(super) fn read(root: &Path) -> Result<Changes> {
         branch: output(root, &["symbolic-ref", "--short", "HEAD"]).ok(),
         head,
         files,
+        integration: super::integration::read(root)?,
     })
 }
 

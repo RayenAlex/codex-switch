@@ -1,7 +1,7 @@
 import { useSelectedCodexHome } from "../../components/CodexHomeScope";
 import { useCallback } from "react";
 import { migrateCodexThreads } from "../../api/backend";
-import type { ThreadCopy } from "./copy";
+import type { ThreadCopy } from "@remoteai/i18n/copy/desktop/threads";
 
 interface MigrationOptions {
   text: ThreadCopy;

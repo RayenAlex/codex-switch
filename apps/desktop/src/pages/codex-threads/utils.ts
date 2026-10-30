@@ -1,4 +1,6 @@
-import { guiText } from "../../i18n/guiText";
+import inlineCopy from '@remoteai/i18n/copy/inline/desktop/pages/codex-threads/utils';
+import { interpolate as interpolateCopy } from '@remoteai/i18n';
+import { uiText } from "../../i18n/uiText";
 import type { Language } from "../../i18n";
 import type { CodexThreadEntry } from "../../types";
 
@@ -29,18 +31,18 @@ export function relativeTime(timestamp: number | null, language: Language) {
   const seconds = Math.max(0, Math.floor(Date.now() / 1000 - timestamp));
   if (seconds < 3600) {
     const minutes = Math.max(1, Math.floor(seconds / 60));
-    return (language === "ru" ? guiText("{value1} 分钟", { value1: minutes }, language) : language === "zh" ? `${minutes} 分钟` : `${minutes} min`);
+    return (language !== "zh" && language !== "en" ? uiText("client.settings.minutes", { value1: minutes }, language) : language === "zh" ? interpolateCopy(inlineCopy["value1_d28542b5"], { value1: String(minutes) }) : interpolateCopy(inlineCopy["value1_min_ef4135f6"], { value1: String(minutes) }));
   }
   if (seconds < 86400) {
     const hours = Math.floor(seconds / 3600);
-    return (language === "ru" ? guiText("{value1} 小时", { value1: hours }, language) : language === "zh" ? `${hours} 小时` : `${hours} hr`);
+    return (language !== "zh" && language !== "en" ? uiText("client.usage.hours", { value1: hours }, language) : language === "zh" ? interpolateCopy(inlineCopy["value1_496ff081"], { value1: String(hours) }) : interpolateCopy(inlineCopy["value1_hr_298eb33b"], { value1: String(hours) }));
   }
   if (seconds < 604800) {
     const days = Math.floor(seconds / 86400);
-    return (language === "ru" ? guiText("{value1} 天", { value1: days }, language) : language === "zh" ? `${days} 天` : `${days} days`);
+    return (language !== "zh" && language !== "en" ? uiText("client.usage.days", { value1: days }, language) : language === "zh" ? interpolateCopy(inlineCopy["value1_f0f66c04"], { value1: String(days) }) : interpolateCopy(inlineCopy["value1_days_444fd725"], { value1: String(days) }));
   }
   const weeks = Math.floor(seconds / 604800);
-  return (language === "ru" ? guiText("{value1} 周", { value1: weeks }, language) : language === "zh" ? `${weeks} 周` : `${weeks} wk`);
+  return (language !== "zh" && language !== "en" ? uiText("client.usage.weeks", { value1: weeks }, language) : language === "zh" ? interpolateCopy(inlineCopy["value1_37da0acf"], { value1: String(weeks) }) : interpolateCopy(inlineCopy["value1_wk_ffada4ba"], { value1: String(weeks) }));
 }
 
 export function groupLabel(cwd: string) {

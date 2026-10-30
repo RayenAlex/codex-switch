@@ -10,7 +10,7 @@ export function ChatReconnectButton({ retryAt, onClick }: { retryAt: number | nu
     return () => window.clearInterval(timer);
   }, []);
   const seconds = retryAt === null ? null : Math.max(0, Math.ceil((retryAt - now) / 1000));
-  return <ChatConnectionAction className="chat-reconnect" label={t("立即连接")} onClick={onClick}>
-    {t("立即连接")}{seconds === null ? '' : t("（{value1}秒）", { value1: seconds })}
+  return <ChatConnectionAction className="chat-reconnect" label={t("client.chat.connectNow")} onClick={onClick}>
+    {t("client.chat.connectNow")}{seconds === null ? '' : t("client.chat.s", { value1: seconds })}
   </ChatConnectionAction>;
 }

@@ -16,8 +16,17 @@ async fn native_capture_reaches_a_real_browser_decoder() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("resources/remote-desktop/runtime/ffmpeg.exe");
     let requested = std::env::var("CSW_NATIVE_TEST_DISPLAY").ok();
-    let opened = super::super::open(requested.clone(), Default::default(), None, None)
-        .expect("native input lease");
+    let settings = tempfile::tempdir().unwrap();
+    let opened = super::super::open(
+        requested.clone(),
+        Default::default(),
+        super::super::sessions::Options {
+            expires_at: None,
+            capture_group: None,
+            settings_root: settings.path().to_owned(),
+        },
+    )
+    .expect("native input lease");
     if let Some(requested) = requested {
         assert_eq!(opened.display_id, requested);
     }

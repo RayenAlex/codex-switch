@@ -1,7 +1,8 @@
-import { PROJECT_FILE_LIMIT, PROJECT_SEARCH_QUERY_LIMIT, type ProjectBrowserClient } from './protocol';
+import { PROJECT_SEARCH_QUERY_LIMIT, type ProjectBrowserClient } from './protocol';
 import type { DocumentsSnapshot } from './documents';
 import { withinPath, type BrowserHost, type EntryAction } from './entryActions';
 import { validFileSelection } from './fileSelection';
+import { displayText } from '../localization/messages';
 
 function entryAction(target: Record<string, unknown>): EntryAction {
   if (target.action === 'delete') return { action: 'delete' };
@@ -16,7 +17,14 @@ function entryAction(target: Record<string, unknown>): EntryAction {
 
 export interface BrowserSettings {
   type: 'settings'; cwd: string; connected: boolean; labels: Record<string, string>; theme: Record<string, string>;
+  language?: import('@remoteai/i18n').EnabledLanguage;
+  themeMode?: import('../theme/mode').ThemeMode;
   autoSaveDelay?: number; snapshot?: DocumentsSnapshot;
+  scripts?: import('./nativeScripts').NativeScriptState;
+  capabilities?: Pick<BrowserHost, 'entryActions' | 'downloadDirectory'> & {
+    reference: boolean; quoteSelection: boolean; blame?: boolean;
+  };
+  ssh?: { path: string; hidden: boolean; busy: boolean; revision: number };
 }
 export interface BrowserReply { type: 'reply'; id: number; data?: unknown; error?: string }
 export type BrowserHostMessage = BrowserSettings | BrowserReply | { type: 'close' };
@@ -55,6 +63,14 @@ export async function handleBrowserRequest(raw: string, options: {
     }
     if (typeof target.path !== 'string' || target.path.length > 4096) throw new Error('文件暂时无法读取，请重试。');
     const file = { cwd: options.cwd, path: target.path };
+    if (message.action === 'blame') {
+      if (!options.client.blame || typeof target.revision !== 'string' || !target.revision
+        || target.revision.length > 256 || !withinPath(file.path, options.cwd)
+        || file.path.replace(/\\/g, '/').split('/').includes('..')) {
+        throw new Error(displayText('client.gitBlame.unavailable'));
+      }
+      return { type: 'reply', id, data: await options.client.blame({ ...file, revision: target.revision }) };
+    }
     if (message.action === 'mutate') {
       return { type: 'reply', id, data: await options.client.mutate({ ...file, ...entryAction(target) }) };
     }
@@ -76,7 +92,7 @@ export async function handleBrowserRequest(raw: string, options: {
       return { type: 'reply', id, data };
     }
     if (message.action === 'read') return { type: 'reply', id, data: await options.client.read(file) };
-    if (message.action !== 'save' || typeof target.text !== 'string' || target.text.length > PROJECT_FILE_LIMIT
+    if (message.action !== 'save' || typeof target.text !== 'string'
       || typeof target.revision !== 'string') throw new Error('未能保存文件，请确认文件可写后重试。');
     return { type: 'reply', id,
       data: await options.client.save({ ...file, text: target.text, revision: target.revision }) };

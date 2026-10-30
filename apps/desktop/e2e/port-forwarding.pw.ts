@@ -13,10 +13,11 @@ declare global {
   }
 }
 async function add(page: Page, remotePort: number, localPort: number) {
-  if (await page.getByRole('dialog').getByRole('button', { name: '新建映射', exact: true }).isVisible()) {
-    await page.getByRole('dialog').getByRole('button', { name: '新建映射', exact: true }).click();
-  }
-  await panel(page).getByRole('spinbutton', { name: '远程端口' }).fill(String(remotePort));
+  const create = page.getByRole('dialog').getByRole('button', { name: '新建映射', exact: true });
+  const remoteInput = panel(page).getByRole('spinbutton', { name: '远程端口' });
+  await expect(create.or(remoteInput)).toBeVisible();
+  if (await create.isVisible()) await create.click();
+  await remoteInput.fill(String(remotePort));
   await panel(page).getByRole('spinbutton', { name: '本地端口' }).fill(String(localPort));
   await page.getByRole('dialog').getByRole('button', { name: '添加并启动' }).click();
 }

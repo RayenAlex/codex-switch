@@ -1,4 +1,5 @@
 .chat-thread-row { display: flex; align-items: center; min-width: 0; }
+.chat-project-toggle[aria-haspopup="dialog"] { user-select: none; -webkit-touch-callout: none; }
 .chat-thread-row > .chat-thread { flex: 1; min-width: 0; user-select: none; -webkit-touch-callout: none; }
 .chat-thread-more { display: grid; place-items: center; flex-shrink: 0; width: 36px; height: 40px;
   border: 0; border-radius: 10px; background: transparent; color: var(--app-muted, #718078); cursor: pointer; }

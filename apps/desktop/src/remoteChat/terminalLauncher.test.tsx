@@ -63,6 +63,24 @@ it('shows an opening failure in the drawer and retries by restoring an existing 
   } finally { await test.dispose(); }
 });
 
+it('shows a failed file-browser launch and retries in the requested directory', async () => {
+  const test = fixture();
+  const directory = '/project/src';
+  test.client.open.mockRejectedValueOnce(new Error('Unavailable'));
+  test.client.open.mockResolvedValue({ ...info, cwd: directory });
+  try {
+    await test.render();
+    await act(async () => test.panel().addInDirectory(directory));
+    expect(test.panel().open).toBe(true);
+    expect(test.panel().error).not.toBe('');
+    await act(async () => test.panel().retry());
+    expect(test.client.open).toHaveBeenLastCalledWith(directory, { cols: 80, rows: 24 }, info.cwd);
+    expect(test.panel().open).toBe(true);
+    expect(test.panel().error).toBe('');
+    expect(test.panel().tabs[0].cwd).toBe(directory);
+  } finally { await test.dispose(); }
+});
+
 it('keeps a dismissed loading drawer closed when a late shell opens and reuses it on the next click', async () => {
   const test = fixture();
   let finish!: (session: TerminalInfo) => void;

@@ -7,7 +7,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { Language } from "../../../i18n";
 import type { CodexThreadEntry, CodexThreadTokenTotals } from "../../../types";
 import { openCodexThreadPath } from "../../../api/backend";
-import type { ThreadCopy } from "../copy";
+import type { ThreadCopy } from "@remoteai/i18n/copy/desktop/threads";
 import type { ThreadGroup } from "../utils";
 import {
   formatSize, formatTokenAmount, isUnassignedWorkspace, relativeTime, workspaceDisplayName,

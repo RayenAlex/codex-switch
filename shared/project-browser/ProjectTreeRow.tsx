@@ -12,7 +12,8 @@ export function ProjectTreeRow({ entry, depth, expanded, selected, disabled, cut
   const Icon = entry.directory ? (expanded ? FolderOpen : Folder) : File;
   return <button type="button" role="treeitem" aria-level={depth + 1}
     aria-expanded={entry.directory ? expanded : undefined} aria-selected={selected} disabled={disabled}
-    className="pf-tree-row" data-cut={cut || undefined} data-path={entry.path} aria-label={entry.name}
+    className="pf-tree-row" data-cut={cut || undefined} data-path={entry.path} data-directory={entry.directory}
+    aria-label={entry.name}
     aria-description={relativePath}
     {...gesture} onClick={open} onKeyDown={event => {
       if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {

@@ -1,4 +1,5 @@
 import { createThemedStyles } from '../../theme/styles';
+import { textMetrics } from '../../theme/text';
 import { StyleSheet } from 'react-native';
 import { CURSOR_SIZE, MOUSE_SIZE, MOUSE_ICON_SIZE }
   from '../../../../../shared/remote-desktop/geometry';
@@ -19,14 +20,13 @@ export const useDesktopStyles = createThemedStyles((color) => ({
   portraitBar: { flexGrow: 0, flexShrink: 0 },
   portraitTool: { flex: 0, minWidth: 48 },
   selected: { backgroundColor: '#304b78' },
-  label: { alignSelf: 'stretch', textAlign: 'center', color: color('#e7edf8', 'faint'), fontSize: 10, lineHeight: 16 },
+  label: { alignSelf: 'stretch', textAlign: 'center', color: color('#e7edf8', 'faint'), ...textMetrics(10, 16) },
   messageLayer: { position: 'absolute', top: 12, left: 12, right: 12, alignItems: 'center' },
-  message: { maxWidth: '100%', flexDirection: 'row', alignItems: 'center', backgroundColor: '#222b3aee',
+  message: { maxWidth: '100%', alignItems: 'stretch', backgroundColor: '#222b3aee',
     borderRadius: 12, padding: 12, gap: 12 },
-  messageText: { flexShrink: 1, minWidth: 0, maxWidth: 400 },
-  retry: { flexShrink: 0, paddingVertical: 6 },
-  text: { color: color('#e7edf8', 'faint'), fontSize: 14, lineHeight: 22,
-    includeFontPadding: true, paddingVertical: 2 },
+  messageText: { minWidth: 0, maxWidth: 400 },
+  retry: { alignSelf: 'flex-end', maxWidth: '100%', paddingVertical: 6, paddingHorizontal: 12 },
+  text: { color: color('#e7edf8', 'faint'), ...textMetrics(14, 22) },
   hint: { color: color('#aebad0', 'faint'), fontSize: 12, lineHeight: 18 },
   cursor: { position: 'absolute', ...CURSOR_SIZE, zIndex: 2 },
   // Explicit image dimensions override Metro's 3x bitmap dimensions on both native platforms.

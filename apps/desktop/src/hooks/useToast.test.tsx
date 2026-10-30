@@ -1,11 +1,14 @@
+import { resources as clientResources } from '@remoteai/i18n/client';
+const english: Readonly<Record<string, string>> = clientResources.en;
+const russian: Readonly<Record<string, string>> = clientResources.ru;
 // @vitest-environment jsdom
 import { act, forwardRef, useImperativeHandle } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { english } from "../../../../shared/i18n/en";
-import { russian } from "../../../../shared/i18n/ru";
-import { translateBackendMessage } from "../../../../shared/i18n/backend/translateBackendMessage";
-import { setGuiLanguage } from "../i18n/guiText";
+
+
+import { formatRemoteError } from "../../../../shared/localization/errors";
+import { setGuiLanguage } from "../i18n/uiText";
 import { useToast } from "./useToast";
 
 const api = vi.hoisted(() => ({
@@ -50,10 +53,10 @@ describe("useToast", () => {
     await act(async () => setGuiLanguage("ru"));
     await show(BACKEND_MESSAGE);
 
-    expect(russian[BACKEND_MESSAGE]).toBeTruthy();
-    expect(container.textContent).toBe(russian[BACKEND_MESSAGE]);
+    expect(russian["client.configEditor.couldNotLoadConfiguration"]).toBeTruthy();
+    expect(container.textContent).toBe(russian["client.configEditor.couldNotLoadConfiguration"]);
     expect(api.recordToastLog).toHaveBeenCalledWith(BACKEND_MESSAGE);
-    expect(api.syncCodexNotification).toHaveBeenCalledWith(russian[BACKEND_MESSAGE]);
+    expect(api.syncCodexNotification).toHaveBeenCalledWith(russian["client.configEditor.couldNotLoadConfiguration"]);
   });
 
   it("follows a language change while the toast is visible", async () => {
@@ -61,7 +64,7 @@ describe("useToast", () => {
     await show(BACKEND_MESSAGE);
     await act(async () => setGuiLanguage("en"));
 
-    expect(container.textContent).toBe(english[BACKEND_MESSAGE]);
+    expect(container.textContent).toBe(english["client.configEditor.couldNotLoadConfiguration"]);
   });
 
   it("leaves Chinese and already translated toasts unchanged", async () => {
@@ -69,16 +72,16 @@ describe("useToast", () => {
     expect(container.textContent).toBe(BACKEND_MESSAGE);
 
     await act(async () => setGuiLanguage("ru"));
-    await show(russian[BACKEND_MESSAGE]);
-    expect(container.textContent).toBe(russian[BACKEND_MESSAGE]);
-    expect(api.recordToastLog).toHaveBeenLastCalledWith(russian[BACKEND_MESSAGE]);
+    await show(russian["client.configEditor.couldNotLoadConfiguration"]);
+    expect(container.textContent).toBe(russian["client.configEditor.couldNotLoadConfiguration"]);
+    expect(api.recordToastLog).toHaveBeenLastCalledWith(russian["client.configEditor.couldNotLoadConfiguration"]);
   });
 
   it("does not change translated dictionary text when it is translated again", () => {
     for (const [language, dictionary] of [["en", english], ["ru", russian]] as const) {
       const changed = Object.values(dictionary)
         .map(String)
-        .filter((value) => !chinese.test(value) && translateBackendMessage(language, value) !== value);
+        .filter((value) => !chinese.test(value) && formatRemoteError(language, value) !== value);
       expect(changed, language).toEqual([]);
     }
   });

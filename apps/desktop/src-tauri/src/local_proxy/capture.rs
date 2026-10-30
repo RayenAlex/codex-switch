@@ -362,23 +362,6 @@ fn record_token_usage_entry<R: Runtime>(
     accounting: LanUsageAccounting,
 ) {
     let usage = usage.unwrap_or_default();
-    update_proxy_session_request_usage(
-        context.session_id.as_deref(),
-        context.session_request_id,
-        &usage,
-    );
-    update_proxy_session_usage(
-        context.session_id.as_deref(),
-        context
-            .account
-            .as_ref()
-            .map(|account| account.account_id.as_str()),
-        context
-            .account
-            .as_ref()
-            .map(|account| account.account_email.as_str()),
-        Some(&usage),
-    );
     let duration_ms = context.started_at.elapsed().as_millis() as u64;
     let id = short_hash_str(&format!(
         "{}:{}:{}:{}:{}:{}",
@@ -412,6 +395,20 @@ fn record_token_usage_entry<R: Runtime>(
         total_tokens: usage.total_tokens,
         model_context_window: None,
     };
+    if let Err(error) = session_cost::record(app, context, &entry) {
+        log_proxy_error!("failed to record conversation cost: {error}");
+    }
+    update_proxy_session_request_usage(
+        context.session_id.as_deref(),
+        context.session_request_id,
+        &usage,
+    );
+    update_proxy_session_usage(
+        context.session_id.as_deref(),
+        context.account.as_ref().map(|account| account.account_id.as_str()),
+        context.account.as_ref().map(|account| account.account_email.as_str()),
+        Some(&usage),
+    );
     let usage_complete = match accounting {
         LanUsageAccounting::Complete => Some(true),
         LanUsageAccounting::Incomplete => Some(false),

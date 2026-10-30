@@ -1,8 +1,8 @@
 import { ArrowUpRight, Check } from 'lucide-react';
-import { featureContent, featureImageAlt, features } from '../content/features';
-import type { Language } from '../content/types';
+import { featureContent, featureImageAlt, features } from '@remoteai/i18n/website-content/features';
+import type { Language } from '@remoteai/i18n/website-content/types';
 import { href } from '../lib/site';
-import { ui } from '../lib/ui-text';
+import { ui } from '@remoteai/i18n/website-content/ui-text';
 import { ProductImage } from './ProductFigure';
 
 const stories = ['conversations', 'providers', 'skills'];

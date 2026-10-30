@@ -1,7 +1,8 @@
+import { displayText } from '../i18n/index';
 import { useContext, useMemo, type ReactNode } from 'react';
 import { DetailsWorkspace } from '../../../desktop/src/pages/codexGui/DetailsWorkspace';
 import { DiffTextContext, type DiffTranslate } from '../../../../shared/chat/diffText';
-import { t, useLanguage } from '../i18n';
+import { useLanguage } from '../i18n';
 import { ChatFileContext } from './ChatFileLink';
 import { ChatRemoteFilePreview } from './ChatRemoteFilePreview';
 import './detailsWorkspace.css';
@@ -13,7 +14,7 @@ export function ChatDetailsWorkspace({ selected, active, enabled, children }: {
   const language = useLanguage();
   const files = useContext(ChatFileContext);
   // Refresh memoized diff content when the language changes without resetting the review state.
-  const translate = useMemo<DiffTranslate>(() => (source, values) => t(source, values), [language]);
+  const translate = useMemo<DiffTranslate>(() => (source, values) => displayText(source, values), [language]);
   return <DiffTextContext.Provider value={translate}>
     <DetailsWorkspace selected={selected} active={active} enabled={enabled}
       renderRemoteFile={files ? props => <ChatRemoteFilePreview {...props} context={files}

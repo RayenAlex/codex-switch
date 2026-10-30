@@ -1,3 +1,4 @@
+import { testText } from './i18n-fixture.mjs';
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -21,7 +22,7 @@ const { buildQuotaChartData } = loadModule(`${componentPath}quotaHistoryData.ts`
 const { quotaChartOption } = loadModule(`${componentPath}quotaChartOption.ts`, {
   "../../i18n": { getLocale: language => language === "zh" ? "zh-CN" : "en-US" },
   "./quotaChartLabels": loadModule(`${componentPath}quotaChartLabels.ts`, {
-    "../../i18n/guiText": { guiText: text => text },
+    "../../i18n/uiText": { uiText: testText },
   }),
   "./quotaSeriesSampling": loadModule(`${componentPath}quotaSeriesSampling.ts`),
   "../../utils/theme": loadModule("../apps/desktop/src/utils/theme.ts"),

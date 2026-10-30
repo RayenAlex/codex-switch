@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import type { TokenSummary } from '../../../../shared/remote-chat/tokenSummary';
 import { chartPalette, formatTokens } from '../../../desktop/src/components/TokenUsageDashboard/chartUtils';
-import { TOKEN_FIELDS } from './UsagePanels';
+import { TOKEN_FIELDS } from '../../../../shared/remote-chat/tokenSummaryLabels';
 import { useSummaryStyles as useS } from './styles';
 
 const DAYS_PER_WEEK = 7;
@@ -22,9 +22,9 @@ export function UsageHeatmap({ data }: { data: TokenSummary }) {
   const daily = new Map(data.dailyUsage.map((day) => [day.date, day]));
   const weeks = Array.from({ length: Math.ceil(data.dateKeys.length / DAYS_PER_WEEK) }, (_, index) =>
     data.dateKeys.slice(index * DAYS_PER_WEEK, (index + 1) * DAYS_PER_WEEK));
-  return <View style={s.card}><Text style={s.sectionTitle}>{t("每日 Token 热力图")}</Text>
-    <Text style={s.hint}>{t("颜色越深，消耗越多。左右滑动查看，点按日期查看详情。")}</Text>
-    <View style={s.row}><View>{[t("日"), t("一"), t("二"), t("三"), t("四"), t("五"), t("六")].map((day) =>
+  return <View style={s.card}><Text style={s.sectionTitle}>{t("client.mobile.dailyTokenHeatmap")}</Text>
+    <Text style={s.hint}>{t("client.mobile.darkerColorsMeanHigherUsageSwipeToBrowseTapA")}</Text>
+    <View style={s.row}><View>{[t("client.mobile.sun"), t("client.mobile.mon"), t("client.mobile.tue"), t("client.mobile.wed"), t("client.mobile.thu"), t("client.mobile.fri"), t("client.mobile.sat")].map((day) =>
       <Text key={day} style={h.weekday}>{day}</Text>)}</View>
       <ScrollView horizontal style={s.fill} contentContainerStyle={{ gap: 3 }}>
         {weeks.map((week) => <View key={week[0]} style={{ gap: 3 }}>{week.map((date) => {
@@ -36,8 +36,8 @@ export function UsageHeatmap({ data }: { data: TokenSummary }) {
         })}</View>)}
       </ScrollView></View>
     <View style={s.row}><Text style={[s.hint, s.fill]}>{data.dateKeys[0]} — {data.dateKeys.at(-1)}</Text></View>
-    <View style={s.row}><Text style={s.hint}>{t("少")}</Text>{heat.map((color) =>
-      <View key={color} style={[h.legend, { backgroundColor: color }]} />)}<Text style={s.hint}>{t("多")}</Text></View>
+    <View style={s.row}><Text style={s.hint}>{t("client.mobile.less")}</Text>{heat.map((color) =>
+      <View key={color} style={[h.legend, { backgroundColor: color }]} />)}<Text style={s.hint}>{t("client.mobile.more")}</Text></View>
     {selected && <View style={s.detail} accessibilityLiveRegion="polite"><Text style={s.value}>{selected}</Text>
       {TOKEN_FIELDS.map(([label, field]) => <Text key={field} style={s.hint}>
         {t(label)}: {formatTokens(daily.get(selected)?.[field] ?? 0, language)}</Text>)}

@@ -43,6 +43,7 @@ export interface Account {
 }
 
 export interface AccountPrivateDetails {
+  alias?: string;
   password: string;
   phoneNumber: string;
   totpSecret: string;
@@ -100,6 +101,8 @@ export interface ProviderRequestOptions {
 }
 
 export interface Provider {
+  balanceScript?: import('../../../shared/provider-market/types').MarketBalanceQuery | null;
+  marketSource?: import('../../../shared/provider-market/pageLink').ProviderMarketSource | null;
   requestOptions?: ProviderRequestOptions | null;
   id: string;
   kind: ProviderKind;
@@ -134,6 +137,9 @@ export interface Provider {
 }
 
 export interface ProviderInput {
+  balanceScript?: import('../../../shared/provider-market/types').MarketBalanceQuery | null;
+  marketSource?: import('../../../shared/provider-market/pageLink').ProviderMarketSource | null;
+  clearBalanceScript?: boolean;
   requestOptions?: ProviderRequestOptions;
   id?: string;
   kind: ProviderKind;
@@ -375,6 +381,7 @@ export interface ProxySessionRequest {
 }
 
 export interface ProxySessionLatencySummary {
+  estimatedCostUsd?: number | null;
   totalFirstTokenTimeMs: number;
   firstTokenRequestCount: number;
   totalFirstResponseTimeMs: number;
@@ -543,6 +550,9 @@ export interface AppSettings {
   closeToTray?: boolean;
   nonProxyEnhancementsEnabled?: boolean;
   floatingBubbleEnabled: boolean;
+  quotaDisplayAllAccounts?: boolean;
+  petDockEnabled?: boolean;
+  petDockShowLabels?: boolean;
   privacyMode: boolean;
   hideAccountNotes: boolean;
   bubbleResetDisplay: BubbleResetDisplay;

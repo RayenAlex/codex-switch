@@ -1,10 +1,10 @@
 import { ArrowUpRight, Github } from 'lucide-react';
 import { Button } from 'antd';
-import { copy, homeFaqs } from '../content/copy';
-import { features } from '../content/features';
-import type { Language } from '../content/types';
+import { copy, homeFaqs } from '@remoteai/i18n/website-content/copy';
+import { features } from '@remoteai/i18n/website-content/features';
+import type { Language } from '@remoteai/i18n/website-content/types';
 import { href, LINKS } from '../lib/site';
-import { ui } from '../lib/ui-text';
+import { ui } from '@remoteai/i18n/website-content/ui-text';
 import { ClosingCta, Faq } from '../components/Shared';
 import { ConnectionIllustration } from '../components/ProductFigure';
 import { FeatureCard } from '../components/FeatureCard';

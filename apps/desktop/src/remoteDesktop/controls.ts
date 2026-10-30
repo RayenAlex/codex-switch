@@ -9,7 +9,7 @@ export class DesktopControls {
   private queue: object[] = [];
   private busy = false;
   private closed = false;
-  constructor(private readonly capture: DesktopCapture, private readonly fail: () => void,
+  constructor(private readonly capture: DesktopCapture, private readonly fail: (error?: unknown) => void,
     private readonly reply?: (message: ClipboardReply | FileReadEvent) => void) {}
   receive(data: string) {
     if (this.closed) return;
@@ -34,7 +34,7 @@ export class DesktopControls {
           if (!this.closed) this.reply?.(reply);
         } else await this.capture.input(input);
       }
-    } catch { this.fail(); }
+    } catch (error) { this.fail(error); }
     finally { this.busy = false; }
   }
   close() { this.closed = true; this.queue.length = 0; }

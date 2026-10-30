@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { dictionaries, translate, type Dictionary } from "./index";
+import { formatRemoteError } from './index';
+import { resources } from '@remoteai/i18n/coze';
 
 /**
  * Rust runtime messages reach the editor as Chinese text (the /api error body, job.error,
@@ -19,9 +20,8 @@ const withoutTests = (text: string) => text.split(/^#\[cfg\(test\)\]/m)[0];
 /** Rust string literals with escapes resolved (only the simple escapes these files use). */
 const literals = (text: string) => [...text.matchAll(/"((?:[^"\\]|\\.)*)"/g)]
   .map((match) => match[1].replace(/\\\r?\n\s*/g, "").replace(/\\(["\\])/g, "$1"));
-const hasOwn = (dictionary: Dictionary, key: string) => Object.prototype.hasOwnProperty.call(dictionary, key);
-const untranslated = (keys: readonly string[]) => keys.flatMap((key) => (["en", "ru"] as const)
-  .filter((language) => !hasOwn(dictionaries[language], key)).map((language) => `${language}: ${key}`));
+const untranslated = (sources: readonly string[]) => sources.filter(source =>
+  !Object.values(resources.zh).includes(source));
 
 /** `#[error("…")]` Display texts; `{0}` is the only argument and becomes `{reason}`. */
 function errorMessages(): string[] {
@@ -89,24 +89,24 @@ describe("Rust runtime messages", () => {
     expect(untranslated(reasons)).toEqual([]);
     for (const reason of reasons) {
       const source = IMPORT_ERROR.replace("{reason}", reason);
-      expect(translate("zh", source)).toBe(source);
-      expect(translate("en", source)).toBe(`This node can't be imported yet: ${dictionaries.en[reason]}.`);
-      expect(translate("ru", source)).toBe(`Сейчас не удаётся импортировать этот узел: ${dictionaries.ru[reason]}.`);
+      expect(formatRemoteError("zh", source)).toBe(source);
+      expect(formatRemoteError("en", source)).toBe(`This node can't be imported yet: ${formatRemoteError('en', reason)}.`);
+      expect(formatRemoteError("ru", source)).toBe(`Сейчас не удаётся импортировать этот узел: ${formatRemoteError('ru', reason)}.`);
     }
-    expect(translate("ru", "暂时无法导入此节点：嵌套画布。")).toBe("Сейчас не удаётся импортировать этот узел: вложенный холст.");
+    expect(formatRemoteError("ru", "暂时无法导入此节点：嵌套画布。")).toBe("Сейчас не удаётся импортировать этот узел: вложенный холст.");
   });
 
   it("translates the persisted run errors and the built-in template entry", () => {
     expect(untranslated([...persisted, ...templates])).toEqual([]);
-    expect(translate("en", "上次运行已中断。")).toBe("The previous run was interrupted.");
-    expect(translate("ru", "知识问答助手")).toBe("Помощник по базе знаний");
+    expect(formatRemoteError("en", "coze.index.thePreviousRunWasInterrupted")).toBe("The previous run was interrupted.");
+    expect(formatRemoteError("ru", "coze.index.knowledgeQAAssistant")).toBe("Помощник по базе знаний");
   });
 
   it("returns every runtime message unchanged in Chinese", () => {
     for (const source of [...messages.filter((message) => message !== IMPORT_ERROR), ...persisted, ...templates]) {
-      expect(translate("zh", source)).toBe(source);
-      expect(translate("en", source)).not.toMatch(HAN);
-      expect(translate("ru", source)).not.toMatch(HAN);
+      expect(formatRemoteError("zh", source)).toBe(source);
+      expect(formatRemoteError("en", source)).not.toMatch(HAN);
+      expect(formatRemoteError("ru", source)).not.toMatch(HAN);
     }
   });
 });

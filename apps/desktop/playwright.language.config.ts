@@ -1,9 +1,12 @@
+import { testBrowserChannel, testBrowserLaunchOptions } from '../../scripts/test-browser.mjs';
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e-language', testMatch: '**/*.pw.ts', workers: 1, timeout: 45_000,
   outputDir: '../../.codex-tmp/language-playwright', reporter: 'list',
-  use: { channel: process.env.CHAT_TEST_BROWSER ?? 'msedge', headless: true,
+  use: {
+    launchOptions: testBrowserLaunchOptions(),
+    channel: testBrowserChannel(process.env.CHAT_TEST_BROWSER), headless: true,
     screenshot: 'only-on-failure', trace: 'retain-on-failure' },
   // Build desktop and web first; check the same frontend assets that ship to users.
   webServer: [

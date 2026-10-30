@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Alert, Button, Input, Modal, Select, Table, Tag, type TableColumnsType } from "antd";
 import { RefreshCw, RotateCcw, Search, Trash2 } from "lucide-react";
-import { backendText } from "../../../../shared/i18n/backend/translateBackendMessage";
+import { remoteErrorText } from "../../../../shared/localization/errors";
 import {
   loadDeletedCloudAccounts,
   loadDeletedCloudProviders,
@@ -58,7 +58,7 @@ export function CloudRecycleBin({ t, disabled, triggerClassName }: CloudRecycleB
       setProviders(nextProviders);
       setError("");
     } catch (cause) {
-      const detail = backendText(cause instanceof Error ? cause.message : String(cause));
+      const detail = remoteErrorText(cause instanceof Error ? cause.message : String(cause));
       setError(`${t("providers.proxy.recycleBinLoadError")}: ${detail}`);
     } finally {
       setLoading(false);
@@ -78,7 +78,7 @@ export function CloudRecycleBin({ t, disabled, triggerClassName }: CloudRecycleB
       }
       setError("");
     } catch (cause) {
-      const detail = backendText(cause instanceof Error ? cause.message : String(cause));
+      const detail = remoteErrorText(cause instanceof Error ? cause.message : String(cause));
       setError(`${t("providers.proxy.recycleBinRestoreError")}: ${detail}`);
     } finally {
       setRestoringKey(null);

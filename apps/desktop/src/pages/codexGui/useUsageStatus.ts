@@ -1,7 +1,8 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "../../api/backend";
 import { USAGE_REFRESH_INTERVAL_MS, type UsageSummary } from "../../../../../shared/remote-chat/usage";
+import { decodeUsageSummary } from "../../../../../shared/remote-chat/usageSummary";
 export type { UsageSummary } from "../../../../../shared/remote-chat/usage";
 
 export function useUsageStatus(active: boolean) {
@@ -16,12 +17,12 @@ export function useUsageStatus(active: boolean) {
       if (loading.current || cancelled) return;
       loading.current = true;
       try {
-        const nextUsage = await invoke<UsageSummary>("codex_gui_usage_summary");
+        const nextUsage = decodeUsageSummary(await invoke<unknown>("codex_gui_usage_summary"));
         if (cancelled) return;
         setUsage(nextUsage);
         setError("");
       } catch {
-        if (!cancelled) { setUsage(null); setError(guiText("暂时无法刷新用量，请稍后重试。")); }
+        if (!cancelled) { setUsage(null); setError(uiText("client.errors.couldNotRefreshUsagePleaseTryAgainLater")); }
       } finally { loading.current = false; }
     };
     queueMicrotask(() => void refresh());

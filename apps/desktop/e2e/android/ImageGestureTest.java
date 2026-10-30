@@ -26,12 +26,17 @@ public final class ImageGestureTest extends UiAutomatorTestCase {
         String direction = getParams().getString("direction");
         if ("edges".equals(direction)) {
             verifyEdgeGestures(image, bounds);
+        } else if ("pan".equals(direction)) {
+            assertTrue(image.swipeLeft(GESTURE_STEPS));
         } else {
             assertTrue("in".equals(direction) ? image.pinchIn(70, GESTURE_STEPS)
                 : image.pinchOut(70, GESTURE_STEPS));
         }
         Thread.sleep(500);
-        assertTrue(new UiObject(new UiSelector().description("保存到相册")).exists());
+        String keepOpen = getParams().getString("keepOpen");
+        UiSelector control = keepOpen == null ? new UiSelector().description("保存到相册")
+            : new UiSelector().text(keepOpen);
+        assertTrue("Gestures keep the preview open", new UiObject(control).exists());
         assertTrue(getUiDevice().takeScreenshot(after));
         Bitmap original = BitmapFactory.decodeFile(before.getPath());
         Bitmap changed = BitmapFactory.decodeFile(after.getPath());
@@ -43,7 +48,7 @@ public final class ImageGestureTest extends UiAutomatorTestCase {
         }
         original.recycle();
         changed.recycle();
-        assertTrue("Pinching must visibly change the image", differences > MIN_CHANGED_PIXELS);
+        assertTrue("Gestures must visibly change the image", differences > MIN_CHANGED_PIXELS);
     }
 
     private void verifyEdgeGestures(UiObject image, Rect bounds) throws Exception {

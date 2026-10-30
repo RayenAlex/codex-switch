@@ -10,13 +10,13 @@ export function ChatMarkdownPreview({ text }: { text: string }) {
   const [source, setSource] = useState(false);
   return <section className="chat-markdown-preview">
     <div className="chat-markdown-preview-toolbar">
-      <div className="chat-markdown-preview-modes" role="group" aria-label={t('显示方式')}>
-        <button type="button" aria-pressed={!source} onClick={() => setSource(false)}>{t('预览')}</button>
-        <button type="button" aria-pressed={source} onClick={() => setSource(true)}>{t('原文')}</button>
+      <div className="chat-markdown-preview-modes" role="group" aria-label={t("client.chat.displayMode")}>
+        <button type="button" aria-pressed={!source} onClick={() => setSource(false)}>{t("client.chat.preview")}</button>
+        <button type="button" aria-pressed={source} onClick={() => setSource(true)}>{t("client.chat.source")}</button>
       </div>
-      <ChatCopyButton text={text} label={t('复制原文')} />
+      <ChatCopyButton text={text} label={t("client.chat.copySource")} />
     </div>
-    {source && <ChatCodeBlock text={text} language="markdown" label={t('原文')} copyLabel={t('复制原文')} />}
-    {!source && (text.trim() ? <ChatMarkdown text={text} /> : <p className="chat-muted">{t('（空文件）')}</p>)}
+    {source && <ChatCodeBlock text={text} language="markdown" label={t("client.chat.source")} copyLabel={t("client.chat.copySource")} />}
+    {!source && (text.trim() ? <ChatMarkdown text={text} /> : <p className="chat-muted">{t("client.chat.emptyFile")}</p>)}
   </section>;
 }

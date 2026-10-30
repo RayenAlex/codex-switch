@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-const filenames = ['notes.txt', 'settings.json', 'README.md', 'archive.zip', 'huge.txt', 'main.ts', '测试.py'];
+const filenames = ['notes.txt', 'settings.json', 'README.md', 'archive.zip', 'huge.png', 'main.ts', '测试.py'];
 
 async function openFiles(page: Page) {
   await page.getByRole('treeitem', { name: 'src', exact: true }).click();

@@ -29,11 +29,11 @@ export function KnowledgeImport({ knowledgeId, chunk, job, onError }: Props) {
   // Errors are passed on as Chinese sources; the panel translates them when it renders them.
   const upload = async (file: File) => {
     if (busy) return;
-    if (file.size > 32 * 1024 * 1024) { onError(msg("请选择不超过 32 MB 的文件。")); return; }
+    if (file.size > 32 * 1024 * 1024) { onError(msg("coze.index.chooseAFileOf32MbOrLess")); return; }
     const image = /\.(png|jpe?g|webp)$/i.test(file.name);
     const visual = image || (ocr && /\.pdf$/i.test(file.name));
-    if (visual && !model) { onError(msg("请先选择支持图片识别的模型。")); return; }
-    if (image && file.size > 16 * 1024 * 1024) { onError(msg("请选择不超过 16 MB 的图片。")); return; }
+    if (visual && !model) { onError(msg("coze.index.chooseAModelThatSupportsImageRecognitionFirst")); return; }
+    if (image && file.size > 16 * 1024 * 1024) { onError(msg("coze.index.chooseAnImageOf16MbOrLess")); return; }
     setReading(true);
     try {
       await job.start(visual ? "import_media_document_start" : "import_document_start", {
@@ -42,25 +42,25 @@ export function KnowledgeImport({ knowledgeId, chunk, job, onError }: Props) {
     } catch (error) { onError(errorText(error)); } finally { setReading(false); }
   };
   return <Tabs items={[
-    { key: "file", label: t("文件与图片"), children: <Space direction="vertical" style={{ width: "100%" }}>
-      <Select aria-label={t("图片识别模型")} placeholder={t("识别图片时，请选择支持图片的模型")} showSearch
+    { key: "file", label: t("coze.index.filesAndImages"), children: <Space direction="vertical" style={{ width: "100%" }}>
+      <Select aria-label={t("coze.index.imageRecognitionModel")} placeholder={t("coze.index.toRecognizeImagesChooseAModelThatSupportsThem")} showSearch
         style={{ width: "100%" }} value={model || undefined} onChange={setModel} disabled={busy}
         options={models.map((item) => ({ value: item.id, label: item.name }))} />
       <Checkbox checked={ocr} onChange={(event) => setOcr(event.target.checked)} disabled={busy}>
-        {t("识别扫描 PDF 中的文字")}</Checkbox>
+        {t("coze.index.recognizeTextInScannedPdfs")}</Checkbox>
       <Upload.Dragger accept=".txt,.md,.markdown,.pdf,.docx,.csv,.json,.tsv,.xlsx,.png,.jpg,.jpeg,.webp"
         showUploadList={false} disabled={busy} beforeUpload={(file) => { void upload(file); return false; }}>
-        <FileUp size={30} /><p>{busy ? t("正在整理内容，请稍候…") : t("拖放文件到这里，或点击选择")}</p>
-        <small>{t("文档最大 32 MB，图片最大 16 MB；扫描 PDF 最多 50 页。")}</small>
+        <FileUp size={30} /><p>{busy ? t("coze.index.processingContentPleaseWait") : t("coze.index.dropAFileHereOrClickToChooseOne")}</p>
+        <small>{t("coze.index.documentsUpTo32MbImagesUpTo16Mb")}</small>
       </Upload.Dragger>
-      <small>{t("图片和扫描件将交给所选模型识别，完成后可以查看并修正分段内容。")}</small>
+      <small>{t("coze.index.theSelectedModelRecognizesImagesAndScansThenYouCan")}</small>
     </Space> },
-    { key: "web", label: t("网页"), children: <Space direction="vertical" style={{ width: "100%" }}>
-      <Input aria-label={t("网页地址")} placeholder="https://example.com/article" value={url}
+    { key: "web", label: t("coze.index.webPage"), children: <Space direction="vertical" style={{ width: "100%" }}>
+      <Input aria-label={t("coze.index.webPageUrl")} placeholder="https://example.com/article" value={url}
         onChange={(event) => setUrl(event.target.value)} disabled={busy} />
       <Button type="primary" loading={busy} disabled={!url.trim()} onClick={() => void job.start(
-        "import_web_document_start", { knowledgeId, url: url.trim(), chunk })}>{t("导入网页")}</Button>
-      <small>{t("导入公开网页中的文字。需要登录或只能在浏览器中加载的内容，请另存为文件后导入。")}</small>
+        "import_web_document_start", { knowledgeId, url: url.trim(), chunk })}>{t("coze.index.importWebPage")}</Button>
+      <small>{t("coze.index.importsTextFromPublicWebPagesForContentThatRequires")}</small>
     </Space> },
   ]} />;
 }

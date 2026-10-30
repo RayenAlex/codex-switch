@@ -2,7 +2,7 @@ import type { Item } from '../remote-chat/client/types';
 import { referenceKind } from '../../apps/desktop/src/pages/codexGui/conversationReferences';
 import { visibleUserContent } from './conversationContext';
 
-const REFERENCE_LABELS = { conversation: '引用对话', coze: 'Coze', plugin: '插件', file: '附件', folder: '附件' };
+const REFERENCE_LABELS = { conversation: "client.workspaceActions.referenceAConversation", coze: 'Coze', plugin: "client.chat.plugins", file: "client.mobile.attachments", folder: "client.mobile.attachments" };
 
 /** Read both live mentions and context envelopes retained in older conversation history. */
 export function messageReferences(item: Item) {

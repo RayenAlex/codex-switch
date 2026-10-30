@@ -1,10 +1,14 @@
+import { displayText } from '../i18n/index';
+import { displayError } from '../i18n/index';
 import { ImageAiContext } from '../../../../shared/chat/ImageAiContext';
+import { DesktopUsageContext } from '../../../../shared/chat/DesktopUsageContext';
+import { useVisibleChatUsage } from './useVisibleChatUsage';
 import { imageAiSender } from '../../../../shared/remote-chat/client/imageAiSender';
 import { prepareImageEdit } from './prepareImageEdit';
 import { remotePromptSuggestion } from '../../../../shared/remote-chat/client/promptSuggestion';
 import { t, useLanguage } from '../i18n';
 import { useEffect, useState, type ReactNode } from 'react';
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react';
 import type { ChatComputer } from '../../../../shared/remote-chat/devices';
 import type { ComputerListRefresh } from '../../../../shared/remote-chat/ComputerSearchBar';
 import { ChatApproval } from './ChatApproval';
@@ -17,7 +21,9 @@ import { ChatProcessing } from './ChatProcessing';
 import { currentRunningTurn } from '../../../../shared/chat/runningTurn';
 import { ChatImageContext } from './ChatImage';
 import { ChatFileContext } from './ChatFileLink';
+import { ChatAttachmentMetadata } from './ChatAttachmentMetadata';
 import { ChatThreads } from './ChatThreads';
+import { ChatThreadFilter } from './ChatThreadFilter';
 import { ChatListButton } from './ChatListButton';
 import { ChatSidebar } from './ChatSidebar';
 import { useDesktopLayout, usePanelVisibility } from '../useDesktopLayout';
@@ -31,11 +37,12 @@ import { ChatRetryProvider } from '../../../../shared/remote-chat/ChatRetryProvi
 import { ChatQuotesProvider } from './ChatQuotes';
 import { ChatFileReferencesProvider } from '../../../../shared/chat/ChatFileReferences';
 import { ChatDetailsWorkspace } from './ChatDetailsWorkspace';
+import { ChatTerminalLayout } from './ChatTerminalLayout';
 import { ConversationChangesButton } from '../../../desktop/src/pages/codexGui/ConversationChangesButton';
 import { ChatAsyncQuestions } from './ChatAsyncQuestions';
 import { ChatSearch } from './ChatSearch';
 import { ChatProfileMenu } from './ChatProfileMenu';
-import { ChatTokenSummary } from './ChatTokenSummary';
+import { ChatDesktopAccountPicker } from './ChatDesktopAccountPicker';
 import { useChatCatalog } from './useChatCatalog';
 import { compactUnavailableReason } from '../../../../shared/remote-chat/client/composerCommands';
 import { threadPresentation } from '../../../../shared/remote-chat/sidebar';
@@ -60,6 +67,7 @@ export interface ConnectedChatProps {
   desktopDiffs?: boolean;
   readClipboardImages?: () => Promise<File[]>;
   nativeFileDrop?: NativeFileDrop;
+  openAccounts?: () => void;
 }
 
 export interface ChatSidebarActions {
@@ -72,22 +80,22 @@ export interface ChatSidebarActions {
 export function ConnectedChat({ chat, device, devices, active, scope, email, chooseDevice,
   chooseLocal, accountPicker, headerActions, headerConnectionActions, headerEnd, renderSidebar, composerHeader,
   conversationFooter, renderUserMessage, draggableHeader, scrollableComposer,
-  readClipboardImages, nativeFileDrop, desktopDiffs, deviceRefresh, cliVersion }: ConnectedChatProps) {
+  readClipboardImages, nativeFileDrop, desktopDiffs, deviceRefresh, cliVersion, openAccounts }: ConnectedChatProps) {
   useLanguage();
   const { state, controller, foreground } = chat;
   const [drawer, setDrawer] = useState(false);
   const desktop = useDesktopLayout();
   const [sidebar, setSidebar] = usePanelVisibility('chat-list');
-  const listOpen = desktop ? sidebar : drawer;
-  const ListToggleIcon = listOpen ? PanelLeftClose : PanelLeftOpen;
-  const closeList = () => { if (desktop) setSidebar(false); else setDrawer(false); };
-  const selectedFromList = () => { if (!desktop) setDrawer(false); };
   const [pickingDevice, setPickingDevice] = useState(false);
   const [searching, setSearching] = useState(false);
-  const [tokenSummary, setTokenSummary] = useState(false);
-  useChatDrawerSwipe({ enabled: active && !desktop && !pickingDevice && !searching && !tokenSummary,
-    open: drawer, onOpenChange: setDrawer });
+  const drawerMotion = useChatDrawerSwipe({ enabled: active && !desktop && !pickingDevice && !searching,
+    open: drawer, onOpenChange: setDrawer, onNext: openAccounts });
+  const listOpen = desktop ? sidebar : drawerMotion.visible;
+  const ListToggleIcon = listOpen ? PanelLeftClose : PanelLeftOpen;
+  const closeList = () => { if (desktop) setSidebar(false); else drawerMotion.closeDrawer(); };
+  const selectedFromList = () => { if (!desktop) drawerMotion.closeDrawer(); };
   const ready = state.ready;
+  const usageSnapshot = useVisibleChatUsage(controller.readUsage, desktop && active && foreground && ready);
   const installer = useRemoteCliInstaller(controller.guiTools,
     cliVersion === undefined && desktop && active && foreground && ready);
   const error = visibleChatError(state.error);
@@ -96,13 +104,15 @@ export function ConnectedChat({ chat, device, devices, active, scope, email, cho
   const runningTurn = currentRunningTurn(state.selected?.turns);
   const running = Boolean(runningTurn);
   const approvals = state.approvals.filter((event) => event.params.threadId === state.selected?.id);
-  const newChat = (project?: ChatProject) => { if (!state.sending) { controller.back(project); setDrawer(false); } };
+  const newChat = (project?: ChatProject) => {
+    if (!state.sending) { controller.back(project); drawerMotion.closeDrawer(); }
+  };
   useEffect(() => {
-    controller.setViewing(active && foreground && (desktop || !drawer) && !pickingDevice && !searching && !tokenSummary);
-  }, [active, foreground, desktop, drawer, pickingDevice, searching, tokenSummary, controller]);
+    controller.setViewing(active && foreground && (desktop || !drawerMotion.visible) && !pickingDevice && !searching);
+  }, [active, foreground, desktop, drawerMotion.visible, pickingDevice, searching, controller]);
   useEffect(() => {
-    if (!active) { setDrawer(false); setPickingDevice(false); setSearching(false); setTokenSummary(false); }
-  }, [active]);
+    if (!active) { drawerMotion.closeDrawer(); setPickingDevice(false); setSearching(false); }
+  }, [active, drawerMotion.closeDrawer]);
   const showDesktopDiffs = desktopDiffs ?? desktop;
   const composer = <>
     {!!approvals.length && <div className="chat-approvals chat-scroll">
@@ -115,15 +125,16 @@ export function ConnectedChat({ chat, device, devices, active, scope, email, cho
         || state.compacting === state.selected?.id} answer={controller.answerAsyncQuestion} />
     {composerHeader}
     <ChatComposer suggestions={remotePromptSuggestion(state, controller.suggestNextPrompt, { scope })}
+      dictation={controller.dictation}
       cliVersion={cliVersion === undefined ? installer.version : cliVersion}
       recoveredEdit={controller.messageEditor.recoveredDrafts.get(state.selected?.id ?? '')}
       consumeRecoveredEdit={() => controller.messageEditor.recoveredDrafts.delete(state.selected?.id ?? '')}
       connectionInfo={<ChatConnectionInfo state={state} controller={controller} device={device} active={active}
         chooseDevice={() => setPickingDevice(true)} />}
       projectPicker={!composerHeader && <ChatProjectSwitch state={state} controller={controller}
-        active={active && foreground} />}
+        active={active && (desktop ? foreground : true)} />}
       queue={queueProps(state, controller)} readClipboardImages={readClipboardImages} nativeFileDrop={nativeFileDrop}
-      connection={{ client: controller.guiAccounts, deviceName: device?.name ?? t("选择电脑"),
+      connection={{ client: controller.guiAccounts, deviceName: device?.name ?? t("client.settings.chooseAComputer"),
         chooseDevice: () => setPickingDevice(true) }}
       goals={controller.goals} goal={state.selected ? state.goals?.[state.selected.id] : null} goalBusy={!!state.goalBusy}
       contextSettings={controller.contextSettings} cwd={cwd} catalog={catalog}
@@ -142,33 +153,43 @@ export function ConnectedChat({ chat, device, devices, active, scope, email, cho
       interrupted={state.selected?.turns?.at(-1)?.status === 'interrupted'}
       send={(input) => controller.send(input)} interrupt={() => controller.interrupt()} />
   </>;
-  return <ImageAiContext.Provider value={{ enabled: active && ready && !state.selectedArchived
+  const profileMenu = !accountPicker && (desktop ? <ChatDesktopAccountPicker client={controller.guiAccounts}
+    ready={ready} active={active && foreground && !searching} device={device} devices={devices}
+    deviceRefresh={deviceRefresh} chooseDevice={chooseDevice} chooseLocal={chooseLocal} />
+    : <ChatProfileMenu client={controller.guiAccounts}
+    deviceName={device?.name ?? t("client.settings.chooseAComputer")} email={email} ready={ready}
+    guiTools={controller.guiTools} active={active && foreground && !searching}
+    running={state.sending || running || Object.values(state.sidebar.threads).some(thread => thread.running)}
+    chooseDevice={() => { drawerMotion.closeDrawer(); setPickingDevice(true); }} />);
+  return <DesktopUsageContext.Provider value={usageSnapshot}>
+    <ImageAiContext.Provider value={{ enabled: active && ready && !state.selectedArchived
     && !state.sending && !state.settingsBusy && !state.workspaceBusy && !state.compacting,
     send: imageAiSender(controller, prepareImageEdit) }}>
     <ChatImageContext.Provider value={{ threadId: state.selected?.id ?? null, ready,
       load: controller.imagePreview, save: controller.managedPreviews ? controller.savePreviewImage : undefined }}>
+    <ChatAttachmentMetadata controller={controller} ready={ready} threadId={state.selected?.id ?? null}>
     <ChatFileContext.Provider value={{ threadId: state.selected?.id ?? null, ready, client: controller.files,
       load: controller.textPreview }}>
     <ChatDetailsWorkspace selected={state.selected?.id ?? null} active={active} enabled={showDesktopDiffs}>
     <ChatFileReferencesProvider>
     <ChatQuotesProvider scope={state.selected?.id ?? null} sending={state.sending}
     enabled={active && !state.selectedArchived}>
-    <div className="chat-conversation">
+    <ChatTerminalLayout>
     <header className="chat-header" data-tauri-drag-region={draggableHeader || undefined}>
       {desktop ? <button type="button" className="chat-back"
-        aria-label={listOpen ? t('收起聊天列表') : t('打开聊天列表')}
+        aria-label={listOpen ? t("client.chat.collapseChatList") : t("client.chat.openChatList")}
         aria-expanded={listOpen} onClick={() => setSidebar(!sidebar)}>
         <ListToggleIcon size={21} />
       </button> : <ChatListButton client={controller.guiAccounts} active={active && foreground} ready={ready}
-        expanded={listOpen} onClick={() => setDrawer(!drawer)} />}
+        expanded={listOpen} onClick={listOpen ? drawerMotion.closeDrawer : drawerMotion.openDrawer} />}
       <div className="chat-grow" data-tauri-drag-region={draggableHeader || undefined}>
         <h2 data-tauri-drag-region={draggableHeader || undefined}>
-          {state.selected ? threadPresentation(state.selected, state.sidebar, t).title : t("新聊天")}</h2>
+          {state.selected ? threadPresentation(state.selected, state.sidebar, displayText).title : t("client.chat.newChat")}</h2>
         {headerConnectionActions}</div>
       {state.selected && state.selectedArchived && <button type="button" className="chat-button"
         disabled={!ready || running}
-        onClick={() => { void controller.archive().then(() => setDrawer(true)); }}>
-        {t("恢复")}</button>}
+        onClick={() => { void controller.archive().then(drawerMotion.openDrawer); }}>
+        {t("client.chat.restore")}</button>}
       {headerActions}
       {showDesktopDiffs && <ConversationChangesButton
         value={state.selected?.turns ? { turns: state.selected.turns } : undefined} />}
@@ -176,9 +197,9 @@ export function ConnectedChat({ chat, device, devices, active, scope, email, cho
     </header>
     <div className="chat-scroll chat-notices"><div className="chat-notice-content">
       <ChatTaskStatus state={state} />
-      {!!error && <p role="alert" className="chat-error">{t(error)}</p>}
+      {!!error && <p role="alert" className="chat-error">{displayError(error)}</p>}
       {state.desktopOnly && <p className="chat-muted">
-        {t('桌面已就绪。打开远程桌面，登录电脑后即可继续聊天。')}</p>}
+        {t("client.remoteDesktop.theDesktopIsReadyOpenRemoteDesktopAndSignIn")}</p>}
     </div></div>
       <TaskReviewProvider controller={controller} state={state} active={active && foreground}>
       <ChatRetryProvider controller={controller} state={state}>
@@ -192,23 +213,25 @@ export function ConnectedChat({ chat, device, devices, active, scope, email, cho
       </ChatRetryProvider></TaskReviewProvider>
     {!scrollableComposer && composer}
     {conversationFooter}
-    </div>
-    <ChatSidebar desktop={desktop} open={listOpen} onClose={closeList} customHeading={Boolean(renderSidebar)}>
+    </ChatTerminalLayout>
+    <ChatSidebar desktop={desktop} open={listOpen} onClose={closeList} customHeading={Boolean(renderSidebar)}
+      motion={drawerMotion}
+      headingExtra={!renderSidebar && <>
+        <ChatThreadFilter state={state} controller={controller} />
+        {desktop && <button className="chat-back chat-sidebar-new" type="button"
+          aria-label={t("client.chat.newChat")} title={t("client.chat.newChat")}
+          disabled={state.sending} onClick={() => newChat()}><Plus size={20} aria-hidden="true" /></button>}
+      </>}>
       {renderSidebar ? renderSidebar({ newChat, onClose: selectedFromList, openSearch: () => setSearching(true) })
         : <ChatThreads state={state} controller={controller} newChat={newChat} onClose={selectedFromList}
-        openSearch={() => setSearching(true)} accountPicker={accountPicker} profile={!accountPicker && <ChatProfileMenu client={controller.guiAccounts}
-          deviceName={device?.name ?? t("选择电脑")} email={email} ready={ready}
-          guiTools={controller.guiTools} active={active && foreground && !searching}
-          running={state.sending || running || Object.values(state.sidebar.threads).some(thread => thread.running)}
-          chooseDevice={() => { setDrawer(false); setPickingDevice(true); }}
-          openTokenSummary={() => { setDrawer(false); setTokenSummary(true); }} />} />}
+        openSearch={() => setSearching(true)} accountPicker={accountPicker ?? (desktop ? profileMenu : undefined)}
+        profile={!desktop && profileMenu} />}
     </ChatSidebar>
     {searching && <ChatSearch state={state} controller={controller} onClose={() => setSearching(false)}
-      select={thread => { setSearching(false); setDrawer(false); void controller.select(thread); }} />}
-    {tokenSummary && <ChatTokenSummary read={controller.readTokenSummary} ready={ready}
-      deviceName={device?.name} onClose={() => setTokenSummary(false)} />}
+      select={thread => { setSearching(false); drawerMotion.closeDrawer(); void controller.select(thread); }} />}
     {pickingDevice && <ChatDevices chooseLocal={chooseLocal} devices={devices} onClose={() => setPickingDevice(false)}
       refresh={deviceRefresh} choose={(id) => { chooseDevice(id); setPickingDevice(false); }} />}
   </ChatQuotesProvider></ChatFileReferencesProvider></ChatDetailsWorkspace>
-  </ChatFileContext.Provider></ChatImageContext.Provider></ImageAiContext.Provider>;
+  </ChatFileContext.Provider></ChatAttachmentMetadata></ChatImageContext.Provider></ImageAiContext.Provider>
+  </DesktopUsageContext.Provider>;
 }

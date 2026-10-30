@@ -10,9 +10,9 @@ export function FileAutoSaveSheet({ onClose }: { onClose: () => void }) {
   const preferences = useFilePreferences();
   const styles = useStyles();
   const [error, setError] = useState(false);
-  return <BottomSheet visible title={t('文件自动保存')} onClose={onClose} maxWidth={400}>
+  return <BottomSheet visible title={t("client.projectBrowser.autoSaveFiles")} onClose={onClose} maxWidth={400}>
     <View style={styles.sheetBody} accessibilityRole="radiogroup">
-      <Text style={styles.hint}>{t('停止输入后自动保存。关闭后，可点击保存或按 Ctrl+S（Mac：⌘S）。')}</Text>
+      <Text style={styles.hint}>{t("client.projectBrowser.saveAfterYouStopTypingWhenOffClickSaveOr")}</Text>
       {AUTO_SAVE_OPTIONS.map(option => <Pressable key={option.value} accessibilityRole="radio"
         accessibilityLabel={t(option.label)} accessibilityState={{ checked: preferences.delay === option.value }}
         style={styles.themeOption} onPress={() => {
@@ -21,7 +21,7 @@ export function FileAutoSaveSheet({ onClose }: { onClose: () => void }) {
         <Text style={styles.detailLabel}>{t(option.label)}</Text><View style={styles.spacer} />
         {preferences.delay === option.value && <Text style={styles.detailLabel}>✓</Text>}
       </Pressable>)}
-      {error && <Text accessibilityRole="alert" style={styles.error}>{t('未能保存设置，请重试。')}</Text>}
+      {error && <Text accessibilityRole="alert" style={styles.error}>{t("client.projectBrowser.unableToSaveSettingsPleaseTryAgain")}</Text>}
     </View>
   </BottomSheet>;
 }

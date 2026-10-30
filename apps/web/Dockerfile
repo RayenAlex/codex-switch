@@ -4,6 +4,7 @@ COPY package*.json ./
 COPY apps/web/package*.json ./apps/web/
 # Web previews reuse desktop components and their workspace dependencies.
 COPY apps/desktop/package.json ./apps/desktop/
+COPY packages/i18n/package.json ./packages/i18n/
 RUN npm ci
 
 FROM deps AS build
@@ -13,6 +14,7 @@ ENV VITE_WEB_BASE_PATH=${VITE_WEB_BASE_PATH}
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 COPY apps/web ./apps/web
 COPY shared ./shared
+COPY packages/i18n ./packages/i18n
 # Shared chat logic imports model selection and turn timing from the desktop sources.
 COPY apps/desktop/src ./apps/desktop/src
 # Account formatting and 2FA lists share pure helpers with the mobile client.

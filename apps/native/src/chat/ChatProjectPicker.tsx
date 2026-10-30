@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import { createThemedStyles } from '../theme/styles';
 import { useThemeColor } from '../theme/store';
 import { t, useLanguage } from '../i18n';
@@ -13,21 +14,21 @@ export function ChatProjectPicker(props: ProjectPickerProps) {
   const color = useThemeColor();
   useLanguage();
   const { result, loading, error, browse, retry } = useProjectDirectories(props);
-  return <BottomSheet fullWidthContent visible title={props.title ?? t("选择项目")} onClose={props.close} dragFromHeaderOnly
-    actions={[{ label: t("选择此文件夹"), tone: 'primary', disabled: loading || !result?.directory,
+  return <BottomSheet fullWidthContent visible title={props.title ?? t("client.chat.chooseProject")} onClose={props.close}
+    actions={[{ label: t("client.chat.chooseThisFolder"), tone: 'primary', disabled: loading || !result?.directory,
       onPress: () => { if (result?.directory) props.choose(directoryProject(result.directory)); } }]}>
     <View style={pickerStyles.root}>
       <SheetInset style={pickerStyles.readable}>
-        <Text numberOfLines={2} style={pickerStyles.message}>{result?.directory || t("此电脑")}</Text>
+        <Text numberOfLines={2} style={pickerStyles.message}>{result?.directory || t("client.downloads.thisComputer")}</Text>
         <View style={pickerStyles.navigation}>
           <Pressable accessibilityRole="button" disabled={loading} onPress={() => browse('')}>
-            <Text style={pickerStyles.link}>{t("此电脑")}</Text></Pressable>
+            <Text style={pickerStyles.link}>{t("client.downloads.thisComputer")}</Text></Pressable>
           {result?.parent != null && <Pressable accessibilityRole="button" disabled={loading}
-            onPress={() => browse(result.parent ?? '')}><Text style={pickerStyles.link}>{t("返回上一级")}</Text></Pressable>}
+            onPress={() => browse(result.parent ?? '')}><Text style={pickerStyles.link}>{t("client.downloads.goBack")}</Text></Pressable>}
         </View>
-        {loading && <ActivityIndicator accessibilityLabel={t("正在读取文件夹")} style={pickerStyles.message} />}
-        {!!error && <View><Text accessibilityRole="alert" style={pickerStyles.message}>{t(error)}</Text>
-          <Pressable accessibilityRole="button" onPress={retry}><Text style={pickerStyles.link}>{t("重试")}</Text></Pressable>
+        {loading && <ActivityIndicator accessibilityLabel={t("client.mobile.loadingFolder")} style={pickerStyles.message} />}
+        {!!error && <View><Text accessibilityRole="alert" style={pickerStyles.message}>{displayError(error)}</Text>
+          <Pressable accessibilityRole="button" onPress={retry}><Text style={pickerStyles.link}>{t("client.terminal.retry")}</Text></Pressable>
         </View>}
       </SheetInset>
       <SheetFlatList data={result?.entries ?? []} keyExtractor={(entry) => entry.path} style={pickerStyles.list}
@@ -39,9 +40,9 @@ export function ChatProjectPicker(props: ProjectPickerProps) {
           <Text numberOfLines={1} style={pickerStyles.name}>{item.name}</Text>
           <Feather name="chevron-right" size={18} color={color("#6f8177", 'muted')} />
         </Pressable>}
-        ListEmptyComponent={!loading && !error ? <Text style={pickerStyles.message}>{t("此处没有子文件夹")}</Text> : null}
+        ListEmptyComponent={!loading && !error ? <Text style={pickerStyles.message}>{t("client.chat.noSubfoldersHere")}</Text> : null}
         ListFooterComponent={result?.truncated
-          ? <Text style={pickerStyles.message}>{t("文件夹较多，仅显示部分结果。")}</Text> : null} />
+          ? <Text style={pickerStyles.message}>{t("client.chat.onlySomeFoldersAreShown")}</Text> : null} />
     </View>
   </BottomSheet>;
 }

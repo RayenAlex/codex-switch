@@ -17,11 +17,11 @@ export function ChatRemoteFilePreview({ target, active, navigation, context }: R
       (element as HTMLMediaElement).pause();
     });
   }, [active]);
-  return <section ref={host} className={styles.window} aria-label={t('文件预览')}>
+  return <section ref={host} className={styles.window} aria-label={t("client.projectBrowser.filePreview")}>
     <header className={styles.toolbar}>
       <PreviewNavigation navigation={navigation} />
       <div className={styles.heading}>
-        <strong>{target.path.split(/[\\/]/).at(-1) || t('文件预览')}</strong><span>{target.path}</span>
+        <strong>{target.path.split(/[\\/]/).at(-1) || t("client.projectBrowser.filePreview")}</strong><span>{target.path}</span>
       </div>
     </header>
     <div className="chat-remote-file-preview">

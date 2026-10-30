@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { Button, Tooltip } from "antd";
 import { Maximize, Minimize } from "lucide-react";
 
@@ -8,7 +8,7 @@ export interface GuiFocusMode {
 }
 
 export function FocusModeButton({ focused, onToggleFocus }: GuiFocusMode) {
-  const label = focused ? guiText("退出专注模式") : guiText("进入专注模式");
+  const label = focused ? uiText("client.composer.exitFocusMode") : uiText("client.composer.enterFocusMode");
   return <Tooltip title={label} styles={{ root: { maxWidth: 400 } }}>
     <Button type="text" size="small" aria-label={label} aria-pressed={focused} onClick={onToggleFocus}
       icon={focused ? <Minimize size={15} /> : <Maximize size={15} />} />

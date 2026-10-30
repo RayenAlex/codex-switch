@@ -37,6 +37,7 @@ fn read_upstream_payload(mut payload: UpstreamPayload) -> Vec<u8> {
 
 fn openai_provider(base_url: String) -> ProviderProfile {
     ProviderProfile {
+        account_alias: None,
         request_options: Default::default(),
         id: "openai".to_string(),
         kind: ProviderKind::OpenAi,
@@ -56,6 +57,8 @@ fn openai_provider(base_url: String) -> ProviderProfile {
         fast_mode_enabled: true,
         websocket_enabled: false,
         api_format: ProviderApiFormat::OpenaiResponses,
+        balance_script: None,
+        market_source: None,
         balance_platform: None,
         balance_query_url: None,
         balance_query_token: None,

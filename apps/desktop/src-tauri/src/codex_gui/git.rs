@@ -69,16 +69,24 @@ pub(super) enum GitError {
     Worktree,
     #[error("操作未完成，请稍后重试。")]
     Operation,
-    #[error("此工作目录正在使用中，请等待当前任务或分支操作完成后重试。")]
-    WorkspaceBusy,
+    #[error(transparent)]
+    WorkspaceActivity(super::error::GuiError),
     #[error("文件信息无效，请刷新后重试。")]
     File,
     #[error("改动文件过多，请先在电脑上整理后重试。")]
     TooManyFiles,
     #[error("文件或分支已变化，请刷新并重新选择文件。")]
     Changed,
-    #[error("请先在电脑上解决冲突或完成正在进行的合并。")]
+    #[error("client.gitConflict.resolveFirst")]
     Conflict,
+    #[error("client.gitConflict.unsupported")]
+    ConflictUnsupported,
+    #[error("client.gitConflict.changed")]
+    ConflictChanged,
+    #[error("client.gitConflict.markersRemain")]
+    ConflictMarkers,
+    #[error("client.gitConflict.continueFailed")]
+    ContinueFailed,
     #[error("Git 正在执行其他操作，请稍后重试。")]
     Locked,
     #[error("提交未完成，请在电脑上检查 Git 用户信息、提交检查和签名设置。")]
@@ -93,7 +101,7 @@ pub(super) enum GitError {
     Remote,
     #[error("远程操作未完成，请检查电脑的网络和 Git 登录状态。")]
     Network,
-    #[error("更新未完成，请在电脑上检查冲突或正在进行的合并、变基。")]
+    #[error("client.gitConflict.integrationStopped")]
     Integrate,
     #[error("推送未完成，请先拉取远程改动，或检查推送权限与提交检查。")]
     Push,
@@ -362,5 +370,5 @@ async fn workspace_change(
     activity
         .change(key)
         .await
-        .map_err(|_| GitError::WorkspaceBusy.to_string())
+        .map_err(|error| error.to_string())
 }

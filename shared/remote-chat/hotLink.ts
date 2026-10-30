@@ -1,4 +1,6 @@
 import { SessionCipher } from './cipher';
+import { CompressedPackets, isCompressedPacket } from './compressedPackets';
+import { PACKET_COMPRESSION } from './packetCompression';
 import { BulkTransport } from './bulkTransport';
 import { deliveryFrame, type DeliveryData } from './delivery';
 import { fitsRelayChunkLimit } from './framing';
@@ -32,6 +34,8 @@ export class HotLink {
   private readonly delivery: LinkDelivery;
   private readonly timer: ReturnType<typeof setInterval>;
   private cipher?: SessionCipher;
+  private compressed?: CompressedPackets;
+  private compressionEnabled = false;
   private channel?: Channel;
   private readonly endpointObservation = new PeerEndpointObservation();
   private readonly directPackets = new DirectPackets({
@@ -98,6 +102,11 @@ export class HotLink {
   private setKey(key: string) {
     if (this.cipher) throw new Error('Session key cannot change');
     this.cipher = new SessionCipher({ ...this.options, publicKey: key });
+    if (this.cipher.supportsBinaryPlaintext) {
+      const codec = this.options.createPacketCompression?.();
+      if (codec) this.compressed = new CompressedPackets(codec, this.cipher,
+        () => this.receiveFailure(), () => this.flushCompressed());
+    }
   }
 
   async acceptSignal(signal: Signal) {
@@ -131,15 +140,27 @@ export class HotLink {
 
   private transmit(path: Path, frame: object): boolean {
     if (!this.cipher || this.closed) return false;
+    const data = 'kind' in frame && frame.kind === 'data';
     const buffered = path === 'relay' ? this.options.relayBuffered()
       : (this.channel?.bufferedAmount ?? MAX_BUFFER_BYTES) + this.directPackets.bufferedAmount;
-    if (buffered === undefined || buffered >= MAX_BUFFER_BYTES) return false;
+    const pending = data ? (this.compressed?.bufferedAmount ?? 0) : 0;
+    if (buffered === undefined || buffered + pending >= MAX_BUFFER_BYTES) return false;
     if (path === 'direct' && this.channel?.readyState !== 'open') return false;
     if (path === 'relay' && (!this.relay || this.quotaBlocked)) return false;
-    const payload = this.cipher.encrypt(JSON.stringify(frame));
+    const text = JSON.stringify(frame);
+    if (this.compressionEnabled && this.compressed && data) {
+      const delivery = frame as DeliveryData & { lane?: string };
+      return this.compressed.send(`${path}:${delivery.lane ?? 'ordered'}:${delivery.sequence}`, text,
+        payload => { if (!this.closed) this.writePacket(path, payload, true); });
+    }
+    return this.writePacket(path, this.cipher.encrypt(text), data);
+  }
+
+  private writePacket(path: Path, payload: string, data: boolean): boolean {
     try {
       if (path === 'relay') return this.signal({ type: 'relay', payload });
-      this.directPackets.send(payload, 'kind' in frame && frame.kind === 'data');
+      if (this.channel?.readyState !== 'open') return false;
+      this.directPackets.send(payload, data);
       return true;
     } catch (error) {
       if (!(path === 'direct' && error instanceof ChannelBackpressureError)) this.lastPong[path] = 0;
@@ -166,7 +187,8 @@ export class HotLink {
       route: path === 'direct' ? this.endpointObservation.capture(this.channel) : undefined });
     // A very large configured timeout must not retain unanswered probes indefinitely.
     if (this.probes.size > MAX_PENDING_PROBES) this.probes.delete(this.probes.keys().next().value!);
-    const frame = { kind: 'ping', id, packetBatching: true, parallelResponses: true };
+    const frame = { kind: 'ping', id, packetBatching: true, parallelResponses: true,
+      packetCompression: this.compressed ? PACKET_COMPRESSION : undefined };
     if (!this.transmit(path, frame)) this.probes.delete(id);
   }
 
@@ -175,20 +197,41 @@ export class HotLink {
     try {
       const packets = path === 'direct' ? directPackets(payload) : [payload];
       for (const packet of packets) this.receivePacket(packet, path, endpoints);
-    } catch { this.fail('连接校验失败，请重新连接电脑。'); }
+    } catch { this.receiveFailure(); }
+  }
+
+  private receiveFailure() { this.fail('连接校验失败，请重新连接电脑。'); }
+
+  private flushCompressed() {
+    if (this.closed) return;
+    try { this.delivery.flush(); } catch { this.receiveFailure(); }
   }
 
   private receivePacket(payload: string, path: Path, endpoints?: ConnectionEndpoints) {
     if (this.closed || !this.cipher) return;
+    if (isCompressedPacket(payload)) {
+      if (!this.compressed) throw new Error('Compression unavailable');
+      this.compressed.receive(payload, text => this.acceptFrame(text, path, endpoints));
+      return;
+    }
     const text = this.cipher.decrypt(payload);
     if (text === null) return;
+    this.acceptFrame(text, path, endpoints);
+  }
+
+  private acceptFrame(text: string, path: Path, endpoints?: ConnectionEndpoints) {
+    if (this.closed) return;
     const frame = deliveryFrame(text);
+    if ((frame.kind === 'ping' || frame.kind === 'pong') && frame.packetCompression === PACKET_COMPRESSION) {
+      this.compressionEnabled = Boolean(this.compressed);
+    }
     if (frame.kind === 'close') { this.close(false); return; }
     if (frame.kind === 'ping') {
       if (!Number.isSafeInteger(frame.id)) throw new Error('Invalid probe');
       if (frame.parallelResponses === true) this.delivery.enableResponses();
       if (path === 'direct' && frame.packetBatching === true) this.directPackets.enable();
       this.transmit(path, { kind: 'pong', id: frame.id, packetBatching: true, parallelResponses: true,
+        packetCompression: this.compressed ? PACKET_COMPRESSION : undefined,
         observedEndpoint: path === 'direct' ? endpoints?.remote : undefined });
     } else if (frame.kind === 'pong') {
       if (frame.parallelResponses === true) this.delivery.enableResponses();
@@ -229,7 +272,8 @@ export class HotLink {
     const relay = this.healthy('relay');
     const stable = Date.now() - this.directSince >= DIRECT_STABLE_MS;
     let path: Path | undefined;
-    if (direct && (stable || this.selected === 'direct' || !relay)) path = 'direct';
+    if (this.options.startOnRelay && !this.established) path = relay ? 'relay' : undefined;
+    else if (direct && (stable || this.selected === 'direct' || !relay)) path = 'direct';
     else if (relay) path = 'relay';
     const changed = path !== this.selected;
     if (changed) this.directPackets.clear();
@@ -337,6 +381,7 @@ export class HotLink {
     clearInterval(this.timer);
     this.peer.close();
     this.channel?.close();
+    this.compressed?.close();
     this.cipher?.destroy();
     this.delivery.clear();
     this.probes.clear();

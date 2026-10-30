@@ -1,6 +1,7 @@
+import { displayText } from '../../i18n/uiText';
 import { RequestSpeedButton } from "../../../../../shared/remote-chat/RequestSpeedButton";
 import type { RequestSpeed } from "../../../../../shared/remote-chat/composer";
-import { guiText } from "../../i18n/guiText";
+
 import type { Translate } from "../../i18n";
 import type { LocalProxyStatus, ProxyServiceTier } from "../../types";
 
@@ -20,6 +21,6 @@ export function ExternalProxySpeedButton({ proxy, busy, onChange, t }: {
   const tier = proxy?.serviceTier ?? (proxy?.fastModeEnabled ? "priority" : "default");
   return <RequestSpeedButton speed={SPEEDS[tier]} disabled={!proxy?.running} busy={busy}
     error={!proxy?.running ? t("usage.speedProxyRequired") : undefined}
-    available={Boolean(proxy?.fastModeAvailable)} translate={guiText}
+    available={Boolean(proxy?.fastModeAvailable)} translate={displayText}
     onChange={(speed) => onChange(SERVICE_TIERS[speed])} />;
 }

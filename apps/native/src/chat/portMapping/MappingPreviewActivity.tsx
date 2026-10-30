@@ -10,7 +10,7 @@ export function MappingPreviewActivity({ active }: { active: boolean }) {
   const rotate = progress.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
   return <View style={styles.slot}>
     {active && <Animated.View accessible accessibilityRole="progressbar"
-      accessibilityLabel={t('正在加载网页…')} accessibilityState={{ busy: true }}
+      accessibilityLabel={t("client.portForwarding.loadingWebsite")} accessibilityState={{ busy: true }}
       style={{ transform: [{ rotate }] }}>
       <Ionicons name="refresh-outline" size={22} color={color('#0b8065', 'accent')} />
     </Animated.View>}

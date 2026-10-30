@@ -36,7 +36,7 @@ function codeBlock(children: ReactNode, desktop = false) {
 function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
   const files = useContext(ChatFileContext);
   const source = src && files?.basePath ? previewReference(src, files.basePath)?.path ?? src : src;
-  return <ChatImage source={source} description={alt || t("图片")} />;
+  return <ChatImage source={source} description={alt || t("client.chat.image")} />;
 }
 
 const components: Components = {

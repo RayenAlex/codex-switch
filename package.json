@@ -1,11 +1,12 @@
 {
   "name": "codex-switch",
   "private": true,
-  "version": "2.0.17",
+  "version": "2.1.10",
   "license": "Apache-2.0",
   "packageManager": "npm@10.8.2",
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "packages/i18n"
   ],
   "scripts": {
     "dev": "npm run dev -w @codex-switch/desktop",
@@ -43,7 +44,9 @@
     "affected": "nx affected",
     "stats:cloc": "cloc . --exclude-dir=.git,node_modules,dist,target,coverage,.nx,.idea,.codex-tmp,docs,public,resources,icons,gen --not-match-f=\"(package-lock\\.json|\\.min\\.(js|css)$)\" --exclude-ext=md",
     "release": "node scripts/tag-release.mjs",
-    "release-beta": "node scripts/tag-release.mjs --beta"
+    "release-beta": "node scripts/tag-release.mjs --beta",
+    "check:i18n": "npm run check -w @remoteai/i18n",
+    "generate:i18n": "npm run generate -w @remoteai/i18n"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.3",

@@ -122,7 +122,7 @@ fn russian_labels_rewrite_only_the_usage_markers_and_keep_their_colors() {
         ..UsageSummary::default()
     };
     let english = account_label("a · Primary 1", &usage, false);
-    let russian = russian_account_label(&english).unwrap();
+    let russian = localized_account_label(&english, ["Основной", "Второй"]).unwrap();
     assert_eq!(russian, "a · Primary 1 · Основной 10% · Второй 60%");
 
     let label = AccountMenuLabel::from_text(&russian, GOOD_COLOR).unwrap();
@@ -145,11 +145,21 @@ fn russian_labels_rewrite_only_the_usage_markers_and_keep_their_colors() {
         "Provider · model",
         "test · Основной 10% · Второй --",
     ] {
-        assert_eq!(russian_account_label(text), None);
+        assert_eq!(localized_account_label(text, ["Основной", "Второй"]), None);
     }
     assert!(
         AccountMenuLabel::from_text("test · Основной 10% · Secondary --", GOOD_COLOR).is_none()
     );
+}
+
+#[test]
+fn japanese_usage_labels_preserve_names_values_and_colors() {
+    let text = "user · Primary 1 · Primary 10% · Secondary 60%";
+    let translated = localized_account_label(text, ["メイン", "サブ"]).unwrap();
+    assert_eq!(translated, "user · Primary 1 · メイン 10% · サブ 60%");
+    let label = AccountMenuLabel::from_text(&translated, GOOD_COLOR).unwrap();
+    assert_eq!(label.segments[1].color, Some([0xb9, 0x4b, 0x42]));
+    assert_eq!(label.segments[3].color, Some(GOOD_COLOR));
 }
 
 #[test]

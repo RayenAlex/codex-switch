@@ -231,11 +231,11 @@ it('cancels pending presentation frames when leaving the conversation', () => {
   expect(frames.size).toBe(0);
 });
 
-it.each([400, 720])('shows the bottom shortcut only beyond 20 percent of a %i pixel viewport', (viewport) => {
+it.each([400, 720])('shows the bottom shortcut only beyond 50 percent of a %i pixel viewport', (viewport) => {
   const scroll = render();
   layout(scroll, FINAL_CONTENT_HEIGHT);
   scroll.onScrollBeginDrag();
-  const threshold = viewport * 0.2;
+  const threshold = viewport * 0.5;
   for (const [remaining, visible] of [[threshold + 1, true], [threshold, false], [0, false]] as const) {
     scroll.onScroll(scrollEvent(FINAL_CONTENT_HEIGHT, remaining, viewport));
     expect(render().showScrollToBottom).toBe(visible);
@@ -260,10 +260,10 @@ it('uses content and viewport measurements from the final native event instead o
   scroll.onScrollBeginDrag();
   scroll.onScroll(scrollEvent(FINAL_CONTENT_HEIGHT, VIEWPORT_HEIGHT));
   // A collapsed activity group can update the native scroll range before onContentSizeChange arrives.
-  scroll.onMomentumScrollEnd(scrollEvent(FIRST_CONTENT_HEIGHT, 120, 600));
+  scroll.onMomentumScrollEnd(scrollEvent(FIRST_CONTENT_HEIGHT, 300, 600));
   expect(render().showScrollToBottom).toBe(false);
   scroll.onScrollBeginDrag();
-  scroll.onScroll(scrollEvent(FIRST_CONTENT_HEIGHT, 121, 600));
+  scroll.onScroll(scrollEvent(FIRST_CONTENT_HEIGHT, 301, 600));
   expect(render().showScrollToBottom).toBe(true);
 });
 
@@ -271,8 +271,8 @@ it('refreshes the shortcut when content or viewport height changes while reading
   const scroll = render();
   layout(scroll, FINAL_CONTENT_HEIGHT);
   scroll.onScrollBeginDrag();
-  scroll.onScroll(scrollEvent(FINAL_CONTENT_HEIGHT, 200));
-  scroll.onScrollEndDrag(scrollEvent(FINAL_CONTENT_HEIGHT, 200));
+  scroll.onScroll(scrollEvent(FINAL_CONTENT_HEIGHT, 400));
+  scroll.onScrollEndDrag(scrollEvent(FINAL_CONTENT_HEIGHT, 400));
   expect(render().showScrollToBottom).toBe(true);
   scroll.onContentSizeChange(393, FINAL_CONTENT_HEIGHT - 100);
   expect(render().showScrollToBottom).toBe(false);
@@ -291,4 +291,61 @@ it.each([true, false])('keeps the shortcut hidden while following growing conten
   expect(render().showScrollToBottom).toBe(false);
   scroll.onScroll(scrollEvent(FINAL_CONTENT_HEIGHT));
   expect(render().showScrollToBottom).toBe(false);
+});
+
+it.each(['onScrollEndDrag', 'onMomentumScrollEnd'] as const)(
+  'keeps a small upward scroll paused after %s and subsequent layout updates', (finish) => {
+    hooks.attached.current = false;
+    const scroll = render();
+    const scrollToOffset = vi.fn();
+    scroll.list.current = { scrollToOffset } as unknown as NonNullable<typeof scroll.list.current>;
+    layout(scroll, FIRST_CONTENT_HEIGHT);
+    scroll.onScroll(scrollEvent(FIRST_CONTENT_HEIGHT));
+    flushFrames();
+    scrollToOffset.mockClear();
+    scroll.onScrollBeginDrag();
+    scroll.onScroll(scrollEvent(FIRST_CONTENT_HEIGHT, 50));
+    scroll[finish](scrollEvent(FIRST_CONTENT_HEIGHT, 50));
+    scroll.onContentSizeChange(393, FINAL_CONTENT_HEIGHT);
+    flushFrames();
+    expect(scrollToOffset).not.toHaveBeenCalled();
+  },
+);
+
+it('uses an upward final offset when the last drag event was dropped', () => {
+  hooks.attached.current = false;
+  const scroll = render();
+  const scrollToOffset = vi.fn();
+  scroll.list.current = { scrollToOffset } as unknown as NonNullable<typeof scroll.list.current>;
+  layout(scroll, FIRST_CONTENT_HEIGHT);
+  scroll.onScroll(scrollEvent(FIRST_CONTENT_HEIGHT));
+  flushFrames();
+  scrollToOffset.mockClear();
+  scroll.onScrollBeginDrag();
+  scroll.onScrollEndDrag(scrollEvent(FIRST_CONTENT_HEIGHT, 50));
+  scroll.onMomentumScrollBegin();
+  scroll.onMomentumScrollEnd(scrollEvent(FIRST_CONTENT_HEIGHT, 50));
+  scroll.onContentSizeChange(393, FINAL_CONTENT_HEIGHT);
+  flushFrames();
+  expect(scrollToOffset).not.toHaveBeenCalled();
+});
+
+it('resumes following when the reader scrolls downward near the bottom', () => {
+  hooks.attached.current = false;
+  const scroll = render();
+  const scrollToOffset = vi.fn();
+  scroll.list.current = { scrollToOffset } as unknown as NonNullable<typeof scroll.list.current>;
+  layout(scroll, FIRST_CONTENT_HEIGHT);
+  scroll.onScroll(scrollEvent(FIRST_CONTENT_HEIGHT));
+  flushFrames();
+  scrollToOffset.mockClear();
+  scroll.onScrollBeginDrag();
+  scroll.onScroll(scrollEvent(FIRST_CONTENT_HEIGHT, 80));
+  scroll.onScrollEndDrag(scrollEvent(FIRST_CONTENT_HEIGHT, 80));
+  scroll.onScrollBeginDrag();
+  scroll.onScroll(scrollEvent(FIRST_CONTENT_HEIGHT, 30));
+  scroll.onScrollEndDrag(scrollEvent(FIRST_CONTENT_HEIGHT, 30));
+  scroll.onContentSizeChange(393, FINAL_CONTENT_HEIGHT);
+  flushFrames();
+  expect(scrollToOffset).toHaveBeenCalledWith({ offset: FINAL_CONTENT_HEIGHT - VIEWPORT_HEIGHT, animated: false });
 });

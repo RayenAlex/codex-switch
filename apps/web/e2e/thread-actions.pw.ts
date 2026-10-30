@@ -51,7 +51,8 @@ async function openActions(page: Page, title: string, mobile: boolean) {
 }
 
 function action(page: Page, name: string, mobile: boolean) {
-  return page.getByRole(mobile ? 'button' : 'menuitem', { name, exact: true });
+  const desktopLabels: Record<string, string> = { '重命名对话': '重命名', '删除对话': '删除', '恢复': '恢复对话' };
+  return page.getByRole(mobile ? 'button' : 'menuitem', { name: mobile ? name : desktopLabels[name] ?? name, exact: true });
 }
 
 test('long press renames without selecting; archive, restore and confirmed deletion target the correct chat',

@@ -1,4 +1,5 @@
-import type { Language } from '../content/types';
+import { applications, isAppLanguage, languageInfo } from '@remoteai/i18n';
+import type { Language } from '@remoteai/i18n/website-content/types';
 
 export const SITE_URL = __SITE_URL__;
 export const BASE_PATH = new URL(SITE_URL).pathname;
@@ -11,12 +12,12 @@ export const LINKS = {
   issues: 'https://github.com/piperhex/remoteai/issues',
 };
 
-export const languages: Language[] = ['zh', 'en', 'ru'];
+export const languages = applications.website;
 /** BCP 47 tags for `<html lang>`, `hreflang` and structured data. */
-export const languageTags: Record<Language, string> = { zh: 'zh-CN', en: 'en', ru: 'ru' };
+export const languageTags = Object.fromEntries(languages.map(id => [id, languageInfo(id).tag])) as Record<Language, string>;
 
 export function isLanguage(value: unknown): value is Language {
-  return languages.includes(value as Language);
+  return isAppLanguage('website', value);
 }
 
 export function pagePath(language: Language, path = '') {

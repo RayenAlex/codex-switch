@@ -18,16 +18,16 @@ function InfoRow({ label, value, secret = false, copy = false }: {
   useLanguage();
   const [revealed, setRevealed] = useState(false);
   const hidden = secret && !revealed;
-  const text = value ? (hidden ? '••••••••' : value) : t("未设置");
+  const text = value ? (hidden ? '••••••••' : value) : t("client.accounts.notSet");
   return <View style={styles.row}>
     <Text style={styles.label}>{label}</Text>
     <Text selectable={!hidden} style={[styles.value, !value && styles.emptyValue]}>{text}</Text>
     {secret && value ? <Pressable accessibilityRole="button"
-      accessibilityLabel={`${hidden ? t("显示") : t("隐藏")}${label}`} onPress={() => setRevealed(!revealed)}
+      accessibilityLabel={`${hidden ? t("client.remoteDesktop.display") : t("client.mobile.hide")}${label}`} onPress={() => setRevealed(!revealed)}
       style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
       <Ionicons name={hidden ? 'eye-outline' : 'eye-off-outline'} size={17} color={color(colors.muted, 'muted')} />
     </Pressable> : null}
-    {copy && value ? <Pressable accessibilityRole="button" accessibilityLabel={t("复制{value1}", { value1: label })}
+    {copy && value ? <Pressable accessibilityRole="button" accessibilityLabel={t("client.accounts.copy", { value1: label })}
       onPress={() => void copyAccountValue(label, value)}
       style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
       <Ionicons name="copy-outline" size={17} color={color(colors.muted, 'muted')} />
@@ -43,15 +43,15 @@ function TotpRow({ secret, active }: { secret: string; active: boolean }) {
   return <View style={styles.row}>
     <Text style={styles.label}>2FA</Text>
     <View style={styles.spacer}>
-      <Pressable accessibilityRole="button" accessibilityLabel={t("复制当前验证码")} disabled={!totp}
-        onPress={() => { if (totp) void copyAccountValue(t("验证码"), totp.code); }} style={styles.codeButton}>
+      <Pressable accessibilityRole="button" accessibilityLabel={t("client.accounts.copyCurrentCode")} disabled={!totp}
+        onPress={() => { if (totp) void copyAccountValue(t("client.accounts.verificationCode"), totp.code); }} style={styles.codeButton}>
         <Text style={totp ? styles.code : styles.emptyCode}>
-          {secret ? (totp?.code ?? t("暂不可用")) : t("未设置")}
+          {secret ? (totp?.code ?? t("client.accounts.unavailable")) : t("client.accounts.notSet")}
         </Text>
         {totp ? <Ionicons name="copy-outline" size={17} color={color(colors.muted, 'muted')} /> : null}
       </Pressable>
     </View>
-    {totp ? <Text style={styles.countdown}>{totp.remaining}{' '}{t("秒")}</Text> : null}
+    {totp ? <Text style={styles.countdown}>{totp.remaining}{' '}{t("client.accounts.s")}</Text> : null}
   </View>;
 }
 
@@ -60,11 +60,11 @@ function CreditsRow({ credits, onPress }: { credits: ResetCreditsState; onPress:
   const color = useThemeColor();
   useLanguage();
   const count = credits.summary?.credits.length;
-  return <Pressable accessibilityRole="button" accessibilityLabel={t("查看重置卡详情")} onPress={onPress}
+  return <Pressable accessibilityRole="button" accessibilityLabel={t("client.accounts.viewResetCredits")} onPress={onPress}
     style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
-    <Text style={styles.label}>{t("重置卡")}</Text>
+    <Text style={styles.label}>{t("client.accounts.resetCredits")}</Text>
     {credits.loading ? <View style={styles.value}><ActivityIndicator size="small" color={color(colors.green, 'accent')} /></View>
-      : <Text style={styles.value}>{count === undefined ? t("暂不可用") : t("{value1} 张", { value1: count })}</Text>}
+      : <Text style={styles.value}>{count === undefined ? t("client.accounts.unavailable") : t("client.accounts.credits", { value1: count })}</Text>}
     <Ionicons name="chevron-forward" size={16} color={color(colors.muted, 'muted')} />
   </Pressable>;
 }
@@ -85,24 +85,24 @@ export function AccountInfoCard({ account, credits, active, onEdit, onNote, onCr
   return <View style={styles.section}>
     <View style={styles.heading}>
       <View style={styles.sectionIcon}><Ionicons name="person" size={17} color={color(colors.muted, 'muted')} /></View>
-      <Text style={styles.title}>{t("账号信息")}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={t("编辑账号信息")} onPress={onEdit}
+      <Text style={styles.title}>{t("client.accounts.accountInformation")}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={t("client.accounts.editAccountInformation")} onPress={onEdit}
         style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
         <Ionicons name="create-outline" size={21} color={color(colors.green, 'accent')} />
       </Pressable>
     </View>
-    <InfoRow label={t("套餐")} value={account.plan || 'ChatGPT'} />
-    <InfoRow label={t("到期时间")} value={expiration} />
+    <InfoRow label={t("client.accounts.plan")} value={account.plan || 'ChatGPT'} />
+    <InfoRow label={t("client.accounts.expires")} value={expiration} />
     {account.expiresAt && expiration !== account.expiresAt
-      ? <InfoRow label={t("预设截止")} value={account.expiresAt} /> : null}
-    <InfoRow label={t("账号 ID")} value={account.accountId} copy />
-    <InfoRow label={t("手机号")} value={details?.phoneNumber} copy />
-    <InfoRow label={t("密码")} value={details?.password} secret copy />
+      ? <InfoRow label={t("client.accounts.presetEndDate")} value={account.expiresAt} /> : null}
+    <InfoRow label={t("client.accounts.accountId")} value={account.accountId} copy />
+    <InfoRow label={t("client.accounts.phoneNumber")} value={details?.phoneNumber} copy />
+    <InfoRow label={t("client.accounts.password")} value={details?.password} secret copy />
     <TotpRow secret={details?.totpSecret ?? ''} active={active} />
-    <Pressable accessibilityRole="button" accessibilityLabel={t("查看完整备注")} onPress={onNote}
+    <Pressable accessibilityRole="button" accessibilityLabel={t("client.accounts.viewFullNote")} onPress={onNote}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
-      <Text style={styles.label}>{t("备注")}</Text>
-      <Text style={styles.value} numberOfLines={1} ellipsizeMode="tail">{account.note || t("未设置")}</Text>
+      <Text style={styles.label}>{t("client.accounts.notes")}</Text>
+      <Text style={styles.value} numberOfLines={1} ellipsizeMode="tail">{account.note || t("client.accounts.notSet")}</Text>
       <Ionicons name="chevron-forward" size={16} color={color(colors.muted, 'muted')} />
     </Pressable>
     <CreditsRow credits={credits} onPress={onCredits} />

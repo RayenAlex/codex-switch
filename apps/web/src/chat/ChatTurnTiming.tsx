@@ -27,7 +27,7 @@ export function ChatTurnTiming({ turn, fallback = '' }: { turn: Turn; fallback?:
     return () => window.clearInterval(timer);
   }, [turn.id, running]);
   const elapsed = turnElapsedMs(turn, now);
-  if (turn.status === 'interrupted') return <>{t("已停止生成")}{elapsed != null && t(" · 用时 {value1}", { value1: formatTurnDuration(elapsed) })}</>;
+  if (turn.status === 'interrupted') return <>{t("client.chat.generationStopped")}{elapsed != null && t("client.chat.duration.fdf64e", { value1: formatTurnDuration(elapsed) })}</>;
   if (elapsed == null) return <>{fallback}</>;
-  return <>{running ? t("已处理") : t("用时")} {formatTurnDuration(elapsed)}</>;
+  return <>{running ? t("client.chat.workingFor") : t("client.chat.duration.8d6d31")} {formatTurnDuration(elapsed)}</>;
 }

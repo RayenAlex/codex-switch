@@ -1,13 +1,16 @@
-/** Security changes belong to the active viewer's capture group and expire with its last display. */
+/** Preferences are persisted by the controlled computer and returned on each connection. */
 export interface DesktopSecurity {
   lockOnDisconnect: boolean;
   muteHost: boolean;
+  clipboardSync?: boolean;
+  privacyScreen?: boolean;
   autoUnlock?: { enabled: boolean; status: 'disabled' | 'ready' | 'unlocking' | 'failed' | 'unavailable' };
 }
 export type AutoUnlockChange = { enabled: false } | { enabled: true; username: string; password: string };
 export interface DesktopSecurityChange {
   lockOnDisconnect?: boolean;
   muteHost?: boolean;
+  clipboardSync?: boolean;
   autoUnlock?: AutoUnlockChange;
 }
 export const DEFAULT_DESKTOP_SECURITY: DesktopSecurity = { lockOnDisconnect: false, muteHost: false };
@@ -18,7 +21,7 @@ export function validateDesktopSecurity(value: unknown): DesktopSecurityChange {
   }
   const entries = Object.entries(value);
   if (entries.some(([key, item]) => key === 'autoUnlock' ? !validUnlock(item)
-    : !['lockOnDisconnect', 'muteHost'].includes(key) || typeof item !== 'boolean')) {
+    : !['lockOnDisconnect', 'muteHost', 'clipboardSync'].includes(key) || typeof item !== 'boolean')) {
     throw new Error('安全选项无效，请重试。');
   }
   return Object.fromEntries(entries);
@@ -35,17 +38,17 @@ function validUnlock(value: unknown): value is AutoUnlockChange {
 }
 
 export const AUTO_UNLOCK_ERRORS = [
-  '请填写 Windows 账号和登录密码。', '请使用这台电脑已绑定的 Windows 账号。',
-  '请先在电脑上更新应用并开启无人值守，再设置自动解锁。', '自动解锁设置未能保存，请重试。',
+  "请填写 Windows 账号和登录密码。", "请使用这台电脑已绑定的 Windows 账号。",
+  "请先在电脑上更新应用并开启无人值守，再设置自动解锁。", "自动解锁设置未能保存，请重试。",
 ] as const;
 export function autoUnlockDescription(state?: DesktopSecurity['autoUnlock']) {
-  if (!state) return AUTO_UNLOCK_ERRORS[2];
+  if (!state) return 'client.remoteDesktop.updateTheAppAndEnableUnattendedAccessOnTheComputer';
   switch (state.status) {
-    case 'unlocking': return '正在解锁远程电脑…';
-    case 'failed': return '自动解锁已暂停，请检查 Windows 账号和密码后重新保存。';
-    case 'unavailable': return '自动解锁暂时不可用，请重新连接后重试。';
-    case 'ready': return '连接时自动登录或解锁远程电脑。';
-    default: return '首次开启时，在此填写远程电脑的 Windows 账号和密码。';
+    case 'unlocking': return "client.remoteDesktop.unlockingTheRemoteComputer";
+    case 'failed': return "client.remoteDesktop.automaticUnlockIsPausedCheckYourWindowsAccountAndPassword";
+    case 'unavailable': return "client.remoteDesktop.automaticUnlockIsUnavailableReconnectAndTryAgain";
+    case 'ready': return "client.remoteDesktop.automaticallySignInOrUnlockTheComputerWhenConnecting";
+    default: return "client.remoteDesktop.whenFirstEnablingThisEnterTheRemoteComputerSWindows";
   }
 }
 
@@ -56,7 +59,8 @@ export interface SecuritySettingsProps {
   value: DesktopSecurity;
   saving: boolean;
   error: string;
-  update: (change: DesktopSecurityChange) => Promise<void>;
+  update: (change: DesktopSecurityChange) => Promise<boolean>;
+  saved?: boolean;
   privacy: { available: boolean; enabled: boolean; toggle: () => Promise<void> };
   clipboard: { available: boolean; enabled: boolean; toggle: () => void };
   notice?: { message: string; label: string; run: () => void };

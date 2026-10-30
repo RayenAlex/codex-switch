@@ -10,6 +10,8 @@ import { useFonts } from 'expo-font';
 import type { GuiToolsClient } from '../../../shared/remote-chat/guiTools';
 import type { TerminalEvent, TerminalInfo } from '../../../shared/terminal/types';
 import { ChatTerminal } from '../src/chat/ChatTerminal';
+import { createSshFixture } from './sshFixture';
+import { AppearanceTools } from './AppearanceTools';
 
 function App() {
   const [fonts] = useFonts(Ionicons.font);
@@ -24,8 +26,14 @@ function App() {
     const sessions = new Map<string, { info: TerminalInfo; events: TerminalEvent[] }>();
     let sequence = 0;
     return {
+      ssh: createSshFixture(computer, info => {
+        sessions.set(info.id, { info, events: [{ type: 'output', data: Array.from('SSH ready\r\n$ ',
+          char => char.charCodeAt(0)) }] });
+        setOpened(value => value + 1);
+      }),
       link: async () => { throw new Error('Website connections are not simulated by this terminal fixture.'); },
-      list: async cwd => [...sessions.values()].filter(session => session.info.cwd === cwd).map(session => session.info),
+      list: async cwd => [...sessions.values()].filter(session => session.info.projectCwd === cwd)
+        .map(session => session.info),
       open: async cwd => {
         setOpened(value => value + 1);
         const history = Array.from({ length: 120 }, (_, index) => `History line ${index + 1}`).join('\r\n');
@@ -40,6 +48,8 @@ function App() {
         setInput(value => value + data);
         sessions.get(id)?.events.push({ type: 'output', data: Array.from(data, char => char.charCodeAt(0)) });
       },
+      writeBinary: async () => { throw new Error('Binary transfers require the live SSH fixture.'); },
+      binaryMode: async () => {},
       read: async (id, cursor) => ({ found: sessions.has(id), cursor: sessions.get(id)?.events.length ?? 0,
         truncated: false, events: sessions.get(id)?.events.slice(cursor) ?? [] }),
       resize: async (_id, next) => { setSize(`${next.cols} x ${next.rows}`); },
@@ -52,6 +62,7 @@ function App() {
       <Text style={{ flex: 1 }}>Chat · {computer}</Text>
       {fonts && <ChatTerminal key={computer} client={client} cwd={project} active connected deviceName={computer} />}
     </View>
+    <AppearanceTools />
     <Pressable accessibilityRole="button" accessibilityLabel="Switch computer" style={{ padding: 20 }}
       onPress={() => setComputer(value => value === 'Office' ? 'Home' : 'Office')}><Text>Switch computer</Text></Pressable>
     <Pressable accessibilityRole="button" accessibilityLabel="Switch project" style={{ padding: 20 }}

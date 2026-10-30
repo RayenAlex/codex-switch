@@ -2,6 +2,8 @@ import React, { Children, isValidElement, type ReactElement, type ReactNode } fr
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { DesktopVersionContent } from './DesktopVersionSheet';
 import type { useDesktopUpdate } from '../../../../shared/desktop-update/useDesktopUpdate';
+import { setInterfaceLanguage } from '../../../../shared/localization/interfaceLanguage';
+import { remoteErrorText } from '../../../../shared/localization/errors';
 
 const state = vi.hoisted(() => ({ confirmation: null as { deviceId: string; version: string } | null }));
 vi.mock('react', async (original) => ({ ...await original<typeof React>(),
@@ -9,11 +11,12 @@ vi.mock('react', async (original) => ({ ...await original<typeof React>(),
   useSyncExternalStore: (_subscribe: unknown, snapshot: () => unknown) => snapshot(),
 }));
 vi.mock('react-native', () => ({ Pressable: 'Pressable', ScrollView: 'ScrollView', Text: 'Text', View: 'View',
+  Platform: { OS: 'android' },
   StyleSheet: { create: <T,>(value: T) => value } }));
 vi.mock('../components/BottomSheet', () => ({ BottomSheet: 'BottomSheet' }));
 vi.mock('../api/client', () => ({ fetchUserProfile: vi.fn() }));
 beforeEach(() => { state.confirmation = null; vi.stubGlobal('React', React); });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { setInterfaceLanguage('zh'); vi.unstubAllGlobals(); });
 
 function model(): ReturnType<typeof useDesktopUpdate> {
   const device = { deviceId: 'pc', name: '我的电脑', platform: 'windows',
@@ -32,6 +35,17 @@ function buttons(tree: ReactNode): ReactElement<NodeProps>[] {
   return Children.toArray(tree).flatMap((child) => isValidElement<NodeProps>(child)
     ? [child, ...buttons(child.props.children)] : []);
 }
+
+it.each(['en', 'ru', 'ja'] as const)('translates desktop update status and failures in %s', language => {
+  setInterfaceLanguage(language);
+  const update = model();
+  update.error = '连接已断开，请重新连接后查看结果。';
+  const content = text(DesktopVersionContent({ update, onClose: vi.fn() }));
+  expect(content).toContain(remoteErrorText(update.message, language));
+  expect(content).toContain(remoteErrorText(update.error, language));
+  expect(content).not.toContain(update.message);
+  expect(content).not.toContain(update.error);
+});
 
 it('shows computer versions and requires a separate compact confirmation before install', () => {
   const update = model(); const props = { update, onClose: vi.fn() };

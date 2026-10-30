@@ -1,5 +1,43 @@
 # Remote chat transport compatibility
 
+## Native packet compression
+
+Transport v2 peers advertise `packetCompression: "deflate-raw-v1"` in authenticated,
+uncompressed ping/pong frames. Only a peer advertising the same capability receives
+compressed data. Old peers and old native binaries retain the original plaintext format.
+Capabilities belong to the encrypted session and survive direct/relay switches and socket
+reconnection; a new session negotiates again. Legacy transport v1 stays uncompressed.
+
+Each data fragment is compressed independently before encryption. Inputs below 256 UTF-8
+bytes are skipped. Compression is used only if the complete compressed body saves at least
+32 bytes and 10%. Control frames remain uncompressed. Binary `CSB1` routing is unchanged;
+there is no network Base64 or hexadecimal wrapper around the compressed plaintext.
+
+The second 32-bit big-endian nonce word is 0 for legacy plaintext or 1 for DEFLATE v1.
+The nonce is authenticated by ChaCha20-Poly1305, and the sequence remains shared across both
+formats. Compressed plaintext contains a two-byte big-endian original byte length followed
+by one raw DEFLATE stream. Authentication and replay rejection precede decompression.
+The decoded packet cannot exceed 19,972 bytes, must match its declared length exactly, and
+must contain a complete stream without trailing bytes. Unknown nonce format IDs are rejected.
+
+Desktop and Android/iOS use the shared Rust codec at compression level 1 on native workers.
+Android reserves a separate bounded executor so network polling cannot delay codec tasks.
+New Android binaries combine UTF-8 conversion, Rust DEFLATE and platform AEAD in one async
+native call per direction. Intermediate plaintext and compressed bytes never cross the JS
+bridge. The native encoder applies the same threshold and saving policy, sets the authenticated
+nonce flag, and returns the existing ciphertext representation. JS reserves send sequences
+before dispatch and suppresses pending duplicates; receive sequences enter the shared replay
+window only after successful native completion and are checked again against newer arrivals.
+Older Android binaries, iOS, desktop and Web retain their existing codec adapters and wire format.
+Web uses native `CompressionStream`/`DecompressionStream` in a dedicated Worker; its browser
+chooses the compression level because that API does not expose one. Both produce interoperable
+raw DEFLATE. Browsers without native raw-DEFLATE support advertise no compression capability.
+JavaScript performs framing, size checks and IPC encoding only; it has no compression algorithm.
+
+Pending native work is bounded, heartbeats bypass it, and completion after closing a session
+cannot send or deliver data. The receiving delivery lanes still handle out-of-order fragments,
+retries and duplicates independently.
+
 The coordinator continues to use WebSocket/TCP. No UDP or QUIC transport is introduced.
 
 ## Relay recovery and credential renewal

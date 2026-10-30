@@ -1,6 +1,8 @@
+import { SheetGestureScrollView as ScrollView } from '../../components/SheetScrollGesture';
+import { displayError } from '../../i18n/index';
 import { useThemeColor } from '../../theme/store';
 import { t, useLanguage } from '../../i18n';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { GitCommit, GitCommitFile } from '../../../../../shared/remote-chat/gitTypes';
 import type { CommitFilesState } from '../../../../../shared/remote-chat/useGitCommitFiles';
@@ -22,18 +24,18 @@ export function GitCommitFiles({ commit, state, connected, onSelect }: Props) {
       <Text style={styles.subject}>{commit.subject}</Text>
       <Text style={styles.meta}>{commit.hash.slice(0, 8)} · {commit.author} · {
         new Date(commit.date).toLocaleString()}</Text>
-      {commit.parents.length > 1 && <Text style={styles.meta}>{t("显示相对第一个父提交的变更")}</Text>}
+      {commit.parents.length > 1 && <Text style={styles.meta}>{t("client.git.changesComparedWithTheFirstParent")}</Text>}
     </View>
     {state.error && <View>
-      <Text accessibilityRole="alert" style={styles.error}>{t(state.error)}</Text>
+      <Text accessibilityRole="alert" style={styles.error}>{displayError(state.error)}</Text>
       <Pressable accessibilityRole="button" disabled={!connected} style={styles.button} onPress={state.retry}>
-        <Text style={styles.buttonText}>{t("重试")}</Text></Pressable>
+        <Text style={styles.buttonText}>{t("client.terminal.retry")}</Text></Pressable>
     </View>}
     {!state.files && !state.error && connected && <ActivityIndicator style={styles.loading} color={color(palette.green, 'accent')} />}
     {state.files && <>
-      <Text style={styles.detailTitle}>{t("变更文件")}{' '}{state.files.length}</Text>
+      <Text style={styles.detailTitle}>{t("client.mobile.changedFiles")}{' '}{state.files.length}</Text>
       <ScrollView style={styles.fill}>
-        {!state.files.length && <Text style={styles.notice}>{t("这次提交没有文件变更。")}</Text>}
+        {!state.files.length && <Text style={styles.notice}>{t("client.git.thisCommitHasNoFileChanges")}</Text>}
         {state.files.map(file => <CommitFile key={file.path} file={file} disabled={!connected}
           onPress={() => onSelect(file)} />)}
       </ScrollView>
@@ -49,7 +51,7 @@ function CommitFile({ file, disabled, onPress }: { file: GitCommitFile; disabled
   const role = file.status === 'D' ? 'danger' : file.status === 'A' ? 'accent' : 'info';
   const textColor = color(status.color, role);
   const background = color(status.background, `${role}Soft`);
-  return <Pressable accessibilityRole="button" accessibilityLabel={t("查看 {value1}", { value1: file.path })}
+  return <Pressable accessibilityRole="button" accessibilityLabel={t("client.mobile.view", { value1: file.path })}
     disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.commitFile, pressed && styles.activeMode]}>
     <GitTreeIcon folder={false} />
     <View style={styles.fill}>
@@ -58,7 +60,7 @@ function CommitFile({ file, disabled, onPress }: { file: GitCommitFile; disabled
       {file.originalPath && <Text style={styles.meta}>{file.originalPath} → {file.path}</Text>}
     </View>
     <Text style={[styles.commitStatus, { color: textColor, backgroundColor: background }]}>
-      {status.label}</Text>
+      {t(status.label)}</Text>
     <Ionicons name="chevron-forward" size={14} color={color(palette.muted, 'muted')} />
   </Pressable>;
 }

@@ -6,6 +6,7 @@ import { ChatImage, ChatImageContext } from '../../../web/src/chat/ChatImage';
 import { ChatMarkdown } from '../../../web/src/chat/ChatMarkdown';
 import type { ImagePreviewOptions } from '../../../../shared/remote-chat/client/useChatImage';
 import type { PreviewLoadOptions } from '../../../../shared/remote-chat/previewProgress';
+import { FileEnvironmentContext, type FileEnvironment } from '../pages/codexGui/fileEnvironment';
 
 const dataUrl = 'data:image/png;base64,aW1hZ2U=';
 const load = vi.fn<ImagePreviewOptions['load']>();
@@ -13,6 +14,7 @@ let container: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
   load.mockReset();
   container = document.createElement('div');
   root = createRoot(container);
@@ -89,13 +91,19 @@ it('shows Windows Markdown table images as thumbnails and loads the original on 
   expect(container.querySelector('dialog[open] img')?.getAttribute('src')).toBe(dataUrl);
 });
 
-it('accepts managed blob thumbnails and saves the same lazily loaded original only once', async () => {
+it.each(['web', 'remote'])('%s keeps original loading on demand and reuses it when saving', async mode => {
   HTMLDialogElement.prototype.showModal = function () { this.open = true; };
   const save = vi.fn().mockResolvedValue(undefined);
+  const environment: FileEnvironment = {
+    remote: true, actions: { applications: vi.fn(), perform: vi.fn() },
+    previews: { open: vi.fn(), close: vi.fn() }, resolveWebsite: vi.fn(), image: () => null,
+  };
   load.mockResolvedValueOnce('blob:thumbnail').mockResolvedValue('blob:original');
-  await act(async () => root.render(<ChatImageContext.Provider value={{ ready: true, threadId: 'task', load, save }}>
-    <ChatImage source="./preview.png" />
-  </ChatImageContext.Provider>));
+  await act(async () => root.render(<FileEnvironmentContext.Provider value={mode === 'remote' ? environment : null}>
+    <ChatImageContext.Provider value={{ ready: true, threadId: 'task', load, save }}>
+      <ChatImage source="./preview.png" />
+    </ChatImageContext.Provider>
+  </FileEnvironmentContext.Provider>));
   await act(async () => container.querySelector<HTMLButtonElement>('.chat-image')!.click());
   expect(load).toHaveBeenCalledTimes(1);
   expect(container.querySelector('dialog img')?.getAttribute('src')).toBe('blob:thumbnail');

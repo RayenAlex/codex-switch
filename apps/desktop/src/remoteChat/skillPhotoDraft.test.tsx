@@ -23,6 +23,18 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); vi.unstubAllGlobals(); });
 
+it('appends dictation to the latest draft without dropping photos, attachments or skill mentions', async () => {
+  const attachments = [{ kind: 'file' as const, name: 'note.txt', path: '/project/note.txt' }];
+  const send = vi.fn().mockResolvedValue(true);
+  await render({ threadId: 'chat', send });
+  await act(async () => draft.restore({ text: '$review', images, attachments, skills: [skill] }));
+  await act(async () => { draft.setText('$review 补充'); draft.appendDictation('  语音内容  '); });
+  expect(draft.text).toBe('$review 补充\n语音内容');
+  await act(async () => { await draft.submit(); });
+  expect(send).toHaveBeenCalledWith(expect.objectContaining({ text: '$review 补充\n语音内容', images, attachments,
+    skills: [{ name: skill.name, path: skill.path }] }));
+});
+
 it('restores full queued text, photos, attachments and editable skills and preserves them on failure', async () => {
   const attachments = [{ kind: 'file' as const, name: 'note.txt', path: '/project/note.txt' }];
   const send = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true);

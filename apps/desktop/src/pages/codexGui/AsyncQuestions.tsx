@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useRef, useState } from "react";
 import { Button, Input, Radio } from "antd";
 import { X } from "lucide-react";
@@ -48,11 +48,11 @@ function QuestionCard({ item, disabled, onAnswer, onClose }: QuestionCardProps) 
     finally { submitting.current = false; setBusy(false); }
   };
   if (submitted) return null;
-  return <section className={styles.card} aria-label={guiText("需要你的补充")} aria-busy={busy}
+  return <section className={styles.card} aria-label={uiText("client.chat.moreInformationNeeded")} aria-busy={busy}
     onKeyDown={(event) => submitQuestionOnEnter(event, submit)}>
     <div className={styles.header}>
-      <strong>{guiText("需要你的补充")}</strong>
-      <Button type="text" size="small" aria-label={guiText("关闭补充信息")} icon={<X size={16} />}
+      <strong>{uiText("client.chat.moreInformationNeeded")}</strong>
+      <Button type="text" size="small" aria-label={uiText("client.composer.closeAdditionalInformation")} icon={<X size={16} />}
         onClick={onClose} onKeyDown={(event) => event.stopPropagation()} />
     </div>
     {questions.map((question, index) => <fieldset key={index} disabled={disabled || busy}>
@@ -61,14 +61,14 @@ function QuestionCard({ item, disabled, onAnswer, onClose }: QuestionCardProps) 
         onChange={(event) => setAnswer(index, event.target.value)}>
         {question.options?.map((option) => <Radio key={option} value={option}>{option}</Radio>)}
       </Radio.Group>}
-      <Input.TextArea aria-label={question.title} placeholder={guiText("输入回答，按回车发送")}
+      <Input.TextArea aria-label={question.title} placeholder={uiText("client.composer.typeYourAnswerAndPressEnterToSend")}
         autoSize={{ minRows: 1, maxRows: 4 }} disabled={disabled || busy}
         value={answers[index] ?? ""} onChange={(event) => setAnswer(index, event.target.value)} />
     </fieldset>)}
     <div className={styles.footer}>
-      <small className={styles.hint}>{guiText("Enter 发送 · Shift + Enter 换行")}</small>
+      <small className={styles.hint}>{uiText("client.chat.enterToSendShiftEnterForANewLine")}</small>
       <Button type="primary" loading={busy} disabled={!canSubmit || busy} onClick={() => void submit()}>
-        {guiText("确认")}</Button>
+        {uiText("client.composer.confirm")}</Button>
     </div>
   </section>;
 }

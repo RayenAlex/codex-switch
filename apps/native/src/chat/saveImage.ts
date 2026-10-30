@@ -16,7 +16,7 @@ const usesMediaStore = () => Platform.OS === 'android' && Number(Platform.Versio
 async function requestSavePermission() {
   if (usesMediaStore()) return;
   const permission = await MediaLibrary.requestPermissionsAsync(true);
-  if (!permission.granted) throw new ImageSavePermissionError(t("请允许保存照片后重试"));
+  if (!permission.granted) throw new ImageSavePermissionError(t("client.mobile.allowPhotoStorageAndTryAgain"));
 }
 
 async function prepareImage(source: string, directory: string, mimeType?: string) {
@@ -39,7 +39,7 @@ async function prepareImage(source: string, directory: string, mimeType?: string
   const mime = header?.[1].split(';')[0].trim().toLowerCase() ?? '';
   if (download.status !== 200 || !EXTENSIONS[mime]) throw new Error('Invalid image response');
   const info = await FileSystem.getInfoAsync(download.uri);
-  if (!info.exists || info.isDirectory) throw new Error(t("图片暂时无法保存，请重试。"));
+  if (!info.exists || info.isDirectory) throw new Error(t("client.mobile.couldNotSaveTheImageTryAgain"));
   checkDownloadSize(info.size);
   const uri = `${directory}image.${EXTENSIONS[mime]}`;
   await FileSystem.moveAsync({ from: download.uri, to: uri });

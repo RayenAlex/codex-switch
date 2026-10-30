@@ -1,7 +1,7 @@
 # Remote desktop status text on Android
 
 Connect a physical Android phone with USB debugging enabled. This fixture renders
-the production `RemoteDesktop` component using local, pending connection and Mac
+the production `RemoteDesktop` component using local pending/reconnecting and Mac
 permission responses. It tests native text layout, not remote video transport.
 Its separate application ID, `com.codexswitch.mobile.desktopstatustest`, preserves
 the installed app and account data.
@@ -19,11 +19,15 @@ Pop-Location
 node apps/native/e2e/desktop-status-test.mjs
 ```
 
-The runner checks the connection message, retry action and multiline permission
+Set `DESKTOP_STATUS_APK` to a saved fixture APK when other local builds share the Android output directory.
+Use `--access` to run only locked-session, unattended-access and privacy-failure notices, including the pinned
+notice in the production security panel after scrolling to and enabling privacy mode.
+
+The runner checks connection and reconnection messages, the retry action and multiline permission
 guidance in portrait and landscape at system font scales 1.0 and 1.3. It verifies
 minimum text height, compact width, nonoverlap and screen containment, and taps
 retry before repeating the connection check. Minimum height comes from a native
-reference label, allowing Android's nonlinear font scaling rather than assuming
+reference label using `textMetrics`, allowing Android's nonlinear font scaling rather than assuming
 that scaled pixels are proportional to the font-scale setting. The original font scale is restored
 in `finally`, and the installed production app is reopened.
 

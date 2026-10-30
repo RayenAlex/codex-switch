@@ -110,7 +110,7 @@
   font-size: calc(var(--gui-font-size, 14px) - 1px); line-height: max(16px, 1.4em); } }
 .headerActions { margin-left: auto; display: flex; align-items: center; flex-shrink: 0; }
 .focusWindowControls { align-self: stretch; display: flex; flex-shrink: 0; margin: -4px -14px -4px 4px; }
-.messageViewport { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; overflow-anchor: none; }
+.messageViewport { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: none; overflow-anchor: none; }
 .messageEntry { display: flex; flex-direction: column; min-width: 0; }
 .historyLoader { height: 40px; display: flex; justify-content: center; align-items: center; margin-bottom: 12px;
   > span { display: flex; align-items: center; gap: 8px; color: var(--gui-muted);
@@ -191,16 +191,12 @@
 .composerWrap, .questionWrap { width: min(100%, 920px); align-self: center;
   padding: 0 28px; flex-shrink: 0; box-sizing: border-box; }
 .composerWrap { --gui-composer-padding: 12px; position: relative; padding-bottom: 14px; }
-.projectBar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 5px 10px 8px; min-width: 0;
+.projectBar { display: flex; align-items: center; gap: 8px; padding: 5px 10px 8px; min-width: 0;
   container: gui-project-bar / inline-size;
-  > button, .projectBarActions > button {
+  > button {
     max-width: 50%; > span:last-child { overflow: hidden; text-overflow: ellipsis; }
   }
   :global(.ant-select) { width: 120px; } }
-.projectBarActions { display: contents; }
-@container gui-project-bar (max-width: 640px) {
-  .projectBarActions { display: none; }
-}
 .localLabel { font-size: calc(var(--gui-font-size, 14px) - 2px); color: var(--gui-muted); margin-left: auto; }
 .composer { position: relative; border: 1px solid var(--gui-border); border-radius: 18px;
   background: var(--gui-composer-surface);
@@ -215,7 +211,8 @@
 .modelControls { margin-left: auto; display: flex; gap: 8px; align-items: center;
   flex: 1 1 510px; justify-content: flex-end; min-width: 0; font-size: calc(var(--gui-font-size, 14px) - 2px);
   line-height: max(20px, 1.4em); }
-.composerHint { display: flex; justify-content: space-between; font-size: calc(var(--gui-font-size, 14px) - 4px);
+.composerHint { display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between;
+  font-size: calc(var(--gui-font-size, 14px) - 4px);
   color: var(--gui-muted); padding: 7px 5px 0; }
 .attachments { padding: 3px 8px 8px; display: flex; flex-wrap: wrap; gap: 5px;
   :global(.ant-tag) { max-width: 240px; white-space: normal; overflow-wrap: anywhere; } }

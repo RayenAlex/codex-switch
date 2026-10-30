@@ -11,7 +11,7 @@ vi.mock('react', async () => ({ ...await vi.importActual<typeof React>('react'),
 vi.mock('react-native', () => ({ Pressable: 'Button', Text: 'Text',
   StyleSheet: { create: <T,>(styles: T) => styles } }));
 vi.mock('../theme/store', () => ({ useThemeColor: () => () => '#25332b' }));
-vi.mock('../i18n', () => ({ t: (text: string) => text }));
+vi.mock('../i18n', async () => ({ ...await vi.importActual<typeof import('../i18n')>('../i18n'),  }));
 beforeEach(() => { vi.stubGlobal('React', React); vi.clearAllMocks(); });
 afterEach(() => vi.unstubAllGlobals());
 

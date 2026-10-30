@@ -123,7 +123,7 @@ pub(crate) fn contains_local_proxy(content: &str) -> bool {
         || content.contains(LOCAL_PROXY_TOKEN)
 }
 
-#[cfg(test)]
+/// Reads the saved model without changing unrelated configuration.
 pub(crate) fn root_model(content: &str) -> Option<String> {
     parse_document(content)
         .ok()?

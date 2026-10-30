@@ -35,3 +35,14 @@ Pull fetches only the tracked remote and still supports choosing merge or rebase
 Both require a clean worktree and retain commit hooks. No automatic stash, submodule update
 or multi-root project update is performed.
 Resolve integration conflicts on the computer or through the terminal before retrying.
+
+Selected-file rollback and deletion protect files reported by active tasks, including both sides of a rename.
+Unrelated running tasks do not block them. File versions are rechecked before writing, and errors identify the
+conflicting tasks and files. Shell edits without file-change records still use version checks; they are not
+attributed to a task by guessing from command text. Branch changes retain whole-worktree protection.
+
+For named file-conflict prompts on a physical Android device, build the isolated fixture from `apps/native/android`:
+`./gradlew.bat assembleDebug -I ../e2e/git-file-conflicts.init.gradle -PreactNativeArchitectures=arm64-v8a`.
+Set `ANDROID_SERIAL` and run `node apps/native/e2e/git-file-conflicts-test.mjs` from the repository root.
+It installs a separate test package, checks font scales 1.0 and 1.3, verifies unrelated rollback and back navigation,
+and restores the original font scale. Inspect `.codex-tmp/git-file-conflicts-android/` screenshots for glyph clipping.

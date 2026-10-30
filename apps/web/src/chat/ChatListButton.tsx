@@ -11,9 +11,9 @@ interface Props {
 export function ChatListButton({ client, active, ready, expanded, onClick }: Props) {
   useLanguage();
   const { snapshot } = useGuiAccounts(client, active && ready);
-  const avatar = guiAccountAvatar(snapshot, t('我'));
+  const avatar = guiAccountAvatar(snapshot, t("client.chat.me"));
   return <button type="button" className="chat-list-button"
-    aria-label={expanded ? t('收起聊天列表') : t('打开聊天列表')} aria-expanded={expanded} onClick={onClick}>
+    aria-label={expanded ? t("client.chat.collapseChatList") : t("client.chat.openChatList")} aria-expanded={expanded} onClick={onClick}>
     <span className="chat-list-avatar" aria-hidden="true">{avatar.initials}</span>
   </button>;
 }

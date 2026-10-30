@@ -1,3 +1,4 @@
+import { displayText } from '../i18n/index';
 import { t } from '../i18n';
 import type { DownloadTask } from './types';
 import { archivePercent, archiveStatus } from '../../../../shared/remote-chat/archiveDownload';
@@ -17,18 +18,18 @@ export function downloadPercent(task: DownloadTask) {
   return task.size ? Math.min(100, Math.floor(task.received / task.size * 100)) : 0;
 }
 export const downloadStatus: Record<DownloadTask['status'], string> = {
-  get preparing() { return t('准备并校验文件'); }, get verifying() { return t('正在校验'); },
-  get saving() { return t('正在保存'); },
-  get queued() { return t("等待下载"); }, get downloading() { return t("正在下载"); }, get paused() { return t("已暂停"); }, get completed() { return t("已完成"); }, get failed() { return t("下载中断"); },
+  get preparing() { return t("client.downloads.preparingAndCheckingTheFile"); }, get verifying() { return t("client.downloads.verifying"); },
+  get saving() { return t("client.downloads.saving"); },
+  get queued() { return t("client.downloads.queued"); }, get downloading() { return t("client.mobile.downloading"); }, get paused() { return t("client.downloads.paused"); }, get completed() { return t("client.chat.completed"); }, get failed() { return t("client.mobile.downloadInterrupted"); },
 };
 export function downloadStatusLabel(task: DownloadTask) {
   return task.status === 'preparing' && task.preparation
-    ? t(archiveStatus(task.preparation)) : downloadStatus[task.status];
+    ? displayText(archiveStatus(task.preparation)) : downloadStatus[task.status];
 }
 export function downloadDetail(task: DownloadTask) {
   if (task.status === 'preparing') {
     if (!task.preparation || task.preparation.phase !== 'compressing') return downloadStatusLabel(task);
-    return t('已压缩 {done} / {total} 个文件', {
+    return t("client.downloads.compressedFiles", {
       done: task.preparation.completedFiles, total: task.preparation.totalFiles,
     });
   }

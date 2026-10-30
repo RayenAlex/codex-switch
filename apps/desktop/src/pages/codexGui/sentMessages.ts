@@ -1,4 +1,4 @@
-import type { Content, Item, QueuedMessage, Turn } from "./types";
+import type { Content, Item, MessageInput, Turn } from "./types";
 import { visibleUserMessage } from "../../../../../shared/chat/conversationContext";
 
 /** Replace local echoes in submission order; server IDs handle repeated lifecycle notifications. */
@@ -23,7 +23,9 @@ export function mergeMessageItems(previous: Item[], incoming: Item[]): Item[] {
   return items;
 }
 
-function messageContent(message: QueuedMessage): Content[] {
+type SentMessage = MessageInput & { id: string };
+
+function messageContent(message: SentMessage): Content[] {
   return [
     { type: "text", text: message.text },
     ...message.images.map((image) => image.startsWith("data:")
@@ -36,7 +38,7 @@ function messageContent(message: QueuedMessage): Content[] {
 }
 
 /** A batch is one server user message. Keep it visible until that message is delivered. */
-export function withSentMessage(turn: Turn, messages: QueuedMessage[], userMessageIndex: number): Turn {
+export function withSentMessage(turn: Turn, messages: SentMessage[], userMessageIndex: number): Turn {
   if (!messages.length || turn.items.filter((item) => item.type === "userMessage").length > userMessageIndex) return turn;
   const item: Item = { id: `sent-${messages[0].id}`, type: "userMessage", localEcho: true,
     content: messages.flatMap(messageContent) };

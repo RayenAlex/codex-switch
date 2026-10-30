@@ -51,14 +51,17 @@ mod auth;
 mod common;
 mod content;
 mod gui_devices;
+mod lounge;
 mod official_usage;
 mod port_mappings;
 mod prompt_plugins;
+mod provider_market;
 mod providers;
 mod public_settings;
 mod push_identity;
 mod request_error;
 mod skills;
+mod ssh_profiles;
 mod sync_commands;
 mod telemetry;
 mod token_pricing;
@@ -68,6 +71,8 @@ mod types;
 mod update_downloads;
 
 #[cfg(test)]
+mod compression_tests;
+#[cfg(test)]
 mod tests;
 
 use accounts::*;
@@ -76,14 +81,17 @@ pub(super) use auth::*;
 pub(super) use common::*;
 pub(super) use content::*;
 pub(crate) use gui_devices::*;
+pub(crate) use lounge::*;
 pub(crate) use official_usage::*;
 pub(crate) use port_mappings::*;
 pub(super) use prompt_plugins::*;
+pub(crate) use provider_market::*;
 use providers::*;
 pub(crate) use public_settings::*;
 pub(crate) use push_identity::*;
 use request_error::request_error;
 pub(super) use skills::*;
+pub(crate) use ssh_profiles::*;
 pub(super) use sync_commands::*;
 pub(super) use telemetry::*;
 pub(crate) use token_pricing::*;

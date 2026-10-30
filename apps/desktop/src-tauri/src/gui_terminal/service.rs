@@ -16,11 +16,19 @@ struct Session {
     master: Mutex<Box<dyn MasterPty + Send>>,
     writer: Mutex<Box<dyn Write + Send>>,
     child: Mutex<Box<dyn Child + Send + Sync>>,
+    npm_script: bool,
 }
 
 impl Session {
     fn stop(&self) {
         if let Ok(mut child) = self.child.lock() {
+            if self.npm_script && matches!(child.try_wait(), Ok(None)) {
+                if let Some(id) = child.process_id() {
+                    if let Err(error) = super::npm::stop_tree(id) {
+                        eprintln!("npm process tree shutdown failed: {error}");
+                    }
+                }
+            }
             if let Err(error) = child.kill() {
                 eprintln!("terminal shutdown failed: {error}");
                 return;
@@ -51,7 +59,10 @@ impl TerminalState {
     ) -> Result<TerminalInfo> {
         let size = request.size.validate()?;
         let cwd = platform::directory(request.cwd.as_deref())?;
-        let (command, shell) = platform::shell(&cwd)?;
+        let (command, shell) = match request.npm_script.as_deref() {
+            Some(name) => super::npm::command(&cwd, name)?,
+            None => platform::shell(&cwd)?,
+        };
         let pair = native_pty_system()
             .openpty(size)
             .map_err(|_| TerminalError::Start)?;
@@ -72,6 +83,7 @@ impl TerminalState {
             master: Mutex::new(pair.master),
             writer: Mutex::new(writer),
             child: Mutex::new(child),
+            npm_script: request.npm_script.is_some(),
         });
         let id = uuid::Uuid::new_v4().to_string();
         // Start draining before closing ConPTY on any failure: its close waits for the output pipe.
@@ -85,6 +97,7 @@ impl TerminalState {
             id,
             cwd: platform::display_path(&cwd),
             shell,
+            npm_script: request.npm_script,
         })
     }
 

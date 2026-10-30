@@ -1,5 +1,5 @@
-import { guiText } from "../../../i18n/guiText";
-import { backendText } from "../../../../../../shared/i18n/backend/translateBackendMessage";
+import { uiText } from "../../../i18n/uiText";
+import { remoteErrorText } from "../../../../../../shared/localization/errors";
 import { Button, Dropdown } from "antd";
 import { CheckCircle2, CirclePlay, LoaderCircle, MoreHorizontal, PauseCircle } from "lucide-react";
 import { scheduleLabel, type ScheduledTask } from "./types";
@@ -13,14 +13,14 @@ export function TaskRow({ task, busy, onAction }: {
   const running = task.runStatus !== "idle";
   const Icon = running ? LoaderCircle : task.status === "completed" ? CheckCircle2
     : task.status === "paused" ? PauseCircle : CirclePlay;
-  const status = running ? guiText("正在执行") : task.status === "paused" ? guiText("已暂停") : "";
+  const status = running ? uiText("client.scheduledTasks.running") : task.status === "paused" ? uiText("client.downloads.paused") : "";
   const items = [
-    { key: "edit", label: guiText("编辑任务"), disabled: busy || running },
-    { key: "run", label: guiText("立即运行"), disabled: busy || running },
+    { key: "edit", label: uiText("client.scheduledTasks.editTask"), disabled: busy || running },
+    { key: "run", label: uiText("client.scheduledTasks.runNow"), disabled: busy || running },
     ...(task.status === "completed" ? [] : [{ key: "toggle",
-      label: task.status === "active" ? guiText("暂停任务") : guiText("开启任务"), disabled: busy || running }]),
-    { key: "open", label: guiText("查看任务对话"), disabled: !task.lastThreadId },
-    { key: "delete", label: guiText("删除任务"), danger: true, disabled: busy || running },
+      label: task.status === "active" ? uiText("client.scheduledTasks.pauseTask") : uiText("client.scheduledTasks.enableTask"), disabled: busy || running }]),
+    { key: "open", label: uiText("client.scheduledTasks.viewTaskConversation"), disabled: !task.lastThreadId },
+    { key: "delete", label: uiText("client.scheduledTasks.deleteTask"), danger: true, disabled: busy || running },
   ];
   return <div className={`${styles.taskRow} ${task.status === "paused" ? styles.paused : ""}`}>
     <Icon size={20} className={running ? styles.spinning : styles.taskIcon} aria-hidden="true" />
@@ -28,12 +28,12 @@ export function TaskRow({ task, busy, onAction }: {
       onClick={() => onAction(running && task.lastThreadId ? "open" : "edit", task)}>
       <span className={styles.taskTitle}>{task.title}</span>
       <span className={styles.taskSchedule}>{scheduleLabel(task.schedule)}{status && ` · ${status}`}</span>
-      {task.error && <span className={styles.taskError}>{backendText(task.error)}</span>}
+      {task.error && <span className={styles.taskError}>{remoteErrorText(task.error)}</span>}
     </button>
     <Dropdown trigger={["click"]} menu={{ items, onClick: ({ key }) => onAction(key as TaskAction, task) }}
       overlayStyle={{ maxWidth: 400 }}>
       <Button type="text" className={styles.taskMenu} icon={<MoreHorizontal size={19} />}
-        aria-label={guiText("管理任务：{value1}", { value1: task.title })} />
+        aria-label={uiText("client.scheduledTasks.manageTask", { value1: task.title })} />
     </Dropdown>
   </div>;
 }

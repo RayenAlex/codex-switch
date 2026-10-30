@@ -1,4 +1,5 @@
-import { guiText } from "../../i18n/guiText";
+import inlineCopy from '@remoteai/i18n/copy/inline/desktop/components/FloatingUsageBubble/BubbleResetLabel';
+import { uiText } from "../../i18n/uiText";
 import { useEffect, useState } from "react";
 import type { BubbleResetDisplay } from "../../types";
 import type { Language } from "../../i18n";
@@ -25,14 +26,14 @@ export function BubbleResetLabel({ timestamp, language, display, className, comp
     if (compact) {
       return (
         <small className={`floating-bubble-reset ${className ?? ""}`}>
-          <span>{clock ?? ((language === "ru" ? guiText("未知", {}, language) : language === "zh" ? "未知" : "unknown"))}</span>
+          <span>{clock ?? ((language !== "zh" && language !== "en" ? uiText("client.usage.unknown", {}, language) : language === "zh" ? inlineCopy["text_4d8c1c5b"] : inlineCopy["unknown_b23a6a84"]))}</span>
         </small>
       );
     }
     return (
       <small className={`floating-bubble-reset floating-bubble-reset-stacked ${className ?? ""}`}>
-        <span>{(language === "ru" ? (clock ? guiText("重置于", {}, language) : guiText("重置时间", {}, language)) : language === "zh" ? (clock ? "重置于" : "重置时间") : (clock ? "Resets at" : "Reset time"))}</span>
-        <span>{clock ?? ((language === "ru" ? guiText("未知", {}, language) : language === "zh" ? "未知" : "unknown"))}</span>
+        <span>{(language !== "zh" && language !== "en" ? (clock ? uiText("client.usage.resetsAt", {}, language) : uiText("client.usage.resetTime", {}, language)) : language === "zh" ? (clock ? inlineCopy["text_dd47b4d9"] : inlineCopy["text_f9063838"]) : (clock ? inlineCopy["Resets_at_7890153e"] : inlineCopy["Reset_time_1e6ca7f7"]))}</span>
+        <span>{clock ?? ((language !== "zh" && language !== "en" ? uiText("client.usage.unknown", {}, language) : language === "zh" ? inlineCopy["text_4d8c1c5b"] : inlineCopy["unknown_b23a6a84"]))}</span>
       </small>
     );
   }
@@ -48,13 +49,13 @@ export function BubbleResetLabel({ timestamp, language, display, className, comp
   if (compact) {
     return (
       <small className={`floating-bubble-reset ${className ?? ""}`}>
-        <span>{time ? `${days}${(language === "ru" ? guiText("天", {}, language) : language === "zh" ? "天" : "d")}\u00a0${time}` : "--"}</span>
+        <span>{time ? `${days}${(language !== "zh" && language !== "en" ? uiText("client.mobile.d", {}, language) : language === "zh" ? inlineCopy["text_49da61ce"] : inlineCopy["d_18ac3e73"])}\u00a0${time}` : "--"}</span>
       </small>
     );
   }
   return (
     <small className={`floating-bubble-reset floating-bubble-reset-stacked ${className ?? ""}`}>
-      {time ? <><span>{days}{(language === "ru" ? guiText("天", {}, language) : language === "zh" ? "天" : "d")}</span><span>{time}</span></> : <span>--</span>}
+      {time ? <><span>{days}{(language !== "zh" && language !== "en" ? uiText("client.mobile.d", {}, language) : language === "zh" ? inlineCopy["text_49da61ce"] : inlineCopy["d_18ac3e73"])}</span><span>{time}</span></> : <span>--</span>}
     </small>
   );
 }

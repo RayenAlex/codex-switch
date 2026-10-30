@@ -1,11 +1,14 @@
-//! Russian copy for native surfaces rendered by Rust: completion notifications, save dialogs,
-//! login window titles and the OAuth callback page. Chinese source strings are the keys, as in
-//! the TypeScript dictionaries. Russian is used only when it was explicitly saved; every other
-//! language keeps the existing Chinese text.
+// Generated from packages/i18n/platform/desktop/src-tauri/src/storage/interface_copy.rs. Do not edit.
+//! Localized native notifications, save dialogs, login windows and OAuth callback pages.
+//! Russian and Japanese follow the saved preference. Chinese and English retain their
+//! established native copy; unknown provider messages are preserved.
 
 use std::borrow::Cow;
 
 use super::{interface_language, InterfaceLanguage};
+
+#[path = "interface_copy_japanese.rs"]
+mod japanese;
 
 /// Returns the copy for a fixed Chinese source string in the saved interface language.
 pub(crate) fn native_text(source: &'static str) -> &'static str {
@@ -15,6 +18,7 @@ pub(crate) fn native_text(source: &'static str) -> &'static str {
 fn native_text_for(language: InterfaceLanguage, source: &'static str) -> &'static str {
     match language {
         InterfaceLanguage::Ru => russian_native_text(source).unwrap_or(source),
+        InterfaceLanguage::Ja => japanese::native_text(source).unwrap_or(source),
         InterfaceLanguage::Zh | InterfaceLanguage::En => source,
     }
 }
@@ -54,6 +58,11 @@ fn callback_page_copy_for<'a>(
     message: &'a str,
 ) -> CallbackPageCopy<'a> {
     match language {
+        InterfaceLanguage::Ja => CallbackPageCopy {
+            lang: "ja",
+            title: japanese::callback_text(title),
+            message: japanese::callback_text(message),
+        },
         InterfaceLanguage::Ru => CallbackPageCopy {
             lang: "ru",
             title: russian_callback_text(title),
@@ -237,5 +246,30 @@ mod tests {
             assert_eq!(page.message, "Вернитесь в Remote AI, чтобы продолжить.");
         });
         assert_eq!(native_text("新对话"), "新对话");
+    }
+
+    #[test]
+    fn japanese_covers_native_surfaces_and_preserves_provider_details() {
+        for source in NATIVE_SOURCES {
+            assert_ne!(native_text_for(InterfaceLanguage::Ja, source), source);
+        }
+        for source in CALLBACK_SOURCES {
+            assert_ne!(japanese::callback_text(source), source);
+        }
+        with_interface_language(InterfaceLanguage::Ja, || {
+            assert_eq!(native_text("图片另存为"), "名前を付けて画像を保存");
+            let page = callback_page_copy("登录失败", "登录凭据交换失败（HTTP 503）");
+            assert_eq!(page.lang, "ja");
+            assert_eq!(page.title, "ログインに失敗しました");
+            assert_eq!(
+                page.message,
+                "ログイン認証情報の取得に失敗しました（HTTP 503）"
+            );
+            assert_eq!(
+                callback_page_copy("登录失败", "access_denied").message,
+                "access_denied"
+            );
+        });
+        assert_eq!(native_text("图片另存为"), "图片另存为");
     }
 }

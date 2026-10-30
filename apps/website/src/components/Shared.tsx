@@ -1,7 +1,7 @@
 import { Button } from 'antd';
 import { ArrowRight, ArrowUpRight, Plus } from 'lucide-react';
-import { copy } from '../content/copy';
-import type { Language } from '../content/types';
+import { copy } from '@remoteai/i18n/website-content/copy';
+import type { Language } from '@remoteai/i18n/website-content/types';
 import { href, LINKS } from '../lib/site';
 
 export function Actions({ language }: { language: Language }) {

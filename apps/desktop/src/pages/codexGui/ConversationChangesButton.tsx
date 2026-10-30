@@ -12,13 +12,13 @@ export function ConversationChangesButton({ value }: { value?: Pick<Conversation
   const turn = value?.turns.slice().reverse().find((entry) => entry.diff
     || entry.items.some((item) => item.type === "fileChange" && item.changes?.length));
   const files = useTurnChangedFiles(turn);
-  const title = t("文件更改");
+  const title = t("client.chat.fileChanges.049e14");
   const entry = useMemo(() => ({ id, title, files }), [id, files, title]);
   const panel = useDetailsEntry(entry);
   const register = panel?.setConversationChanges;
   useEffect(() => { register?.(entry); }, [register, entry]);
   const showingChanges = Boolean(panel?.visible && panel.showingChanges);
-  const label = t(showingChanges ? "收起文件更改" : "查看文件更改");
+  const label = t(showingChanges ? "client.chat.hideFileChanges" : "client.chat.viewFileChanges");
   return <Tooltip title={label} styles={{ root: { maxWidth: 400 } }}>
     <Button type="text" icon={showingChanges ? <PanelRightClose size={16} /> : <PanelRight size={16} />}
       aria-label={label} aria-expanded={showingChanges}

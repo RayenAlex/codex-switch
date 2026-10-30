@@ -16,6 +16,7 @@ class ChatScrollAnchor : ReactScrollViewHelper.ScrollListener,
   private data class Position(
     var following: Boolean,
     val edgeDistance: Float,
+    var offset: Int,
     var interacting: Boolean = false,
     var paused: Boolean = false,
   )
@@ -30,7 +31,7 @@ class ChatScrollAnchor : ReactScrollViewHelper.ScrollListener,
       listening = true
     }
     if (managers.add(manager)) manager.addUIManagerEventListener(this)
-    positions[view] = Position(following, edgeDistance)
+    positions[view] = Position(following, edgeDistance, view.scrollY)
     follow(view)
   }
 
@@ -83,21 +84,28 @@ class ChatScrollAnchor : ReactScrollViewHelper.ScrollListener,
   override fun didMountItems(uiManager: UIManager) = Unit
   override fun didScheduleMountItems(uiManager: UIManager) = Unit
 
+  private fun updateFollowing(view: ReactScrollView, position: Position) {
+    val movement = view.scrollY - position.offset
+    position.offset = view.scrollY
+    // End events often repeat the final offset; proximity alone must not resume an upward drag.
+    if (!position.interacting || position.paused || movement == 0) return
+    position.following = movement > 0 && bottom(view) - view.scrollY < position.edgeDistance
+  }
+
   override fun onScroll(view: ViewGroup?, type: ScrollEventType?, xVelocity: Float, yVelocity: Float) {
     if (view !is ReactScrollView) return
     val position = positions[view] ?: return
     when (type) {
       ScrollEventType.BEGIN_DRAG -> {
+        position.offset = view.scrollY
         position.interacting = true
       }
       ScrollEventType.MOMENTUM_BEGIN -> position.interacting = true
       ScrollEventType.END_DRAG, ScrollEventType.MOMENTUM_END -> {
-        if (!position.paused) position.following = bottom(view) - view.scrollY < position.edgeDistance
+        updateFollowing(view, position)
         position.interacting = false
       }
-      ScrollEventType.SCROLL -> if (position.interacting && !position.paused) {
-        position.following = bottom(view) - view.scrollY < position.edgeDistance
-      }
+      ScrollEventType.SCROLL -> updateFollowing(view, position)
       else -> Unit
     }
   }

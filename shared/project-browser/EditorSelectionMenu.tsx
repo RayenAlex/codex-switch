@@ -1,3 +1,4 @@
+import { remoteErrorText } from '../localization/errors';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { EditorView } from '@codemirror/view';
 import { redo, redoDepth, selectAll, undo, undoDepth } from '@codemirror/commands';
@@ -69,22 +70,22 @@ export function EditorSelectionMenu({ menu, editor, quoteSelection, close, t }: 
   const item = (action: EditAction, label: string, disabled = false) =>
     <button type="button" role="menuitem" disabled={busy || disabled} onClick={() => { void edit(action); }}>
       <span>{t(label)}</span></button>;
-  const content = <div ref={element} role="menu" aria-label={t('文本操作')}
+  const content = <div ref={element} role="menu" aria-label={t("client.projectBrowser.textActions")}
     className={`pf-tree-menu pf-selection-menu${menu.touch ? ' pf-selection-touch' : ''}`}
     style={menu.touch ? undefined : position} onKeyDown={moveMenuFocus}
     onPointerDown={event => event.preventDefault()} onContextMenu={event => event.preventDefault()}>
     <button type="button" role="menuitem" disabled={busy} onClick={() => { void quote(); }}>
-      <Quote size={16} /><span>{t('引用到聊天')}</span></button>
+      <Quote size={16} /><span>{t("client.projectBrowser.quoteInChat")}</span></button>
     {!menu.touch && <>
       <div role="separator" />
-      {item('undo', '撤销', editor.state.readOnly || !undoDepth(editor.state))}
-      {item('redo', '重做', editor.state.readOnly || !redoDepth(editor.state))}
+      {item('undo', "client.projectBrowser.undo", editor.state.readOnly || !undoDepth(editor.state))}
+      {item('redo', "client.projectBrowser.redo", editor.state.readOnly || !redoDepth(editor.state))}
       <div role="separator" />
-      {item('cut', '剪切', editor.state.readOnly)}{item('copy', '复制')}
-      {item('paste', '粘贴', editor.state.readOnly)}{item('delete', '删除', editor.state.readOnly)}
-      <div role="separator" />{item('selectAll', '全选')}
+      {item('cut', "client.projectBrowser.cut", editor.state.readOnly)}{item('copy', "client.projectBrowser.copied")}
+      {item('paste', "client.projectBrowser.paste", editor.state.readOnly)}{item('delete', "client.projectBrowser.deleted", editor.state.readOnly)}
+      <div role="separator" />{item('selectAll', "client.projectBrowser.selectAll")}
     </>}
-    {error && <p className="pf-selection-error" role="alert">{t(error)}</p>}
+    {error && <p className="pf-selection-error" role="alert">{remoteErrorText(error)}</p>}
   </div>;
   if (menu.touch) return content;
   return <div className="pf-menu-backdrop" onPointerDown={event => {

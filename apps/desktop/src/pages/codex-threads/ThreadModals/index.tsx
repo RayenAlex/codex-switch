@@ -6,7 +6,7 @@ import type {
   CodexThreadBinEntry, CodexThreadBundlePreview, CodexThreadVisibilityReport,
 } from "../../../types";
 import type { Language } from "../../../i18n";
-import type { ThreadCopy } from "../copy";
+import type { ThreadCopy } from "@remoteai/i18n/copy/desktop/threads";
 import { formatSize, interpolate, relativeTime } from "../utils";
 import styles from "./index.module.less";
 

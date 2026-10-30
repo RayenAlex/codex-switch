@@ -1,3 +1,4 @@
+import inlineCopy from '@remoteai/i18n/copy/inline/admin/pages/UpdateSharingPage';
 import { Button, Card, Form, Select, Space, Switch, Typography } from 'antd';
 import { useI18n } from '../i18n-context';
 import { useUpdateSharingSettings, type UpdateSharingSettingsProps } from '../hooks/useUpdateSharingSettings';
@@ -14,45 +15,44 @@ export function UpdateSharingPage({ api, canManage }: UpdateSharingSettingsProps
     <div>
       <Typography.Title level={2}>{t('nav.updateSharing')}</Typography.Title>
       <Typography.Paragraph type="secondary">{zh
-        ? '让在线电脑共享公开安装包，帮助电脑和手机下载得更快。设置统一应用于所有用户。'
-        : 'Let online computers share public installers to speed up downloads for computers and phones. '
-          + 'These settings apply to all users.'}</Typography.Paragraph>
+        ? inlineCopy["text_61ce84e8"]
+        : inlineCopy.descriptionEn}</Typography.Paragraph>
     </div>
     <UpdateDownloadStatistics api={api} />
-    <Card title={zh ? '安装包共享' : 'Installer sharing'} loading={settings.loading}>
+    <Card title={zh ? inlineCopy["text_ed23a6c4"] : inlineCopy["Installer_sharing_3b199b16"]} loading={settings.loading}>
       <Form form={settings.form} layout="vertical" onFinish={settings.save} disabled={disabled}
         style={{ maxWidth: 560 }}>
-        <Form.Item name="scope" label={zh ? '共享范围' : 'Sharing scope'} rules={[{ required: true }]}>
+        <Form.Item name="scope" label={zh ? inlineCopy["text_d1b2bf59"] : inlineCopy["Sharing_scope_9fbf08fd"]} rules={[{ required: true }]}>
           <Select options={[
-            { value: 'off', label: zh ? '关闭' : 'Off' },
-            { value: 'own', label: zh ? '我的设备' : 'My devices' },
-            { value: 'everyone', label: zh ? '所有用户' : 'All users' },
+            { value: 'off', label: zh ? inlineCopy["text_3fd47edc"] : inlineCopy["Off_ca7981b4"] },
+            { value: 'own', label: zh ? inlineCopy["text_0542b7f6"] : inlineCopy["My_devices_6f3cba5e"] },
+            { value: 'everyone', label: zh ? inlineCopy["text_099aaa20"] : inlineCopy["All_users_f7898130"] },
           ]} />
         </Form.Item>
-        <Form.Item name="uploadKibPerSecond" label={zh ? '上传速度上限' : 'Upload speed limit'}
+        <Form.Item name="uploadKibPerSecond" label={zh ? inlineCopy["text_3ad11137"] : inlineCopy["Upload_speed_limit_a54cef37"]}
           rules={[{ required: true }]}>
           <Select options={UPLOAD_SPEEDS.map(value => ({ value,
-            label: value === 0 ? (zh ? '不限速' : 'Unlimited') : `${value} KiB/s` }))} />
+            label: value === 0 ? (zh ? inlineCopy["text_e264d2c9"] : inlineCopy["Unlimited_11dde17d"]) : `${value} KiB/s` }))} />
         </Form.Item>
         <Form.Item name="unmeteredOnly" valuePropName="checked"
-          label={zh ? '仅在非计费网络上传' : 'Upload only on unmetered networks'}>
+          label={zh ? inlineCopy["text_3abe2fda"] : inlineCopy["Upload_only_on_unmetered_networks_be97e2ac"]}>
           <Switch />
         </Form.Item>
         <Form.Item name="prepareAndroid" valuePropName="checked"
-          label={zh ? '提前准备 Android 安装包' : 'Prepare Android installers in advance'}>
+          label={zh ? inlineCopy["Android_b034f554"] : inlineCopy["Prepare_Android_installers_in_advance_4b5ec658"]}>
           <Switch />
         </Form.Item>
         <Typography.Paragraph type="secondary">{zh
-          ? '开启后，在线电脑会提前下载 Android 安装包，供手机更新时使用。'
-          : 'Online computers download Android installers in advance so phones can use them when updating.'}
+          ? inlineCopy["Android_d0975a54"]
+          : inlineCopy["Online_computers_download_Android_installers_0d857a02"]}
         </Typography.Paragraph>
         <Typography.Paragraph type="secondary">{zh
-          ? '保存后，在线电脑通常会在 30 秒内应用新设置。'
-          : 'Online computers usually apply saved changes within 30 seconds.'}</Typography.Paragraph>
+          ? inlineCopy["30_a6f71a23"]
+          : inlineCopy["Online_computers_usually_apply_saved_7c55572b"]}</Typography.Paragraph>
         <Space wrap>
           {canManage && <Button type="primary" htmlType="submit" loading={settings.saving}>{t('common.save')}</Button>}
           <Button onClick={settings.reload} disabled={settings.loading || settings.saving}>
-            {zh ? '重新加载' : 'Reload'}</Button>
+            {zh ? inlineCopy["text_7bdd5ce1"] : inlineCopy["Reload_bdc090ec"]}</Button>
         </Space>
       </Form>
     </Card>

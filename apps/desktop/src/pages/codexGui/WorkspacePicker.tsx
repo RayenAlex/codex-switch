@@ -1,5 +1,5 @@
-import { guiText } from "../../i18n/guiText";
-import { backendText } from "../../../../../shared/i18n/backend/translateBackendMessage";
+import { uiText } from "../../i18n/uiText";
+import { remoteErrorText } from "../../../../../shared/localization/errors";
 import { useRef, useState } from "react";
 import { Input, Modal, Popover, type InputRef } from "antd";
 import { Check, GitBranch, GitFork, Laptop, Plus, Search } from "lucide-react";
@@ -12,7 +12,7 @@ const MAX_BRANCH_LENGTH = 200;
 const MENU_ALIGN = { overflow: { adjustX: true, adjustY: true, shiftX: true } };
 
 export function WorkspacePicker({ cwd, disabled, onChange, onBusyChange, request, enabled = true, remote = false,
-  localLabel = isDesktopApp ? guiText("本地") : guiText("Remote AI 主机") }: {
+  localLabel = isDesktopApp ? uiText("client.git.local") : uiText("client.conversation.remoteAiHost") }: {
   cwd: string; disabled: boolean; onChange: (cwd: string) => void; onBusyChange: (busy: boolean) => void;
   localLabel?: string; request?: GitWorkspaceClient; enabled?: boolean; remote?: boolean;
 }) {
@@ -23,11 +23,11 @@ export function WorkspacePicker({ cwd, disabled, onChange, onBusyChange, request
   const [branch, setBranch] = useState("");
   const search = useRef<InputRef>(null);
   const locked = disabled || git.busy || git.loading;
-  const worktreeLabel = remote ? guiText("远程工作树") : guiText("本地工作树");
-  const createWorktreeLabel = remote ? guiText("新建远程工作树") : guiText("新建本地工作树");
+  const worktreeLabel = remote ? uiText("client.workspaceActions.remoteWorktree") : uiText("client.workspaceActions.localWorktree");
+  const createWorktreeLabel = remote ? uiText("client.workspaceActions.newRemoteWorktree") : uiText("client.workspaceActions.newLocalWorktree");
   const locationLabel = git.status?.isWorktree ? worktreeLabel : localLabel;
-  const computerLabel = remote ? guiText("远程电脑") : guiText("本地");
-  const branchLabel = git.status?.branch ?? (git.status ? guiText("分离的 HEAD") : guiText("Git 分支"));
+  const computerLabel = remote ? uiText("client.workspaceActions.remoteComputer") : uiText("client.git.local");
+  const branchLabel = git.status?.branch ?? (git.status ? uiText("client.git.detachedHead") : uiText("client.workspaceActions.gitBranch"));
   const branches = git.status?.branches.filter((item) => item.name.toLowerCase().includes(query.toLowerCase())) ?? [];
   const openDialog = (kind: "branch" | "worktree") => { setMenu(null); setBranch(""); setDialog(kind); };
   const create = async () => {
@@ -39,14 +39,14 @@ export function WorkspacePicker({ cwd, disabled, onChange, onBusyChange, request
     setMenu(open ? kind : null);
     if (open) { setQuery(""); void git.refresh(); }
   };
-  const notice = git.error && <p role="alert" className={styles.notice}>{backendText(git.error)}</p>;
+  const notice = git.error && <p role="alert" className={styles.notice}>{remoteErrorText(git.error)}</p>;
   const branchPanel = <div className={styles.panel} onKeyDown={(event) => {
     if (event.key === "Escape") { event.stopPropagation(); setMenu(null); }
   }}>
-    <Input ref={search} prefix={<Search size={16} />} variant="borderless" aria-label={guiText("搜索分支")} placeholder={guiText("搜索分支")}
+    <Input ref={search} prefix={<Search size={16} />} variant="borderless" aria-label={uiText("client.git.searchBranches")} placeholder={uiText("client.git.searchBranches")}
       value={query} onChange={(event) => setQuery(event.target.value)} />
-    <div className={styles.caption}>{git.loading ? guiText("正在读取分支…") : guiText("分支")}</div>
-    <div className={styles.list} role="menu" aria-label={guiText("Git 分支")}>
+    <div className={styles.caption}>{git.loading ? uiText("client.workspaceActions.loadingBranches") : uiText("client.workspaceActions.branch")}</div>
+    <div className={styles.list} role="menu" aria-label={uiText("client.workspaceActions.gitBranch")}>
       {branches.map((item) => <button type="button" role="menuitemradio" key={item.name}
         aria-checked={item.name === git.status?.branch} disabled={locked || item.occupied}
         className={styles.option} onClick={async () => {
@@ -54,26 +54,26 @@ export function WorkspacePicker({ cwd, disabled, onChange, onBusyChange, request
           if (await git.run({ operation: "switch", cwd, branch: item.name, create: false })) setMenu(null);
         }}>
         <GitBranch size={17} /><span>{item.name}
-          {item.name === git.status?.branch && <small>{guiText("未提交：")}{git.status.changedFiles}  {guiText("个文件")}</small>}
-          {item.occupied && <small>{guiText("已在其他工作树中打开")}</small>}
+          {item.name === git.status?.branch && <small>{uiText("client.workspaceActions.uncommitted")}{git.status.changedFiles}  {uiText("client.chat.files.2d4a2a")}</small>}
+          {item.occupied && <small>{uiText("client.workspaceActions.alreadyOpenInAnotherWorktree")}</small>}
         </span>{item.name === git.status?.branch && <Check size={17} />}
       </button>)}
-      {!branches.length && <p className={styles.caption}>{query ? guiText("没有找到匹配的分支") : guiText("还没有分支")}</p>}
+      {!branches.length && <p className={styles.caption}>{query ? uiText("client.workspaceActions.noMatchingBranches") : uiText("client.workspaceActions.noBranchesYet")}</p>}
     </div>
     {notice}
     <button type="button" className={`${styles.option} ${styles.create}`} disabled={locked || !git.status}
-      onClick={() => openDialog("branch")}><Plus size={18} />{guiText("创建并切换新分支…")}</button>
+      onClick={() => openDialog("branch")}><Plus size={18} />{uiText("client.workspaceActions.createAndSwitchToANewBranch")}</button>
   </div>;
   const locationPanel = <div className={styles.panel} onKeyDown={(event) => {
     if (event.key === "Escape") { event.stopPropagation(); setMenu(null); }
   }}>
-    <div className={styles.caption}>{guiText("工作位置")}</div>
+    <div className={styles.caption}>{uiText("client.workspaceActions.workLocation")}</div>
     <div className={styles.option}><Laptop size={18} />
       <span>{git.status?.isWorktree ? worktreeLabel : computerLabel}</span>
       <Check size={17} /></div>
     <button type="button" className={styles.option} disabled={locked || !git.status}
       onClick={() => openDialog("worktree")}><GitFork size={18} /><span>{createWorktreeLabel}</span></button>
-    <p className={styles.caption}>{guiText("从当前提交创建独立副本，方便并行工作。")}</p>{notice}
+    <p className={styles.caption}>{uiText("client.workspaceActions.createASeparateCopyFromTheCurrentCommitForParallel")}</p>{notice}
   </div>;
   return <>
     <Popover trigger="click" placement="topLeft" align={MENU_ALIGN} arrow={false}
@@ -81,7 +81,7 @@ export function WorkspacePicker({ cwd, disabled, onChange, onBusyChange, request
       onOpenChange={(open) => toggle("location", open)} content={locationPanel}
       styles={{ root: { maxWidth: 400 }, body: { padding: 6, borderRadius: 18 } }}>
       <button type="button" className={styles.trigger} disabled={disabled || git.busy}
-        aria-label={guiText("工作位置")} aria-haspopup="menu" aria-expanded={menu === "location"}>
+        aria-label={uiText("client.workspaceActions.workLocation")} aria-haspopup="menu" aria-expanded={menu === "location"}>
         <Laptop size={16} /><span>{locationLabel}</span>
       </button>
     </Popover>
@@ -91,18 +91,18 @@ export function WorkspacePicker({ cwd, disabled, onChange, onBusyChange, request
       afterOpenChange={(open) => { if (open) search.current?.focus(); }}
       styles={{ root: { maxWidth: 400 }, body: { padding: 6, borderRadius: 18 } }}>
       <button type="button" className={styles.trigger} disabled={disabled || git.busy}
-        aria-label={guiText("切换 Git 分支")} aria-haspopup="menu" aria-expanded={menu === "branch"}>
+        aria-label={uiText("client.workspaceActions.switchGitBranch")} aria-haspopup="menu" aria-expanded={menu === "branch"}>
         <GitBranch size={16} /><span>{branchLabel}</span>
       </button>
     </Popover>}
-    {dialog && <Modal open centered width={400} title={dialog === "worktree" ? createWorktreeLabel : guiText("创建新分支")}
-      okText={dialog === "worktree" ? guiText("创建工作树") : guiText("创建并切换")} cancelText={guiText("取消")}
+    {dialog && <Modal open centered width={400} title={dialog === "worktree" ? createWorktreeLabel : uiText("client.workspaceActions.createBranch")}
+      okText={dialog === "worktree" ? uiText("client.workspaceActions.createWorktree") : uiText("client.workspaceActions.createAndSwitch")} cancelText={uiText("client.accounts.cancel")}
       confirmLoading={git.busy} okButtonProps={{ disabled: locked || !branch.trim() }}
       cancelButtonProps={{ disabled: git.busy }} closable={!git.busy} maskClosable={!git.busy} keyboard={!git.busy}
       onCancel={() => setDialog(null)} onOk={() => void create()}>
-      <p>{dialog === "worktree" ? guiText("新对话将使用独立的工作树。未提交的修改会保留在原目录。")
-        : guiText("从当前提交创建分支，并在新对话中使用。")}</p>
-      <Input autoFocus aria-label={guiText("新分支名称")} placeholder={guiText("新分支名称，如 feature/login")} value={branch}
+      <p>{dialog === "worktree" ? uiText("client.workspaceActions.newConversationsWillUseASeparateWorktreeUncommittedChangesStay")
+        : uiText("client.workspaceActions.createABranchFromTheCurrentCommitAndUseIt")}</p>
+      <Input autoFocus aria-label={uiText("client.workspaceActions.newBranchName")} placeholder={uiText("client.workspaceActions.newBranchNameSuchAsFeatureLogin")} value={branch}
         maxLength={MAX_BRANCH_LENGTH} disabled={git.busy} onChange={(event) => setBranch(event.target.value)}
         onPressEnter={() => void create()} />{notice}
     </Modal>}

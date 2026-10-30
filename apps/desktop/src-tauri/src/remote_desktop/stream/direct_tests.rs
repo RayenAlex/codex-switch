@@ -382,3 +382,33 @@ async fn retaining_a_relay_invalidates_a_pending_backup_commit() {
         leases.insert(stream.id.clone(), previous);
     }
 }
+
+#[cfg(windows)]
+#[tokio::test]
+async fn locked_host_delivers_the_actionable_reason_before_closing_a_live_channel() {
+    let stream = fixture(false).await;
+    let peer = Arc::clone(&stream.peer.borrow());
+    let (client, channel) = connect(&peer).await;
+    let (sender, mut receiver) = mpsc::unbounded_channel();
+    channel.on_message(Box::new(move |message| {
+        sender.send(message.data).unwrap();
+        Box::pin(async {})
+    }));
+    super::super::failure::notify(
+        &stream,
+        crate::remote_desktop::DesktopError::LockedWithoutUnattended,
+    )
+    .await;
+    stream.close().await;
+    let data = tokio::time::timeout(Duration::from_secs(5), receiver.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let message: serde_json::Value = serde_json::from_slice(&data).unwrap();
+    assert_eq!(message["kind"], "error");
+    assert_eq!(
+        message["message"],
+        "client.remoteDesktop.lockedRequiresUnattended"
+    );
+    client.close().await;
+}

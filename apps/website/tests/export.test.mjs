@@ -11,18 +11,19 @@ const htmlFiles = urls.map((url) => ({
   url,
   html: readFileSync(resolve(dist, new URL(url).pathname.slice(basePath.length), 'index.html'), 'utf8'),
 }));
-const languageTags = { zh: 'zh-CN', en: 'en', ru: 'ru' };
-const prefixes = { zh: '', en: 'en/', ru: 'ru/' };
+const languageTags = { zh: 'zh-CN', en: 'en', ru: 'ru', ja: 'ja' };
+const prefixes = { zh: '', en: 'en/', ru: 'ru/', ja: 'ja/' };
 
 function pageLanguage(url) {
   const path = new URL(url).pathname.slice(basePath.length);
   if (path.startsWith('en/')) return { language: 'en', path: path.slice(3) };
   if (path.startsWith('ru/')) return { language: 'ru', path: path.slice(3) };
+  if (path.startsWith('ja/')) return { language: 'ja', path: path.slice(3) };
   return { language: 'zh', path };
 }
 
 test('exports every language, every feature, and crawlable content without JavaScript', () => {
-  assert.equal(urls.length, 48);
+  assert.equal(urls.length, 64);
   for (const language of Object.keys(languageTags)) {
     assert.equal(urls.filter((url) => pageLanguage(url).language === language).length, 16, language);
   }
@@ -45,9 +46,9 @@ test('exports every language, every feature, and crawlable content without JavaS
     }
     assert.ok(html.includes(`rel="alternate" hreflang="x-default" href="${new URL(path, siteUrl).href}"`), url);
     assert.ok(html.includes(`<html lang="${languageTags[language]}">`), url);
-    const locale = { zh: 'zh_CN', en: 'en_US', ru: 'ru_RU' }[language];
+    const locale = { zh: 'zh_CN', en: 'en_US', ru: 'ru_RU', ja: 'ja_JP' }[language];
     assert.ok(html.includes(`<meta property="og:locale" content="${locale}">`), url);
-    assert.equal((html.match(/property="og:locale:alternate"/g) ?? []).length, 2, url);
+    assert.equal((html.match(/property="og:locale:alternate"/g) ?? []).length, 3, url);
     const graphs = [...html.matchAll(/<script type="application\/ld\+json">(.*?)<\/script>/g)];
     assert.equal(graphs.length, 1, url);
     assert.ok(
@@ -60,9 +61,9 @@ test('exports every language, every feature, and crawlable content without JavaS
 });
 
 test('English and Russian pages never fall back to Chinese text', () => {
-  for (const { url, html } of htmlFiles.filter(({ url }) => pageLanguage(url).language !== 'zh')) {
-    // The language switch names Chinese in Chinese; nothing else on these pages may use Han characters.
-    const text = html.replace(/<a [^>]*hreflang="zh-CN"[^>]*>中文<\/a>/i, '');
+  for (const { url, html } of htmlFiles.filter(({ url }) => ['en', 'ru'].includes(pageLanguage(url).language))) {
+    // Only language switch names may use Han characters on English and Russian pages.
+    const text = html.replace(/<a [^>]*hreflang="(?:zh-CN|ja)"[^>]*>.*?<\/a>/gi, '');
     assert.equal(text.match(/\p{Script=Han}+/u)?.[0], undefined, url);
     const markdown = readFileSync(resolve(dist, new URL(url).pathname.slice(basePath.length), 'index.md'), 'utf8');
     assert.equal(markdown.match(/\p{Script=Han}+/u)?.[0], undefined, `${url}index.md`);
@@ -140,6 +141,7 @@ test('the AI resources page lists every resource with a description in every lan
       assert.ok(item.name && item.url.startsWith('https://') && item.description, `${url} ${item.name}`);
       // Russian descriptions come from resources-ru.ts; an English fallback here means a missing translation.
       if (language === 'ru') assert.match(item.description, /\p{Script=Cyrillic}/u, `${url} ${item.name}`);
+      if (language === 'ja') assert.match(item.description, /[\u3040-\u30ff]/u, `${url} ${item.name}`);
     }
     const markdown = readFileSync(resolve(folder, 'index.md'), 'utf8');
     assert.equal((markdown.match(/^- \[[^\]]+\]\(https:\/\/[^)]+\): \S/gm) ?? []).length, 26, `${url}index.md`);

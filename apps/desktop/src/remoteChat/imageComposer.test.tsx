@@ -3,6 +3,7 @@ import { act, type ComponentProps, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ChatComposer } from '../../../web/src/chat/ChatComposer';
+import { testModels } from '../pages/codexGui/testModels';
 import { draftImage, MAX_CHAT_IMAGE_CHARS } from '../../../../shared/remote-chat/attachments';
 import type { FileDropEvent } from '../../../../shared/chat/useFileDrop';
 
@@ -26,7 +27,8 @@ beforeEach(() => {
     disconnect = vi.fn();
   });
   container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container);
-  props = { models: [], selection: { model: 'astra', effort: 'high', access: 'workspace-write' },
+  props = { models: [{ ...testModels[0], id: 'astra', model: 'astra' }],
+    selection: { model: 'astra', effort: 'high', access: 'workspace-write' },
     connection: { deviceName: '测试电脑', chooseDevice: vi.fn(), client: {
       read: vi.fn().mockResolvedValue({ selection: { kind: 'none' }, choices: [], running: false }),
       select: vi.fn(), subscribe: vi.fn(() => vi.fn()),
@@ -75,7 +77,7 @@ it('drops mixed browser files as photo thumbnails and transferable document atta
   await act(async () => container.querySelector('textarea')!.dispatchEvent(event));
   expect(event.defaultPrevented).toBe(true);
   expect(container.querySelector('img')?.src).toBe(url);
-  expect(container.querySelector('.chat-capsule')?.textContent).toBe('notes.txt');
+  expect(container.querySelector('.chat-composer-capsules')?.textContent).toBe('notes.txt');
   await act(async () => button('发送消息')!.click());
   expect(props.send).toHaveBeenCalledWith({ text: '', images: [url], ...props.selection,
     attachments: [{ kind: 'file', name: 'notes.txt', path: '', data: 'bm90ZXM=' }] });

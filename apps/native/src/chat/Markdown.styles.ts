@@ -12,8 +12,11 @@ export const headingStyles: Record<string, TextStyle> = {
 };
 
 export const useMarkdownStyles = createThemedStyles((color) => ({
-  paragraph: { marginVertical: 10 },
+  paragraph: { marginVertical: 6 },
   compact: { marginVertical: 0 },
+  compactContent: { gap: 8 },
+  flushTop: { marginTop: 0 },
+  flushBottom: { marginBottom: 0 },
   // The first paragraph shares its top edge with the marker; later paragraphs retain their spacing.
   listLead: { marginTop: 0 },
   bold: { fontWeight: '700' },
@@ -24,7 +27,7 @@ export const useMarkdownStyles = createThemedStyles((color) => ({
   quote: { borderLeftWidth: 3, borderLeftColor: color(palette.border, 'border'), paddingLeft: 16, marginVertical: 10 },
   muted: { color: color(palette.muted, 'muted') },
   process: { color: color(palette.muted, 'muted'), fontSize: 13, lineHeight: 22 },
-  list: { marginVertical: 10 },
+  list: { marginVertical: 6 },
   listRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   // Keep the intrinsic text size when a list is measured inside an auto-width message bubble.
   listContent: { flexShrink: 1, minWidth: 0 },

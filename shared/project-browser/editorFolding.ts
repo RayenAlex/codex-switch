@@ -20,7 +20,7 @@ function toggleLineFold(view: EditorView, line: BlockInfo) {
 
 function foldMarker(open: boolean, t: BrowserTranslate) {
   const marker = document.createElement('span');
-  marker.title = t(open ? '折叠此行' : '展开此行');
+  marker.title = t(open ? "client.projectBrowser.foldLine" : "client.projectBrowser.unfoldLine");
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('width', '12');

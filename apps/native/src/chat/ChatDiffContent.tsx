@@ -26,13 +26,14 @@ function UnifiedRow({ line, language, wrap, copy, onComment }: {
   const heading = line.kind === 'hunk' || line.kind === 'meta';
   return <View style={[diffStyles.line, diffStyles[line.kind]]}>
     {onComment && !!(line.oldLine || line.newLine) && <Pressable accessibilityRole="button"
-      accessibilityLabel={t('对第 {value1} 行留言', { value1: line.newLine ?? line.oldLine ?? 0 })}
+      accessibilityLabel={t("client.taskReview.commentOnLine", { value1: line.newLine ?? line.oldLine ?? 0 })}
       style={diffStyles.comment} onPress={() => onComment(line)}>
-      <Text style={diffStyles.actionText}>{t('留言')}</Text></Pressable>}
+      <Text style={diffStyles.actionText}>{t("client.taskReview.comment")}</Text></Pressable>}
     <Text style={[styles.code, diffStyles.number]}>{line.oldLine ?? ''}</Text>
     <Text style={[styles.code, diffStyles.number]}>{line.newLine ?? ''}</Text>
     <Text style={[styles.code, diffStyles.sign]}>{marker}</Text>
-    <SelectableChatText copy={copy} style={[styles.code, wrap ? diffStyles.wrappedText : diffStyles.unwrappedText]}>
+    <SelectableChatText copy={copy} layoutKey={line.text}
+      style={[styles.code, wrap ? diffStyles.wrappedText : diffStyles.unwrappedText]}>
       <HighlightedCode text={line.text || ' '} language={heading ? '' : language} /></SelectableChatText>
   </View>;
 }
@@ -46,7 +47,8 @@ function SplitCell({ line, side, language, column, wrap, copy }: {
   useLanguage();
   return <View style={[diffStyles.cell, column, line && diffStyles[line.kind]]}>
     <Text style={[styles.code, diffStyles.number]}>{side === 'left' ? line?.oldLine : line?.newLine}</Text>
-    <SelectableChatText copy={copy} style={[styles.code, wrap ? diffStyles.wrappedText : diffStyles.unwrappedText]}>
+    <SelectableChatText copy={copy} layoutKey={line?.text ?? ''}
+      style={[styles.code, wrap ? diffStyles.wrappedText : diffStyles.unwrappedText]}>
       <HighlightedCode text={line?.text || ' '} language={language} /></SelectableChatText>
   </View>;
 }
@@ -85,8 +87,8 @@ function SplitRows({ pairs, language, wrap, copy }: {
         width > current.right ? { ...current, right: width } : current)} />
     </>}
     <View style={diffStyles.line}>
-      <Text style={[diffStyles.columnLabel, columns[0]]}>{t("修改前")}</Text>
-      <Text style={[diffStyles.columnLabel, columns[1]]}>{t("修改后")}</Text>
+      <Text style={[diffStyles.columnLabel, columns[0]]}>{t("client.chat.before")}</Text>
+      <Text style={[diffStyles.columnLabel, columns[1]]}>{t("client.chat.after")}</Text>
     </View>
     {pairs.map((pair, index) => pair.heading
       ? <SelectableChatText key={index} style={[styles.code, diffStyles.hunk]}
@@ -114,7 +116,7 @@ export function ChatDiffContent({ file, onComment }: { file: DiffFile; onComment
   const language = fileLanguage(file.path);
   const total = split ? pairs.length : lines.length;
   const { limit, loadMore, scrollProps } = useDiffScroll(total);
-  const copy = { text: file.raw, label: t("复制 diff") };
+  const copy = { text: file.raw, label: t("client.chat.copyDiff") };
   const rows = split ? <SplitRows pairs={pairs.slice(0, limit)} language={language} wrap={wrap} copy={copy} />
     : <View>{lines.slice(0, limit).map((line, index) =>
       <UnifiedRow key={index} line={line} language={language} wrap={wrap} onComment={onComment}
@@ -124,18 +126,18 @@ export function ChatDiffContent({ file, onComment }: { file: DiffFile; onComment
       {file.previousPath} → {file.path}</SelectableChatText>}
     <View style={diffStyles.toolbar}>
       <Pressable accessibilityRole="button" style={diffStyles.action} onPress={() => setWrap(!wrap)}>
-        <Text style={diffStyles.actionText}>{wrap ? t("横向滚动") : t("自动换行")}</Text></Pressable>
+        <Text style={diffStyles.actionText}>{wrap ? t("client.mobile.scrollHorizontally") : t("client.projectBrowser.wrapLines")}</Text></Pressable>
       {!onComment && <Pressable accessibilityRole="button" style={diffStyles.action} onPress={() => setSplit(!split)}>
-        <Text style={diffStyles.actionText}>{split ? t("统一") : t("并排")}</Text></Pressable>}
+        <Text style={diffStyles.actionText}>{split ? t("client.chat.unified") : t("client.chat.sideBySide")}</Text></Pressable>}
       {openFile && file.kind !== 'delete' && <Pressable accessibilityRole="button" style={diffStyles.action}
-        onPress={() => openFile({ path: file.path })}><Text style={diffStyles.actionText}>{t("查看文件")}</Text></Pressable>}
+        onPress={() => openFile({ path: file.path })}><Text style={diffStyles.actionText}>{t("client.mobile.viewFile")}</Text></Pressable>}
     </View>
     {wrap ? rows : <ScrollView horizontal nestedScrollEnabled>{rows}</ScrollView>}
     {!total && <SelectableChatText style={styles.subtitle} copy={copy}>
-      {file.kind === 'add' ? t("新增空文件") : t("此文件没有可显示的文本差异。")}</SelectableChatText>}
+      {file.kind === 'add' ? t("client.chat.newEmptyFile") : t("client.chat.noTextDiffIsAvailableForThisFile")}</SelectableChatText>}
     {total > limit && <Pressable accessibilityRole="button" style={styles.button}
       onPress={loadMore}>
-      <Text style={styles.buttonText}>{t("继续显示（还有")}{' '}{total - limit}{' '}{t("行）")}</Text></Pressable>}
+      <Text style={styles.buttonText}>{t("client.mobile.showMoreRemaining")}{' '}{total - limit}{' '}{t("client.mobile.lines.39aac4")}</Text></Pressable>}
   </SheetScrollView>;
 }
 

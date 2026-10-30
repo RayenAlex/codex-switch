@@ -1,3 +1,5 @@
+import inlineCopy from '@remoteai/i18n/copy/inline/admin/hooks/useHelpSettings';
+import defaultQuestionsResource from '@remoteai/i18n/copy/admin/helpQuestions';
 import { useEffect, useRef, useState } from "react";
 import { App } from "antd";
 import type { OfficialModelsProps } from "./useOfficialModels";
@@ -7,11 +9,7 @@ export interface HelpQuestion { zh: string; en: string }
 export interface HelpSettings {
   model: string; effort: HelpReasoningEffort; systemPrompt: string; revision: string; questions: HelpQuestion[];
 }
-const defaultQuestions: HelpQuestion[] = [
-  { zh: "如何选择 Codex 使用的账户？", en: "How do I choose the account Codex uses?" },
-  { zh: "手机为什么连接不上电脑？", en: "Why can’t my phone connect to my computer?" },
-  { zh: "自动切换账户怎么设置？", en: "How do I set up automatic account switching?" },
-];
+const defaultQuestions: HelpQuestion[] = defaultQuestionsResource;
 const ENDPOINT = "/admin/api/help-assistant";
 const noticeStyle = { maxWidth: 400, whiteSpace: "normal" as const };
 
@@ -32,8 +30,8 @@ export function useHelpSettings(api: OfficialModelsProps["api"], zh: boolean) {
         questions: settings.questions ?? defaultQuestions });
     })
       .catch(() => {
-        if (current) message.error({ content: zh ? "助手设置加载失败，请重试。"
-          : "Unable to load assistant settings. Please retry.", style: noticeStyle });
+        if (current) message.error({ content: zh ? inlineCopy["text_c8a7d93e"]
+          : inlineCopy["Unable_to_load_assistant_settings_ca19fd5b"], style: noticeStyle });
       }).finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
   }, [api, attempt, message, zh]);
@@ -45,11 +43,11 @@ export function useHelpSettings(api: OfficialModelsProps["api"], zh: boolean) {
       const settings = await api<HelpSettings>(ENDPOINT, { method: "PATCH", body: JSON.stringify(draft) });
       if (!active.current) return;
       setDraft(settings);
-      message.success({ content: zh ? "助手设置已保存，下次提问时生效。"
-        : "Assistant settings saved. They apply to the next question.", style: noticeStyle });
+      message.success({ content: zh ? inlineCopy["text_04f2e0c8"]
+        : inlineCopy["Assistant_settings_saved_They_apply_7c956fea"], style: noticeStyle });
     } catch (error) {
       if (active.current) message.error({ content: error instanceof Error ? error.message
-        : (zh ? "保存失败，请重试。" : "Unable to save. Please retry."), style: noticeStyle });
+        : (zh ? inlineCopy["text_3461df8d"] : inlineCopy["Unable_to_save_Please_retry_aa2c25e7"]), style: noticeStyle });
     } finally {
       pending.current = false; if (active.current) setSaving(false);
     }

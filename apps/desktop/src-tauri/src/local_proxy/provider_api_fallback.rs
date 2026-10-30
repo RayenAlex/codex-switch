@@ -21,7 +21,7 @@ fn forward_provider_api(
     let preferred = if requires_responses {
         ProviderApiFormat::OpenaiResponses
     } else {
-        provider_api_cache::cached_format(&provider.id, &provider.base_url, &model)
+        provider_api_cache::cached_format(provider, &model)
             .unwrap_or(provider.api_format)
     };
     let first = provider_api_attempt(preferred, 1, &mut send);
@@ -225,5 +225,5 @@ fn remember_provider_api_format(
     model: &str,
     format: ProviderApiFormat,
 ) {
-    provider_api_cache::remember_format(&provider.id, &provider.base_url, model, format);
+    provider_api_cache::remember_format(provider, model, format);
 }

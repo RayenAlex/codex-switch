@@ -24,11 +24,11 @@ function PermissionDetails({ event }: { event: GuiEvent }) {
   if (event.method !== 'item/permissions/requestApproval') return null;
   const permissions = event.params.permissions;
   return <View style={approvalStyles.permissions}>
-    {permissions?.network?.enabled && <Text style={approvalStyles.body}>{t("访问网络")}</Text>}
+    {permissions?.network?.enabled && <Text style={approvalStyles.body}>{t("client.chat.networkAccess")}</Text>}
     {permissions?.fileSystem?.read?.map((path) =>
-      <Text selectable key={path} style={approvalStyles.body}>{t("读取：")}{path}</Text>)}
+      <Text selectable key={path} style={approvalStyles.body}>{t("client.chat.read")}{path}</Text>)}
     {permissions?.fileSystem?.write?.map((path) =>
-      <Text selectable key={path} style={approvalStyles.body}>{t("编辑：")}{path}</Text>)}
+      <Text selectable key={path} style={approvalStyles.body}>{t("client.chat.edit")}{path}</Text>)}
     {permissions?.fileSystem?.entries && <ApprovalCode
       text={JSON.stringify(permissions.fileSystem.entries, null, 2)} />}
   </View>;
@@ -54,7 +54,7 @@ function ApprovalQuestion({ question, value, busy, update, submit }: QuestionPro
         {!!option.description && <Text style={styles.subtitle}>{option.description}</Text>}</View>
     </Pressable>)}
     <TextInput accessibilityLabel={question.question} style={[styles.questionInput, busy && styles.disabled]}
-      placeholder={t("输入你的回答")} placeholderTextColor={color(palette.muted, 'muted')} editable={!busy}
+      placeholder={t("client.chat.enterYourAnswer")} placeholderTextColor={color(palette.muted, 'muted')} editable={!busy}
       secureTextEntry={question.isSecret} value={value} onChangeText={update} returnKeyType="send"
       onSubmitEditing={submit} />
   </View>;
@@ -77,7 +77,7 @@ export function ChatApproval({ event, respond }: ApprovalProps) {
   const submit = () => { void send('accept'); };
   return <View style={[styles.approval, approvalStyles.card]} accessibilityState={{ busy }}>
     <View style={styles.row}><Ionicons name="shield-outline" size={17} color={color(palette.ink, 'ink')} />
-      <Text style={approvalStyles.title}>{isQuestion ? t("需要你的补充") : t("需要你的确认")}</Text></View>
+      <Text style={approvalStyles.title}>{isQuestion ? t("client.chat.moreInformationNeeded") : t("client.chat.yourApprovalIsNeeded")}</Text></View>
     {!!params.reason && <Text style={approvalStyles.body}>{params.reason}</Text>}
     {!!params.command && <ApprovalCode text={params.command} />}
     {!!(params.cwd || params.grantRoot) && <Text selectable style={styles.subtitle}>
@@ -93,12 +93,12 @@ export function ChatApproval({ event, respond }: ApprovalProps) {
           accessibilityState={{ disabled: busy || incomplete, busy }} onPress={submit}
           style={[styles.button, styles.primary, approvalStyles.action, (busy || incomplete) && styles.disabled]}>
           {busy && <ActivityIndicator size="small" color="#fff" />}
-          <Text style={[styles.buttonText, styles.primaryText]}>{isQuestion ? t("提交回答") : t("允许这一次")}</Text>
+          <Text style={[styles.buttonText, styles.primaryText]}>{isQuestion ? t("client.chat.submitAnswer") : t("client.chat.allowOnce")}</Text>
         </Pressable>}
       {!isQuestion && <Pressable accessibilityRole="button" disabled={busy}
         accessibilityState={{ disabled: busy }} style={[styles.button, approvalStyles.decline, busy && styles.disabled]}
         onPress={() => { void send(params.availableDecisions?.includes('decline') === false ? 'cancel' : 'decline'); }}>
-        <Text style={approvalStyles.body}>{t("拒绝")}</Text>
+        <Text style={approvalStyles.body}>{t("client.chat.deny")}</Text>
       </Pressable>}
     </View>
   </View>;

@@ -12,6 +12,7 @@ mod config;
 pub(crate) mod host_health;
 pub(crate) mod identity;
 mod ipc_ack;
+pub(crate) mod packet_codec;
 mod protocol;
 mod renderer_recovery;
 mod runtime;

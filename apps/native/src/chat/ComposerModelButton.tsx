@@ -1,3 +1,4 @@
+import { displayText } from '../i18n/index';
 import { createThemedStyles } from '../theme/styles';
 import Feather from '@expo/vector-icons/Feather';
 import { Pressable, Text, View } from 'react-native';
@@ -13,11 +14,11 @@ export function ComposerModelButton({ models, selection, compact, onPress }: {
 }) {
   const styles = useStyles();
   const indicatorStyles = useIndicatorStyles();
-  const label = composerLabel(models, selection, t);
+  const label = composerLabel(models, selection, displayText);
   const bolts = speedBoltCount(selection.speed ?? 'normal');
   const { color, fontSize } = styles.composerModelText;
   return <Pressable accessibilityRole="button" style={[styles.composerModel, compact && styles.composerModelCompact]}
-    accessibilityLabel={t('{value1}，聊天设置', { value1: label + requestSpeedSuffix(selection.speed, t) })}
+    accessibilityLabel={t("client.mobile.chatSettings", { value1: label + requestSpeedSuffix(selection.speed, displayText) })}
     onPress={onPress}>
     {compact ? <Feather name="sliders" size={19} color={color} /> : <>
       <Text numberOfLines={1} ellipsizeMode="head" style={styles.composerModelText}>{modelLabelTail(label)}</Text>

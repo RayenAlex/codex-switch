@@ -57,6 +57,8 @@ struct ProxySessionRequestState {
 
 #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 struct ProxySessionTokenTotals {
+    #[serde(default)]
+    estimated_cost_usd: Option<f64>,
     total_tokens: u64,
     input_tokens: u64,
     output_tokens: u64,

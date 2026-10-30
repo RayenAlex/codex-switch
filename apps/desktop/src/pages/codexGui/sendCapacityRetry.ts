@@ -1,6 +1,7 @@
 import { guiApi } from "./api";
 import { CONTINUE_MESSAGE } from "./continuation";
 import { conversation } from "./events";
+import { modelSelectionError } from "./modelSelection";
 import type { GuiState, Settings, Thread, Turn } from "./types";
 
 interface RetrySendHost {
@@ -23,6 +24,7 @@ export async function sendCapacityRetry(host: RetrySendHost, threadId: string, c
   host.patch({ sending: true, pendingRequest: { threadId, startedAtMs: Date.now() } });
   try {
     const { model, effort } = await host.selection(threadId);
+    if (modelSelectionError(host.getSnapshot().models, { model, effort })) return false;
     if (!canSend() || !currentCatalog()) return false;
     const { thread } = await guiApi.request<{ thread: Thread }>({ operation: "resume", threadId, access, cwd });
     if (!canSend() || !currentCatalog()) return false;

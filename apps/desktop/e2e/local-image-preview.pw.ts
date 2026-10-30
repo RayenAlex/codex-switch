@@ -6,7 +6,7 @@ const fixturePath = process.env.CODEX_IMAGE_PREVIEW_OUTPUT;
 const pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lE'
   + 'QVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=';
 
-test('previews local images and loads original bytes only on demand', async ({ page }, info) => {
+test('loads original bytes automatically when opening a local preview', async ({ page }, info) => {
   const fixture: { thumbnail: string; original: string } = fixturePath
     ? JSON.parse(await readFile(fixturePath, 'utf8')) : { thumbnail: pixel, original: pixel };
   const requests: string[] = [];
@@ -32,8 +32,8 @@ test('previews local images and loads original bytes only on demand', async ({ p
   await page.getByRole('textbox', { name: '消息' }).fill('大图预览时仍可编辑消息');
   await page.screenshot({ path: info.outputPath('local-image-thumbnail.png') });
   await page.getByRole('button', { name: '放大查看：large.jpg' }).click();
-  expect(requests).toEqual(['thumbnail']);
-  await page.getByRole('button', { name: '查看原图', exact: true }).click();
+  await expect.poll(() => requests).toEqual(['thumbnail', 'original']);
+  await expect(page.getByRole('button', { name: '查看原图', exact: true })).toHaveCount(0);
   const original = page.locator('dialog img');
   await expect.poll(() => original.evaluate((image: HTMLImageElement) => image.src.length))
     .toBe(fixture.original.length);

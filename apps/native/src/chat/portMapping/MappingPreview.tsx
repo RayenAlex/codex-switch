@@ -20,24 +20,24 @@ export function MappingPreview({ port, close }: { port: number; close: () => voi
     <SafeAreaProvider><SafeAreaView style={styles.page}>
       <View style={styles.header}>
         <Pressable accessibilityRole="button" onPress={close} style={styles.button}>
-          <Text style={styles.buttonText}>{t('关闭')}</Text></Pressable>
+          <Text style={styles.buttonText}>{t("client.projectBrowser.close")}</Text></Pressable>
         <Text selectable numberOfLines={1} style={[styles.subtitle, { flex: 1, minWidth: 0 }]}>{url}</Text>
         <MappingPreviewActivity active={activity.active} />
       </View>
       <View style={[styles.row, { paddingHorizontal: 16, paddingBottom: 12, flexWrap: 'wrap' }]}>
         <Pressable accessibilityRole="button" onPress={() => { activity.onLoadStart(); webview.current?.goBack(); }}
           disabled={!canGoBack} style={[styles.button, !canGoBack && styles.disabled]}>
-          <Text style={styles.buttonText}>{t('返回')}</Text></Pressable>
+          <Text style={styles.buttonText}>{t("client.mobile.back")}</Text></Pressable>
         <Pressable accessibilityRole="button" onPress={() => {
           setError(''); activity.onLoadStart(); webview.current?.reload();
         }}
-          style={styles.button}><Text style={styles.buttonText}>{t('刷新')}</Text></Pressable>
+          style={styles.button}><Text style={styles.buttonText}>{t("client.chat.refresh")}</Text></Pressable>
         <Pressable accessibilityRole="button" style={styles.button}
-          onPress={() => { void Linking.openURL(url).catch(() => setError(t('无法打开浏览器，请重试。'))); }}>
-          <Text style={styles.buttonText}>{t('在浏览器中打开')}</Text></Pressable>
+          onPress={() => { void Linking.openURL(url).catch(() => setError(t("client.portForwarding.couldNotOpenTheBrowserPleaseTryAgain"))); }}>
+          <Text style={styles.buttonText}>{t("client.workspaceActions.openInBrowser")}</Text></Pressable>
       </View>
       {Platform.OS === 'ios' && <Text style={[styles.subtitle, { paddingHorizontal: 16, maxWidth: 400 }]}>
-        {t('切到其他应用后，映射可能中断，建议在此预览。')}</Text>}
+        {t("client.portForwarding.switchingAppsMayInterruptTheMappingPreviewHereForA")}</Text>}
       {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
       <WebView ref={webview} source={{ uri: url }} style={styles.fill} incognito
         originWhitelist={['http://*', 'https://*']} allowFileAccess={false}
@@ -53,8 +53,8 @@ export function MappingPreview({ port, close }: { port: number; close: () => voi
         onNavigationStateChange={state => setCanGoBack(state.canGoBack)}
         renderError={() => <View style={styles.empty}>
           <Text style={[styles.subtitle, { maxWidth: 400 }]}>
-            {t('网页未能加载，请确认服务已启动后刷新。')}</Text></View>}
-        onError={() => { activity.reset(); setError(t('网页未能加载，请确认服务已启动后刷新。')); }} />
+            {t("client.portForwarding.couldNotLoadTheWebsiteCheckThatTheServiceIs")}</Text></View>}
+        onError={() => { activity.reset(); setError(t("client.portForwarding.couldNotLoadTheWebsiteCheckThatTheServiceIs")); }} />
     </SafeAreaView></SafeAreaProvider>
   </Modal>;
 }

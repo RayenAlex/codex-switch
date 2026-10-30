@@ -4,6 +4,11 @@
   small { color: var(--muted); font-size: 10px; }
 }
 .identity { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.quotaSummary { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.estimate {
+  color: var(--muted); font-size: 10px; line-height: 1.5; font-variant-numeric: tabular-nums;
+}
+.estimate:empty { display: none; }
 .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .plan {
   flex-shrink: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

@@ -7,7 +7,8 @@ export function desktopSecuritySettings(session: ReturnType<typeof useDesktopSes
   const action = desktopStatusAction(session);
   return { connected: !!session.stream, control: session.capabilities.control !== false,
     supported: session.capabilities.security === true, value: session.security.value,
-    saving: session.saving || session.security.saving, error: session.security.error, update: session.security.update,
+    saving: session.saving || session.security.saving, saved: session.security.saved,
+    error: session.security.error, update: session.security.update,
     privacy: { available: session.capabilities.privacyScreen === true,
       enabled: session.privacyScreen, toggle: session.togglePrivacy },
     clipboard: { available: session.capabilities.clipboard === true, enabled: session.security.clipboardSync,

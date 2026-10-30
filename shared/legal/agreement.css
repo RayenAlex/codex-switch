@@ -5,6 +5,7 @@
   color: inherit; font-size: 13px; font-weight: 400; line-height: 1.6; cursor: pointer;
 }
 .agreement-check-label input { flex: 0 0 auto; width: 18px; height: 18px; margin: 0; accent-color: #0b8065; }
+.agreement-check-suffix { font-size: 13px; line-height: 1.6; }
 .agreement-consent .agreement-link, .agreement-confirm .agreement-link {
   display: inline; min-height: 44px; max-width: 100%; padding: 4px 0; border: 0; border-radius: 3px;
   color: #08735d; background: transparent; font: inherit; font-size: 13px; line-height: 1.6;

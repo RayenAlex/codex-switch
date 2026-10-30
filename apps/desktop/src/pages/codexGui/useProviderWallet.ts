@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useEffect, useState } from "react";
 import { queryProviderBalance, subscribeToProviderBalance } from "../../api/backend";
 import type { Provider, ProviderBalance } from "../../types";
@@ -37,7 +37,7 @@ export function useProviderWallet(provider: Provider | undefined, active: boolea
 
   const balance = active && platform && result?.id === id ? result?.balance : null;
   if (platform === "codexSwitch") {
-    if (balance?.apiUnlimited) return guiText("不限额");
+    if (balance?.apiUnlimited) return uiText("client.workspaceActions.noLimit");
     if (typeof balance?.apiAmount !== "number" || !Number.isFinite(balance.apiAmount)) return null;
     return formatAmount(balance.apiAmount, balance.apiUnit);
   }

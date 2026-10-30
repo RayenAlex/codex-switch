@@ -7,6 +7,7 @@ import { currentRunningTurn } from '../../../../shared/chat/runningTurn';
 import { findWorkEntry, type WorkEntry } from '../../../../shared/chat/turnPresentation';
 import { activityTimeline, findActivityEntry, latestActivity, type TimelineEntry as Entry }
   from '../../../../shared/chat/activityTimeline';
+import { hasCompactTimelineGap } from '../../../../shared/chat/timelineSpacing';
 import { ChatActivity } from './ChatActivity';
 import { turnElapsedMs } from '../../../desktop/src/pages/codexGui/turnTiming';
 import { formatTurnDuration } from './formatters';
@@ -33,20 +34,20 @@ function WorkSummary({ entry, open, inline, desktop }: {
   useLanguage();
   const running = entry.turn.status === 'inProgress';
   const elapsed = entry.timed ? turnElapsedMs(entry.turn, 0) : null;
-  const label = elapsed == null ? (running ? t("正在处理") : t("处理过程")) : t("用时 {value1}", { value1: formatTurnDuration(elapsed) });
+  const label = elapsed == null ? (running ? t("client.chat.working") : t("client.chat.activity")) : t("client.chat.duration", { value1: formatTurnDuration(elapsed) });
   if (desktop) return <div className="chat-work-summary chat-desktop-work">
-    <button type="button" aria-label={t("查看处理过程，{value1} 项活动", { value1: entry.items.length })} aria-expanded={entry.inline}
+    <button type="button" aria-label={t("client.chat.viewActivityActions", { value1: entry.items.length })} aria-expanded={entry.inline}
       onClick={() => inline(entry.turn.id, !entry.inline)}>
-      <span>{entry.timed ? <ChatTurnTiming turn={entry.turn} fallback={t("处理过程")} /> : t("处理过程")}</span>
+      <span>{entry.timed ? <ChatTurnTiming turn={entry.turn} fallback={t("client.chat.activity")} /> : t("client.chat.activity")}</span>
       <ChevronRight size={14} /></button>
   </div>;
   return <div className="chat-work-summary">
-    <button type="button" aria-label={t("查看处理过程，{value1} 项活动", { value1: entry.items.length })} onClick={open}>
+    <button type="button" aria-label={t("client.chat.viewActivityActions", { value1: entry.items.length })} onClick={open}>
       <span>{label}</span><ChevronRight size={14} /></button>
     {(entry.inline || ['inProgress', 'interrupted', 'failed'].includes(entry.turn.status)) &&
-      <button type="button" aria-expanded={entry.inline} aria-label={entry.inline ? t("收起处理过程") : t("展开处理过程")}
+      <button type="button" aria-expanded={entry.inline} aria-label={entry.inline ? t("client.chat.collapseActivity") : t("client.chat.expandActivity")}
         onClick={() => inline(entry.turn.id, !entry.inline)}>
-        <span>{entry.inline ? t("收起") : t("展开")}</span><ChevronDown size={14} /></button>}
+        <span>{entry.inline ? t("client.chat.collapse") : t("client.chat.expand")}</span><ChevronDown size={14} /></button>}
   </div>;
 }
 
@@ -69,7 +70,7 @@ function TimelineEntry({ entry, open, inline, desktop, renderUserMessage }: {
   if (entry.kind === 'duration') {
     if (desktop) return <p className="chat-turn-duration"><ChatTurnTiming turn={entry.turn} /></p>;
     const elapsed = turnElapsedMs(entry.turn, 0);
-    return elapsed == null ? null : <p className="chat-turn-duration">{t("用时")} {formatTurnDuration(elapsed)}</p>;
+    return elapsed == null ? null : <p className="chat-turn-duration">{t("client.chat.duration.8d6d31")} {formatTurnDuration(elapsed)}</p>;
   }
   if (entry.kind === 'summary') return <ChatTurnSummary turn={entry.turn} hideStopped={desktop}
     onOpen={panel => open({ type: 'turn', id: entry.turn.id, panel })} />;
@@ -93,10 +94,10 @@ export function ChatMessages(props: MessageProps & { footer?: ReactNode }) {
   const desktop = useDesktopLayout();
   const scroll = useHistoryScroll(props);
   const jump = scroll.showBottom && <button type="button" className="chat-scroll-bottom"
-    onClick={scroll.toBottom}><ArrowDown size={17} />{t("回到底部")}</button>;
+    onClick={scroll.toBottom}><ArrowDown size={17} />{t("client.chat.scrollToBottom")}</button>;
   return <div className={`chat-message-region${props.footer ? ' has-scroll-footer' : ''}`}>
     <ChatSelectionQuote root={scroll.content} selected={props.thread?.id ?? null} enabled={desktop} />
-    <div ref={scroll.list} className="chat-scroll chat-messages" aria-label={t("聊天记录")}
+    <div ref={scroll.list} className="chat-scroll chat-messages" aria-label={t("client.chat.chatHistory")}
       onScroll={scroll.onScroll} onWheel={scroll.onWheel}
       onTouchStart={scroll.onTouchStart} onTouchMove={scroll.onTouchMove}
       onTouchEnd={scroll.onTouchEnd} onTouchCancel={scroll.onTouchCancel}>
@@ -139,13 +140,15 @@ function ChatMessageHistory({ props, scroll }: {
       onClickCapture={desktop ? scroll.pauseFollowing : undefined}>
       {(hasMore || loadingMore || (loading && !entries.length)) && <div className="chat-history-more">
         {loading && !entries.length && !loadingMore
-          ? <span role="status" className="chat-processing"><span className="chat-spinner" />{t("正在加载聊天记录…")}</span>
+          ? <span role="status" className="chat-processing"><span className="chat-spinner" />{t("client.chat.loadingChatHistory")}</span>
           : <button type="button" className="chat-text-action" onClick={scroll.more}
-            disabled={loadingMore}>{loadingMore ? t("加载中…") : t("加载更早的消息")}</button>}
+            disabled={loadingMore}>{loadingMore ? t("client.mobile.loading") : t("client.chat.loadEarlierMessages")}</button>}
       </div>}
-      {timeline.map(entry => <Fragment key={entry.id}>
+      {timeline.map((entry, index) => <Fragment key={entry.id}>
         {entry === runningSummary && props.processing}
-        <div data-message-id={'item' in entry ? entry.item.id : entry.id} className={`chat-entry-${entry.kind}`}>
+        <div data-message-id={'item' in entry ? entry.item.id : entry.id}
+          data-response-continuation={hasCompactTimelineGap(timeline[index - 1], entry) || undefined}
+          className={`chat-entry-${entry.kind}`}>
           <TimelineEntry entry={entry} open={open} inline={setInline} desktop={desktop}
             renderUserMessage={props.renderUserMessage} />
         </div>
@@ -153,12 +156,12 @@ function ChatMessageHistory({ props, scroll }: {
       {!runningSummary && props.processing}
       {!entries.length && !loading && !props.processing && <div className="chat-empty">
         <Terminal size={28} className="chat-empty-glyph" />
-        <h2>{t("想一起完成什么？")}</h2><p className="chat-muted">{t("直接提问，或选择一个项目开始任务。")}</p>
-        {desktop && <div className="chat-empty-suggestions"><span>{t("理解代码")}</span><span>{t("实现功能")}</span>
-          <span>{t("排查问题")}</span></div>}</div>}
+        <h2>{t("client.chat.whatShallWeWorkOn")}</h2><p className="chat-muted">{t("client.chat.askAQuestionOrChooseAProjectToGetStarted")}</p>
+        {desktop && <div className="chat-empty-suggestions"><span>{t("client.chat.understandCode")}</span><span>{t("client.chat.buildAFeature")}</span>
+          <span>{t("client.chat.troubleshoot")}</span></div>}</div>}
     </div>
-    {work && <AdaptiveSheet open title={work.turn.status === 'inProgress' ? t("正在处理") : t("处理过程")}
-      subtitle={t("{value1} 项活动", { value1: work.items.length })} width={760} onClose={close}>
+    {work && <AdaptiveSheet open title={work.turn.status === 'inProgress' ? t("client.chat.working") : t("client.chat.activity")}
+      subtitle={t("client.chat.actions", { value1: work.items.length })} width={760} onClose={close}>
       <div className="chat-detail-stack">{work.items.map(item => <ChatMessage key={item.id} item={item} process
         running={work.turn.status === 'inProgress' && item.status !== 'completed'} onQuote={close}
         onOpen={id => open({ type: 'item', id,

@@ -14,25 +14,7 @@ import {
   Tooltip,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import {
-  CalendarClock,
-  Check,
-  CircleHelp,
-  Columns3,
-  Copy,
-  Gauge,
-  GripVertical,
-  LogIn,
-  LogOut,
-  Lock,
-  MoreHorizontal,
-  Pencil,
-  RefreshCw,
-  ListOrdered,
-  ToggleLeft,
-  ToggleRight,
-  Trash2,
-} from "lucide-react";
+import { CalendarClock, CircleHelp, Columns3, Copy, Gauge, GripVertical, LogIn, LogOut, Lock, MoreHorizontal, Pencil, RefreshCw, ListOrdered, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
 import {
   loadAccountTokenUsage,
   loadProxySessions,
@@ -56,7 +38,7 @@ import type {
 import { accountExpirationDate } from "../../../utils/expiration";
 import { maskAccountEmail } from "../../../utils/accountPrivacy";
 import { shouldShowUsageError } from "../../../utils/usageErrors";
-import { translateBackendMessage } from "../../../../../../shared/i18n/backend/translateBackendMessage";
+import { formatRemoteError } from "../../../../../../shared/localization/errors";
 import {
   formatEstimatedCost,
   invalidateCustomTokenCostRulesCache,
@@ -75,7 +57,7 @@ import { AccountNoteModal } from "../../modals/AccountNoteModal";
 import { AccountExpandedPanel } from "../AccountExpandedPanel";
 import { AccountAvatar } from "../AccountAvatar";
 import { AccountCardFooter } from "../AccountCardFooter";
-import { accountCardLabels } from "../accountCardLabels";
+import { accountCardLabels } from "@remoteai/i18n/copy/desktop/accountCardLabels";
 import { AccountCredits, AccountCreditsTitle } from "../AccountCredits";
 import { AccountCardAutoSwitchSettings } from "../AccountCardAutoSwitchSettings";
 import { AccountGroupCell, ConcurrentRoutingControl } from "../AccountGroupControls";
@@ -85,14 +67,14 @@ import { UsageMeter, UsageRefreshAge } from "../UsageMeter";
 import { canReceiveConcurrentConversation } from "../concurrentAccountEligibility";
 import { createAccountTokenUsageLookup } from "../accountCardUsage";
 import { useOfficialUsage } from "../../../hooks/useOfficialUsage";
-import { officialUsageLabels } from "../../../../../../shared/officialUsageLabels";
+import { officialUsageLabels } from "@remoteai/i18n/copy/client/officialUsageLabels";
 import { AvailableQuota } from "../../TokenUsageDashboard/OfficialAccountUsage";
 import { getSwitchableAccounts } from "../accountSelectors";
 import { confirmOfficialAuthAccountChange } from "../confirmOfficialAuthAccountChange";
 import styles from "./index.module.less";
 import { isAccountControlTarget } from "./accountAreaInteraction";
 import { AccountOrderModal } from "./AccountOrderModal";
-import { accountOrderLabels } from "./accountOrderLabels";
+import { accountOrderLabels } from "@remoteai/i18n/copy/desktop/accountOrderLabels";
 import { useAccountOrder, type AccountSortOrder } from "./useAccountOrder";
 import {
   AccountNoteEditButton,
@@ -676,7 +658,7 @@ export function AccountTable({
                   })}</span>
                 )}
                 {shouldShowUsageError(account.usage.error, showUsageNetworkErrors)
-                  && <Tooltip title={translateBackendMessage(language, account.usage.error)}>
+                  && <Tooltip title={formatRemoteError(language, account.usage.error)}>
                     <Tag color="error" className="account-error-tag" icon={<CircleHelp size={12} aria-hidden="true" />}>
                       {t("table.error")}
                     </Tag>
@@ -1301,7 +1283,7 @@ export function AccountTable({
                     })}</span>
                   )}
                   {shouldShowUsageError(account.usage.error, showUsageNetworkErrors)
-                    && <Tooltip title={translateBackendMessage(language, account.usage.error)}>
+                    && <Tooltip title={formatRemoteError(language, account.usage.error)}>
                       <Tag color="error" className="account-error-tag" icon={<CircleHelp size={12} aria-hidden="true" />}>
                         {t("table.error")}
                       </Tag>

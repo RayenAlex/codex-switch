@@ -18,7 +18,7 @@ export function GitHistory({ panel, connected, onPatch }: {
   const pagination = useGitHistoryScroll(panel, connected);
   return <div className="git-history" style={HISTORY_STYLE} ref={pagination.list} onScroll={pagination.onScroll}>
     {panel.changes && !panel.busy && !panel.commits.length &&
-      <p className="git-notice">{t('还没有提交记录。')}</p>}
+      <p className="git-notice">{t("client.git.noCommitsYet")}</p>}
     {graph.rows.map(row => <GitCommitMenu key={row.commit.hash} commit={row.commit} panel={panel}
       connected={connected} onPatch={onPatch}><button type="button" className="git-history-row"
       style={{ minWidth: `calc(${row.width}px + var(--git-history-content-width, 560px))` }}
@@ -41,9 +41,9 @@ export function GitHistory({ panel, connected, onPatch }: {
       </span>
     </button></GitCommitMenu>)}
     <div ref={pagination.end} className="git-history-end">
-      {panel.hasMore && pagination.loadingMore && <span role="status">{t('正在加载…')}</span>}
+      {panel.hasMore && pagination.loadingMore && <span role="status">{t("client.projectBrowser.loading")}</span>}
       {panel.hasMore && pagination.failed && <button type="button" className="git-more"
-        disabled={panel.busy || !connected} onClick={pagination.retry}>{t('重试')}</button>}
+        disabled={panel.busy || !connected} onClick={pagination.retry}>{t("client.terminal.retry")}</button>}
     </div>
   </div>;
 }

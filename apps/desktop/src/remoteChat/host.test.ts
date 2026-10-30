@@ -6,6 +6,7 @@ import { mobileConnection } from './mobileConnection';
 import { DEFAULT_CHAT_POLICY, getChatPolicy, setChatPolicy } from '../../../../shared/remote-chat/policy';
 import type { HostTransportEvent } from './nativeTransport';
 import { assistanceStore } from '../remoteAssistance/store';
+import { GUI_ACCOUNTS_EVENT, GUI_ACCOUNT_SELECTION_EVENT } from '../../../../shared/remote-chat/guiAccounts';
 
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock('@tauri-apps/api/core', () => ({ invoke }));
@@ -14,7 +15,11 @@ const links = vi.hoisted(() => new Map<string, {
   message: (request: RpcRequest) => void; send: (value: unknown) => Promise<void>;
 }>());
 const native = vi.hoisted(() => ({ receive: undefined as ((event: HostTransportEvent) => void) | undefined,
+  balanceChanged: undefined as (() => void) | undefined,
   accountChanged: undefined as (() => void) | undefined, release: vi.fn(), execute: vi.fn() }));
+vi.mock('./guiAccountBalances', () => ({ guiAccountBalances: { subscribe: (changed: () => void) => {
+  native.balanceChanged = changed; return vi.fn();
+} } }));
 vi.mock('./nativeTransport', () => ({ NativeChatTransport: class {
   ready = true; bufferedAmount = 0;
   constructor(receive: (event: HostTransportEvent) => void) { native.receive = receive; }
@@ -75,6 +80,20 @@ async function receive(type: string, sessionId: string) {
   message({ type, sessionId, publicKey: 'test', iceServers: [] });
   await Promise.resolve();
 }
+
+it('distinguishes balance refreshes from account switches while keeping account pickers updated', async () => {
+  await receive('peer-open', 'phone');
+  const send = vi.mocked(links.get('phone')!.send);
+  send.mockClear();
+  native.balanceChanged!();
+  expect(send.mock.calls).toEqual([[{ kind: 'event', event: { method: GUI_ACCOUNTS_EVENT, params: {} } }]]);
+  send.mockClear();
+  native.accountChanged!();
+  expect(send.mock.calls).toEqual([
+    [{ kind: 'event', event: { method: GUI_ACCOUNT_SELECTION_EVENT, params: {} } }],
+    [{ kind: 'event', event: { method: GUI_ACCOUNTS_EVENT, params: {} } }],
+  ]);
+});
 
 it('accepts more than four admitted sessions and keeps them when the policy limit decreases', async () => {
   message({ type: 'chat-policy', policy: { ...DEFAULT_CHAT_POLICY, chatSessionLimit: 8 } });

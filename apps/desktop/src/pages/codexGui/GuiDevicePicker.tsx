@@ -1,5 +1,5 @@
-import { guiText } from "../../i18n/guiText";
-import { backendText } from "../../../../../shared/i18n/backend/translateBackendMessage";
+import { uiText } from "../../i18n/uiText";
+import { remoteErrorText } from "../../../../../shared/localization/errors";
 import { useRef, useState } from 'react';
 import { Popover, Spin } from 'antd';
 import { Check, ChevronDown, Monitor, RefreshCw } from 'lucide-react';
@@ -9,16 +9,16 @@ import styles from './ProxyAccountPicker.module.less';
 function DeviceList({ navigation, busy, choose }: {
   navigation: GuiComputerNavigation; busy: boolean; choose: (device: GuiComputerNavigation['current']) => void;
 }) {
-  return <section className={styles.deviceList} aria-label={guiText("设备列表")} aria-busy={navigation.loading}>
-    <button type="button" className={styles.deviceOption} disabled={busy}
+  return <section className={styles.deviceList} aria-label={uiText("client.workspaceSettings.devices")} aria-busy={navigation.loading}>
+    {navigation.allowLocal !== false && <button type="button" className={styles.deviceOption} disabled={busy}
       aria-pressed={!navigation.current} onClick={() => choose(null)}>
-      <Monitor size={16} /><span>{guiText("本机")}</span>{!navigation.current && <Check size={16} />}
-    </button>
+      <Monitor size={16} /><span>{uiText("client.composer.thisComputer")}</span>{!navigation.current && <Check size={16} />}
+    </button>}
     {navigation.devices.map((device) => <button key={device.deviceId} type="button"
       className={styles.deviceOption} aria-pressed={navigation.current?.deviceId === device.deviceId}
       disabled={busy || !device.online} onClick={() => choose(device)}>
       <Monitor size={16} /><span><span className={styles.deviceName}>{device.name}</span>
-        <small>{device.online ? guiText("在线") : guiText("离线")} · {device.platform}</small></span>
+        <small>{device.online ? uiText("client.chat.online") : uiText("client.chat.offline")} · {device.platform}</small></span>
       {navigation.current?.deviceId === device.deviceId && <Check size={16} />}
     </button>)}
   </section>;
@@ -40,24 +40,24 @@ export function GuiDevicePicker({ navigation, busy, onSelect }: {
     <DeviceList navigation={navigation} busy={busy} choose={choose} />
     <div className={styles.deviceFooter}>
       {!navigation.authenticated ? <button type="button" className={styles.deviceOption}
-        disabled={busy} onClick={() => { close(); onSelect(); navigation.login(); }}>{guiText("登录后选择其他设备")}</button> : <>
+        disabled={busy} onClick={() => { close(); onSelect(); navigation.login(); }}>{uiText("client.workspaceSettings.signInToChooseAnotherDevice")}</button> : <>
         {!navigation.devices.length && !navigation.loading && !navigation.error
-          && <p className={styles.hint}>{guiText("在其他设备上打开 Remote AI，登录同一账户即可连接。")}</p>}
-        <button type="button" className={styles.deviceOption} aria-label={guiText("刷新设备列表")}
+          && <p className={styles.hint}>{uiText("client.workspaceSettings.openRemoteAiOnAnotherDeviceAndSignInTo")}</p>}
+        <button type="button" className={styles.deviceOption} aria-label={uiText("client.app.refreshDeviceList")}
           disabled={navigation.loading} onClick={navigation.refresh}>
-          {navigation.loading ? <Spin size="small" /> : <RefreshCw size={14} />}{guiText("刷新设备列表")}</button>
+          {navigation.loading ? <Spin size="small" /> : <RefreshCw size={14} />}{uiText("client.app.refreshDeviceList")}</button>
       </>}
-      {navigation.error && <p className={styles.error} role="alert">{backendText(navigation.error)}</p>}
+      {navigation.error && <p className={styles.error} role="alert">{remoteErrorText(navigation.error)}</p>}
     </div>
   </div>;
   return <Popover trigger="click" placement="bottomRight" arrow={false} open={open} content={content}
     classNames={{ root: styles.devicePopup }} getPopupContainer={(element) => element.parentElement ?? document.body}
     onOpenChange={(next) => { setOpen(next); if (next) navigation.refresh(); }}>
-    <button ref={trigger} type="button" className={styles.deviceTrigger} aria-label={guiText("切换设备")}
-      aria-expanded={open} title={guiText("当前设备：{value1}", { value1: navigation.current?.name ?? guiText('本机') })} onKeyDown={(event) => {
+    <button ref={trigger} type="button" className={styles.deviceTrigger} aria-label={uiText("client.workspaceSettings.switchDevice")}
+      aria-expanded={open} title={uiText("client.workspaceSettings.currentDevice", { value1: navigation.current?.name ?? uiText("client.composer.thisComputer") })} onKeyDown={(event) => {
         if (open && event.key === 'Escape') { event.stopPropagation(); close(); }
       }}>
-      <Monitor size={16} /><span>{guiText("切换设备")}</span><ChevronDown size={12} />
+      <Monitor size={16} /><span>{uiText("client.workspaceSettings.switchDevice")}</span><ChevronDown size={12} />
     </button>
   </Popover>;
 }

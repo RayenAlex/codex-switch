@@ -1,7 +1,10 @@
 //! Only the main window can open shells; its remote host scopes forwarded handles to authenticated sessions.
 pub(crate) mod links;
+mod npm;
 mod platform;
 mod service;
+pub(crate) mod ssh;
+pub(crate) mod ssh_drop;
 #[cfg(test)]
 mod tests;
 mod types;

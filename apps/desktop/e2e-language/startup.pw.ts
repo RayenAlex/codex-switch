@@ -9,6 +9,25 @@ const applications = [
     viewport: { width: 320, height: 740 } },
 ];
 
+test('desktop offers Japanese, applies it immediately and restores the saved selection', async ({ page }, info) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(applications[0].url);
+  await page.getByRole('button', { name: 'Settings', exact: true }).first().click();
+  await page.locator('.interface-language-select').click();
+  await page.getByRole('option', { name: '日本語', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ja-JP');
+  expect(await page.evaluate(key => localStorage.getItem(key), applications[0].key)).toBe('ja');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath('desktop-settings-japanese.png') });
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ja-JP');
+  await page.getByRole('button', { name: '設定', exact: true }).first().click();
+  await expect(page.locator('.interface-language-select')).toContainText('日本語');
+  await page.locator('.interface-language-select').click();
+  await page.getByRole('option', { name: 'English', exact: true }).click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en-US');
+});
+
 test.describe('Linux message locale', () => {
   test.use({ locale: 'en-US', viewport: { width: 1440, height: 1000 } });
   test('uses the locale supplied before rendering and preserves a saved choice', async ({ page }) => {
@@ -26,7 +45,7 @@ test.describe('Linux message locale', () => {
 });
 
 for (const app of applications) {
-  for (const locale of ['en-US', 'zh-CN', 'fr-FR', 'ru-RU']) {
+  for (const locale of ['en-US', 'zh-CN', 'fr-FR', 'ru-RU', 'ja-JP']) {
     test.describe(`${app.name} ${locale}`, () => {
       test.use({ locale, viewport: app.viewport });
       test('first launch follows the locale and saved preferences take priority', async ({ page }, info) => {
@@ -41,7 +60,7 @@ for (const app of applications) {
         await page.screenshot({ path: info.outputPath('first-launch.png') });
         await page.reload();
         await expect(page.locator('html')).toHaveAttribute('lang', chinese ? 'zh-CN' : 'en-US');
-        for (const [choice, htmlLang] of [['ru', 'ru-RU'], ['zh', 'zh-CN'], ['en', 'en-US']]) {
+        for (const [choice, htmlLang] of [['ru', 'ru-RU'], ['ja', 'ja-JP'], ['zh', 'zh-CN'], ['en', 'en-US']]) {
           await page.evaluate(({ key, value }) => localStorage.setItem(key, value), { key: app.key, value: choice });
           await page.reload();
           await expect(page.locator('html')).toHaveAttribute('lang', htmlLang);

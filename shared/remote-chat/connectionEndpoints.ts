@@ -34,9 +34,9 @@ export function connectionEndpointRows(mode: ConnectionMode, value?: ConnectionE
   if (mode !== 'direct') return [];
   const local = value?.localPublic ?? value?.local;
   return [
-    { id: 'local', label: value?.localPublic ? '本机公网 IP 和端口' : '本机 IP 和端口',
+    { id: 'local', label: value?.localPublic ? "client.chatReliability.thisDeviceSPublicIpAndPort" : "client.chatReliability.thisDeviceSIpAndPort",
       address: local && formatPublicEndpoint(local) },
-    { id: 'remote', label: '电脑 IP 和端口', address: value?.remote && formatPublicEndpoint(value.remote) },
+    { id: 'remote', label: "client.chatReliability.computerSIpAndPort", address: value?.remote && formatPublicEndpoint(value.remote) },
   ];
 }
 

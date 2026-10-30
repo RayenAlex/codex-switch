@@ -41,15 +41,12 @@ export const editorTheme = EditorView.theme({
   '.cm-foldGutter svg': { display: 'block' },
   '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'var(--pf-hover)' },
   '.cm-panels': { color: 'var(--pf-ink)', backgroundColor: 'var(--pf-surface)', borderColor: 'var(--pf-border)' },
-  '.cm-search': { padding: '8px', display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' },
-  '.cm-search .cm-textfield': { minWidth: '60px', maxWidth: '150px', fontSize: '16px',
-    color: 'var(--pf-ink)', backgroundColor: 'var(--pf-subtle)', border: '1px solid var(--pf-border)' },
-  '.cm-search .cm-button': { minHeight: '30px', backgroundImage: 'none', color: 'var(--pf-ink)',
-    backgroundColor: 'var(--pf-subtle)', border: '1px solid var(--pf-border)' },
-  '.cm-search label': { display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' },
-  '.cm-search br': { display: 'none' },
   '&.cm-focused .cm-cursor': { borderLeftColor: 'var(--pf-ink)' },
-  '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: 'var(--pf-selection)' },
+  '.cm-selectionBackground': { backgroundColor: 'var(--pf-selection)' },
+  // Match CodeMirror's focused layer selector so its light default cannot override the host palette.
+  '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': {
+    backgroundColor: 'var(--pf-selection)',
+  },
   '.cm-tooltip': { backgroundColor: 'var(--pf-surface)', color: 'var(--pf-ink)' },
 });
 
@@ -65,11 +62,11 @@ export const editorHighlighting = syntaxHighlighting(HighlightStyle.define([
 
 export function editorPhrases(t: BrowserTranslate): Extension {
   const labels: Record<string, string> = {
-    Find: '查找', Replace: '替换', next: '下一个', previous: '上一个', all: '全部',
-    'match case': '区分大小写', regexp: '正则表达式', 'by word': '全字匹配',
-    replace: '替换', 'replace all': '全部替换', close: '关闭',
-    'Fold line': '折叠此行', 'Unfold line': '展开此行', 'Go to line': '跳转到行', go: '跳转',
-    'current match': '当前匹配', 'replaced $ matches': '已替换 $ 处',
+    Find: "client.projectBrowser.find", Replace: "client.projectBrowser.replace", next: "client.projectBrowser.next", previous: "client.projectBrowser.previous", all: "client.configHelp.all",
+    'match case': "client.projectBrowser.matchCase", regexp: "client.projectBrowser.regularExpression", 'by word': "client.projectBrowser.wholeWords",
+    replace: "client.projectBrowser.replace", 'replace all': "client.projectBrowser.replaceAll", close: "client.projectBrowser.close",
+    'Fold line': "client.projectBrowser.foldLine", 'Unfold line': "client.projectBrowser.unfoldLine", 'Go to line': "client.projectBrowser.goToLine", go: "client.projectBrowser.go",
+    'current match': "client.projectBrowser.currentMatch", 'replaced $ matches': "client.projectBrowser.replacedMatches",
   };
   return EditorState.phrases.of(Object.fromEntries(Object.entries(labels).map(([key, value]) => [key, t(value)])));
 }

@@ -17,7 +17,7 @@ export function useApprovalResponse({ event, answers, respond }: Options) {
     setBusy(true);
     setError('');
     try { await respond(reply); }
-    catch { setError(t("提交失败，请重试。")); }
+    catch { setError(t("client.mobile.couldNotSubmitTryAgain")); }
     finally { submitting.current = false; setBusy(false); }
   };
   return { busy, error, send };

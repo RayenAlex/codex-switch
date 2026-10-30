@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { prepareDesktopVideoRuntime } from "./prepare-remote-desktop-runtime.mjs";
 import { prepareDesktopService } from './prepare-desktop-service.mjs';
+import { prepareXServer } from './prepare-x-server.mjs';
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, "..");
@@ -14,6 +15,7 @@ const tauriCli = join(repositoryRoot, "node_modules", "@tauri-apps", "cli", "tau
 const tauriArgs = process.argv.slice(2);
 await prepareDesktopVideoRuntime();
 await prepareDesktopService();
+await prepareXServer();
 
 if (!existsSync(tauriCli)) {
   fail("Tauri CLI is unavailable. Run `npm ci` or `npm install` first.");

@@ -1,3 +1,4 @@
+import { displayError, displayText } from '../i18n/index';
 import { createThemedStyles } from '../theme/styles';
 import { t, useLanguage } from '../i18n';
 import { Pressable, Text, TextInput, View } from 'react-native';
@@ -14,32 +15,32 @@ export function ChatThreadActions({ actions }: { actions: ThreadActionsModel }) 
   if (!actions.target) return null;
   const { view, busy, error, name, reason } = actions;
   const archive: ThreadAction = actions.target.archived ? 'unarchive' : 'archive';
-  const titles = { menu: t("操作 - {value1}", { value1: actions.target.title }), rename: t("重命名对话"), delete: t("删除这条对话？") };
+  const titles = { menu: t("client.mobile.actions", { value1: actions.target.title }), rename: t("client.threadActions.renameChat"), delete: t("client.threadActions.deleteThisChat") };
   const title = titles[view];
   const hint = reason(view === 'menu' ? archive : view);
-  return <BottomSheet visible title={title} truncateTitle maxWidth={400} dismissible={!busy} dragFromHeaderOnly
+  return <BottomSheet visible title={title} truncateTitle maxWidth={400} dismissible={!busy}
     onClose={actions.close} onBack={view !== 'menu' && !busy ? () => actions.changeView('menu') : undefined}
     actions={view === 'menu' ? [] : [
-      { label: t("取消"), onPress: actions.close, disabled: busy },
-      { label: view === 'rename' ? t("保存") : t("删除"), tone: view === 'delete' ? 'danger' : 'primary',
+      { label: t("client.accounts.cancel"), onPress: actions.close, disabled: busy },
+      { label: view === 'rename' ? t("client.projectBrowser.save") : t("client.projectBrowser.deleted"), tone: view === 'delete' ? 'danger' : 'primary',
         loading: busy, disabled: !!hint || (view === 'rename' && !name.trim()),
         onPress: () => actions.submit(view) },
     ]}>
     <View style={actionStyles.content}>
       {view === 'menu' && <>
-        <Action label={t("重命名")} icon="edit-2" disabled={!!reason('rename')} onPress={() => actions.changeView('rename')} />
-        <Action label={actions.target.archived ? t("恢复") : t("归档")} icon="archive" disabled={!!reason(archive)}
+        <Action label={t("client.projectBrowser.renamed")} icon="edit-2" disabled={!!reason('rename')} onPress={() => actions.changeView('rename')} />
+        <Action label={actions.target.archived ? t("client.chat.restore") : t("client.threadActions.archive")} icon="archive" disabled={!!reason(archive)}
           onPress={() => { void actions.submit(archive); }} />
-        <Action label={t("删除")} icon="trash-2" danger disabled={!!reason('delete')}
+        <Action label={t("client.projectBrowser.deleted")} icon="trash-2" danger disabled={!!reason('delete')}
           onPress={() => actions.changeView('delete')} />
       </>}
-      {view === 'rename' && <TextInput accessibilityLabel={t("对话名称")} value={name} onChangeText={actions.setName}
+      {view === 'rename' && <TextInput accessibilityLabel={t("client.threadActions.chatName")} value={name} onChangeText={actions.setName}
         style={actionStyles.input} maxLength={THREAD_NAME_LIMIT} autoFocus selectTextOnFocus editable={!busy}
         returnKeyType="done" onSubmitEditing={() => { if (!hint && name.trim()) void actions.submit('rename'); }} />}
       {view === 'delete' && <Text style={actionStyles.copy}>
-        {t("这条对话及其所有子对话将一起移入回收站，可在电脑端“会话管理”中恢复。")}</Text>}
+        {t("client.threadActions.thisChatAndAllItsChildChatsWillMoveTo")}</Text>}
       {!!(error || hint) && <Text accessibilityRole="alert" style={error ? styles.error : styles.subtitle}>
-        {error ? t(error) : t(hint || '')}</Text>}
+        {error ? displayError(error) : displayText(hint || '')}</Text>}
     </View>
   </BottomSheet>;
 }

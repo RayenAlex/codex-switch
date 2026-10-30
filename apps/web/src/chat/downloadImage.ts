@@ -3,7 +3,7 @@ import { base64Bytes, checkDownloadSize } from '../../../../shared/remote-chat/p
 
 export function downloadChatImage(url: string) {
   const match = /^data:image\/(png|jpeg|webp|gif);base64,([a-z0-9+/=]+)$/i.exec(url);
-  if (!match) throw new Error(t("图片暂时无法下载，请重试。"));
+  if (!match) throw new Error(t("client.chat.couldNotDownloadTheImagePleaseTryAgain"));
   checkDownloadSize(base64Bytes(url));
   const bytes = Uint8Array.from(atob(match[2]), (character) => character.charCodeAt(0));
   const objectUrl = URL.createObjectURL(new Blob([bytes], { type: `image/${match[1]}` }));

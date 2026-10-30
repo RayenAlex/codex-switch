@@ -1,30 +1,38 @@
 import { Tooltip } from 'antd';
-import { loadConversationMetrics } from '../../api/conversationMetrics';
-import { guiText } from '../../i18n/guiText';
-import { useConversationMetrics } from '../../../../../shared/remote-chat/client/useConversationMetrics';
-import { CONVERSATION_TPS_DESCRIPTION, CONVERSATION_TTFT_DESCRIPTION, formatConversationTps, formatConversationTtft }
+import { useMemo } from 'react';
+import { CONVERSATION_TSR_DESCRIPTION, formatConversationTsr, summarizeCommands, type CommandMetricTurn }
+  from '../../../../../shared/remote-chat/commandMetrics';
+import { uiText } from "../../i18n/uiText";
+import { UsageFooter } from '../../../../../shared/chat/UsageFooter';
+import { CONVERSATION_TPS_DESCRIPTION, CONVERSATION_TTFT_DESCRIPTION, formatConversationTps, formatConversationTtft,
+  type ConversationMetrics }
   from '../../../../../shared/remote-chat/conversationMetrics';
-import { formatConversationTokens } from '../../../../../shared/remote-chat/usage';
+import type { UsageSummary } from '../../../../../shared/remote-chat/usage';
 import styles from './ConversationTokenStatus.module.less';
 
-export function ConversationTokenStatus({ threadId, tokens, active }: {
-  threadId: string | null; tokens: number; active: boolean;
+export function ConversationTokenStatus({ threadId, active, turns, usage = null, metrics = null }: {
+  threadId: string | null; active: boolean; turns?: readonly CommandMetricTurn[];
+  usage?: UsageSummary | null;
+  metrics?: ConversationMetrics | null;
 }) {
-  const metrics = useConversationMetrics(loadConversationMetrics, threadId, active);
-  const speed = `${formatConversationTps(metrics)} TPS`;
-  const firstToken = `${formatConversationTtft(metrics)} TTFT`;
-  if (!threadId) return null;
+  const commands = useMemo(() => turns ? summarizeCommands(turns) : null, [turns]);
+  const success = `${formatConversationTsr(active ? commands : null)} TSR`;
+  const speed = `${formatConversationTps(active ? metrics : null)} TPS`;
+  const firstToken = `${formatConversationTtft(active ? metrics : null)} TTFT`;
   return <span className={styles.status}>
-    <Tooltip title={guiText(CONVERSATION_TPS_DESCRIPTION)} styles={{ root: { maxWidth: 400 } }}>
-      <span aria-label={`${guiText('对话输出速度')} ${speed}`}>{speed}</span>
-    </Tooltip>
-    <span aria-hidden="true"> · </span>
-    <Tooltip title={guiText(CONVERSATION_TTFT_DESCRIPTION)} styles={{ root: { maxWidth: 400 } }}>
-      <span aria-label={`${guiText('首 token 等待时间')} ${firstToken}`}>{firstToken}</span>
-    </Tooltip>
-    {tokens > 0 && <>
+    <UsageFooter usage={usage} translate={uiText}>{threadId && <>
+      <Tooltip title={uiText(CONVERSATION_TSR_DESCRIPTION)}
+        styles={{ root: { maxWidth: 'min(400px, calc(100vw - 16px))' } }}>
+        <span aria-label={uiText('client.chat.commandSuccessRateValue', { value: success })}>{success}</span>
+      </Tooltip>
       <span aria-hidden="true"> · </span>
-      <span>{formatConversationTokens(tokens)} tokens</span>
-    </>}
+      <Tooltip title={uiText(CONVERSATION_TPS_DESCRIPTION)} styles={{ root: { maxWidth: 400 } }}>
+        <span aria-label={`${uiText("client.mobile.conversationOutputSpeed")} ${speed}`}>{speed}</span>
+      </Tooltip>
+      <span aria-hidden="true"> · </span>
+      <Tooltip title={uiText(CONVERSATION_TTFT_DESCRIPTION)} styles={{ root: { maxWidth: 400 } }}>
+        <span aria-label={`${uiText("client.mobile.timeToFirstToken")} ${firstToken}`}>{firstToken}</span>
+      </Tooltip>
+    </>}</UsageFooter>
   </span>;
 }

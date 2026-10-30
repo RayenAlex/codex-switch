@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react';
+import { act, Profiler } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
 import { downloadManager } from '../../../web/src/downloads/manager';
@@ -25,8 +25,17 @@ it('counts active downloads for this account and local tasks, excluding previews
     listeners.add(listener); return () => { listeners.delete(listener); };
   });
   try {
-    await act(async () => root.render(<DownloadNavigationIcon owner="current" />));
+    const rendered = vi.fn();
+    await act(async () => root.render(<Profiler id="count" onRender={rendered}>
+      <DownloadNavigationIcon owner="current" /></Profiler>));
     expect(host.querySelector('sup')?.textContent).toBe('4');
+    expect(host.querySelector('sup')?.getAttribute('aria-label')).toBe('4 项正在下载');
+    const renders = rendered.mock.calls.length;
+    await act(async () => {
+      tasks = tasks.map(value => ({ ...value, received: value.received + 10 }));
+      listeners.forEach(listener => listener());
+    });
+    expect(rendered.mock.calls.length).toBe(renders);
     await act(async () => {
       tasks = tasks.map(value => value.status === 'downloading' ? { ...value, status: 'ready' } : value);
       listeners.forEach(listener => listener());

@@ -1,7 +1,7 @@
 import { queryProviderBalance } from '../api/backend';
 import type { Provider, ProviderBalance } from '../types';
 import { formatCurrencyAmount } from '../utils/currencyDisplay';
-import { guiText } from '../i18n/guiText';
+import { uiText } from "../i18n/uiText";
 
 const BALANCE_CACHE_MS = 60_000;
 // Keep the query state instead of formatted text so every read uses the current interface language.
@@ -9,18 +9,18 @@ type BalanceEntry = { balance?: ProviderBalance; failed: boolean; updatedAt: num
 
 function balanceDetail(provider: Provider, balance: ProviderBalance) {
   const quota = provider.balancePlatform === 'codexSwitch';
-  if (quota && balance.apiUnlimited) return guiText('剩余额度 不限额');
+  if (quota && balance.apiUnlimited) return uiText("client.remoteHostData.remainingQuotaUnlimited");
   const amount = quota ? balance.apiAmount : balance.walletAmount;
   const unit = quota ? balance.apiUnit : balance.walletUnit;
   if (typeof amount !== 'number' || !Number.isFinite(amount)) {
-    return guiText(quota ? '剩余额度 暂无余额' : '钱包余额 暂无余额');
+    return uiText(quota ? "client.remoteHostData.remainingQuotaNoData" : "client.remoteHostData.walletBalanceNoData");
   }
-  return guiText(quota ? '剩余额度 {amount}' : '钱包余额 {amount}', { amount: formatCurrencyAmount(amount, unit) });
+  return uiText(quota ? "client.remoteHostData.remainingQuota" : "client.remoteHostData.walletBalance", { amount: formatCurrencyAmount(amount, unit) });
 }
 
 function entryDetail(provider: Provider, entry: BalanceEntry) {
   if (entry.balance) return balanceDetail(provider, entry.balance);
-  return guiText(entry.failed ? '余额暂不可用' : '正在查询余额…');
+  return uiText(entry.failed ? "client.remoteHostData.balanceTemporarilyUnavailable" : "client.remoteHostData.checkingBalance");
 }
 
 /** Balance requests run separately so a slow provider cannot delay the account picker. */
@@ -34,7 +34,7 @@ export class GuiAccountBalances {
   }
 
   detail(provider: Provider): string {
-    if (!provider.balancePlatform) return guiText('钱包余额 暂无余额');
+    if (!provider.balancePlatform) return uiText("client.remoteHostData.walletBalanceNoData");
     const existing = this.entries.get(provider.id);
     if (existing && (existing.pending || Date.now() - existing.updatedAt < BALANCE_CACHE_MS)) {
       return entryDetail(provider, existing);

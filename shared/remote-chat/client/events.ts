@@ -31,7 +31,10 @@ export function updateThread(thread: Thread, event: GuiEvent): Thread {
   // A delayed error for unloaded history must not create a new active turn at the end of the conversation.
   if (index < 0 && method === 'error') return thread;
   let turn: Turn = turns[index] ?? { id, status: 'inProgress', items: [] };
-  if (params.turn) turn = { ...turn, ...params.turn, items: mergeItems(turn.items, params.turn.items ?? []) };
+  // Receipts restore missing turns but must not overwrite newer lifecycle notifications.
+  if (params.turn && (method !== MESSAGE_ACKNOWLEDGED || index < 0)) {
+    turn = { ...turn, ...params.turn, items: mergeItems(turn.items, params.turn.items ?? []) };
+  }
   if (method === MESSAGE_ACKNOWLEDGED) turn = acknowledgeMessage(turn, event);
   else if (params.item) turn = { ...turn, items: mergeItems(turn.items, [params.item]) };
   if (method === 'turn/diff/updated') turn = { ...turn, diff: params.diff };

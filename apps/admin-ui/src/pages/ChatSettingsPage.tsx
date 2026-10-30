@@ -1,3 +1,4 @@
+import inlineCopy from '@remoteai/i18n/copy/inline/admin/pages/ChatSettingsPage';
 import { useEffect, useState } from 'react';
 import { App, Button, Form, Space, Typography, theme } from 'antd';
 import type { ChatPolicy } from '../../../../shared/remote-chat/policy';
@@ -26,7 +27,7 @@ export function ChatSettingsPage({ api, canManage }: Props) {
     void api<ChatPolicy>('/admin/api/chat-settings').then((policy) => {
       if (!cancelled) { form.setFieldsValue(policy); setLoaded(true); }
     }).catch(() => {
-      if (!cancelled) message.error(zh ? '聊天设置加载失败，请重试。' : 'Unable to load chat settings. Please retry.');
+      if (!cancelled) message.error(zh ? inlineCopy["text_e1b8864d"] : inlineCopy["Unable_to_load_chat_settings_de7244dd"]);
     }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [api, form, message, zh, attempt]);
@@ -38,8 +39,8 @@ export function ChatSettingsPage({ api, canManage }: Props) {
         method: 'PATCH', body: JSON.stringify(policy),
       });
       form.setFieldsValue(saved);
-      message.success(zh ? '聊天设置已保存' : 'Chat settings saved');
-    } catch { message.error(zh ? '保存失败，请稍后重试。' : 'Unable to save. Please try again.'); }
+      message.success(zh ? inlineCopy["text_64c60109"] : inlineCopy["Chat_settings_saved_2ec0a073"]);
+    } catch { message.error(zh ? inlineCopy["text_a5fc967e"] : inlineCopy["Unable_to_save_Please_try_05cd3aad"]); }
     finally { setSaving(false); }
   };
 
@@ -47,22 +48,22 @@ export function ChatSettingsPage({ api, canManage }: Props) {
     <div className="chat-policy-heading">
       <Typography.Title level={2}>{t('nav.chatSettings')}</Typography.Title>
       <Typography.Text type="secondary">{zh
-        ? '统一管理 Codex GUI、手机 App 和网页的聊天设置。各项设置的生效时间见下方说明。'
-        : 'Manage chat settings for Codex GUI, mobile and web. See each section for when changes take effect.'}
+        ? inlineCopy["Codex_GUI_App_b8417ac5"]
+        : inlineCopy["Manage_chat_settings_for_Codex_c2805743"]}
       </Typography.Text>
       <Typography.Text type="secondary">{zh
-        ? '传输大小和图片压缩设置仅用于 Relay，P2P 直连不受这些限制。'
-        : 'Transfer size and image compression settings apply to Relay only. P2P transfers are unrestricted.'}
+        ? inlineCopy["RelayP2P_aa88e54d"]
+        : inlineCopy["Transfer_size_and_image_compression_7978ce03"]}
       </Typography.Text>
     </div>
     <Form form={form} onFinish={save} disabled={!canManage || saving || !loaded}>
       <ChatSettingsFields zh={zh} loading={loading} />
       <div className="chat-policy-actions"
         style={{ background: token.colorBgContainer, borderColor: token.colorBorderSecondary }}>
-        <Typography.Text type="secondary">{zh ? '修改后保存，即可应用新设置。' : 'Save to apply your changes.'}</Typography.Text>
+        <Typography.Text type="secondary">{zh ? inlineCopy["text_1726736f"] : inlineCopy["Save_to_apply_your_changes_890cfb60"]}</Typography.Text>
         <Space>
           {!loaded && !loading && <Button onClick={() => setAttempt((value) => value + 1)} disabled={false}>
-            {zh ? '重新加载' : 'Reload'}</Button>}
+            {zh ? inlineCopy["text_7bdd5ce1"] : inlineCopy["Reload_bdc090ec"]}</Button>}
           {canManage && <Button type="primary" htmlType="submit" loading={saving}>{t('common.save')}</Button>}
         </Space>
       </div>

@@ -20,17 +20,17 @@ beforeEach(() => {
   }));
 });
 
-it("resolves concrete model and effort selections when switching Providers and back", async () => {
+it("preserves concrete model and effort selections when switching Providers and back", async () => {
   const controller = new GuiController();
   await controller.connect();
   expect(controller.getSnapshot().settings).toMatchObject({ model: official.model, effort: "high" });
   controller.settings({ model: official.model, effort: "high" });
   await controller.setModels([thirdParty]);
   expect(controller.getSnapshot().models).toEqual([thirdParty]);
-  expect(controller.getSnapshot().settings).toMatchObject({ model: thirdParty.model, effort: "high" });
-  controller.settings({ model: thirdParty.model, effort: "max" });
+  expect(controller.getSnapshot().settings).toMatchObject({ model: official.model, effort: "high" });
+  expect(await controller.send("blocked", [])).toBe(false);
   await controller.setModels([thirdParty]);
-  expect(controller.getSnapshot().settings).toMatchObject({ model: thirdParty.model, effort: "high" });
+  expect(controller.getSnapshot().settings).toMatchObject({ model: official.model, effort: "high" });
   await controller.setModels([official]);
   expect(controller.getSnapshot().models).toEqual([official]);
   expect(controller.getSnapshot().settings).toMatchObject({ model: official.model, effort: "high" });

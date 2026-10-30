@@ -1,9 +1,10 @@
+import { remoteErrorText } from '../localization/errors';
 import { useEffect, useRef, useState } from 'react';
 import type { TreePrompt } from './useTreeActions';
 import { entryNameError } from './entryActions';
 import type { BrowserTranslate } from './ProjectTree';
 
-const TITLES = { createFile: '新建文件', createFolder: '新建文件夹', rename: '重命名', delete: '删除' };
+const TITLES = { createFile: "client.projectBrowser.newFile", createFolder: "client.projectBrowser.newFolder", rename: "client.projectBrowser.renamed", delete: "client.projectBrowser.deleted" };
 
 export function TreeActionDialog({ prompt, busy, error, connected, confirm, cancel, t }: {
   prompt: TreePrompt; busy: boolean; error: string; connected: boolean;
@@ -33,17 +34,17 @@ export function TreeActionDialog({ prompt, busy, error, connected, confirm, canc
       <form onSubmit={event => { event.preventDefault(); if (!invalid && !busy && connected) confirm(name); }}>
         <strong>{t(TITLES[prompt.action])}</strong><p className="pf-entry-name">{prompt.entry.name}</p>
         {deleting ? <p>{t(prompt.entry.directory
-          ? '将删除此文件夹及其中的全部内容，包括未保存的修改。此操作无法撤销。'
-          : '将删除此文件，包括未保存的修改。此操作无法撤销。')}</p>
-          : <label className="pf-name-field">{t('名称')}
-            <input value={name} maxLength={255} disabled={busy} aria-label={t('名称')}
+          ? "client.projectBrowser.thisWillDeleteTheFolderAndAllItsContentsIncluding"
+          : "client.projectBrowser.thisWillDeleteTheFileIncludingUnsavedChangesThisCannot")}</p>
+          : <label className="pf-name-field">{t("client.projectBrowser.name")}
+            <input value={name} maxLength={255} disabled={busy} aria-label={t("client.projectBrowser.name")}
               onChange={event => setName(event.target.value)} /></label>}
-        {name && invalid && <p role="alert">{t(invalid)}</p>}
-        {error && <p role="alert">{t(error)}</p>}
+        {name && invalid && <p role="alert">{remoteErrorText(invalid)}</p>}
+        {error && <p role="alert">{remoteErrorText(error)}</p>}
         <div className="pf-dialog-actions">
-          <button type="button" disabled={busy} onClick={cancel}>{t('取消')}</button>
+          <button type="button" disabled={busy} onClick={cancel}>{t("client.accounts.cancel")}</button>
           <button type="submit" className={deleting ? 'pf-danger' : 'pf-save'}
-            disabled={busy || !connected || !!invalid}>{t(busy ? '正在处理…' : deleting ? '确认删除' : '确定')}</button>
+            disabled={busy || !connected || !!invalid}>{t(busy ? "client.threadActions.working" : deleting ? "client.mobile.confirmDeletion" : "client.projectBrowser.ok")}</button>
         </div>
       </form>
     </section>

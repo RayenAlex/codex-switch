@@ -1,5 +1,5 @@
-import { guiText } from "../../i18n/guiText";
-import { backendText } from "../../../../../shared/i18n/backend/translateBackendMessage";
+import { uiText } from "../../i18n/uiText";
+import { remoteErrorText } from "../../../../../shared/localization/errors";
 import { useMemo, type ReactNode } from "react";
 import { Spin } from "antd";
 import { ArrowDown, Terminal } from "lucide-react";
@@ -31,8 +31,9 @@ export function Messages({ value, selected, active = true, footer, pendingReques
   onFork?: (threadId: string, turnId: string) => Promise<boolean>; forkDisabled?: boolean;
 } & CapacityRetryControl) {
   const last = lastUserMessage(value);
-  const { viewport, content, away, onScroll, jumpToLatest, pauseFollowing } = useFollowScroll(selected, active);
-  const history = useMessageWindow({ turns: value?.turns, selected, active, viewport, pauseFollowing, away });
+  const { viewport, content, movement, away, showJumpToLatest, onScroll, jumpToLatest, pauseFollowing }
+    = useFollowScroll(selected, active);
+  const history = useMessageWindow({ turns: value?.turns, selected, active, viewport, movement, pauseFollowing, away });
   const entries = useMemo(() => groupVisibleTurns(history.entries), [history.entries]);
   const quote = useQuoteSelection({ root: content, selected, enabled: active && Boolean(onQuote) });
   const sending = pendingRequest && pendingRequest.threadId === selected && !value?.activeTurn;
@@ -47,23 +48,23 @@ export function Messages({ value, selected, active = true, footer, pendingReques
       quote.dismiss();
       jumpToLatest();
     }} />}
-    <div ref={viewport} className={styles.messageViewport} aria-label={guiText("对话消息")}
+    <div ref={viewport} className={styles.messageViewport} aria-label={uiText("client.conversation.conversationMessages")}
       onWheel={history.onWheel} onScroll={() => {
-        if (history.onScroll()) return;
+        const offsetChange = history.onScroll();
         if (history.hasNewer) pauseFollowing();
-        else onScroll();
+        else onScroll(offsetChange);
       }}>
       <div ref={content} className={styles.messageScrollBody}>
         <div className={styles.messageContent}>
           {!selected && <div className={styles.welcome}>
             <div className={styles.welcomeIcon}><Terminal size={28} /></div>
-            <h1>{guiText("想一起完成什么？")}</h1><p>{guiText("直接提问，或选择一个项目开始任务。")}</p>
-            <div className={styles.suggestions}><span>{guiText("理解代码")}</span><span>{guiText("实现功能")}</span><span>{guiText("排查问题")}</span></div>
+            <h1>{uiText("client.chat.whatShallWeWorkOn")}</h1><p>{uiText("client.chat.askAQuestionOrChooseAProjectToGetStarted")}</p>
+            <div className={styles.suggestions}><span>{uiText("client.chat.understandCode")}</span><span>{uiText("client.chat.buildAFeature")}</span><span>{uiText("client.chat.troubleshoot")}</span></div>
           </div>}
-          {selected && !value && <div className={styles.listEmpty}><Spin /><p>{guiText("正在读取对话…")}</p></div>}
+          {selected && !value && <div className={styles.listEmpty}><Spin /><p>{uiText("client.conversation.loadingConversation")}</p></div>}
           {history.hasMore && <div className={styles.historyLoader}>
-            {history.loading ? <span role="status"><Spin size="small" />{guiText("正在加载更早的消息…")}</span>
-              : <button type="button" onClick={history.loadOlder}>{guiText("加载更早的消息")}</button>}
+            {history.loading ? <span role="status"><Spin size="small" />{uiText("client.conversation.loadingEarlierMessages")}</span>
+              : <button type="button" onClick={history.loadOlder}>{uiText("client.chat.loadEarlierMessages")}</button>}
           </div>}
           {entries.map(({ turn, items, followsInterruption, groups }) => <TurnMessage
             key={`${selected}:${turn.id}`} turn={turn} visibleItems={items}
@@ -83,16 +84,16 @@ export function Messages({ value, selected, active = true, footer, pendingReques
             running={value?.activeTurn === turn.id} active={active} />)}
           {history.hasNewer && <div className={styles.historyLoader}>
             <button type="button" onClick={history.loadNewer} disabled={history.loading}>
-              {guiText("加载更新的消息")}</button>
+              {uiText("client.chat.loadNewerMessages")}</button>
           </div>}
-          {value?.error && <p className={styles.turnError} role="status">{backendText(value.error)}</p>}
+          {value?.error && <p className={styles.turnError} role="status">{remoteErrorText(value.error)}</p>}
           {value?.activeTurn && <WorkingStatus key={`${selected}:${value.activeTurn}`} active={active}
             turn={activeTurn} processing={processing} />}
           {sending && <WorkingStatus key={`sending:${selected}`} active={active} pendingRequest={pendingRequest} />}
         </div>
         <div className={styles.messageFooter}>
-          {away && <button type="button" className={styles.jumpToLatest} onClick={jumpToLatest}>
-            <ArrowDown size={15} />{guiText("回到最新消息")}</button>}
+          {showJumpToLatest && <button type="button" className={styles.jumpToLatest} onClick={jumpToLatest}>
+            <ArrowDown size={15} />{uiText("client.conversation.jumpToLatestMessage")}</button>}
           {footer}
         </div>
       </div>

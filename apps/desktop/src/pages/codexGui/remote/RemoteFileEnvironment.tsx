@@ -5,7 +5,7 @@ import { downloadManager } from '../../../../../web/src/downloads/manager';
 import { ChatImage } from '../../../../../web/src/chat/ChatImage';
 import { FileEnvironmentContext, type FileEnvironment } from '../fileEnvironment';
 import { FileThreadContext } from '../fileApi';
-import { guiText } from '../../../i18n/guiText';
+import { uiText } from "../../../i18n/uiText";
 import { RemoteFileAccess } from './fileAccess';
 import { isDesktopApp } from '../../../api/backend';
 
@@ -33,7 +33,7 @@ export function RemoteFileEnvironment({ controller, ready, threadId, children }:
           if (!connection || !target.threadId) throw new Error('请连接远程电脑后重试。');
           await downloadManager.enqueue({ owner: connection.owner, deviceId: connection.deviceId,
             deviceName: connection.deviceName, scope: 'project', threadId: target.threadId, path: target.path });
-          void message.success({ content: guiText('已加入下载管理。'),
+          void message.success({ content: uiText("client.downloads.addedToDownloads"),
             style: { maxWidth: 400, marginInline: 'auto' } });
           return { path: target.path, saved: false };
         },

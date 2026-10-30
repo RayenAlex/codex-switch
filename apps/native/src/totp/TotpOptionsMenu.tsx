@@ -26,12 +26,12 @@ export function TotpOptionsMenu({ title, visible, onClose, options }: {
   return <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}
     supportedOrientations={['portrait', 'landscape-left', 'landscape-right']}>
     <View style={styles.overlay}>
-      <Pressable accessibilityLabel={t("关闭菜单")} accessibilityRole="button"
+      <Pressable accessibilityLabel={t("client.git.closeMenu")} accessibilityRole="button"
         style={StyleSheet.absoluteFill} onPress={onClose} />
       <View style={styles.menu} accessibilityViewIsModal>
         <View style={styles.header}>
           <Text style={styles.title}>{title}</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel={t("关闭菜单")} onPress={onClose} style={styles.close}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("client.git.closeMenu")} onPress={onClose} style={styles.close}>
             <Ionicons name="close" size={22} color={color(totpColors.muted, 'muted')} />
           </Pressable>
         </View>

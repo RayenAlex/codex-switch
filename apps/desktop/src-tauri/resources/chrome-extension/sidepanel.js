@@ -13,11 +13,11 @@ let chatLoading = false;
 function loadChat() {
   clearTimeout(loadingTimer);
   chatLoading = true;
-  loading.textContent = t('chatOpening', '正在打开聊天…');
+  loading.textContent = t('chatOpening');
   loading.hidden = !settings.hidden;
   chat.src = CHAT_URL;
   loadingTimer = setTimeout(() => {
-    loading.textContent = t('chatLoadingSlow', '加载时间较长，可以重新加载或在新标签页打开。');
+    loading.textContent = t('chatLoadingSlow');
   }, LOAD_HINT_DELAY_MS);
 }
 
@@ -33,7 +33,7 @@ toggle.addEventListener('click', () => {
   chat.hidden = showSettings;
   loading.hidden = showSettings || !chatLoading;
   toggle.setAttribute('aria-pressed', String(showSettings));
-  const label = showSettings ? t('backToChat', '返回聊天') : t('settingsTitle', '浏览器助手设置');
+  const label = showSettings ? t('backToChat') : t('settingsTitle');
   toggle.setAttribute('aria-label', label);
   toggle.title = label;
   // Keep the chat document alive so switching settings preserves the conversation and draft.

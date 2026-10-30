@@ -1,4 +1,6 @@
-import { guiText } from "../../i18n/guiText";
+import inlineCopy from '@remoteai/i18n/copy/inline/desktop/components/accounts/UsageMeter';
+import { interpolate as interpolateCopy } from '@remoteai/i18n';
+import { uiText } from "../../i18n/uiText";
 import { Progress } from "antd";
 import { useEffect, useState } from "react";
 import type { Language, Translate } from "../../i18n";
@@ -19,11 +21,11 @@ function tableResetLabel(timestamp: number | null | undefined, language: Languag
   if (resetWindow === "oneWeek") {
     const countdown = resetCountdownWithDays(timestamp, language, now);
     if (!countdown) return label;
-    return (language === "ru" ? guiText("{value1} · 剩 {value2}", { value1: label, value2: countdown }, language) : language === "zh" ? `${label} · 剩 ${countdown}` : `${label} · ${countdown} left`);
+    return (language !== "zh" && language !== "en" ? uiText("client.usage.remaining", { value1: label, value2: countdown }, language) : language === "zh" ? interpolateCopy(inlineCopy["value1_value2_830179b5"], { value1: String(label), value2: String(countdown) }) : interpolateCopy(inlineCopy["value1_value2_left_19823fbf"], { value1: String(label), value2: String(countdown) }));
   }
   const countdown = resetCountdownTime(timestamp, now);
   if (!countdown) return label;
-  return (language === "ru" ? guiText("{value1} · 剩 {value2}", { value1: label, value2: countdown }, language) : language === "zh" ? `${label} · 剩 ${countdown}` : `${label} · ${countdown} left`);
+  return (language !== "zh" && language !== "en" ? uiText("client.usage.remaining", { value1: label, value2: countdown }, language) : language === "zh" ? interpolateCopy(inlineCopy["value1_value2_830179b5"], { value1: String(label), value2: String(countdown) }) : interpolateCopy(inlineCopy["value1_value2_left_19823fbf"], { value1: String(label), value2: String(countdown) }));
 }
 
 function secondsSinceRefresh(timestamp: string | null | undefined, now: number) {

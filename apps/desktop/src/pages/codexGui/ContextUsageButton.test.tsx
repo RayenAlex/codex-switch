@@ -44,8 +44,8 @@ it("shows the compaction estimate while daily usage is pending and accepts a com
 
 it("opens while usage requests are pending, refreshes live and closes with Escape or another click", async () => {
   await render();
-  expect(vi.mocked(invoke).mock.calls.filter(([command]) => command !== "codex_gui_context_settings")).toHaveLength(1);
-  expect(button().nextElementSibling?.textContent).toBe("今日");
+  expect(vi.mocked(invoke).mock.calls.filter(([command]) => command !== "codex_gui_context_settings")).toHaveLength(0);
+  expect(button().nextElementSibling?.textContent).toBe("11.67 M · — USD");
   await click();
   expect(content()?.textContent).toContain("47% 已用（剩余 53%）");
   expect(content()?.textContent).toContain("已用 121.3K Token，共 258K");
@@ -56,7 +56,7 @@ it("opens while usage requests are pending, refreshes live and closes with Escap
   await click();
   await click();
   expect(button().getAttribute("aria-expanded")).toBe("false");
-  expect(vi.mocked(invoke).mock.calls.filter(([command]) => command !== "codex_gui_context_settings")).toHaveLength(1);
+  expect(vi.mocked(invoke).mock.calls.filter(([command]) => command !== "codex_gui_context_settings")).toHaveLength(0);
 });
 
 it("closes on conversation changes and when hidden, without reusing another conversation's statistics", async () => {

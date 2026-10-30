@@ -105,14 +105,13 @@ const CODEX_MODEL_OBSERVER_PATCH_HELPERS: &str = r#"
   };
 "#;
 
-fn codex_model_refresh_expression(
-    models: &[String],
-    fast_mode_models: &[String],
-    image_input_models: &[String],
-    model_reasoning_efforts: &crate::models::ModelReasoningEfforts,
-    selected_model: &str,
-    reasoning_profile: crate::providers::ReasoningEffortProfile,
-) -> Result<String, String> {
+fn codex_model_refresh_expression(request: &crate::codex_runtime::ModelRefreshRequest) -> Result<String, String> {
+    let crate::codex_runtime::ModelRefreshRequest {
+        models, fast_mode_models, image_input_models, model_reasoning_efforts,
+        selected_model, reasoning_profile, display_names,
+    } = request;
+    let reasoning_profile = *reasoning_profile;
+    let display_names = json!(display_names);
     let mut default_reasoning_efforts = Map::new();
     let reasoning_efforts = models
         .iter()
@@ -158,8 +157,7 @@ fn codex_model_refresh_expression(
     let observer_patch_helpers = CODEX_MODEL_OBSERVER_PATCH_HELPERS;
     let service_tier = serde_json::to_string(crate::local_proxy::proxy_service_tier_name())
         .map_err(|error| format!("Failed to prepare the proxy service tier: {error}"))?;
-    let speed_selector_overlay =
-        CODEX_SPEED_SELECTOR_OVERLAY.replace("__CODEX_SWITCH_SERVICE_TIER__", &service_tier);
+    let speed_selector_overlay = speed_selector_overlay_expression(&service_tier);
     let composer_query_client = include_str!("composer_query_client.js");
     let composer_status_setup = include_str!("composer_status.js");
     let proxy_running = crate::local_proxy::is_running();
@@ -173,6 +171,7 @@ fn codex_model_refresh_expression(
   const isCurrentRefresh = () => window[refreshSequenceKey] === refreshSequence;
   const supersededRefresh = {{ refreshed: false, reason: "superseded-model-refresh" }};
   const expectedModels = {models};
+  const displayNames = {display_names};
   const proxyRunning = {proxy_running};
   const fastModeModels = new Set({fast_mode_models});
   window.__CODEX_SWITCH_FAST_MODE_AVAILABLE__ = fastModeModels.size > 0;
@@ -232,13 +231,14 @@ fn codex_model_refresh_expression(
 
   const currentQueries = queryClient.getQueryCache().getAll().filter(matchesModelsQuery);
   const expected = new Set(expectedModels);
+  const modelOrder = new Map(expectedModels.map((model, index) => [model, index]));
   const injectedModels = expectedModels.map((model, index) => ({{
     id: model,
     model,
     upgrade: null,
     upgradeInfo: null,
     availabilityNux: null,
-    displayName: model === "codex switch control" ? "Remote AI Control" : model,
+    displayName: displayNames[model] ?? (model === "codex switch control" ? "Remote AI Control" : model),
     description: model,
     modelSpecialty: null,
     hidden: false,
@@ -285,6 +285,8 @@ fn codex_model_refresh_expression(
       const containsExpectedModels = expectedModels.every(model => currentIds.includes(model));
       const visibleCurrentModels = currentModels.filter(model =>
         expected.has(model?.model ?? model?.id)
+      ).sort((left, right) =>
+        modelOrder.get(left.model ?? left.id) - modelOrder.get(right.model ?? right.id)
       );
       if (!containsExpectedModels || currentIds.length !== expectedModels.length) injected = true;
       const data = containsExpectedModels
@@ -298,9 +300,9 @@ fn codex_model_refresh_expression(
             inputModalities: imageInputModels.has(model.model ?? model.id)
               ? ["text", "image"]
               : ["text"],
-            displayName: (model.model ?? model.id) === "codex switch control"
+            displayName: displayNames[model.model ?? model.id] ?? ((model.model ?? model.id) === "codex switch control"
               ? "Remote AI Control"
-              : model.displayName,
+              : model.displayName),
             isDefault: (model.model ?? model.id) === selectedModel ||
               (!expected.has(selectedModel) && index === 0),
           }}))

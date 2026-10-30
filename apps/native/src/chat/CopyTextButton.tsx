@@ -1,3 +1,4 @@
+import { displayText } from '../i18n/index';
 import { createThemedStyles } from '../theme/styles';
 import { useThemeColor } from '../theme/store';
 import { t, useLanguage } from '../i18n';
@@ -29,9 +30,9 @@ function useTextCopy(text: string) {
   const notice = (value: string) => {
     if (!mounted.current) return;
     setStatus(value);
-    AccessibilityInfo.announceForAccessibility(t(value));
-    if (value === '复制失败，请重试') Toast.fail(t(value));
-    else if (value !== '已复制') Toast.success(value);
+    AccessibilityInfo.announceForAccessibility(displayText(value));
+    if (value === "client.app.couldNotCopyPleaseTryAgain") Toast.fail(displayText(value));
+    else if (value !== "client.chat.copied") Toast.success(displayText(value));
     clearTimeout(timer.current);
     timer.current = setTimeout(() => setStatus(''), 2000);
   };
@@ -41,9 +42,9 @@ function useTextCopy(text: string) {
     try {
       const result = await copyText(text);
       if (!mounted.current) return;
-      if (result === 'copied') notice('已复制');
+      if (result === 'copied') notice("client.chat.copied");
       else if (Platform.OS === 'android') { setError(''); setRequest({ text, reason: result }); }
-      else notice('复制失败，请重试');
+      else notice("client.app.couldNotCopyPleaseTryAgain");
     } finally { busy.current = false; }
   };
   const save = async () => {
@@ -53,15 +54,15 @@ function useTextCopy(text: string) {
       const result = await saveTextFile(request.text);
       if (result && mounted.current) {
         setRequest(null);
-        notice(result.location === 'downloads' ? t("已保存到下载文件夹") : t("已保存到所选文件夹"));
+        notice(result.location === 'downloads' ? t("client.mobile.savedToDownloads") : t("client.mobile.savedToTheSelectedFolder"));
       }
-    } catch { if (mounted.current) setError(t("保存失败，请重试。")); }
+    } catch { if (mounted.current) setError(t("client.mobile.couldNotSaveTryAgain.3461df")); }
     finally { busy.current = false; if (mounted.current) setSaving(false); }
   };
   return { status, request, saving, error, copy, save, close: () => setRequest(null) };
 }
 
-export function CopyTextButton({ text, label = t("复制"), variant = 'inline' }: {
+export function CopyTextButton({ text, label = t("client.projectBrowser.copied"), variant = 'inline' }: {
   text: string; label?: string; variant?: 'inline' | 'labeled' | 'icon';
 }) {
   const copyStyles = useCopyStyles();
@@ -71,17 +72,17 @@ export function CopyTextButton({ text, label = t("复制"), variant = 'inline' }
   const copy = useTextCopy(text);
   const labeled = variant === 'labeled';
   return <View style={variant === 'inline' && copyStyles.inline}>
-    <Pressable accessibilityRole="button" accessibilityLabel={copy.status ? t(copy.status) : label}
+    <Pressable accessibilityRole="button" accessibilityLabel={copy.status ? displayText(copy.status) : label}
       style={[variant === 'inline' ? copyStyles.button : copyStyles.actionButton,
         variant === 'icon' && copyStyles.iconButton]} hitSlop={8}
       disabled={copy.saving} onPress={() => void copy.copy()}>
-      <Feather name={copy.status === '已复制' ? 'check' : 'copy'} size={15} color={color(palette.muted, 'muted')} />
-      {labeled && <Text style={copyStyles.label}>{copy.status ? t(copy.status) : label}</Text>}
+      <Feather name={copy.status === "client.chat.copied" ? 'check' : 'copy'} size={15} color={color(palette.muted, 'muted')} />
+      {labeled && <Text style={copyStyles.label}>{copy.status ? displayText(copy.status) : label}</Text>}
     </Pressable>
-    {copy.request && <BottomSheet visible title={t("保存完整内容")} onClose={copy.close} dismissible={!copy.saving}
-      actions={[{ label: t("保存完整内容"), onPress: copy.save, loading: copy.saving, disabled: copy.saving }]}>
+    {copy.request && <BottomSheet visible title={t("client.mobile.saveFullContent")} onClose={copy.close} dismissible={!copy.saving}
+      actions={[{ label: t("client.mobile.saveFullContent"), onPress: copy.save, loading: copy.saving, disabled: copy.saving }]}>
       <Text style={[styles.messageText, { maxWidth: 400 }]}>{copy.request.reason === 'too-large'
-        ? t("内容较长，可将完整内容保存为文本文件。") : t("复制未成功，可将完整内容保存为文本文件。")}</Text>
+        ? t("client.mobile.thisContentIsLongSaveTheFullTextToA") : t("client.mobile.couldNotCopyYouCanSaveTheFullTextTo")}</Text>
       {!!copy.error && <Text accessibilityRole="alert" style={styles.error}>{copy.error}</Text>}
     </BottomSheet>}
   </View>;
@@ -89,7 +90,8 @@ export function CopyTextButton({ text, label = t("复制"), variant = 'inline' }
 
 const useCopyStyles = createThemedStyles((color) => ({
   actionButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8 },
-  iconButton: { width: 32, justifyContent: 'center' },
+  // Keep the touch area below the icon so its height does not add space after the reply.
+  iconButton: { width: 32, justifyContent: 'center', alignItems: 'flex-start' },
   label: { color: color(palette.muted, 'muted'), fontSize: 14 },
   // Explicit dimensions let Android lay out this view as one inline attachment in a TextView.
   inline: { width: INLINE_COPY_WIDTH, height: 20 },

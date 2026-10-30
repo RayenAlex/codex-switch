@@ -10,6 +10,7 @@ import { downloadManager } from '../../web/src/downloads/manager';
 import { createGuiToolsClient } from '../../../shared/remote-chat/guiTools';
 import { DashboardNavigation, type DashboardPage } from '../src/components/dashboard/DashboardNavigation';
 import { translate } from '../src/i18n';
+import { setGuiLanguage } from '../src/i18n/uiText';
 import { initialChatState } from '../../../shared/remote-chat/client/types';
 import type { DownloadClient } from '../../../shared/remote-chat/downloads';
 import type { GuiComputer } from '../src/pages/codexGui/remote/types';
@@ -17,6 +18,7 @@ import { ChatFilePreview } from '../../web/src/chat/ChatFilePreview';
 import { DEFAULT_CHAT_POLICY, setChatConnectionMode, setChatPolicy } from '../../../shared/remote-chat/policy';
 import { nativeBulkFixture, nativeBulkStats } from './native-bulk-fixture';
 import { nativeDirectBulkFixture, nativeDirectStats, NATIVE_DIRECT_FILE_BYTES } from './native-direct-bulk-fixture';
+import { LOCAL_DOWNLOAD_OWNER } from '../src/downloads/localGitDownloads';
 import 'antd/dist/reset.css';
 import '../src/styles.css';
 
@@ -32,6 +34,15 @@ setChatPolicy({ ...DEFAULT_CHAT_POLICY, fileDownloadMaxMb: nativeBulk ? 20 : 1,
 const identity = { baseUrl: 'https://fixture.test', userId: 'owner' };
 const auth = { ...identity, enabled: true, authenticated: true, sessionExpired: false };
 const fixture = { delay: 500, failDownload: false,
+  setLanguage: setGuiLanguage,
+  addRemote: (name: string) => downloadManager.enqueue({ owner: authenticatedDownloadOwner(auth),
+    deviceId: 'office', deviceName: '办公电脑', scope: 'project', cwd: 'C:/project', path: `C:/project/${name}` }),
+  addLocal: async (name = 'local.patch') => {
+    downloadManager.register({ owner: LOCAL_DOWNLOAD_OWNER, deviceId: 'fixture-local', deviceName: '此电脑',
+      ready: true, mode: 'direct', client: office.downloads, files: { ...office.files } });
+    await downloadManager.enqueue({ owner: LOCAL_DOWNLOAD_OWNER, deviceId: 'fixture-local', deviceName: '此电脑',
+      scope: 'project', cwd: 'C:/project', path: `C:/project/${name}` });
+  },
   offsets: [] as { device: string; offset: number }[], nativeBulkStats, nativeDirectStats };
 declare global { interface Window { desktopDownloads: typeof fixture } }
 window.desktopDownloads = fixture;

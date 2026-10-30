@@ -59,6 +59,8 @@ it('bounds a continually open conversation, keeps history stable, and returns to
     await render(value);
     expect(count()).toBe(10);
   }
+  const viewport = container.querySelector('[aria-label="对话消息"]')!;
+  Object.defineProperties(viewport, { scrollHeight: { value: 2_000 }, clientHeight: { value: 500 } });
   await older(); await older(); await older();
   expect(count()).toBe(30);
   const first = container.querySelector('[data-message-id]')?.getAttribute('data-message-id');

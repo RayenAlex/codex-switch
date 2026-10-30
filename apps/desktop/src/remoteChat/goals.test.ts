@@ -3,6 +3,7 @@ import { RemoteGoals } from '../../../../shared/remote-chat/client/goals';
 import { applyChatEvent } from '../../../../shared/remote-chat/client/events';
 import { initialChatState, type ChatState, type Request } from '../../../../shared/remote-chat/client/types';
 import type { ThreadGoal } from '../pages/codexGui/goalTypes';
+import { testModels } from '../pages/codexGui/testModels';
 
 const thread = { id: 'one', cwd: 'F:/project', preview: '', updatedAt: 1, turns: [] };
 const goal: ThreadGoal = { threadId: thread.id, objective: '完成登录页面', status: 'active', tokenBudget: null,
@@ -15,7 +16,8 @@ const request = vi.fn<(body: Request) => Promise<unknown>>();
 const created = vi.fn();
 beforeEach(() => {
   vi.resetAllMocks(); generation = 0;
-  state = { ...initialChatState(), ready: true, draftProject: { cwd: thread.cwd, label: 'project' } };
+  state = { ...initialChatState(), ready: true, draftProject: { cwd: thread.cwd, label: 'project' },
+    models: [{ ...testModels[0], id: 'astra', model: 'astra' }] };
   request.mockImplementation(async (body) => {
     if (body.operation === 'resume') return {};
     if (body.operation === 'goalGet' || body.operation === 'goalSet') return { goal };

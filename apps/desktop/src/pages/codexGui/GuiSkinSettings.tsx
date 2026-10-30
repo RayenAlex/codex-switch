@@ -1,5 +1,5 @@
-import { guiText } from "../../i18n/guiText";
-import { backendText } from "../../../../../shared/i18n/backend/translateBackendMessage";
+import { uiText } from "../../i18n/uiText";
+import { remoteErrorText } from "../../../../../shared/localization/errors";
 import { useState } from "react";
 import { Alert, Button, Input, Segmented } from "antd";
 import { useLanguage } from "../../hooks/useLanguage";
@@ -20,26 +20,26 @@ export function GuiSkinSettings() {
   const library = useGuiSkinLibrary(catalog);
   const isBusy = library.busy !== null;
   const resourceUnavailable = !library.resources?.installed;
-  const resourceMessage = library.resources?.phase === "error" ? guiText("皮肤图片下载失败，请重试。")
-    : library.resources?.phase === "unsupported" ? guiText("当前设备暂不支持读取内置皮肤。") : guiText("正在准备皮肤图片，请稍候…");
-  return <section className={styles.panel} aria-label={guiText("Codex GUI 皮肤")}>
+  const resourceMessage = library.resources?.phase === "error" ? uiText("client.workspaceSettings.couldNotDownloadTheThemeImagePleaseTryAgain")
+    : library.resources?.phase === "unsupported" ? uiText("client.workspaceSettings.thisDeviceCannotLoadBuiltInThemesYet") : uiText("client.workspaceSettings.preparingTheThemeImagePleaseWait");
+  return <section className={styles.panel} aria-label={uiText("client.workspaceSettings.codexGuiThemes")}>
     <div className={styles.toolbar}>
-      <p className={styles.hint}>{guiText("从皮肤库中选择喜欢的背景，仅用于 Codex GUI。更改后自动保存。")}</p>
+      <p className={styles.hint}>{uiText("client.workspaceSettings.chooseABackgroundFromTheThemeLibraryForCodexGui")}</p>
       <div className={styles.controls}>
-        <Segmented<GuiSkin["mode"]> aria-label={guiText("皮肤使用方式")} value={settings.mode} disabled={isBusy}
-          options={[{ value: "inherit", label: guiText("跟随皮肤页") }, { value: "custom", label: guiText("独立设置") },
-            { value: "none", label: guiText("不使用皮肤") }]} onChange={(mode) => library.update({ mode })} />
+        <Segmented<GuiSkin["mode"]> aria-label={uiText("client.workspaceSettings.themeBehavior")} value={settings.mode} disabled={isBusy}
+          options={[{ value: "inherit", label: uiText("client.workspaceSettings.followThemePage") }, { value: "custom", label: uiText("client.workspaceSettings.chooseIndependently") },
+            { value: "none", label: uiText("client.workspaceSettings.noTheme") }]} onChange={(mode) => library.update({ mode })} />
         <DreamSkinOverlaySlider disabled={isBusy || settings.mode !== "custom" || !settings.themeId}
           opacity={settings.overlayOpacity}
           onChange={(overlayOpacity) => library.update({ overlayOpacity })} t={t} />
       </div>
-      {settings.mode === "custom" && !settings.themeId && <p className={styles.hint}>{guiText("请选择下方的皮肤。")}</p>}
+      {settings.mode === "custom" && !settings.themeId && <p className={styles.hint}>{uiText("client.workspaceSettings.chooseAThemeBelow")}</p>}
       <div className={styles.controls}>
-        <Segmented<ThemeTab> aria-label={guiText("皮肤来源")} value={themeTab}
-          options={[{ value: "builtIn", label: guiText("内置皮肤") },
-            { value: "market", label: guiText("社区皮肤") }, { value: "saved", label: guiText("已保存") }]}
+        <Segmented<ThemeTab> aria-label={uiText("client.workspaceSettings.themeSource")} value={themeTab}
+          options={[{ value: "builtIn", label: uiText("client.workspaceSettings.builtInThemes") },
+            { value: "market", label: uiText("client.workspaceSettings.communityThemes") }, { value: "saved", label: uiText("client.configHelp.saved") }]}
           onChange={(next) => { setThemeTab(next); if (next === "saved") void library.refreshSaved(); }} />
-        <Input.Search className={styles.search} aria-label={guiText("搜索皮肤")} placeholder={guiText("搜索皮肤")} allowClear
+        <Input.Search className={styles.search} aria-label={uiText("client.workspaceSettings.searchThemes")} placeholder={uiText("client.workspaceSettings.searchThemes")} allowClear
           value={themeTab === "market" ? catalog.marketQuery : queries[themeTab]}
           onChange={(event) => themeTab === "market"
             ? catalog.setMarketQuery(event.target.value)
@@ -47,15 +47,15 @@ export function GuiSkinSettings() {
         <Button size="small" disabled={isBusy} onClick={() => {
           void library.refreshSaved();
           if (themeTab === "market") catalog.refreshThemeMarket();
-        }}>{guiText("刷新")}</Button>
+        }}>{uiText("client.chat.refresh")}</Button>
       </div>
-      {library.error && <Alert type="error" showIcon closable message={backendText(library.error)}
+      {library.error && <Alert type="error" showIcon closable message={remoteErrorText(library.error)}
         onClose={() => library.setError(null)} />}
       {resourceUnavailable && themeTab === "builtIn" && <Alert showIcon
         type={library.resources?.phase === "error" ? "error" : "info"}
         message={resourceMessage}
         action={library.resources?.phase === "error" && <Button size="small"
-          onClick={() => void library.retry()}>{guiText("重试")}</Button>} />}
+          onClick={() => void library.retry()}>{uiText("client.terminal.retry")}</Button>} />}
     </div>
     <div className={styles.browser}>
       <DreamSkinBrowser actions={library.actions} busy={library.busy} isBusy={isBusy}

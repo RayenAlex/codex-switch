@@ -17,7 +17,7 @@ export function createFrameSessions(target, guard) {
     debuggee: (frameId) => debuggee(state, frameId),
     relatedFrames: (frameId) => relatedFrames(state, frameId),
     send: (method, params = {}, frameId) => {
-      if (frameId && !state.frameSessions.has(frameId)) throw new Error(t('frameChanged', '页面框架已变化，请重新读取页面。'));
+      if (frameId && !state.frameSessions.has(frameId)) throw new Error(t('frameChanged'));
       return command(state, { method, params, sessionId: state.frameSessions.get(frameId) });
     },
     dispose: () => dispose(state, listener),
@@ -44,7 +44,7 @@ async function dispose(state, listener) {
 }
 
 function debuggee(state, frameId) {
-  if (!state.frameSessions.has(frameId)) throw new Error(t('frameChanged', '页面框架已变化，请重新读取页面。'));
+  if (!state.frameSessions.has(frameId)) throw new Error(t('frameChanged'));
   const sessionId = state.frameSessions.get(frameId);
   return { ...state.target, ...(sessionId ? { sessionId } : {}) };
 }
@@ -55,7 +55,7 @@ function relatedFrames(state, frameId) {
 }
 
 function listen(state, frameId, listener) {
-  if (!state.frameSessions.has(frameId)) throw new Error(t('frameChanged', '页面框架已变化，请重新读取页面。'));
+  if (!state.frameSessions.has(frameId)) throw new Error(t('frameChanged'));
   const sessionId = state.frameSessions.get(frameId);
   const handler = (source, method, params) => {
     if (source.tabId === state.target.tabId && source.sessionId === sessionId) listener(method, params);
@@ -75,7 +75,7 @@ function onEvent(state, { source, method, params }) {
   }
   if (method !== 'Target.attachedToTarget' || params.targetInfo.type !== 'iframe') return;
   if (state.targets.has(params.sessionId)) return;
-  if (state.targets.size >= MAX_TARGETS) { state.error = new Error(t('tooManyFrames', '页面框架过多，请关闭无关内容后重试。')); return; }
+  if (state.targets.size >= MAX_TARGETS) { state.error = new Error(t('tooManyFrames')); return; }
   state.targets.set(params.sessionId, params.targetInfo.targetId);
   // Auto-attach is not recursive; nested cross-site frames need it enabled in each child session.
   autoAttach(state, params.sessionId);
@@ -83,7 +83,7 @@ function onEvent(state, { source, method, params }) {
 
 function autoAttach(state, sessionId) {
   const task = command(state, { method: 'Target.setAutoAttach', params: AUTO_ATTACH, sessionId })
-    .catch(() => { state.error = new Error(t('frameConnectionChanged', '页面框架连接已变化，请重新读取页面。')); })
+    .catch(() => { state.error = new Error(t('frameConnectionChanged')); })
     .finally(() => state.pending.delete(task));
   state.pending.add(task);
 }
@@ -95,7 +95,7 @@ async function settle(state) {
 
 async function command(state, { method, params = {}, sessionId }) {
   await state.guard();
-  if (state.disposed) throw new Error(t('browserActionEnded', '浏览器操作已结束。'));
+  if (state.disposed) throw new Error(t('browserActionEnded'));
   return chrome.debugger.sendCommand({ ...state.target, ...(sessionId ? { sessionId } : {}) }, method, params);
 }
 

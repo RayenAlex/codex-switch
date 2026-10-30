@@ -27,7 +27,8 @@ export async function forkRemoteConversation(threadId: unknown) {
     access: state.settings.access, cwd: state.projectOverrides[threadId] });
   controller.modelSettings.created(thread.id, selection);
   await controller.modelSettings.ready(thread.id);
-  void controller.refresh();
+  controller.receiveThreadListEvent({ method: 'thread/started', params: { thread } });
+  void controller.refresh(false, false);
   // The client loads paged history after opening the fork; avoid sending its entire history over the relay.
   const { turns: _turns, ...summary } = thread;
   return { thread: summary };

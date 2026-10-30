@@ -1,3 +1,4 @@
+import { displayText } from '../localization/messages';
 import { useEffect, useRef, useState } from 'react';
 import { DownloadPolicyError } from './policy';
 import { DownloadCancelled, downloadFile, type DownloadOptions } from './fileDownload';
@@ -43,5 +44,7 @@ export function useFileDownload(options: Options) {
       if (mounted.current) setBusy(false);
     }
   };
-  return { busy, ...progress, message, start, cancel, label: busy ? `取消下载 · ${progress.percent}%` : '下载' };
+  return { busy, ...progress, message, start, cancel, label: busy
+    ? displayText("client.shared.cancelDownload", { percent: progress.percent })
+    : displayText("client.projectBrowser.download") };
 }

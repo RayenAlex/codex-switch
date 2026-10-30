@@ -102,3 +102,33 @@ test('lets nested code scroll upward without fetching earlier chat messages', as
   await expect(page.locator('[data-message-id="older"]')).toBeVisible();
   expect(requests).toBe(1);
 });
+
+test('keeps a restored near-bottom history anchor paused when new messages arrive', async ({ page }) => {
+  const messages = (prefix: string) => Array.from({ length: 10 }, (_, index) =>
+    turn(`${prefix}-${index}`, `${prefix} ${index}\n\n${'Readable history. '.repeat(20)}`));
+  const latest = messages('latest');
+  const older = messages('older');
+  const thread: Thread = { id: 'following', cwd: '', preview: '', updatedAt: 1, turns: latest };
+  await page.route('**/display-fixture.json', route => route.fulfill({ json: thread }));
+  await page.route('**/display-history.json', route => route.fulfill({ json: { turns: older, hasMore: false } }));
+  await page.goto('e2e/chat-display-harness.html?history');
+  const viewport = page.getByLabel('聊天记录');
+  await expect(page.locator('.chat-entry-message')).toHaveCount(10);
+  const overflow = await viewport.evaluate(node => node.scrollHeight - node.clientHeight);
+  const size = page.viewportSize()!;
+  await page.setViewportSize({ ...size, height: size.height + overflow - 52 });
+  await expect.poll(() => viewport.evaluate(node => node.scrollTop)).toBe(52);
+  await wheel(page, -60);
+  await expect(page.locator('.chat-entry-message')).toHaveCount(20);
+  const anchor = page.locator('[data-message-id="latest-0"]');
+  const top = (await anchor.boundingBox())!.y;
+  const next = { ...thread, turns: [...older, ...latest, turn('streamed', 'Streaming reply.\n\n'.repeat(30))] };
+  await page.evaluate(detail => window.dispatchEvent(new CustomEvent('display-fixture', { detail })), next);
+  await expect(page.locator('.chat-entry-message')).toHaveCount(21);
+  await expect(page.getByRole('button', { name: '回到底部', exact: true })).toBeVisible();
+  expect(Math.abs((await anchor.boundingBox())!.y - top)).toBeLessThan(2);
+  await page.getByLabel('消息', { exact: true }).fill('Keep reading history');
+  await page.getByRole('button', { name: '回到底部', exact: true }).click();
+  await expect.poll(() => viewport.evaluate(node => node.scrollHeight - node.clientHeight - node.scrollTop))
+    .toBeLessThan(2);
+});

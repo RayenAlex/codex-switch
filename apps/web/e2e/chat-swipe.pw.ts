@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { connect, fixtureUrl, login, screenshot, send, settled } from './chat-helpers';
 
 type Point = { x: number; y: number };
@@ -15,6 +15,34 @@ async function swipe(page: Page, points: Point[], cancel = false) {
 
 const drawer = (page: Page) => page.locator('.chat-drawer .ant-drawer-content');
 const right = [{ x: 90, y: 300 }, { x: 115, y: 302 }, { x: 170, y: 306 }, { x: 240, y: 310 }];
+const left = [{ x: 280, y: 300 }, { x: 250, y: 302 }, { x: 190, y: 306 }, { x: 100, y: 310 }];
+const activeTab = (page: Page) => page.locator('.mobile-tabbar .adm-tab-bar-item-active');
+
+async function trackSettling(page: Page, key: string) {
+  return page.locator(`[data-primary-page="${key}"]`).evaluate(node => new Promise<number[]>(resolve => {
+    const positions: number[] = [];
+    const started = performance.now();
+    const sample = () => {
+      positions.push(node.getBoundingClientRect().x);
+      if (performance.now() - started < 650) requestAnimationFrame(sample);
+      else resolve(positions);
+    };
+    sample();
+  }));
+}
+
+function trackDrawerSettling(panel: Locator) {
+  return panel.evaluate(node => new Promise<number[]>(resolve => {
+    const samples: number[] = [];
+    const until = performance.now() + 500;
+    const sample = () => {
+      samples.push(node.getBoundingClientRect().x);
+      if (performance.now() < until) requestAnimationFrame(sample);
+      else resolve(samples);
+    };
+    sample();
+  }));
+}
 
 test.beforeEach(async ({ page, request }) => {
   await request.post(`${fixtureUrl}/test/reset`);
@@ -22,6 +50,147 @@ test.beforeEach(async ({ page, request }) => {
   await connect(page);
   await expect(page.getByRole('status').filter({ hasText: 'P2P' })).toBeVisible({ timeout: 16_000 });
 });
+
+test('swipes through adjacent main pages in both directions and retains the chat draft',
+  async ({ page, isMobile }, info) => {
+    test.skip(!isMobile, 'Main page swipes belong to the mobile layout.');
+    await page.getByRole('textbox', { name: '聊天消息' }).fill('保留切页草稿');
+    for (const label of ['账号', '发现', '设置', '设置']) {
+      await swipe(page, left);
+      await expect(activeTab(page)).toHaveText(label);
+      await expect(drawer(page)).toHaveCount(0);
+    }
+    await screenshot(page, info, 'swipe-to-settings');
+    for (const label of ['发现', '账号', '聊天']) {
+      await swipe(page, right);
+      await expect(activeTab(page)).toHaveText(label);
+    }
+    await expect(page.getByRole('textbox', { name: '聊天消息' })).toHaveValue('保留切页草稿');
+    await swipe(page, right);
+    await expect(drawer(page)).toBeVisible();
+    await swipe(page, left);
+    await expect(drawer(page)).toHaveCount(0);
+    await expect(activeTab(page)).toHaveText('聊天');
+  });
+
+test('keeps short, cancelled, vertical-first and input gestures on the current page',
+  async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'Touch navigation belongs to the mobile layout.');
+    await swipe(page, left.slice(0, 2));
+    await expect(activeTab(page)).toHaveText('聊天');
+    await swipe(page, left, true);
+    await expect(activeTab(page)).toHaveText('聊天');
+    await page.locator('.mobile-tabbar').getByText('账号', { exact: true }).click();
+    await swipe(page, [{ x: 280, y: 300 }, { x: 280, y: 340 }, { x: 100, y: 360 }]);
+    await expect(activeTab(page)).toHaveText('账号');
+    await page.locator('.mobile-tabbar').getByText('聊天', { exact: true }).click();
+    const input = page.getByRole('textbox', { name: '聊天消息' });
+    await input.fill('正在编辑的草稿');
+    const bounds = (await input.boundingBox())!;
+    const y = bounds.y + bounds.height / 2;
+    await swipe(page, [{ x: 250, y }, { x: 220, y }, { x: 150, y }]);
+    await expect(activeTab(page)).toHaveText('聊天');
+    await expect(input).toHaveValue('正在编辑的草稿');
+  });
+
+test('swiping discovery rows changes tabs without opening them and leaves subpages alone',
+  async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'Touch navigation belongs to the mobile layout.');
+    await page.locator('.mobile-tabbar').getByText('发现', { exact: true }).click();
+    const row = page.locator('.discovery-list').getByRole('button', { name: '设备', exact: true });
+    const bounds = (await row.boundingBox())!;
+    const y = bounds.y + bounds.height / 2;
+    await swipe(page, [{ x: 280, y }, { x: 250, y }, { x: 190, y }, { x: 100, y }]);
+    await expect(activeTab(page)).toHaveText('设置');
+    await page.locator('.mobile-tabbar').getByText('发现', { exact: true }).click();
+    await row.click();
+    await expect(row).toHaveCount(0);
+    await swipe(page, left);
+    await swipe(page, right);
+    await expect(activeTab(page)).toHaveText('发现');
+    await expect(row).toHaveCount(0);
+  });
+
+test('desktop touch drags do not replace sidebar navigation', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'The desktop layout keeps its sidebar interaction.');
+  const menu = page.locator('.desktop-sidebar nav');
+  await menu.getByRole('button', { name: '账号', exact: true }).click();
+  await swipe(page, [{ x: 800, y: 300 }, { x: 760, y: 300 }, { x: 660, y: 300 }]);
+  await expect(menu.getByRole('button', { name: '账号', exact: true })).toHaveAttribute('aria-current', 'page');
+});
+
+test('shows both real pages under the finger before committing and keeps the tab bar still',
+  async ({ page, isMobile }, info) => {
+    test.skip(!isMobile, 'Page previews belong to the mobile layout.');
+    const session = await page.context().newCDPSession(page);
+    const tabs = await page.locator('.mobile-tabbar').boundingBox();
+    try {
+      for (const [from, to, label, targetLabel, direction] of [
+        ['chat', 'accounts', '聊天', '账号', -1],
+        ['accounts', 'discover', '账号', '发现', -1],
+        ['discover', 'settings', '发现', '设置', -1],
+        ['settings', 'discover', '设置', '发现', 1],
+        ['discover', 'accounts', '发现', '账号', 1],
+        ['accounts', 'chat', '账号', '聊天', 1],
+      ] as const) {
+        const start = direction < 0 ? 280 : 90;
+        await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: start, y: 300 }] });
+        await session.send('Input.dispatchTouchEvent', {
+          type: 'touchMove', touchPoints: [{ x: start + direction * 100, y: 300 }],
+        });
+        const outgoing = page.locator(`[data-primary-page="${from}"]`);
+        const incoming = page.locator(`[data-primary-page="${to}"]`);
+        await expect(incoming).toHaveClass(/is-preview/);
+        await expect(incoming).toHaveAttribute('inert', '');
+        expect((await incoming.textContent())?.trim().length).toBeGreaterThan(0);
+        const outgoingBox = (await outgoing.boundingBox())!;
+        const incomingBox = (await incoming.boundingBox())!;
+        expect(outgoingBox.x).toBeCloseTo(direction * 100, 0);
+        expect(incomingBox.x - outgoingBox.x).toBeCloseTo(-direction * outgoingBox.width, 0);
+        await expect(activeTab(page)).toHaveText(label);
+        expect(await page.locator('.mobile-tabbar').boundingBox()).toEqual(tabs);
+        await screenshot(page, info, `mid-swipe-${from}-${to}`);
+        const settling = trackSettling(page, to);
+        await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await expect(activeTab(page)).toHaveText(targetLabel);
+        await expect(incoming).not.toHaveClass(/is-preview/);
+        const positions = await settling;
+        for (let index = 1; index < positions.length; index++) {
+          expect(Math.abs(positions[index])).toBeLessThanOrEqual(Math.abs(positions[index - 1]) + 1);
+        }
+        expect(positions.at(-1)).toBeCloseTo(0, 0);
+      }
+    } finally { await session.detach(); }
+  });
+
+test('keeps the selected page onscreen when changing between phone and desktop widths', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'Exercise both responsive layouts in one session.');
+  await page.locator('.mobile-tabbar').getByText('设置', { exact: true }).click();
+  const pane = page.locator('[data-primary-page="settings"]');
+  for (const width of [1280, 390, 861, 860]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(pane).toBeInViewport();
+    await expect.poll(async () => {
+      const bounds = await pane.boundingBox();
+      return bounds ? bounds.x >= 0 && bounds.x + bounds.width <= width + 1 : false;
+    }).toBe(true);
+  }
+});
+
+test('returns partial and cancelled previews to their original position without opening a row',
+  async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'Page previews belong to the mobile layout.');
+    await page.locator('.mobile-tabbar').getByText('发现', { exact: true }).click();
+    const pane = page.locator('[data-primary-page="discover"]');
+    const original = await pane.boundingBox();
+    for (const cancel of [false, true]) {
+      await swipe(page, cancel ? left : left.slice(0, 2), cancel);
+      await expect(page.locator('.primary-page-pane.is-preview')).toHaveCount(0);
+      expect(await pane.boundingBox()).toEqual(original);
+      await expect(activeTab(page)).toHaveText('发现');
+      await expect(page.locator('.discovery-list')).toBeVisible();
+    }
+  });
 
 test('swipes right across the conversation to open and left across a row or mask to close',
   async ({ page, isMobile }, info) => {
@@ -44,10 +213,78 @@ test('swipes right across the conversation to open and left across a row or mask
     await expect(drawer(page)).toHaveCount(0);
   });
 
-test('ignores short, opposite, vertical-first, cancelled, selected-text and multitouch gestures',
+test('drawer follows held drags and settles or cancels without jumping or changing tabs',
+  async ({ page, isMobile }, info) => {
+    test.skip(!isMobile, 'The drawer gesture belongs to the phone layout.');
+    const session = await page.context().newCDPSession(page);
+    const panel = page.locator('.chat-drawer .ant-drawer-content-wrapper');
+    const touch = (type: string, x?: number) => session.send('Input.dispatchTouchEvent', {
+      type, touchPoints: x === undefined ? [] : [{ x, y: 300 }],
+    });
+    const exposedWidth = async () => { const box = (await panel.boundingBox())!; return box.x + box.width; };
+    const tabs = await page.locator('.mobile-tabbar').boundingBox();
+    try {
+      await touch('touchStart', 90);
+      await touch('touchMove', 190);
+      await expect.poll(exposedWidth).toBeCloseTo(100, 0);
+      await expect(activeTab(page)).toHaveText('聊天');
+      expect(await page.locator('.mobile-tabbar').boundingBox()).toEqual(tabs);
+      await screenshot(page, info, 'drawer-held-open');
+      await touch('touchMove', 230);
+      await expect.poll(exposedWidth).toBeCloseTo(140, 0);
+      const positions = trackDrawerSettling(panel);
+      await touch('touchEnd');
+      await expect.poll(async () => (await panel.boundingBox())?.x).toBeCloseTo(0, 0);
+      const samples = await positions;
+      for (let index = 1; index < samples.length; index++) {
+        expect(samples[index]).toBeGreaterThanOrEqual(samples[index - 1] - 1);
+      }
+      await touch('touchStart', 250);
+      await touch('touchMove', 150);
+      await expect.poll(async () => (await panel.boundingBox())?.x).toBeCloseTo(-100, 0);
+      await screenshot(page, info, 'drawer-held-close');
+      await touch('touchCancel');
+      await expect.poll(async () => (await panel.boundingBox())?.x).toBeCloseTo(0, 0);
+      await swipe(page, left);
+      await expect(drawer(page)).toHaveCount(0);
+      await touch('touchStart', 90);
+      await touch('touchMove', 190);
+      await expect.poll(exposedWidth).toBeCloseTo(100, 0);
+      await touch('touchCancel');
+      await expect(drawer(page)).toHaveCount(0);
+      await expect(activeTab(page)).toHaveText('聊天');
+    } finally { await session.detach(); }
+  });
+
+test('settles the drawer with compositor transform and opacity animations', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'The desktop sidebar does not slide over the conversation.');
+  const session = await page.context().newCDPSession(page);
+  try {
+    await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 90, y: 300 }] });
+    await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 190, y: 300 }] });
+    // Observe animation creation, so even a slow test runner can inspect a completed transition.
+    await page.locator('.chat-drawer').evaluate(root => {
+      root.querySelectorAll<HTMLElement>('.ant-drawer-content-wrapper, .ant-drawer-mask').forEach(element => {
+        const animate = element.animate.bind(element);
+        element.animate = (...args) => {
+          element.dataset.animatedProperties = JSON.stringify(args[0]);
+          return animate(...args);
+        };
+      });
+    });
+    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await expect(page.locator('.chat-drawer .ant-drawer-content-wrapper'))
+      .toHaveAttribute('data-animated-properties', /transform/);
+    await expect(page.locator('.chat-drawer .ant-drawer-mask'))
+      .toHaveAttribute('data-animated-properties', /opacity/);
+    await expect.poll(async () => (await drawer(page).boundingBox())?.x).toBeCloseTo(0, 0);
+  } finally { await session.detach(); }
+});
+
+test('ignores short, vertical-first, cancelled, selected-text and multitouch gestures',
   async ({ page, isMobile }) => {
     test.skip(!isMobile, 'Touch gestures are exercised by the mobile browser project.');
-    for (const path of [right.slice(0, 2), [...right].reverse(),
+    for (const path of [right.slice(0, 2),
       [{ x: 90, y: 300 }, { x: 92, y: 330 }, { x: 240, y: 340 }]]) {
       await swipe(page, path);
       await expect(page).toHaveURL(/\/web\//);
@@ -129,7 +366,7 @@ test('keeps desktop chat beside independently collapsible menus and remembers th
     await page.getByRole('button', { name: '收起主菜单' }).click();
     await expect(page.locator('.desktop-sidebar nav')).toBeVisible();
     await expect(page.locator('.desktop-sidebar .brand-mark')).toBeVisible();
-    await expect(page.locator('.desktop-sidebar nav').getByRole('button')).toHaveCount(5);
+    await expect(page.locator('.desktop-sidebar nav').getByRole('button')).toHaveCount(4);
     await expect(page.locator('.desktop-sidebar nav').getByRole('button', { name: '聊天', exact: true }))
       .toHaveAttribute('aria-current', 'page');
     await expect(page.locator('.desktop-sidebar').getByRole('button', { name: '展开主菜单' })).toBeVisible();

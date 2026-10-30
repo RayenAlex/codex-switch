@@ -140,8 +140,8 @@ test('remote commit context actions and patches reach this browser download mana
   await drawer.getByRole('button', {
     name: info.project.name === 'desktop' ? '关闭详情抽屉' : '关闭 Git', exact: true,
   }).click();
-  await navigate(page, '设置');
-  await page.getByText('下载管理', { exact: true }).click();
+  await navigate(page, '发现');
+  await page.getByRole('button', { name: '下载管理', exact: true }).click();
   const card = page.getByRole('article', { name: '72c48df04444.patch', exact: true });
   await expect(card).toContainText('文件已就绪');
   await expect(card).toContainText('我的工作电脑');
@@ -278,7 +278,10 @@ test('tools open Git changes, commit only checked files and draw merge history',
   expect(actions.find(op => op.action === 'pull')?.strategy).toBe('rebase');
   await drawer.getByRole('button', { name: desktop ? '关闭详情抽屉' : '关闭 Git', exact: true }).click();
   await openChatTool(page, '终端');
-  await expect(page.getByRole('dialog', { name: '远程终端', exact: true })).toBeVisible();
+  const terminal = desktop
+    ? page.getByRole('region', { name: '终端', exact: true })
+    : page.getByRole('dialog', { name: '远程终端', exact: true });
+  await expect(terminal).toBeVisible();
   await expect(page.locator('.xterm-rows')).toContainText('Remote shell ready');
 });
 

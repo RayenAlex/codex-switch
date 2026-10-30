@@ -3,7 +3,7 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
-use crate::models::ProviderApiFormat;
+use crate::models::{ProviderApiFormat, ProviderProfile};
 
 #[derive(Hash, PartialEq, Eq)]
 struct ProviderModelKey {
@@ -13,44 +13,37 @@ struct ProviderModelKey {
 
 struct CachedApiFormat {
     base_url: String,
+    configured_format: ProviderApiFormat,
     format: ProviderApiFormat,
 }
 
 static API_FORMAT_CACHE: OnceLock<Mutex<HashMap<ProviderModelKey, CachedApiFormat>>> =
     OnceLock::new();
 
-pub(crate) fn cached_format(
-    provider_id: &str,
-    base_url: &str,
-    model: &str,
-) -> Option<ProviderApiFormat> {
-    let key = cache_key(provider_id, model);
+/// A detected protocol is valid only for the configuration that produced it.
+pub(crate) fn cached_format(provider: &ProviderProfile, model: &str) -> Option<ProviderApiFormat> {
+    let key = cache_key(&provider.id, model);
     let mut cache = cache().lock().ok()?;
-    let normalized_base_url = normalized_base_url(base_url);
-    if cache
-        .get(&key)
-        .is_some_and(|entry| entry.base_url == normalized_base_url)
-    {
+    let normalized_base_url = normalized_base_url(&provider.base_url);
+    if cache.get(&key).is_some_and(|entry| {
+        entry.base_url == normalized_base_url && entry.configured_format == provider.api_format
+    }) {
         return cache.get(&key).map(|entry| entry.format);
     }
     cache.remove(&key);
     None
 }
 
-pub(crate) fn remember_format(
-    provider_id: &str,
-    base_url: &str,
-    model: &str,
-    format: ProviderApiFormat,
-) {
+pub(crate) fn remember_format(provider: &ProviderProfile, model: &str, format: ProviderApiFormat) {
     let Ok(mut cache) = cache().lock() else {
         // Protocol detection is best-effort and must never fail a provider request.
         return;
     };
     cache.insert(
-        cache_key(provider_id, model),
+        cache_key(&provider.id, model),
         CachedApiFormat {
-            base_url: normalized_base_url(base_url),
+            base_url: normalized_base_url(&provider.base_url),
+            configured_format: provider.api_format,
             format,
         },
     );
@@ -82,63 +75,48 @@ fn normalized_base_url(base_url: &str) -> String {
 mod tests {
     use super::*;
 
+    fn provider(id: &str, base_url: &str) -> ProviderProfile {
+        serde_json::from_value(serde_json::json!({
+            "id": id, "name": "cache fixture", "baseUrl": base_url, "apiKey": "",
+            "model": "model-a", "apiFormat": "openaiResponses"
+        }))
+        .unwrap()
+    }
+
     #[test]
     fn caches_formats_independently_for_each_provider_model() {
-        remember_format(
-            "cache-provider-a",
-            "https://relay.example.com/v1",
-            "model-a",
-            ProviderApiFormat::OpenaiChat,
-        );
-        remember_format(
-            "cache-provider-a",
-            "https://relay.example.com/v1",
-            "model-b",
-            ProviderApiFormat::OpenaiResponses,
-        );
-
+        let mut provider = provider("cache-provider-a", "https://relay.example.com/v1");
+        remember_format(&provider, "model-a", ProviderApiFormat::OpenaiChat);
+        remember_format(&provider, "model-b", ProviderApiFormat::OpenaiResponses);
+        provider.base_url.push('/');
         assert_eq!(
-            cached_format(
-                "cache-provider-a",
-                "https://relay.example.com/v1/",
-                "model-a"
-            ),
+            cached_format(&provider, "model-a"),
             Some(ProviderApiFormat::OpenaiChat)
         );
         assert_eq!(
-            cached_format(
-                "cache-provider-a",
-                "https://relay.example.com/v1",
-                "model-b"
-            ),
+            cached_format(&provider, "model-b"),
             Some(ProviderApiFormat::OpenaiResponses)
         );
-        assert_eq!(
-            cached_format(
-                "cache-provider-b",
-                "https://relay.example.com/v1",
-                "model-a"
-            ),
-            None
-        );
+        provider.id = "cache-provider-b".into();
+        assert_eq!(cached_format(&provider, "model-a"), None);
     }
 
     #[test]
     fn changing_the_provider_endpoint_invalidates_cached_formats() {
-        remember_format(
-            "cache-provider-endpoint",
-            "https://old.example.com/v1",
-            "model-a",
-            ProviderApiFormat::OpenaiChat,
-        );
+        let mut provider = provider("cache-provider-endpoint", "https://old.example.com/v1");
+        remember_format(&provider, "model-a", ProviderApiFormat::OpenaiChat);
 
-        assert_eq!(
-            cached_format(
-                "cache-provider-endpoint",
-                "https://new.example.com/v1",
-                "model-a"
-            ),
-            None
-        );
+        provider.base_url = "https://new.example.com/v1".into();
+        assert_eq!(cached_format(&provider, "model-a"), None);
+    }
+
+    #[test]
+    fn an_in_flight_old_request_cannot_override_a_new_protocol_setting() {
+        let original = provider("cache-provider-in-flight", "https://relay.example.com/v1");
+        let mut updated = original.clone();
+        updated.api_format = ProviderApiFormat::OpenaiChat;
+        remember_format(&updated, "model-a", ProviderApiFormat::OpenaiChat);
+        remember_format(&original, "model-a", ProviderApiFormat::OpenaiResponses);
+        assert_eq!(cached_format(&updated, "model-a"), None);
     }
 }

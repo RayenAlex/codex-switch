@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { backendText } from "../../../../../shared/i18n/backend/translateBackendMessage";
+import { remoteErrorText } from "../../../../../shared/localization/errors";
 import { AutoComplete, Button, Input, Select } from "antd";
 import { Bot, RefreshCw, Save, X } from "lucide-react";
 import { fetchDeepSeekModels } from "../../api/backend";
-import type { Provider, ProviderInput } from "../../types";
+
 import { CONTEXT_WINDOW_OPTIONS, modelOptions, normalizeModels, parseContextWindowK } from "./providerUtils";
 import { ProviderFastModeSupportControl } from "./ProviderFormFields";
 import type { ProviderModalProps } from "./ProviderModal";
@@ -127,7 +127,7 @@ export function DeepSeekProviderModal({ provider, saving, onClose, onSave, t }: 
     } catch (error) {
       if (requestId !== modelRequestId.current) return;
       setModelsError(t("providers.deepSeek.modelsFetchFailed", {
-        error: backendText(String(error).replace(/^Error:\s*/, "")),
+        error: remoteErrorText(String(error).replace(/^Error:\s*/, "")),
       }));
     } finally {
       if (requestId === modelRequestId.current) setModelsLoading(false);

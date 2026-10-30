@@ -17,7 +17,7 @@ export function DesktopIme({ input, focusRequest }: {
   const webview = useRef<WebView>(null);
   const container = useRef<View>(null);
   const labels = `(() => { const field = document.querySelector('textarea'); if (!field) return;
-    field.setAttribute('aria-label', ${JSON.stringify(t('发送到电脑的文字'))}); })(); true;`;
+    field.setAttribute('aria-label', ${JSON.stringify(t("client.remoteDesktop.textToSendToYourComputer"))}); })(); true;`;
   const focus = () => {
     webview.current?.requestFocus();
     webview.current?.injectJavaScript("document.querySelector('textarea').blur(); "

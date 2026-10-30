@@ -47,7 +47,15 @@ pub(super) fn open(
         .path()
         .app_data_dir()
         .map_err(|_| DesktopError::Settings)?;
-    super::open(display_id, read(&root)?, expires_at, capture_group)
+    super::open(
+        display_id,
+        read(&root)?,
+        super::sessions::Options {
+            expires_at,
+            capture_group,
+            settings_root: root,
+        },
+    )
 }
 
 #[cfg(windows)]

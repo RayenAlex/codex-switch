@@ -1,7 +1,8 @@
-// Chrome picks the messages for its UI language and falls back to zh_CN (manifest default_locale).
-// The Chinese fallback keeps the text unchanged where chrome.i18n is unavailable, such as Node tests.
-export function t(name, fallback) {
-  return globalThis.chrome?.i18n?.getMessage?.(name) || fallback;
+import defaults from './messages.generated.js';
+
+// Chrome selects its UI language; generated defaults also work outside Chrome, including Node tests.
+export function t(name, fallback = name) {
+  return globalThis.chrome?.i18n?.getMessage?.(name) || defaults[name] || fallback;
 }
 
 const ATTRIBUTES = [

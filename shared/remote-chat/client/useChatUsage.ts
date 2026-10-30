@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { USAGE_REFRESH_INTERVAL_MS, type ReadUsage, type UsageSummary } from '../usage';
+import { decodeUsageSummary } from '../usageSummary';
 
 export function useChatUsage(read: ReadUsage, active: boolean) {
   const [usage, setUsage] = useState<UsageSummary | null>(null);
@@ -13,7 +14,7 @@ export function useChatUsage(read: ReadUsage, active: boolean) {
       if (disposed || pending.current.has(read)) return;
       pending.current.add(read);
       try {
-        const next = await read();
+        const next = decodeUsageSummary(await read());
         if (!disposed) { setUsage(next); setError(''); }
       } catch (reason) {
         if (disposed) return;

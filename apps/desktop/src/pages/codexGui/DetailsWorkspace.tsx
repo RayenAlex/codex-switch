@@ -1,6 +1,8 @@
 import { useEffect, useId, useMemo, useRef, type ReactNode } from "react";
+import { ConfigProvider } from 'antd';
 import { WorkspaceDrawerContext } from "../../../../../shared/chat/workspaceDrawer";
 import { useWorkspaceDrawer } from "../../../../../shared/chat/useWorkspaceDrawer";
+import { WorkspaceDrawerTabs } from "../../../../../shared/chat/WorkspaceDrawerTabs";
 import { FileDiff, FileSearch, Maximize2, Minimize2, Minus, PanelRightOpen, X } from "lucide-react";
 import { DetailsContext } from "./detailsContext";
 import { DiffDocument } from "./DiffDocument";
@@ -32,7 +34,6 @@ export function DetailsWorkspace({ selected, active, children, enabled = true, c
   const drawer = useWorkspaceDrawer(active);
   const workspace = useMemo(() => ({ active, tabs: drawer.tabs }), [active, drawer.tabs]);
   const closeButton = useRef<HTMLButtonElement>(null);
-  const tabBar = useRef<HTMLDivElement>(null);
   const panelId = useId();
   const panel = useDetailsPanel({ selected, enabled, remoteFiles: Boolean(renderRemoteFile), drawer: drawer.tabs });
   const { entry, preview, viewId, expanded, showingChanges } = panel;
@@ -41,17 +42,19 @@ export function DetailsWorkspace({ selected, active, children, enabled = true, c
   const visible = drawer.tabs.visible
     && Boolean(tool || (enabled && ((showingChanges && entry) || (showingPreview && preview))));
   const hasTabs = Boolean(entry || preview || drawer.tabs.entries.length);
-  const label = tool?.title ?? t(showingChanges ? "文件更改详情" : "预览详情");
+  const tabs = [
+    ...(enabled ? [{ id: 'changes', title: t('client.chat.fileChanges.049e14'), icon: <FileDiff size={16} /> }] : []),
+    ...(preview ? [{ id: 'preview', title: t('client.chat.preview'), icon: <FileSearch size={16} /> }] : []),
+    ...drawer.tabs.entries,
+  ].filter(tab => !drawer.tabs.closed.has(tab.id));
+  const label = tool?.title ?? t(showingChanges ? "client.chat.fileChangeDetails" : "client.desktopGuiExtras.previewDetails");
   const resize = useDrawerResize(host);
   const docked = visible && !expanded && resize.available - resize.width >= MIN_CHAT_WIDTH;
   const width = expanded ? resize.available : resize.width;
   useEffect(() => { if (visible) closeButton.current?.focus(); }, [visible]);
-  useEffect(() => {
-    if (visible) tabBar.current?.querySelector('[aria-selected="true"]')
-      ?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
-  }, [visible, drawer.tabs.selected]);
   useEffect(() => { if (!visible || expanded) resize.cancel(); }, [visible, expanded, resize.cancel]);
-  return <DetailsContext.Provider value={enabled ? panel.context : null}>
+  return <ConfigProvider theme={{ token: { fontSize } }}>
+    <DetailsContext.Provider value={enabled ? panel.context : null}>
     <WorkspaceDrawerContext.Provider value={workspace}>
     <div ref={host} className={`${styles.host} ${className}`} data-dragging={resize.dragging || undefined}
       style={guiFontStyle(fontSize)}>
@@ -70,30 +73,30 @@ export function DetailsWorkspace({ selected, active, children, enabled = true, c
           }
         }}>
         {!expanded && <div className={styles.resizeHandle} role="separator" tabIndex={0}
-          aria-label={t("调整详情抽屉宽度")} aria-orientation="vertical" aria-controls={panelId}
+          aria-label={t("client.chat.resizeDetailsPanel")} aria-orientation="vertical" aria-controls={panelId}
           aria-valuemin={resize.minimum} aria-valuemax={resize.maximum} aria-valuenow={width} {...resize.handle} />}
         <header className={styles.header}>
-          <div ref={tabBar} className={styles.tabs} role="tablist" aria-label={t("侧栏内容")}>
-            {enabled && <button className={styles.tab} role="tab" aria-selected={showingChanges}
-              onClick={panel.showChanges}><FileDiff size={16} />{t("文件更改")}</button>}
-            {preview && <button className={styles.tab} role="tab" aria-selected={showingPreview}
-              onClick={panel.showPreview}><FileSearch size={16} />{t("预览")}</button>}
-            {drawer.tabs.entries.map(tab => <button key={tab.id} className={styles.tab} role="tab"
-              aria-selected={drawer.tabs.selected === tab.id} onClick={() => drawer.tabs.open(tab.id)}>
-              {tab.icon}<span>{tab.title}</span></button>)}
-          </div>
+          <WorkspaceDrawerTabs tabs={tabs} selected={drawer.tabs.selected} visible={visible}
+            choose={id => {
+              if (id === 'changes') panel.showChanges();
+              else if (id === 'preview') panel.showPreview();
+              else drawer.tabs.open(id);
+            }} close={id => {
+              const next = drawer.tabs.close(id, tabs.map(tab => tab.id));
+              if (id === drawer.tabs.selected && next === 'changes') panel.showChanges();
+            }} />
           <div className={styles.controls}>
-            <button aria-label={t(expanded ? "还原抽屉宽度" : "展开详情抽屉")}
+            <button aria-label={t(expanded ? "client.chat.restorePanelWidth" : "client.chat.expandDetailsPanel")}
               onClick={() => panel.setExpanded(!expanded)}>
               {expanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>
-            <button aria-label={t("最小化详情抽屉")} onClick={() => { panel.context.close(); drawer.minimize(); }}>
+            <button aria-label={t("client.chat.minimizeDetailsPanel")} onClick={() => { panel.context.close(); drawer.minimize(); }}>
               <Minus size={16} /></button>
-            <button ref={closeButton} aria-label={t("关闭详情抽屉")} onClick={panel.context.close}><X size={17} /></button>
+            <button ref={closeButton} aria-label={t("client.chat.closeDetailsPanel")} onClick={panel.context.close}><X size={17} /></button>
           </div>
         </header>
         {entry && <div hidden={!showingChanges} key={`${entry.id}:${entry.filePath ?? ""}:${viewId}`}
           className={styles.content}>
-          {!entry.files.length && <p className={styles.empty}>{t("暂无文件更改")}</p>}
+          {!entry.files.length && <p className={styles.empty}>{t("client.chat.noFileChangesYet")}</p>}
           <DiffDocument files={entry.files} filePath={entry.filePath}
             title={entry.title} status={entry.status}
             initialOpen continuous />
@@ -112,8 +115,8 @@ export function DetailsWorkspace({ selected, active, children, enabled = true, c
       {hasTabs && drawer.minimized && active &&
         <button className={styles.restore} onClick={drawer.restore}>
           <PanelRightOpen size={16} />{tool ? tool.title
-            : t(showingChanges ? "恢复文件更改" : "恢复预览")}</button>}
+            : t(showingChanges ? "client.chat.restoreFileChanges" : "client.desktopGuiExtras.restorePreview")}</button>}
     </div>
     </WorkspaceDrawerContext.Provider>
-  </DetailsContext.Provider>;
+  </DetailsContext.Provider></ConfigProvider>;
 }

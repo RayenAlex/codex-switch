@@ -8,7 +8,7 @@ const endpoints = JSON.parse(input);
 for (const multipleInterfaces of [false, true]) await verifyMedia(multipleInterfaces);
 
 async function verifyMedia(multipleInterfaces) {
-  const browser = await chromium.launch({ channel: 'msedge', headless: true,
+  const browser = await chromium.launch({ headless: true,
     args: multipleInterfaces ? ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] : [] });
   const deadline = setTimeout(() => { void browser.close(); }, 45_000);
   try { await exchangeMedia(browser, multipleInterfaces); }

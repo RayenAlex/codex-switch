@@ -42,7 +42,7 @@ export function ComposerPopover({ anchor, anchorHeight, wide = false, children, 
     if (!position) return;
     const width = Math.min(wide ? MAX_PANEL_WIDTH : MENU_WIDTH, host.size.width - EDGE * 2);
     host.show(<>
-      <Pressable accessibilityRole="button" accessibilityLabel={t("关闭添加菜单")}
+      <Pressable accessibilityRole="button" accessibilityLabel={t("client.mobile.closeAttachmentMenu")}
         onPress={close} style={StyleSheet.absoluteFill} />
       <View style={[popoverStyles.panel, { width, maxHeight: position.height, bottom: position.bottom,
         left: Math.min(position.left, host.size.width - width - EDGE) }]}>{children}</View>

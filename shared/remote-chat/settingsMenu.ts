@@ -3,18 +3,18 @@ import { ACCESS_OPTIONS, EFFORT_LABELS, type ComposerSettings } from './composer
 
 export type SettingField = keyof ComposerSettings;
 export const SETTINGS_FIELDS = [
-  { field: 'model', label: '模型', title: '选择模型' },
-  { field: 'effort', label: '推理强度', title: '推理强度' },
-  { field: 'speed', label: '速度模式', title: '选择速度模式' },
-  { field: 'access', label: '访问权限', title: '访问权限' },
+  { field: 'model', label: "client.shared.model", title: "client.shared.chooseModel" },
+  { field: 'effort', label: "client.shared.reasoningEffort", title: "client.shared.reasoningEffort" },
+  { field: 'speed', label: "client.shared.speedMode", title: "client.shared.chooseSpeedMode" },
+  { field: 'access', label: "client.shared.access", title: "client.shared.access" },
 ] satisfies { field: SettingField; label: string; title: string }[];
 export interface SettingOption { value: string; label: string; description?: string }
 
 export function settingOptions(field: SettingField, models: Model[], selection: ComposerSettings): SettingOption[] {
   if (field === 'speed') return [
-    { value: 'normal', label: '普通模式' },
-    { value: 'fast', label: '快速模式', description: '与电脑端同步，对后续消息生效。' },
-    { value: 'ultrafast', label: 'Ultrafast 模式', description: '与电脑端同步，对后续消息生效。' },
+    { value: 'normal', label: "client.chat.standardMode" },
+    { value: 'fast', label: "client.chat.fastMode.6e02d1", description: "client.shared.syncsWithYourComputerAndAppliesToFutureMessages" },
+    { value: 'ultrafast', label: "client.chat.ultrafastMode", description: "client.shared.syncsWithYourComputerAndAppliesToFutureMessages" },
   ];
   if (field === 'access') return ACCESS_OPTIONS;
   if (field === 'model') return models.map((model) => ({
@@ -31,13 +31,16 @@ export function visibleSettingsFields(selection: ComposerSettings) {
   return SETTINGS_FIELDS.filter(({ field }) => field !== 'speed' || selection.speed !== undefined);
 }
 
-export function settingValue(field: SettingField, models: Model[], selection: ComposerSettings) {
-  return settingOptions(field, models, selection).find((option) => option.value === selection[field])?.label
-    || selection[field] || '正在同步…';
+export function settingValue(field: SettingField, models: Model[], selection: ComposerSettings,
+  translate = (value: string) => value) {
+  const label = settingOptions(field, models, selection).find((option) => option.value === selection[field])?.label
+    || selection[field];
+  if (!label) return translate("client.app.syncing");
+  return field === 'model' ? label : translate(label);
 }
 
 export function settingsNotice({ saving, ready, error }: { saving: boolean; ready: boolean; error: string }) {
   if (error) return error;
-  if (!saving) return '';
-  return ready ? '正在同步设置…' : '已保留选择，连接后自动保存。';
+  if (!saving || ready) return '';
+  return '已保留选择，连接后自动保存。';
 }

@@ -5,8 +5,8 @@ const UPDATE_CHANNEL = 'app-update-download';
 let askedPermission = false;
 
 export function updateNotificationLabels() {
-  return { channel: t('应用更新'), verifying: t('正在校验'),
-    ready: t('更新已下载，点击打开应用安装。'), failed: t('下载未完成，点击打开应用重试。') };
+  return { channel: t("client.downloads.appUpdates"), verifying: t("client.downloads.verifying"),
+    ready: t("client.downloads.updateDownloadedTapToOpenTheAppAndInstall"), failed: t("client.downloads.downloadIncompleteTapToOpenTheAppAndRetry") };
 }
 
 /** Only a manual update asks for permission; background preparation never opens a prompt. */
@@ -14,7 +14,7 @@ export async function prepareUpdateNotifications() {
   try {
     const notifications = await import('expo-notifications');
     await notifications.setNotificationChannelAsync(UPDATE_CHANNEL, {
-      name: t('应用更新'), importance: notifications.AndroidImportance.LOW,
+      name: t("client.downloads.appUpdates"), importance: notifications.AndroidImportance.LOW,
       showBadge: false, sound: null,
     });
     const permission = await notifications.getPermissionsAsync();

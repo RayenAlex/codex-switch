@@ -48,13 +48,48 @@ pub(crate) struct UsageSummary {
     updated_at: i64,
 }
 
-fn load_summary<R: Runtime>(
+impl UsageSummary {
+    pub(super) fn available_quotas(
+        &self,
+    ) -> std::collections::HashMap<String, EstimatedOfficialQuota> {
+        self.accounts
+            .iter()
+            .filter_map(|account| {
+                let remaining_usd = account
+                    .remaining_usd
+                    .filter(|value| value.is_finite() && *value >= 0.0)?;
+                let quota = [&account.primary, &account.secondary]
+                    .into_iter()
+                    .flatten()
+                    .find(|quota| quota.remaining_usd == Some(remaining_usd));
+                let capacity_usd = quota
+                    .and_then(|quota| quota.capacity_usd)
+                    .filter(|value| value.is_finite() && *value >= remaining_usd);
+                Some((
+                    account.account_id.clone(),
+                    EstimatedOfficialQuota {
+                        remaining_usd,
+                        capacity_usd,
+                    },
+                ))
+            })
+            .collect()
+    }
+}
+
+pub(super) fn load_summary<R: Runtime>(
     app: &tauri::AppHandle<R>,
     start_ts: i64,
+    expected_scope: Option<&quota_cache::QuotaScope>,
 ) -> Result<UsageSummary, UsageError> {
     let _guard = lock_cloud_credentials().map_err(|_| UsageError::Unavailable)?;
     let mut settings = read_app_settings(app).map_err(|_| UsageError::Unavailable)?;
     let mut credentials = read_cloud_credentials(app);
+    if expected_scope.is_some_and(|scope| {
+        quota_cache::QuotaScope::from_settings(&settings).as_ref() != Some(scope)
+    }) {
+        return Err(UsageError::Unavailable);
+    }
     if !cloud_state(&settings, &credentials).authenticated {
         return Ok(UsageSummary {
             accounts: Vec::new(),
@@ -91,7 +126,7 @@ pub(crate) async fn get_official_usage_summary<R: Runtime + 'static>(
     if start_ts < 0 || start_ts > Utc::now().timestamp() {
         return Err("请选择有效的统计时间范围。".into());
     }
-    tauri::async_runtime::spawn_blocking(move || load_summary(&app, start_ts))
+    tauri::async_runtime::spawn_blocking(move || load_summary(&app, start_ts, None))
         .await
         .map_err(|_| UsageError::Unavailable.to_string())?
         .map_err(|error| error.to_string())

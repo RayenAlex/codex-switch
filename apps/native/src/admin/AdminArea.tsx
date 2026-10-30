@@ -1,3 +1,4 @@
+import { displayError, displayText } from '../i18n/index';
 import type { ThemeColor } from '../../../../shared/theme/mode';
 import { createThemedStyles } from '../theme/styles';
 import { useThemeColor } from '../theme/store';
@@ -76,24 +77,24 @@ const entries: Array<{
   icon: string;
   tone: Tone;
 }> = [
-  { key: 'dashboard', get title() { return t("数据仪表盘"); }, get subtitle() { return t("用户、设备与增长趋势"); }, get icon() { return t("数"); }, tone: 'blue' },
-  { key: 'officialAccounts', get title() { return t("官方账号池"); }, get subtitle() { return t("账号凭据与用户绑定"); }, get icon() { return t("号"); }, tone: 'green' },
-  { key: 'invitations', get title() { return t("邀请注册"); }, get subtitle() { return t("邀请链接与使用记录"); }, get icon() { return t("邀"); }, tone: 'amber' },
-  { key: 'feedback', get title() { return t("问题反馈"); }, get subtitle() { return t("查看详情并邮件回复"); }, get icon() { return t("馈"); }, tone: 'purple' },
-  { key: 'users', get title() { return t("用户管理"); }, get subtitle() { return t("用户角色与账号状态"); }, get icon() { return t("人"); }, tone: 'red' },
+  { key: 'dashboard', get title() { return t("client.mobile.dashboard"); }, get subtitle() { return t("client.mobile.usersDevicesAndGrowthTrends"); }, get icon() { return t("client.mobile.stats"); }, tone: 'blue' },
+  { key: 'officialAccounts', get title() { return t("client.mobile.officialAccountPool"); }, get subtitle() { return t("client.mobile.accountCredentialsAndUserLinks"); }, get icon() { return t("client.mobile.accounts"); }, tone: 'green' },
+  { key: 'invitations', get title() { return t("client.mobile.registrationInvites"); }, get subtitle() { return t("client.mobile.invitationLinksAndUsageHistory"); }, get icon() { return t("client.mobile.invites"); }, tone: 'amber' },
+  { key: 'feedback', get title() { return t("client.mobile.feedback"); }, get subtitle() { return t("client.mobile.viewDetailsAndReplyByEmail"); }, get icon() { return t("client.mobile.feedback.5ca01a"); }, tone: 'purple' },
+  { key: 'users', get title() { return t("client.mobile.userManagement"); }, get subtitle() { return t("client.mobile.userRolesAndAccountStatus"); }, get icon() { return t("client.mobile.users"); }, tone: 'red' },
 ];
 
 const pageMeta: Record<AdminPage, { title: string; subtitle: string }> = {
-  home: { get title() { return t("管理控制台"); }, get subtitle() { return t("集中管理 Remote AI 服务"); } },
-  dashboard: { get title() { return t("数据仪表盘"); }, get subtitle() { return t("关键运营数据与趋势"); } },
-  officialAccounts: { get title() { return t("官方账号池"); }, get subtitle() { return t("维护账号凭据和绑定关系"); } },
-  invitations: { get title() { return t("邀请注册"); }, get subtitle() { return t("管理注册链接和使用状态"); } },
-  feedback: { get title() { return t("问题反馈"); }, get subtitle() { return t("跟进用户提交的问题"); } },
-  users: { get title() { return t("用户管理"); }, get subtitle() { return t("维护用户角色和登录状态"); } },
+  home: { get title() { return t("client.settings.adminConsole"); }, get subtitle() { return t("client.mobile.manageRemoteAiInOnePlace"); } },
+  dashboard: { get title() { return t("client.mobile.dashboard"); }, get subtitle() { return t("client.mobile.keyMetricsAndTrends"); } },
+  officialAccounts: { get title() { return t("client.mobile.officialAccountPool"); }, get subtitle() { return t("client.mobile.manageAccountCredentialsAndUserLinks"); } },
+  invitations: { get title() { return t("client.mobile.registrationInvites"); }, get subtitle() { return t("client.mobile.manageRegistrationLinksAndTheirUsage"); } },
+  feedback: { get title() { return t("client.mobile.feedback"); }, get subtitle() { return t("client.mobile.followUpOnUserFeedback"); } },
+  users: { get title() { return t("client.mobile.userManagement"); }, get subtitle() { return t("client.mobile.manageUserRolesAndSignInStatus"); } },
 };
 
 function messageOf(error: unknown) {
-  return error instanceof Error ? t(error.message) : t("操作失败，请稍后重试");
+  return error instanceof Error ? displayError(error.message) : t("client.mobile.actionFailedTryAgainLater");
 }
 
 function formatDate(value?: string | null) {
@@ -183,7 +184,7 @@ function PageShell({ page, onBack, children }: { page: AdminPage; onBack: () => 
     <View style={styles.pageHeader}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={t("返回管理控制台")}
+        accessibilityLabel={t("client.mobile.backToAdminConsole")}
         hitSlop={8}
         onPress={onBack}
         style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
@@ -209,11 +210,11 @@ function Toolbar({ total, loading, onRefresh, children }: {
   useLanguage();
   return <View style={styles.toolbar}>
     <View>
-      <Text style={styles.toolbarEyebrow}>{t("当前数据")}</Text>
-      <Text style={styles.toolbarCount}>{total === undefined ? t("管理后台") : t("{value1} 条记录", { value1: total })}</Text>
+      <Text style={styles.toolbarEyebrow}>{t("client.mobile.currentData")}</Text>
+      <Text style={styles.toolbarCount}>{total === undefined ? t("client.mobile.adminConsole") : t("client.mobile.records", { value1: total })}</Text>
     </View>
     <View style={styles.toolbarActions}>
-      <AdminButton label={loading ? t("刷新中") : t("刷新")} loading={loading} onPress={onRefresh} compact />
+      <AdminButton label={loading ? t("client.mobile.refreshing") : t("client.chat.refresh")} loading={loading} onPress={onRefresh} compact />
       {children}
     </View>
   </View>;
@@ -225,13 +226,13 @@ function Pager({ value, onChange }: { value: PageResult<unknown>; onChange: (pag
   const pages = Math.max(1, Math.ceil(value.total / value.pageSize));
   if (pages <= 1) return null;
   return <View style={styles.pager}>
-    <AdminButton label={t("上一页")} compact disabled={value.page <= 1} onPress={() => onChange(value.page - 1)} />
+    <AdminButton label={t("client.mobile.previousPage")} compact disabled={value.page <= 1} onPress={() => onChange(value.page - 1)} />
     <View style={styles.pageBadge}><Text style={styles.pageBadgeText}>{value.page} / {pages}</Text></View>
-    <AdminButton label={t("下一页")} compact disabled={value.page >= pages} onPress={() => onChange(value.page + 1)} />
+    <AdminButton label={t("client.mobile.nextPage")} compact disabled={value.page >= pages} onPress={() => onChange(value.page + 1)} />
   </View>;
 }
 
-function LoadingOrEmpty({ loading, empty, label = t("暂无数据"), children }: {
+function LoadingOrEmpty({ loading, empty, label = t("client.mobile.noData"), children }: {
   loading: boolean;
   empty: boolean;
   label?: string;
@@ -242,13 +243,13 @@ function LoadingOrEmpty({ loading, empty, label = t("暂无数据"), children }:
   useLanguage();
   if (loading) return <View style={styles.stateBox}>
     <View style={styles.stateIcon}><ActivityIndicator color={color(COLORS.primary, 'accent')} /></View>
-    <Text style={styles.stateTitle}>{t("正在加载")}</Text>
-    <Text style={styles.stateDescription}>{t("稍等一下，数据马上就来")}</Text>
+    <Text style={styles.stateTitle}>{t("client.mobile.loading.f020e4")}</Text>
+    <Text style={styles.stateDescription}>{t("client.mobile.pleaseWaitWhileDataLoads")}</Text>
   </View>;
   if (empty) return <View style={styles.stateBox}>
     <View style={styles.stateIcon}><Text style={styles.stateIconText}>—</Text></View>
     <Text style={styles.stateTitle}>{label}</Text>
-    <Text style={styles.stateDescription}>{t("当前没有需要展示的记录")}</Text>
+    <Text style={styles.stateDescription}>{t("client.mobile.noRecordsToDisplay")}</Text>
   </View>;
   return <>{children}</>;
 }
@@ -307,7 +308,7 @@ function SearchBar({ value, onChangeText, onSearch, placeholder }: {
         style={styles.searchInput}
       />
     </View>
-    <AdminButton label={t("搜索")} tone="primary" compact onPress={onSearch} />
+    <AdminButton label={t("client.chat.search")} tone="primary" compact onPress={onSearch} />
   </View>;
 }
 
@@ -362,23 +363,23 @@ function AdminHome({ profile, onExit, onOpen }: {
   useLanguage();
   return <ScrollView style={styles.flex} contentContainerStyle={styles.homeScroll}>
     <View style={styles.homeNavigation}>
-      <Pressable accessibilityRole="button" accessibilityLabel={t("返回设置")} onPress={onExit}
+      <Pressable accessibilityRole="button" accessibilityLabel={t("client.downloads.backToSettings")} onPress={onExit}
         style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
         <Text style={styles.backArrow}>‹</Text>
       </Pressable>
       <View>
-        <Text style={styles.homeNavigationTitle}>{t("管理控制台")}</Text>
-        <Text style={styles.homeNavigationSubtitle}>{t("返回设置")}</Text>
+        <Text style={styles.homeNavigationTitle}>{t("client.settings.adminConsole")}</Text>
+        <Text style={styles.homeNavigationSubtitle}>{t("client.downloads.backToSettings")}</Text>
       </View>
     </View>
     <View style={styles.hero}>
       <View style={styles.heroTop}>
         <View style={styles.heroMark}><Text style={styles.heroMarkText}>CS</Text></View>
-        <Pill tone="green">{t("管理员在线")}</Pill>
+        <Pill tone="green">{t("client.mobile.adminOnline")}</Pill>
       </View>
       <Text style={styles.heroEyebrow}>CONTROL CENTER</Text>
-      <Text style={styles.heroTitle}>{t("管理控制台")}</Text>
-      <Text style={styles.heroSubtitle}>{t("账号、用户与运营数据，一处掌握。")}</Text>
+      <Text style={styles.heroTitle}>{t("client.settings.adminConsole")}</Text>
+      <Text style={styles.heroSubtitle}>{t("client.mobile.accountsUsersAndMetricsInOnePlace")}</Text>
       <View style={styles.heroIdentity}>
         <View style={styles.heroDot} />
         <Text style={styles.heroIdentityText} numberOfLines={1}>{profile.email}</Text>
@@ -386,8 +387,8 @@ function AdminHome({ profile, onExit, onOpen }: {
     </View>
 
     <View style={styles.sectionHeading}>
-      <Text style={styles.sectionTitle}>{t("工作台")}</Text>
-      <Text style={styles.sectionCaption}>{t("5 个管理模块")}</Text>
+      <Text style={styles.sectionTitle}>{t("client.mobile.workspace")}</Text>
+      <Text style={styles.sectionCaption}>{t("client.mobile.5ManagementModules")}</Text>
     </View>
     <View style={styles.entryList}>
       {entries.map((entry) => {
@@ -430,33 +431,33 @@ function DashboardPage({ session, onBack }: AdminAreaProps & { onBack: () => voi
 
   const metrics: Array<{ label: string; value: number; note: string; tone: Tone }> = [
     {
-      label: t("用户总数"),
+      label: t("client.mobile.totalUsers"),
       value: data?.summary.totalUsers ?? 0,
-      note: t("活跃 {value1} · 新增 {value2}", { value1: data?.summary.activeUsers ?? 0, value2: data?.summary.newUsers ?? 0 }),
+      note: t("client.mobile.activeNew", { value1: data?.summary.activeUsers ?? 0, value2: data?.summary.newUsers ?? 0 }),
       tone: 'blue',
     },
     {
-      label: '日活跃用户',
+      label: "client.runtimeErrors.dailyActiveUsers",
       value: data?.summary.dailyActiveUsers ?? 0,
-      note: t("今日活跃设备（按设备去重）"),
+      note: t("client.mobile.uniqueActiveDevicesToday"),
       tone: 'green',
     },
     {
-      label: t("总设备"),
+      label: t("client.mobile.totalDevices"),
       value: data?.summary.totalInstallations ?? 0,
-      note: t("新增 {value1}", { value1: data?.summary.newInstallations ?? 0 }),
+      note: t("client.mobile.add", { value1: data?.summary.newInstallations ?? 0 }),
       tone: 'green',
     },
     {
-      label: t("官方账号"),
+      label: t("client.mobile.officialAccounts"),
       value: data?.summary.officialAccounts ?? 0,
-      note: t("已绑定 {value1}", { value1: data?.summary.boundOfficialAccounts ?? 0 }),
+      note: t("client.mobile.linked.f26697", { value1: data?.summary.boundOfficialAccounts ?? 0 }),
       tone: 'purple',
     },
     {
-      label: t("待处理事项"),
+      label: t("client.mobile.pendingItems"),
       value: (data?.summary.pendingFeedback ?? 0) + (data?.summary.pendingApprovals ?? 0),
-      note: t("反馈 {value1} · 审批 {value2}", { value1: data?.summary.pendingFeedback ?? 0, value2: data?.summary.pendingApprovals ?? 0 }),
+      note: t("client.mobile.feedbackApprovals", { value1: data?.summary.pendingFeedback ?? 0, value2: data?.summary.pendingApprovals ?? 0 }),
       tone: 'amber',
     },
   ];
@@ -473,7 +474,7 @@ function DashboardPage({ session, onBack }: AdminAreaProps & { onBack: () => voi
           onPress={() => setDays(item)}
           style={[styles.segment, days === item && styles.segmentActive]}
         >
-          <Text style={[styles.segmentText, days === item && styles.segmentTextActive]}>{item}{' '}{t("天")}</Text>
+          <Text style={[styles.segmentText, days === item && styles.segmentTextActive]}>{item}{' '}{t("client.mobile.d")}</Text>
         </Pressable>)}
       </View>
 
@@ -484,17 +485,17 @@ function DashboardPage({ session, onBack }: AdminAreaProps & { onBack: () => voi
             <View style={[styles.metricAccent, { backgroundColor: color(colors.backgroundColor, 'canvas') }]}>
               <View style={[styles.metricAccentDot, { backgroundColor: colors.color }]} />
             </View>
-            <Text style={styles.metricLabel}>{t(metric.label)}</Text>
+            <Text style={styles.metricLabel}>{displayText(metric.label)}</Text>
             <Text style={styles.metricValue}>{metric.value}</Text>
             <Text style={styles.metricNote}>{metric.note}</Text>
-            {metric.label === '日活跃用户' && <DailyActivePlatforms counts={data?.dailyActivePlatforms} />}
+            {metric.label === "client.runtimeErrors.dailyActiveUsers" && <DailyActivePlatforms counts={data?.dailyActivePlatforms} />}
           </View>;
         })}
       </View>
 
       <Surface>
         <View style={styles.panelHeader}>
-          <View><Text style={styles.panelTitle}>{t("增长趋势")}</Text></View>
+          <View><Text style={styles.panelTitle}>{t("client.mobile.growthTrends")}</Text></View>
           {data ? <Pill tone="gray">{data.range.startDate} – {data.range.endDate}</Pill> : null}
         </View>
         <DashboardGrowth data={data} />
@@ -502,7 +503,7 @@ function DashboardPage({ session, onBack }: AdminAreaProps & { onBack: () => voi
 
       <Surface>
         <View style={styles.panelHeader}>
-          <View><Text style={styles.panelTitle}>{t("平台分布")}</Text><Text style={styles.panelSubtitle}>{t("已安装设备来源")}</Text></View>
+          <View><Text style={styles.panelTitle}>{t("client.mobile.platforms")}</Text><Text style={styles.panelSubtitle}>{t("client.mobile.installedDevicesByPlatform")}</Text></View>
         </View>
         {data?.platforms.length ? data.platforms.map((item, index) => <View key={item.name} style={styles.distributionRow}>
           <View style={styles.distributionMeta}><Text style={styles.distributionName}>{item.name}</Text><Text style={styles.distributionValue}>{item.value}</Text></View>
@@ -510,7 +511,7 @@ function DashboardPage({ session, onBack }: AdminAreaProps & { onBack: () => voi
             styles.distributionFill,
             { width: percentage(item.value, platformTotal), backgroundColor: index % 2 ? resolveThemeColor(COLORS.blue, 'info') : COLORS.primary },
           ]} /></View>
-        </View>) : <Text style={styles.inlineEmpty}>{t("暂无平台数据")}</Text>}
+        </View>) : <Text style={styles.inlineEmpty}>{t("client.mobile.noPlatformData")}</Text>}
       </Surface>
     </ScrollView>
   </PageShell>;
@@ -559,15 +560,15 @@ function OfficialAccountsPage({ session, profile, onBack }: AdminAreaProps & { o
     const body: Record<string, unknown> = { note, expiresAt };
     if (authJson.trim()) {
       try { body.auth = JSON.parse(authJson.replace(/^\uFEFF/, '')); }
-      catch { Toast.fail(t("auth.json 内容不是有效 JSON")); return; }
-    } else if (editing === 'new') { Toast.fail(t("请填写 auth.json")); return; }
+      catch { Toast.fail(t("client.mobile.authJsonDoesNotContainValidJson")); return; }
+    } else if (editing === 'new') { Toast.fail(t("client.mobile.enterAuthJsonContent")); return; }
     setSaving(true);
     try {
       await adminRequest(session, editing === 'new' ? '/admin/api/official-accounts' : `/admin/api/official-accounts/${editing?.id}`, {
         method: editing === 'new' ? 'POST' : 'PATCH',
         body: JSON.stringify(body),
       });
-      Toast.success(editing === 'new' ? t("账号已添加") : t("账号已更新"));
+      Toast.success(editing === 'new' ? t("client.app.accountAdded") : t("client.mobile.accountUpdated"));
       const firstPage = editing === 'new';
       setEditing(null);
       await load(firstPage ? 1 : data.page);
@@ -580,7 +581,7 @@ function OfficialAccountsPage({ session, profile, onBack }: AdminAreaProps & { o
     setDeletingBusy(true);
     try {
       await adminRequest(session, `/admin/api/official-accounts/${deleting.id}`, { method: 'DELETE' });
-      Toast.success(t("账号已删除"));
+      Toast.success(t("client.mobile.accountDeleted"));
       setDeleting(null);
       await load();
     } catch (error) { Toast.fail(messageOf(error)); }
@@ -611,7 +612,7 @@ function OfficialAccountsPage({ session, profile, onBack }: AdminAreaProps & { o
     try {
       if (added.length) await adminRequest(session, '/admin/api/official-accounts/bind', { method: 'POST', body: JSON.stringify({ systemAccountIds: [binding.id], userIds: added }) });
       if (removed.length) await adminRequest(session, '/admin/api/official-accounts/unbind', { method: 'POST', body: JSON.stringify({ systemAccountIds: [binding.id], userIds: removed }) });
-      Toast.success(t("绑定已更新"));
+      Toast.success(t("client.mobile.linksUpdated"));
       setBinding(null);
       await load();
     } catch (error) { Toast.fail(messageOf(error)); }
@@ -619,30 +620,30 @@ function OfficialAccountsPage({ session, profile, onBack }: AdminAreaProps & { o
   }
 
   return <PageShell page="officialAccounts" onBack={onBack}>
-    <SearchBar value={search} onChangeText={setSearch} onSearch={() => void load(1)} placeholder={t("搜索邮箱、备注或账号 ID")} />
+    <SearchBar value={search} onChangeText={setSearch} onSearch={() => void load(1)} placeholder={t("client.mobile.searchEmailNotesOrAccountId")} />
     <Toolbar total={data.total} loading={loading} onRefresh={() => void load()}>
-      {canManage ? <AdminButton label={t("＋ 新增")} tone="primary" compact onPress={() => openEditor('new')} /> : null}
+      {canManage ? <AdminButton label={t("client.mobile.add.07a04d")} tone="primary" compact onPress={() => openEditor('new')} /> : null}
     </Toolbar>
     <ScrollView contentContainerStyle={styles.listScroll} keyboardShouldPersistTaps="handled">
       <LoadingOrEmpty loading={loading} empty={!data.items.length}>
         {data.items.map((account) => <Surface key={account.id}>
           <View style={styles.cardHeader}>
-            <View style={[styles.avatar, { backgroundColor: color(COLORS.primarySoft, 'accentSoft') }]}><Text style={[styles.avatarText, { color: color(COLORS.primary, 'accent') }]}>{t("号")}</Text></View>
+            <View style={[styles.avatar, { backgroundColor: color(COLORS.primarySoft, 'accentSoft') }]}><Text style={[styles.avatarText, { color: color(COLORS.primary, 'accent') }]}>{t("client.mobile.accounts")}</Text></View>
             <View style={styles.cardHeading}>
               <Text style={styles.cardTitle} numberOfLines={1}>{account.email}</Text>
-              <Text style={styles.cardSubtitle}>{t("更新于")}{' '}{formatDate(account.updatedAt)}</Text>
+              <Text style={styles.cardSubtitle}>{t("client.accounts.updated")}{' '}{formatDate(account.updatedAt)}</Text>
             </View>
-            <Pill tone={account.boundUserCount ? 'green' : 'gray'}>{account.boundUserCount}{' '}{t("个绑定")}</Pill>
+            <Pill tone={account.boundUserCount ? 'green' : 'gray'}>{account.boundUserCount}{' '}{t("client.mobile.linkedUsers")}</Pill>
           </View>
           <View style={styles.pillRow}>
             <Pill tone="blue">{account.plan || 'ChatGPT'}</Pill>
-            {account.expiresAt ? <Pill tone="amber">{t("到期")}{' '}{account.expiresAt}</Pill> : null}
+            {account.expiresAt ? <Pill tone="amber">{t("client.mobile.expires")}{' '}{account.expiresAt}</Pill> : null}
           </View>
-          <Text style={[styles.bodyText, !account.note && styles.placeholderText]}>{account.note || t("暂无备注")}</Text>
+          <Text style={[styles.bodyText, !account.note && styles.placeholderText]}>{account.note || t("client.mobile.noNotes")}</Text>
           {canManage ? <View style={styles.cardActions}>
-            <AdminButton label={t("编辑")} compact onPress={() => openEditor(account)} />
-            <AdminButton label={t("绑定用户")} compact onPress={() => void openBindings(account)} />
-            <AdminButton label={t("删除")} tone="quiet" compact onPress={() => setDeleting(account)} />
+            <AdminButton label={t("client.chat.edit.051836")} compact onPress={() => openEditor(account)} />
+            <AdminButton label={t("client.mobile.linkUsers")} compact onPress={() => void openBindings(account)} />
+            <AdminButton label={t("client.projectBrowser.deleted")} tone="quiet" compact onPress={() => setDeleting(account)} />
           </View> : null}
         </Surface>)}
       </LoadingOrEmpty>
@@ -651,38 +652,38 @@ function OfficialAccountsPage({ session, profile, onBack }: AdminAreaProps & { o
 
     <BottomSheet fullWidthContent
       visible={Boolean(editing)}
-      title={editing === 'new' ? t("新增官方账号") : t("编辑官方账号")}
-      subtitle={editing === 'new' ? t("导入凭据并补充账号信息") : editing ? editing.email : undefined}
+      title={editing === 'new' ? t("client.mobile.addOfficialAccount") : t("client.mobile.editOfficialAccount")}
+      subtitle={editing === 'new' ? t("client.mobile.importCredentialsAndAddAccountDetails") : editing ? editing.email : undefined}
       onClose={() => setEditing(null)}
       dismissible={!saving}
       tall
       actions={[
-        { label: t("取消"), onPress: () => setEditing(null), disabled: saving },
-        { label: t("保存账号"), tone: 'primary', onPress: save, loading: saving },
+        { label: t("client.accounts.cancel"), onPress: () => setEditing(null), disabled: saving },
+        { label: t("client.mobile.saveAccount"), tone: 'primary', onPress: save, loading: saving },
       ]}
     >
       <SheetScrollView style={styles.sheetScroll} keyboardShouldPersistTaps="handled">
-        <Field label="auth.json" value={authJson} onChangeText={setAuthJson} placeholder={editing === 'new' ? '{"tokens":{"access_token":"..."}}' : t("留空表示不修改凭据")} multiline hint={t("请粘贴完整的账号认证 JSON")} />
-        <Field label={t("备注")} value={note} onChangeText={setNote} placeholder={t("给账号添加便于识别的说明")} />
-        <Field label={t("到期日期")} value={expiresAt} onChangeText={setExpiresAt} placeholder="YYYY-MM-DD" />
+        <Field label="auth.json" value={authJson} onChangeText={setAuthJson} placeholder={editing === 'new' ? '{"tokens":{"access_token":"..."}}' : t("client.mobile.leaveBlankToKeepCredentialsUnchanged")} multiline hint={t("client.mobile.pasteTheCompleteAccountAuthenticationJson")} />
+        <Field label={t("client.accounts.notes")} value={note} onChangeText={setNote} placeholder={t("client.mobile.addANoteToIdentifyThisAccount")} />
+        <Field label={t("client.mobile.expirationDate")} value={expiresAt} onChangeText={setExpiresAt} placeholder="YYYY-MM-DD" />
       </SheetScrollView>
     </BottomSheet>
 
     <BottomSheet fullWidthContent
       visible={Boolean(binding)}
-      title={t("绑定用户")}
+      title={t("client.mobile.linkUsers")}
       subtitle={binding?.email}
       onClose={() => setBinding(null)}
       dismissible={!saving}
       tall
       actions={[
-        { label: t("取消"), onPress: () => setBinding(null), disabled: saving },
-        { label: t("保存 {value1} 项", { value1: boundIds.length }), tone: 'primary', onPress: saveBindings, loading: saving, disabled: bindingLoading },
+        { label: t("client.accounts.cancel"), onPress: () => setBinding(null), disabled: saving },
+        { label: t("client.mobile.saveItems", { value1: boundIds.length }), tone: 'primary', onPress: saveBindings, loading: saving, disabled: bindingLoading },
       ]}
     >
       <SheetScrollView style={styles.bindingList}>
-        {bindingLoading ? <View style={styles.sheetLoading}><ActivityIndicator color={color(COLORS.primary, 'accent')} /><Text style={styles.stateDescription}>{t("正在读取用户…")}</Text></View> : null}
-        {!bindingLoading && !bindingUsers.length ? <Text style={styles.inlineEmpty}>{t("暂无可绑定用户")}</Text> : null}
+        {bindingLoading ? <View style={styles.sheetLoading}><ActivityIndicator color={color(COLORS.primary, 'accent')} /><Text style={styles.stateDescription}>{t("client.mobile.loadingUsers")}</Text></View> : null}
+        {!bindingLoading && !bindingUsers.length ? <Text style={styles.inlineEmpty}>{t("client.mobile.noUsersAvailableToLink")}</Text> : null}
         {bindingUsers.map((user) => {
           const checked = boundIds.includes(user.id);
           return <Pressable
@@ -699,16 +700,16 @@ function OfficialAccountsPage({ session, profile, onBack }: AdminAreaProps & { o
 
     <BottomSheet
       visible={Boolean(deleting)}
-      title={t("删除官方账号")}
-      subtitle={t("此操作无法撤销")}
+      title={t("client.mobile.deleteOfficialAccount")}
+      subtitle={t("client.mobile.thisCannotBeUndone")}
       onClose={() => setDeleting(null)}
       dismissible={!deletingBusy}
       actions={[
-        { label: t("取消"), onPress: () => setDeleting(null), disabled: deletingBusy },
-        { label: t("确认删除"), tone: 'danger', onPress: confirmRemove, loading: deletingBusy },
+        { label: t("client.accounts.cancel"), onPress: () => setDeleting(null), disabled: deletingBusy },
+        { label: t("client.mobile.confirmDeletion"), tone: 'danger', onPress: confirmRemove, loading: deletingBusy },
       ]}
     >
-      <ConfirmCopy icon="!" title={deleting?.email ?? ''} description={t("删除后，该账号的凭据和绑定关系将永久移除。")} />
+      <ConfirmCopy icon="!" title={deleting?.email ?? ''} description={t("client.mobile.thisPermanentlyRemovesTheAccountSCredentialsAndUserLinks")} />
     </BottomSheet>
   </PageShell>;
 }
@@ -755,7 +756,7 @@ function InvitationsPage({ session, profile, onBack }: AdminAreaProps & { onBack
     const uses = Number(maxUses);
     const validHours = Number(hours);
     if (!Number.isInteger(uses) || uses < 1 || (!neverExpires && (!Number.isFinite(validHours) || validHours < 1))) {
-      Toast.fail(t("请填写有效的使用次数和有效期"));
+      Toast.fail(t("client.mobile.enterAValidUsageLimitAndExpirationPeriod"));
       return;
     }
     setCreatingBusy(true);
@@ -769,7 +770,7 @@ function InvitationsPage({ session, profile, onBack }: AdminAreaProps & { onBack
       if (invitation.token) {
         const link = `${session.baseUrl}/admin?inviteToken=${encodeURIComponent(invitation.token)}`;
         await Clipboard.setStringAsync(link);
-        Toast.success(t("邀请已创建，链接已复制"));
+        Toast.success(t("client.mobile.invitationCreatedAndLinkCopied"));
       }
     } catch (error) { Toast.fail(messageOf(error)); }
     finally { setCreatingBusy(false); }
@@ -779,7 +780,7 @@ function InvitationsPage({ session, profile, onBack }: AdminAreaProps & { onBack
     try {
       const result = await adminRequest<{ token: string }>(session, `/admin/api/invitations/${item.id}/token`, { method: 'POST' });
       await Clipboard.setStringAsync(`${session.baseUrl}/admin?inviteToken=${encodeURIComponent(result.token)}`);
-      Toast.success(t("注册链接已复制"));
+      Toast.success(t("client.mobile.registrationLinkCopied"));
     } catch (error) { Toast.fail(messageOf(error)); }
   }
 
@@ -810,7 +811,7 @@ function InvitationsPage({ session, profile, onBack }: AdminAreaProps & { onBack
 
   function openGift(user: InvitationRegisteredUser) {
     if (!user.userId) {
-      Toast.fail(t("该注册记录未关联有效用户"));
+      Toast.fail(t("client.mobile.thisRegistrationHasNoValidLinkedUser"));
       return;
     }
     setGiftUser(user);
@@ -821,7 +822,7 @@ function InvitationsPage({ session, profile, onBack }: AdminAreaProps & { onBack
 
   async function confirmGift() {
     if (!giftUser?.userId || !giftSelectedIds.length) {
-      Toast.fail(t("请至少选择一个官方账号"));
+      Toast.fail(t("client.mobile.selectAtLeastOneOfficialAccount"));
       return;
     }
     setGiftSaving(true);
@@ -831,8 +832,8 @@ function InvitationsPage({ session, profile, onBack }: AdminAreaProps & { onBack
         body: JSON.stringify({ systemAccountIds: giftSelectedIds, userIds: [giftUser.userId] }),
       });
       Toast.success(result.count
-        ? t("已向 {value1} 赠送 {value2} 个账号", { value1: giftUser.email, value2: result.count })
-        : t("所选账号均已赠送，无需重复操作"));
+        ? t("client.mobile.grantedAccountsTo", { value1: giftUser.email, value2: result.count })
+        : t("client.mobile.theseAccountsHaveAlreadyBeenGranted"));
       setGiftUser(null);
       if (usersInvite) await openRegisteredUsers(usersInvite);
     } catch (error) { Toast.fail(messageOf(error)); }
@@ -844,7 +845,7 @@ function InvitationsPage({ session, profile, onBack }: AdminAreaProps & { onBack
     setRevokingBusy(true);
     try {
       await adminRequest(session, `/admin/api/invitations/${revoking.id}`, { method: 'DELETE' });
-      Toast.success(t("邀请已撤销"));
+      Toast.success(t("client.mobile.invitationRevoked"));
       setRevoking(null);
       await load();
     } catch (error) { Toast.fail(messageOf(error)); }
@@ -852,16 +853,16 @@ function InvitationsPage({ session, profile, onBack }: AdminAreaProps & { onBack
   }
 
   const status = (item: AdminInvitation) => item.revokedAt
-    ? { active: false, label: t("已撤销") }
+    ? { active: false, label: t("client.chat.reverted") }
     : item.usedCount >= item.maxUses
-      ? { active: false, label: t("已用完") }
+      ? { active: false, label: t("client.mobile.usedUp") }
       : item.expiresAt && new Date(item.expiresAt) <= new Date()
-        ? { active: false, label: t("已过期") }
-        : { active: true, label: t("有效") };
+        ? { active: false, label: t("client.mobile.expired") }
+        : { active: true, label: t("client.runtimeErrors.active") };
 
   return <PageShell page="invitations" onBack={onBack}>
     <Toolbar total={data.total} loading={loading} onRefresh={() => void load()}>
-      {canManage ? <AdminButton label={t("＋ 创建邀请")} tone="primary" compact onPress={openCreate} /> : null}
+      {canManage ? <AdminButton label={t("client.mobile.createInvitation.8f26b4")} tone="primary" compact onPress={openCreate} /> : null}
     </Toolbar>
     <ScrollView contentContainerStyle={styles.listScroll}>
       <LoadingOrEmpty loading={loading} empty={!data.items.length}>
@@ -869,23 +870,23 @@ function InvitationsPage({ session, profile, onBack }: AdminAreaProps & { onBack
           const { active, label: currentStatus } = status(item);
           return <Surface key={item.id}>
             <View style={styles.cardHeader}>
-              <View style={[styles.avatar, { backgroundColor: COLORS.amberSoft }]}><Text style={[styles.avatarText, { color: COLORS.amber }]}>{t("邀")}</Text></View>
+              <View style={[styles.avatar, { backgroundColor: COLORS.amberSoft }]}><Text style={[styles.avatarText, { color: COLORS.amber }]}>{t("client.mobile.invites")}</Text></View>
               <View style={styles.cardHeading}>
-                <Text style={styles.cardTitle} numberOfLines={1}>{item.email || t("任意邮箱")}</Text>
-                <Text style={styles.cardSubtitle}>{t("由 {email} 创建", { email: item.createdByEmail })}</Text>
+                <Text style={styles.cardTitle} numberOfLines={1}>{item.email || t("client.mobile.anyEmail")}</Text>
+                <Text style={styles.cardSubtitle}>{t("client.nativeMisc.createdBy", { email: item.createdByEmail })}</Text>
               </View>
               <Pill tone={active ? 'green' : 'gray'}>{currentStatus}</Pill>
             </View>
             <View style={styles.infoGrid}>
-              <View style={styles.infoCell}><Text style={styles.infoCellLabel}>{t("角色")}</Text><Text style={styles.infoCellValue}>{item.role}</Text></View>
-              <View style={styles.infoCell}><Text style={styles.infoCellLabel}>{t("使用进度")}</Text><Text style={styles.infoCellValue}>{item.usedCount} / {item.maxUses}</Text></View>
+              <View style={styles.infoCell}><Text style={styles.infoCellLabel}>{t("client.mobile.role")}</Text><Text style={styles.infoCellValue}>{item.role}</Text></View>
+              <View style={styles.infoCell}><Text style={styles.infoCellLabel}>{t("client.mobile.usageProgress")}</Text><Text style={styles.infoCellValue}>{item.usedCount} / {item.maxUses}</Text></View>
             </View>
-            <Text style={styles.cardFootnote}>{t("到期时间：")}{item.expiresAt ? formatDate(item.expiresAt) : t("永不过期")}</Text>
+            <Text style={styles.cardFootnote}>{t("client.mobile.expires.cf2be2")}{item.expiresAt ? formatDate(item.expiresAt) : t("client.mobile.neverExpires")}</Text>
             <View style={styles.cardActions}>
-              <AdminButton label={t("注册用户")} compact onPress={() => void openRegisteredUsers(item)} />
+              <AdminButton label={t("client.mobile.registeredUsers.f36e03")} compact onPress={() => void openRegisteredUsers(item)} />
               {canManage ? <>
-                <AdminButton label={t("复制链接")} compact disabled={!active} onPress={() => void copy(item)} />
-                <AdminButton label={t("撤销")} tone="quiet" compact disabled={!active} onPress={() => setRevoking(item)} />
+                <AdminButton label={t("client.mobile.copyLink")} compact disabled={!active} onPress={() => void copy(item)} />
+                <AdminButton label={t("client.projectBrowser.undo")} tone="quiet" compact disabled={!active} onPress={() => setRevoking(item)} />
               </> : null}
             </View>
           </Surface>;
@@ -896,42 +897,42 @@ function InvitationsPage({ session, profile, onBack }: AdminAreaProps & { onBack
 
     <BottomSheet fullWidthContent
       visible={creating}
-      title={t("创建邀请")}
-      subtitle={t("创建后注册链接会自动复制到剪贴板")}
+      title={t("client.mobile.createInvitation")}
+      subtitle={t("client.mobile.theRegistrationLinkWillBeCopiedWhenCreated")}
       onClose={() => setCreating(false)}
       dismissible={!creatingBusy}
       tall
       actions={[
-        { label: t("取消"), onPress: () => setCreating(false), disabled: creatingBusy },
-        { label: t("创建并复制"), tone: 'primary', onPress: create, loading: creatingBusy },
+        { label: t("client.accounts.cancel"), onPress: () => setCreating(false), disabled: creatingBusy },
+        { label: t("client.mobile.createAndCopy"), tone: 'primary', onPress: create, loading: creatingBusy },
       ]}
     >
       <SheetScrollView style={styles.sheetScroll} keyboardShouldPersistTaps="handled">
-        <Field label={t("指定邮箱（可选）")} value={email} onChangeText={setEmail} keyboardType="email-address" placeholder={t("留空允许任意邮箱")} />
-        <Field label={t("角色代码")} value={role} onChangeText={setRole} placeholder="user" />
-        <Field label={t("最大使用次数")} value={maxUses} onChangeText={setMaxUses} keyboardType="numeric" />
-        <SwitchRow label={t("永不过期")} description={t("开启后注册链接不会自动失效")} value={neverExpires} onValueChange={setNeverExpires} />
-        {!neverExpires ? <Field label={t("有效小时数")} value={hours} onChangeText={setHours} keyboardType="numeric" /> : null}
+        <Field label={t("client.mobile.emailRestrictionOptional")} value={email} onChangeText={setEmail} keyboardType="email-address" placeholder={t("client.mobile.leaveBlankToAllowAnyEmail")} />
+        <Field label={t("client.mobile.roleCode")} value={role} onChangeText={setRole} placeholder="user" />
+        <Field label={t("client.mobile.maximumUses")} value={maxUses} onChangeText={setMaxUses} keyboardType="numeric" />
+        <SwitchRow label={t("client.mobile.neverExpires")} description={t("client.mobile.theRegistrationLinkWillNotExpireAutomatically")} value={neverExpires} onValueChange={setNeverExpires} />
+        {!neverExpires ? <Field label={t("client.mobile.validForHours")} value={hours} onChangeText={setHours} keyboardType="numeric" /> : null}
       </SheetScrollView>
     </BottomSheet>
 
     <BottomSheet fullWidthContent
       visible={Boolean(usersInvite) && !giftUser}
-      title={t("已注册用户")}
-      subtitle={usersInvite?.email || t("任意邮箱邀请")}
+      title={t("client.mobile.registeredUsers")}
+      subtitle={usersInvite?.email || t("client.mobile.invitationForAnyEmail")}
       onClose={() => setUsersInvite(null)}
       tall
-      actions={[{ label: t("完成"), tone: 'primary', onPress: () => setUsersInvite(null) }]}
+      actions={[{ label: t("client.shared.done"), tone: 'primary', onPress: () => setUsersInvite(null) }]}
     >
       <SheetScrollView style={styles.sheetScroll}>
-        {registeredLoading ? <View style={styles.sheetLoading}><ActivityIndicator color={color(COLORS.primary, 'accent')} /><Text style={styles.stateDescription}>{t("正在读取注册记录…")}</Text></View> : null}
-        {!registeredLoading && !registeredUsers.length ? <Text style={styles.inlineEmpty}>{t("暂无注册用户")}</Text> : null}
+        {registeredLoading ? <View style={styles.sheetLoading}><ActivityIndicator color={color(COLORS.primary, 'accent')} /><Text style={styles.stateDescription}>{t("client.mobile.loadingRegistrations")}</Text></View> : null}
+        {!registeredLoading && !registeredUsers.length ? <Text style={styles.inlineEmpty}>{t("client.mobile.noRegisteredUsers")}</Text> : null}
         {registeredUsers.map((user) => <View key={user.id} style={styles.personRow}>
           <View style={[styles.miniAvatar, { backgroundColor: color(COLORS.blueSoft, 'infoSoft') }]}><Text style={[styles.miniAvatarText, { color: color(COLORS.blue, 'info') }]}>{user.email.slice(0, 2).toUpperCase()}</Text></View>
           <View style={styles.personCopy}><Text style={styles.personName} numberOfLines={1}>{user.email}</Text><Text style={styles.personMeta}>{user.role} · {formatDate(user.registeredAt)}</Text></View>
           <View style={styles.personActions}>
-            <Pill tone="purple">{user.giftedAccountCount}{' '}{t("个账号")}</Pill>
-            {canGiftAccounts && user.userId ? <AdminButton label={t("赠送")} tone="primary" compact onPress={() => openGift(user)} /> : null}
+            <Pill tone="purple">{user.giftedAccountCount}{' '}{t("client.accounts.accounts.5088a9")}</Pill>
+            {canGiftAccounts && user.userId ? <AdminButton label={t("client.mobile.grant")} tone="primary" compact onPress={() => openGift(user)} /> : null}
           </View>
         </View>)}
       </SheetScrollView>
@@ -939,20 +940,20 @@ function InvitationsPage({ session, profile, onBack }: AdminAreaProps & { onBack
 
     <BottomSheet fullWidthContent
       visible={Boolean(giftUser)}
-      title={t("赠送官方账号")}
+      title={t("client.mobile.grantOfficialAccounts")}
       subtitle={giftUser?.email}
       onClose={() => setGiftUser(null)}
       dismissible={!giftSaving}
       tall
       actions={[
-        { label: t("取消"), onPress: () => setGiftUser(null), disabled: giftSaving },
-        { label: t("赠送 {value1} 个", { value1: giftSelectedIds.length }), tone: 'primary', onPress: confirmGift, loading: giftSaving, disabled: giftLoading || !giftSelectedIds.length },
+        { label: t("client.accounts.cancel"), onPress: () => setGiftUser(null), disabled: giftSaving },
+        { label: t("client.mobile.grant.e478e4", { value1: giftSelectedIds.length }), tone: 'primary', onPress: confirmGift, loading: giftSaving, disabled: giftLoading || !giftSelectedIds.length },
       ]}
     >
-      <SheetInset><Text style={styles.giftHint}>{t("可选择一个或多个账号，已绑定用户较少的账号优先显示。")}</Text></SheetInset>
+      <SheetInset><Text style={styles.giftHint}>{t("client.mobile.chooseOneOrMoreAccountsAccountsWithFewerLinkedUsers")}</Text></SheetInset>
       <SheetScrollView style={styles.bindingList}>
-        {giftLoading ? <View style={styles.sheetLoading}><ActivityIndicator color={color(COLORS.primary, 'accent')} /><Text style={styles.stateDescription}>{t("正在读取官方账号池…")}</Text></View> : null}
-        {!giftLoading && !giftAccounts.items.length ? <Text style={styles.inlineEmpty}>{t("官方账号池暂无可赠送账号")}</Text> : null}
+        {giftLoading ? <View style={styles.sheetLoading}><ActivityIndicator color={color(COLORS.primary, 'accent')} /><Text style={styles.stateDescription}>{t("client.mobile.loadingOfficialAccounts")}</Text></View> : null}
+        {!giftLoading && !giftAccounts.items.length ? <Text style={styles.inlineEmpty}>{t("client.mobile.noAccountsAvailableToGrant")}</Text> : null}
         {giftAccounts.items.map((account) => {
           const checked = giftSelectedIds.includes(account.id);
           return <Pressable
@@ -963,7 +964,7 @@ function InvitationsPage({ session, profile, onBack }: AdminAreaProps & { onBack
             <View style={[styles.checkbox, checked && styles.checkboxChecked]}><Text style={styles.checkboxText}>{checked ? '✓' : ''}</Text></View>
             <View style={styles.checkCopy}>
               <Text style={styles.checkLabel} numberOfLines={1}>{account.email}</Text>
-              <Text style={styles.checkMeta} numberOfLines={1}>{account.plan || 'ChatGPT'}{' '}{t("· 已绑定")}{' '}{account.boundUserCount}{' '}{t("人")}{account.note ? ` · ${account.note}` : ''}</Text>
+              <Text style={styles.checkMeta} numberOfLines={1}>{account.plan || 'ChatGPT'}{' '}{t("client.mobile.linked")}{' '}{account.boundUserCount}{' '}{t("client.mobile.users")}{account.note ? ` · ${account.note}` : ''}</Text>
             </View>
           </Pressable>;
         })}
@@ -973,16 +974,16 @@ function InvitationsPage({ session, profile, onBack }: AdminAreaProps & { onBack
 
     <BottomSheet
       visible={Boolean(revoking)}
-      title={t("撤销邀请")}
-      subtitle={t("撤销后注册链接会立即失效")}
+      title={t("client.mobile.revokeInvitation")}
+      subtitle={t("client.mobile.revokingImmediatelyDisablesTheRegistrationLink")}
       onClose={() => setRevoking(null)}
       dismissible={!revokingBusy}
       actions={[
-        { label: t("取消"), onPress: () => setRevoking(null), disabled: revokingBusy },
-        { label: t("确认撤销"), tone: 'danger', onPress: confirmRevoke, loading: revokingBusy },
+        { label: t("client.accounts.cancel"), onPress: () => setRevoking(null), disabled: revokingBusy },
+        { label: t("client.mobile.confirmRevocation"), tone: 'danger', onPress: confirmRevoke, loading: revokingBusy },
       ]}
     >
-      <ConfirmCopy icon="×" title={revoking?.email || t("任意邮箱邀请")} description={t("已经通过该链接注册的用户不会受到影响。")} />
+      <ConfirmCopy icon="×" title={revoking?.email || t("client.mobile.invitationForAnyEmail")} description={t("client.mobile.usersAlreadyRegisteredThroughThisLinkAreUnaffected")} />
     </BottomSheet>
   </PageShell>;
 }
@@ -998,7 +999,7 @@ function FeedbackPage({ session, profile, onBack }: AdminAreaProps & { onBack: (
   const [selected, setSelected] = useState<AdminFeedback | null>(null);
   const [replying, setReplying] = useState<AdminFeedback | null>(null);
   const [mailServiceId, setMailServiceId] = useState<string | null>(null);
-  const [subject, setSubject] = useState(t("Remote AI 问题反馈回复"));
+  const [subject, setSubject] = useState(t("client.mobile.replyToRemoteAiFeedback"));
   const [content, setContent] = useState('');
   const [replyingBusy, setReplyingBusy] = useState(false);
   const canManage = has(profile, 'admin.feedback.manage');
@@ -1012,7 +1013,7 @@ function FeedbackPage({ session, profile, onBack }: AdminAreaProps & { onBack: (
     setMailServices([]);
     setMailServicesLoading(true);
     try { setMailServices(await adminRequest<AdminMailService[]>(session, '/admin/api/mail-services')); }
-    catch (error) { Toast.fail(t("发件服务加载失败：{value1}", { value1: messageOf(error) })); }
+    catch (error) { Toast.fail(t("client.mobile.couldNotLoadEmailServices", { value1: messageOf(error) })); }
     finally { setMailServicesLoading(false); }
   }, [session]);
   useEffect(() => {
@@ -1032,15 +1033,15 @@ function FeedbackPage({ session, profile, onBack }: AdminAreaProps & { onBack: (
     const initialService = mailServices.find((service) => service.source === 'default' && service.enabled)
       ?? mailServices.find((service) => service.enabled);
     setMailServiceId(initialService?.id ?? null);
-    setSubject(t("Remote AI 问题反馈回复"));
+    setSubject(t("client.mobile.replyToRemoteAiFeedback"));
     setContent('');
     setReplying(item);
   }
 
   async function sendReply() {
-    if (!replying || !subject.trim() || !content.trim()) { Toast.fail(t("请填写主题和回复内容")); return; }
+    if (!replying || !subject.trim() || !content.trim()) { Toast.fail(t("client.mobile.enterASubjectAndReply")); return; }
     if (!mailServices.find((service) => service.id === mailServiceId)?.enabled) {
-      Toast.fail(t("请选择可用的发件服务"));
+      Toast.fail(t("client.mobile.chooseAnAvailableEmailService"));
       return;
     }
     setReplyingBusy(true);
@@ -1049,7 +1050,7 @@ function FeedbackPage({ session, profile, onBack }: AdminAreaProps & { onBack: (
         method: 'POST',
         body: JSON.stringify({ subject, content, mailServiceId }),
       });
-      Toast.success(t("回复邮件已发送"));
+      Toast.success(t("client.mobile.replyEmailSent"));
       setReplying(null);
       setContent('');
       await load();
@@ -1063,22 +1064,22 @@ function FeedbackPage({ session, profile, onBack }: AdminAreaProps & { onBack: (
       <LoadingOrEmpty loading={loading} empty={!data.items.length}>
         {data.items.map((item) => <Surface key={item.id}>
           <View style={styles.cardHeader}>
-            <View style={[styles.avatar, { backgroundColor: color(COLORS.purpleSoft, 'purpleSoft') }]}><Text style={[styles.avatarText, { color: color(COLORS.purple, 'purple') }]}>{t("馈")}</Text></View>
+            <View style={[styles.avatar, { backgroundColor: color(COLORS.purpleSoft, 'purpleSoft') }]}><Text style={[styles.avatarText, { color: color(COLORS.purple, 'purple') }]}>{t("client.mobile.feedback.5ca01a")}</Text></View>
             <View style={styles.cardHeading}>
-              <Text style={styles.cardTitle}>{item.email || t("匿名用户")}</Text>
+              <Text style={styles.cardTitle}>{item.email || t("client.mobile.anonymousUser")}</Text>
               <Text style={styles.cardSubtitle}>{formatDate(item.createdAt)}</Text>
             </View>
-            <Pill tone={item.lastRepliedAt ? 'green' : 'amber'}>{item.lastRepliedAt ? t("已回复") : t("待回复")}</Pill>
+            <Pill tone={item.lastRepliedAt ? 'green' : 'amber'}>{item.lastRepliedAt ? t("client.mobile.replied") : t("client.mobile.awaitingReply")}</Pill>
           </View>
           <Text style={styles.feedbackContent} numberOfLines={3}>{item.content}</Text>
           <View style={styles.pillRow}>
             <Pill tone="blue">{item.platform}</Pill>
             <Pill tone="gray">v{item.version}</Pill>
-            {item.attachments.length ? <Pill tone="purple">{item.attachments.length}{' '}{t("个附件")}</Pill> : null}
+            {item.attachments.length ? <Pill tone="purple">{item.attachments.length}{' '}{t("client.chat.attachments")}</Pill> : null}
           </View>
           <View style={styles.cardActions}>
-            <AdminButton label={t("查看详情")} compact onPress={() => setSelected(item)} />
-            {canManage && item.email ? <AdminButton label={t("邮件回复")} tone="primary" compact onPress={() => openReply(item)} /> : null}
+            <AdminButton label={t("client.mobile.viewDetails")} compact onPress={() => setSelected(item)} />
+            {canManage && item.email ? <AdminButton label={t("client.mobile.replyByEmail")} tone="primary" compact onPress={() => openReply(item)} /> : null}
           </View>
         </Surface>)}
       </LoadingOrEmpty>
@@ -1087,15 +1088,15 @@ function FeedbackPage({ session, profile, onBack }: AdminAreaProps & { onBack: (
 
     <BottomSheet fullWidthContent
       visible={Boolean(selected)}
-      title={t("反馈详情")}
-      subtitle={selected ? `${selected.email || t("匿名用户")} · ${selected.platform} · v${selected.version}` : undefined}
+      title={t("client.mobile.feedbackDetails")}
+      subtitle={selected ? `${selected.email || t("client.mobile.anonymousUser")} · ${selected.platform} · v${selected.version}` : undefined}
       onClose={() => setSelected(null)}
       tall
-      actions={[{ label: t("完成"), tone: 'primary', onPress: () => setSelected(null) }]}
+      actions={[{ label: t("client.shared.done"), tone: 'primary', onPress: () => setSelected(null) }]}
     >
       <SheetScrollView style={styles.sheetScroll}>
         <View style={styles.detailContentBox}><Text selectable style={styles.detailContent}>{selected?.content}</Text></View>
-        {selected?.attachments.length ? <Text style={styles.sheetSectionLabel}>{t("附件")}</Text> : null}
+        {selected?.attachments.length ? <Text style={styles.sheetSectionLabel}>{t("client.mobile.attachments")}</Text> : null}
         {selected?.attachments.map((file) => <View key={file.id} style={styles.fileRow}>
           <View style={styles.fileIcon}><Text style={styles.fileIconText}>↗</Text></View>
           <View style={styles.fileCopy}><Text style={styles.fileName} numberOfLines={1}>{file.fileName}</Text><Text style={styles.fileMeta}>{file.mimeType}</Text></View>
@@ -1106,15 +1107,15 @@ function FeedbackPage({ session, profile, onBack }: AdminAreaProps & { onBack: (
 
     <BottomSheet fullWidthContent
       visible={Boolean(replying)}
-      title={t("邮件回复")}
+      title={t("client.mobile.replyByEmail")}
       subtitle={replying?.email ?? undefined}
       onClose={() => setReplying(null)}
       dismissible={!replyingBusy}
       tall
       actions={[
-        { label: t("取消"), onPress: () => setReplying(null), disabled: replyingBusy },
+        { label: t("client.accounts.cancel"), onPress: () => setReplying(null), disabled: replyingBusy },
         {
-          label: t("发送回复"),
+          label: t("client.mobile.sendReply"),
           tone: 'primary',
           onPress: sendReply,
           loading: replyingBusy,
@@ -1123,10 +1124,10 @@ function FeedbackPage({ session, profile, onBack }: AdminAreaProps & { onBack: (
       ]}
     >
       <SheetScrollView style={styles.sheetScroll} keyboardShouldPersistTaps="handled">
-        <Text style={styles.fieldLabel}>{t("发件服务")}</Text>
+        <Text style={styles.fieldLabel}>{t("client.mobile.emailService")}</Text>
         {mailServicesLoading ? <View style={styles.mailServiceLoading}>
           <ActivityIndicator color={color(COLORS.primary, 'accent')} size="small" />
-          <Text style={styles.mailServiceLoadingText}>{t("正在加载发件服务")}</Text>
+          <Text style={styles.mailServiceLoadingText}>{t("client.mobile.loadingEmailServices")}</Text>
         </View> : mailServices.length ? <View style={styles.mailServiceList}>
           {mailServices.map((service) => {
             const checked = service.id === mailServiceId;
@@ -1148,18 +1149,18 @@ function FeedbackPage({ session, profile, onBack }: AdminAreaProps & { onBack: (
               </View>
               <View style={styles.mailServiceCopy}>
                 <Text style={styles.mailServiceName} numberOfLines={1}>
-                  {service.source === 'default' ? t("默认服务") : service.name}
+                  {service.source === 'default' ? t("client.mobile.defaultService") : service.name}
                 </Text>
                 <Text style={styles.mailServiceMeta} numberOfLines={2}>
-                  {service.fromAddress ? t("发件人：{value1}", { value1: service.fromAddress }) : t("未配置发件人")}
-                  {!service.enabled ? t(" · 已停用") : ''}
+                  {service.fromAddress ? t("client.mobile.sender", { value1: service.fromAddress }) : t("client.mobile.noSenderConfigured")}
+                  {!service.enabled ? t("client.mobile.disabled.55c21d") : ''}
                 </Text>
               </View>
             </Pressable>;
           })}
-        </View> : <Text style={styles.mailServiceEmpty}>{t("暂无可用的发件服务，请刷新后重试")}</Text>}
-        <Field label={t("邮件主题")} value={subject} onChangeText={setSubject} />
-        <Field label={t("回复内容")} value={content} onChangeText={setContent} multiline placeholder={t("输入对用户问题的回复…")} />
+        </View> : <Text style={styles.mailServiceEmpty}>{t("client.mobile.noEmailServicesAvailableRefreshAndTryAgain")}</Text>}
+        <Field label={t("client.mobile.emailSubject")} value={subject} onChangeText={setSubject} />
+        <Field label={t("client.shared.reply")} value={content} onChangeText={setContent} multiline placeholder={t("client.mobile.writeAReplyToTheUserSQuestion")} />
       </SheetScrollView>
     </BottomSheet>
   </PageShell>;
@@ -1207,7 +1208,7 @@ function UsersPage({ session, profile, onBack }: AdminAreaProps & { onBack: () =
 
   async function save() {
     if (!email.trim() || (editing === 'new' && password.length < 8) || (editing !== 'new' && password.length > 0 && password.length < 8)) {
-      Toast.fail(t("请填写有效邮箱，密码至少 8 位"));
+      Toast.fail(t("client.mobile.enterAValidEmailAndAPasswordOfAtLeast"));
       return;
     }
     setSaving(true);
@@ -1217,7 +1218,7 @@ function UsersPage({ session, profile, onBack }: AdminAreaProps & { onBack: () =
         method: editing === 'new' ? 'POST' : 'PATCH',
         body: JSON.stringify(body),
       });
-      Toast.success(editing === 'new' ? t("用户已创建") : t("用户已更新"));
+      Toast.success(editing === 'new' ? t("client.mobile.userCreated") : t("client.mobile.userUpdated"));
       const firstPage = editing === 'new';
       setEditing(null);
       await load(firstPage ? 1 : data.page);
@@ -1230,7 +1231,7 @@ function UsersPage({ session, profile, onBack }: AdminAreaProps & { onBack: () =
     setDeletingBusy(true);
     try {
       await adminRequest(session, `/admin/api/users/${deleting.id}`, { method: 'DELETE' });
-      Toast.success(t("用户已删除"));
+      Toast.success(t("client.mobile.userDeleted"));
       setDeleting(null);
       await load();
     } catch (error) { Toast.fail(messageOf(error)); }
@@ -1238,9 +1239,9 @@ function UsersPage({ session, profile, onBack }: AdminAreaProps & { onBack: () =
   }
 
   return <PageShell page="users" onBack={onBack}>
-    <SearchBar value={search} onChangeText={setSearch} onSearch={() => void load(1)} placeholder={t("搜索用户邮箱")} />
+    <SearchBar value={search} onChangeText={setSearch} onSearch={() => void load(1)} placeholder={t("client.mobile.searchUserEmails")} />
     <Toolbar total={data.total} loading={loading} onRefresh={() => void load()}>
-      {canManage ? <AdminButton label={t("＋ 新增")} tone="primary" compact onPress={() => openEditor('new')} /> : null}
+      {canManage ? <AdminButton label={t("client.mobile.add.07a04d")} tone="primary" compact onPress={() => openEditor('new')} /> : null}
     </Toolbar>
     <ScrollView contentContainerStyle={styles.listScroll} keyboardShouldPersistTaps="handled">
       <LoadingOrEmpty loading={loading} empty={!data.items.length}>
@@ -1251,14 +1252,14 @@ function UsersPage({ session, profile, onBack }: AdminAreaProps & { onBack: () =
             </View>
             <View style={styles.cardHeading}>
               <Text style={styles.cardTitle} numberOfLines={1}>{user.email}</Text>
-              <Text style={styles.cardSubtitle}>{t("最后登录")}{' '}{formatDate(user.lastLoginAt)}</Text>
+              <Text style={styles.cardSubtitle}>{t("client.mobile.lastSignIn")}{' '}{formatDate(user.lastLoginAt)}</Text>
             </View>
-            <Pill tone={user.disabled ? 'red' : 'green'}>{user.disabled ? t("已禁用") : t("正常")}</Pill>
+            <Pill tone={user.disabled ? 'red' : 'green'}>{user.disabled ? t("client.mobile.disabled") : t("client.mobile.active")}</Pill>
           </View>
           <View style={styles.pillRow}><Pill tone="purple">{roles.find((item) => item.code === user.role)?.name ?? user.role}</Pill></View>
           {canManage ? <View style={styles.cardActions}>
-            <AdminButton label={t("编辑用户")} compact onPress={() => openEditor(user)} />
-            <AdminButton label={t("删除")} tone="quiet" compact onPress={() => setDeleting(user)} />
+            <AdminButton label={t("client.mobile.editUser")} compact onPress={() => openEditor(user)} />
+            <AdminButton label={t("client.projectBrowser.deleted")} tone="quiet" compact onPress={() => setDeleting(user)} />
           </View> : null}
         </Surface>)}
       </LoadingOrEmpty>
@@ -1267,22 +1268,22 @@ function UsersPage({ session, profile, onBack }: AdminAreaProps & { onBack: () =
 
     <BottomSheet fullWidthContent
       visible={Boolean(editing)}
-      title={editing === 'new' ? t("新增用户") : t("编辑用户")}
-      subtitle={editing === 'new' ? t("创建一个新的云端用户") : editing ? editing.email : undefined}
+      title={editing === 'new' ? t("client.mobile.addUser") : t("client.mobile.editUser")}
+      subtitle={editing === 'new' ? t("client.mobile.createANewCloudUser") : editing ? editing.email : undefined}
       onClose={() => setEditing(null)}
       dismissible={!saving}
       tall
       actions={[
-        { label: t("取消"), onPress: () => setEditing(null), disabled: saving },
-        { label: t("保存用户"), tone: 'primary', onPress: save, loading: saving },
+        { label: t("client.accounts.cancel"), onPress: () => setEditing(null), disabled: saving },
+        { label: t("client.mobile.saveUser"), tone: 'primary', onPress: save, loading: saving },
       ]}
     >
       <SheetScrollView style={styles.sheetScroll} keyboardShouldPersistTaps="handled">
-        <Field label={t("邮箱")} value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="name@example.com" />
-        <Field label={editing === 'new' ? t("初始密码") : t("重置密码（可选）")} value={password} onChangeText={setPassword} secureTextEntry placeholder={editing === 'new' ? t("至少 8 位") : t("留空表示不修改")} />
-        <Text style={styles.fieldLabel}>{t("角色")}</Text>
+        <Field label={t("client.app.email")} value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="name@example.com" />
+        <Field label={editing === 'new' ? t("client.mobile.initialPassword") : t("client.mobile.resetPasswordOptional")} value={password} onChangeText={setPassword} secureTextEntry placeholder={editing === 'new' ? t("client.mobile.atLeast8Characters") : t("client.mobile.leaveBlankToKeepUnchanged")} />
+        <Text style={styles.fieldLabel}>{t("client.mobile.role")}</Text>
         <View style={styles.choiceRow}>
-          {(roles.length ? roles : [{ code: 'user', name: t("用户") } as AdminRole]).map((item) => <Pressable
+          {(roles.length ? roles : [{ code: 'user', name: t("client.app.user") } as AdminRole]).map((item) => <Pressable
             key={item.code}
             onPress={() => setRole(item.code)}
             style={[styles.choiceChip, role === item.code && styles.choiceChipActive]}
@@ -1290,22 +1291,22 @@ function UsersPage({ session, profile, onBack }: AdminAreaProps & { onBack: () =
             <Text style={[styles.choiceChipText, role === item.code && styles.choiceChipTextActive]}>{item.name}</Text>
           </Pressable>)}
         </View>
-        <SwitchRow label={t("禁用用户")} description={t("禁用后该用户将无法登录")} value={disabled} onValueChange={setDisabled} />
+        <SwitchRow label={t("client.mobile.disableUser")} description={t("client.mobile.aDisabledUserCannotSignIn")} value={disabled} onValueChange={setDisabled} />
       </SheetScrollView>
     </BottomSheet>
 
     <BottomSheet
       visible={Boolean(deleting)}
-      title={t("删除用户")}
-      subtitle={t("此操作无法撤销")}
+      title={t("client.mobile.deleteUser")}
+      subtitle={t("client.mobile.thisCannotBeUndone")}
       onClose={() => setDeleting(null)}
       dismissible={!deletingBusy}
       actions={[
-        { label: t("取消"), onPress: () => setDeleting(null), disabled: deletingBusy },
-        { label: t("永久删除"), tone: 'danger', onPress: confirmRemove, loading: deletingBusy },
+        { label: t("client.accounts.cancel"), onPress: () => setDeleting(null), disabled: deletingBusy },
+        { label: t("client.mobile.deletePermanently"), tone: 'danger', onPress: confirmRemove, loading: deletingBusy },
       ]}
     >
-      <ConfirmCopy icon="!" title={deleting?.email ?? ''} description={t("该用户的登录权限与相关数据将被永久移除。")} />
+      <ConfirmCopy icon="!" title={deleting?.email ?? ''} description={t("client.mobile.thisUserSAccessAndRelatedDataWillBePermanently")} />
     </BottomSheet>
   </PageShell>;
 }

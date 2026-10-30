@@ -24,7 +24,7 @@ it('rejects malformed input and invalid terminal dimensions at the WebView bound
 it('keeps one shell across hide/reopen, restores output and sends keyboard input to that shell', async () => {
   const { api, bridge, emit, output } = fixture();
   bridge.receive(ready); await flush();
-  expect(api.open).toHaveBeenCalledWith('/project', { cols: 45, rows: 30 }, expect.any(Function));
+  expect(api.open).toHaveBeenCalledWith('/project', { cols: 45, rows: 30 }, expect.any(Function), undefined);
   bridge.receive(JSON.stringify({ type: 'input', data: 'echo 中文\r' })); await flush();
   expect(api.write).toHaveBeenCalledWith('terminal', 'echo 中文\r');
   bridge.detach();

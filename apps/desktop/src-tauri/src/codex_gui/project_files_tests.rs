@@ -1,6 +1,30 @@
 use super::*;
 
 #[test]
+fn lists_every_entry_in_large_directories_and_keeps_folders_first() {
+    // Exceed both former caps: 500 returned entries and 10,000 scanned entries.
+    const FILE_COUNT: usize = 10_001;
+    let root = tempfile::tempdir().unwrap();
+    fs::create_dir(root.path().join("z-folder")).unwrap();
+    for index in (0..FILE_COUNT).rev() {
+        fs::write(root.path().join(format!("file-{index:05}.png")), "").unwrap();
+    }
+    fs::write(root.path().join("note.txt"), "hello").unwrap();
+
+    for images_only in [false, true] {
+        let listing = browse(root.path(), "", images_only).unwrap();
+        let entries = listing["entries"].as_array().unwrap();
+        assert_eq!(entries.len(), FILE_COUNT + 1 + usize::from(!images_only));
+        assert_eq!(listing["truncated"], false);
+        assert_eq!(entries[0]["name"], "z-folder");
+        for (index, entry) in entries.iter().skip(1).take(FILE_COUNT).enumerate() {
+            assert_eq!(entry["name"], format!("file-{index:05}.png"));
+            assert_eq!(entry["directory"], false);
+        }
+    }
+}
+
+#[test]
 fn browses_only_the_project_and_filters_photos_without_hiding_folders() {
     let root = std::env::temp_dir().join(format!("csw-project-files-{}", uuid::Uuid::new_v4()));
     fs::create_dir(&root).unwrap();

@@ -113,14 +113,24 @@ enum Operation {
     },
     Reset,
     Addresses,
+    PacketCodec {
+        request: crate::packet_codec::Request,
+    },
 }
 
 fn dispatch(request: Request) -> Result<Value> {
     if request.owner.len() > 128 {
         return Err(Error::Invalid);
     }
+    // Codec work must not initialize networking or compete with session/poll locks.
+    if let Operation::PacketCodec { request } = request.operation {
+        return crate::packet_codec::transform(request)
+            .map(Value::String)
+            .map_err(|_| Error::Invalid);
+    }
     let hub = hub()?;
     match request.operation {
+        Operation::PacketCodec { .. } => Err(Error::Invalid),
         Operation::Open {
             config,
             bulk,

@@ -2,7 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { setGuiLanguage, guiText } from './guiText';
+import { setGuiLanguage, uiText } from './uiText';
 import { MessageItem } from '../pages/codexGui/MessageItem';
 import { RichText } from '../pages/codexGui/RichText';
 
@@ -32,10 +32,10 @@ it('refreshes memoized message actions and code labels without resetting local s
   const wrap = container.querySelector<HTMLButtonElement>('[aria-label="自动换行"]');
   expect(wrap).not.toBeNull();
   await act(async () => wrap?.click());
-  for (const language of ['ru', 'en', 'zh'] as const) {
+  for (const language of ['ru', 'ja', 'en', 'zh'] as const) {
     await act(async () => setGuiLanguage(language));
-    expect(container.querySelector(`[aria-label="${guiText('编辑消息')}"]`)).not.toBeNull();
-    const translatedWrap = container.querySelector(`[aria-label="${guiText('自动换行')}"]`);
+    expect(container.querySelector(`[aria-label="${uiText("client.workspaceActions.editMessage")}"]`)).not.toBeNull();
+    const translatedWrap = container.querySelector(`[aria-label="${uiText("client.projectBrowser.wrapLines")}"]`);
     expect(translatedWrap).toBe(wrap);
     expect(translatedWrap?.getAttribute('aria-pressed')).toBe('true');
     expect(container.textContent).toContain(text);

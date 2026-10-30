@@ -190,6 +190,8 @@ pub(super) fn install(prepared: &Path) -> Result<()> {
             || old.credential != config.credential
     }) {
         crate::remote_desktop::auto_unlock::clear()?;
+        crate::remote_desktop::security::reset_preferences(&data)
+            .map_err(|_| ServiceError::Storage)?;
     }
     register(&root)?;
     if let Some(previous) = previous.filter(|previous| previous.credential != config.credential) {

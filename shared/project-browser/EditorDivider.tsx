@@ -22,7 +22,7 @@ export function EditorDivider({ divider, resize, t }: {
     ? { ...frame, top: frame.top + frame.height * split.ratio, height: 0 }
     : { ...frame, left: frame.left + frame.width * split.ratio, width: 0 };
   return <div ref={element} className="pf-editor-divider" data-vertical={vertical} role="separator" tabIndex={0}
-    aria-label={t('调整编辑区域大小')} aria-orientation={vertical ? 'horizontal' : 'vertical'}
+    aria-label={t("client.projectBrowser.resizeEditorPanes")} aria-orientation={vertical ? 'horizontal' : 'vertical'}
     aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(split.ratio * 100)} style={frameStyle(position)}
     onPointerDown={event => {
       if (event.button !== 0) return;

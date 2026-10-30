@@ -1,3 +1,4 @@
+import { displayError } from '../../i18n/index';
 import { t } from '../../i18n';
 import type { useDesktopClipboard } from './useDesktopClipboard';
 
@@ -6,9 +7,9 @@ export function DesktopClipboardNotice({ clipboard }: { clipboard: ReturnType<ty
   if (clipboard.open || !clipboard.status) return null;
   const files = clipboard.received?.format === 'files' && !clipboard.nativeFiles;
   return <div className="rd-clipboard-notice" role="status">
-    {t(clipboard.status)}{clipboard.progress !== undefined && ` ${clipboard.progress}%`}
+    {displayError(clipboard.status)}{clipboard.progress !== undefined && ` ${clipboard.progress}%`}
     {clipboard.needsSave && !clipboard.busy && <button onMouseDown={event => event.preventDefault()}
-      onClick={clipboard.save}>{t('复制到本机')}</button>}
-    {files && !clipboard.busy && <button onClick={() => clipboard.setOpen(true)}>{t('下载文件')}</button>}
+      onClick={clipboard.save}>{t("client.remoteDesktop.copyToThisDevice")}</button>}
+    {files && !clipboard.busy && <button onClick={() => clipboard.setOpen(true)}>{t("client.cliImport.downloadFile")}</button>}
   </div>;
 }

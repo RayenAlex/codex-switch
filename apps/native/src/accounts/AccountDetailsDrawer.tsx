@@ -38,14 +38,14 @@ function AccountSwitchButton({ account, privateMode, switchBusy, switching, onOp
   const color = useThemeColor();
   useLanguage();
   const email = privateMode ? maskEmail(account.email) : account.email;
-  return <Pressable accessibilityRole="button" accessibilityLabel={t("将官方客户端切换到账号 {value1}", { value1: email })}
-    accessibilityHint={t("选择要切换账号的电脑")}
+  return <Pressable accessibilityRole="button" accessibilityLabel={t("client.mobile.switchTheOfficialClientToAccount", { value1: email })}
+    accessibilityHint={t("client.mobile.chooseAComputerToSwitchAccounts")}
     accessibilityState={{ disabled: switchBusy, busy: switching }} disabled={switchBusy}
     onPress={() => onOpenSwitch(account)}
     style={({ pressed }) => [styles.switchButton, pressed && styles.pressed, switchBusy && styles.disabled]}>
     {switching ? <ActivityIndicator color={color(colors.green, 'accent')} size="small" /> : <>
       <Ionicons name="sync-outline" size={21} color={color(colors.green, 'accent')} />
-      <Text style={styles.switchText}>{t("切换官方客户端账号")}</Text>
+      <Text style={styles.switchText}>{t("client.mobile.switchOfficialClientAccount")}</Text>
     </>}
   </Pressable>;
 }
@@ -62,15 +62,15 @@ function AccountIdentity({ account, devices, privateMode, refreshing, onRefresh 
     <View style={styles.identity}>
       <Text style={styles.email} numberOfLines={1}>{email}</Text>
       <Text style={styles.status}>{active.length
-        ? t("{value1} 正在使用", { value1: active.map((device) => device.name).join('、') }) : t("当前没有设备使用此账号")}</Text>
+        ? t("client.accounts.inUseBy", { value1: active.map((device) => device.name).join('、') }) : t("client.accounts.noDevicesAreUsingThisAccount")}</Text>
       <View style={styles.badge}><Text style={styles.plan}>{account.plan || 'ChatGPT'}</Text></View>
     </View>
-    <Pressable accessibilityRole="button" accessibilityLabel={t("刷新账号状态")} disabled={refreshing}
+    <Pressable accessibilityRole="button" accessibilityLabel={t("client.accounts.refreshAccountStatus")} disabled={refreshing}
       onPress={onRefresh} style={({ pressed }) => [styles.refresh,
         pressed && styles.pressed, refreshing && styles.disabled]}>
       <View style={styles.refreshCircle}>{refreshing ? <ActivityIndicator color={color(colors.green, 'accent')} />
         : <Ionicons name="sync" size={23} color={color(colors.green, 'accent')} />}</View>
-      <Text style={styles.refreshCaption}>{t("刷新状态")}</Text>
+      <Text style={styles.refreshCaption}>{t("client.accounts.refreshStatus")}</Text>
     </Pressable>
   </View>;
 }
@@ -79,12 +79,13 @@ function DetailMessage({ panel, note, onClose }: { panel: DetailsPanel; note: st
   const styles = useStyles();
   useLanguage();
   const visible = panel === 'note' || panel === 'primary' || panel === 'secondary';
-  const title = panel === 'note' ? t("账号备注") : t("{value1}用量窗口", { value1: panel === 'primary' ? '主' : '次' });
+  const title = panel === 'note' ? t("client.accounts.accountNotes") : t(panel === 'primary'
+    ? "client.accounts.primaryUsageWindow" : "client.accounts.secondaryUsageWindow");
   return <BottomSheet visible={visible} title={title} onClose={onClose} onBack={onClose}
-    fullWidthContent dragFromHeaderOnly>
+    fullWidthContent>
     <SheetScrollView contentContainerStyle={styles.messageContent}>
-      <Text selectable style={styles.note}>{panel === 'note' ? (note || t("还没有备注"))
-        : t("这里显示该用量窗口的剩余额度和重置时间。不同套餐的窗口时长可能不同，请以账号返回的用量为准。")}</Text>
+      <Text selectable style={styles.note}>{panel === 'note' ? (note || t("client.accounts.noNotesYet"))
+        : t("client.mobile.remainingQuotaAndResetTimeForThisUsageWindowWindow")}</Text>
     </SheetScrollView>
   </BottomSheet>;
 }
@@ -100,8 +101,8 @@ function AccountDetailsContent(props: AccountDetailsProps) {
   const refresh = () => { void onRefresh(account.id); void credits.reload(); };
   const edit = () => { setPanel('edit'); void onRefreshServer(); };
   return <>
-    <BottomSheet visible={overview} title={t("账号详情")} subtitle={t("查看账号的使用情况与配置信息")}
-      onClose={onClose} tall fullWidthContent dragFromHeaderOnly>
+    <BottomSheet visible={overview} title={t("client.accounts.accountDetails")} subtitle={t("client.accounts.viewAccountUsageAndSettings")}
+      onClose={onClose} tall fullWidthContent>
       <SheetScrollView contentContainerStyle={styles.content}>
         <AccountIdentity {...props} onRefresh={refresh} />
         <AccountUsageSection usage={account.usage} refreshing={props.refreshing}

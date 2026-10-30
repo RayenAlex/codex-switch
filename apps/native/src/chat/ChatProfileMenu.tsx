@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import { createThemedStyles } from '../theme/styles';
 import { useThemeColor } from '../theme/store';
 import { t, useLanguage } from '../i18n';
@@ -18,7 +19,7 @@ export interface ChatConnectionProps {
 }
 
 type Props = ChatConnectionProps & { ready: boolean; active: boolean } & (
-  { variant: 'settings' } | { variant?: 'avatar'; email: string; openTokenSummary: () => void;
+  { variant: 'settings' } | { variant?: 'avatar'; email: string;
     guiTools: GuiToolsClient; running: boolean }
 );
 
@@ -37,8 +38,8 @@ export function ChatProfileMenu(props: Props) {
   const selection = accounts.snapshot?.selection;
   const current = accounts.snapshot?.choices.find((choice) =>
     selection?.kind === choice.kind && selection.id === choice.id);
-  const name = current?.name || t("选择账户");
-  const { initials } = guiAccountAvatar(accounts.snapshot, t("我"));
+  const name = current?.name || t("client.chat.chooseAccount");
+  const { initials } = guiAccountAvatar(accounts.snapshot, t("client.chat.me"));
   const disabled = accounts.loading || Boolean(accounts.saving) || !ready || !accounts.snapshot?.running;
   const search = query.trim().toLowerCase();
   const choices = accounts.snapshot?.choices.filter((choice) =>
@@ -51,25 +52,25 @@ export function ChatProfileMenu(props: Props) {
   };
 
   const connectionOptions = <>
-    <Pressable accessibilityRole="button" accessibilityLabel={t("切换电脑")}
+    <Pressable accessibilityRole="button" accessibilityLabel={t("client.chat.switchComputer")}
       style={[pickerStyles.option, settings && pickerStyles.settingOption]}
       onPress={() => { setPanel(null); chooseDevice(); }}>
       <Feather name="monitor" size={22} color={color(palette.ink, 'ink')} />
-      <View style={pickerStyles.copy}><Text style={styles.title}>{t("切换电脑")}</Text>
-        <Text numberOfLines={1} style={styles.subtitle}>{deviceName || t("选择电脑")}</Text></View>
+      <View style={pickerStyles.copy}><Text style={styles.title}>{t("client.chat.switchComputer")}</Text>
+        <Text numberOfLines={1} style={styles.subtitle}>{deviceName || t("client.settings.chooseAComputer")}</Text></View>
       <Feather name="chevron-right" size={18} color={color(palette.muted, 'muted')} />
     </Pressable>
-    <Pressable accessibilityRole="button" accessibilityLabel={t("切换账户")}
+    <Pressable accessibilityRole="button" accessibilityLabel={t("client.chat.switchAccount")}
       style={[pickerStyles.option, settings && pickerStyles.settingOption]}
       onPress={() => { setQuery(''); setPanel('accounts'); if (ready) accounts.refresh(); }}>
       <Feather name="user" size={22} color={color(palette.ink, 'ink')} />
-      <View style={pickerStyles.copy}><Text style={styles.title}>{t("切换账户")}</Text>
+      <View style={pickerStyles.copy}><Text style={styles.title}>{t("client.chat.switchAccount")}</Text>
         <Text numberOfLines={1} style={styles.subtitle}>{name}</Text></View>
       <Feather name="chevron-right" size={18} color={color(palette.muted, 'muted')} />
     </Pressable>
   </>;
   return <>
-    {settings ? connectionOptions : <Pressable accessibilityRole="button" accessibilityLabel={t("打开头像菜单")}
+    {settings ? connectionOptions : <Pressable accessibilityRole="button" accessibilityLabel={t("client.chat.openProfileMenu")}
       accessibilityState={{ expanded: panel !== null && active }} style={pickerStyles.trigger}
       onPress={() => setPanel('profile')}>
       <Text style={pickerStyles.initials}>{initials}</Text>
@@ -78,41 +79,34 @@ export function ChatProfileMenu(props: Props) {
       client={props.guiTools} active={active} connected={ready} running={props.running} deviceName={deviceName}
       onClose={() => setPanel(null)} onBack={() => setPanel('profile')} />}
     <BottomSheet fullWidthContent visible={panel !== null && panel !== 'update' && active}
-      title={panel === 'accounts' ? t("切换账户") : t("账户与电脑")}
-      subtitle={panel === 'accounts' ? t("与电脑共用当前聊天账户") : undefined}
-      onClose={() => setPanel(null)} dismissible={!accounts.saving} dragFromHeaderOnly
+      title={panel === 'accounts' ? t("client.chat.switchAccount") : t("client.chat.accountAndComputer")}
+      subtitle={panel === 'accounts' ? t("client.chat.useTheSameChatAccountAsYourComputer") : undefined}
+      onClose={() => setPanel(null)} dismissible={!accounts.saving}
       onBack={panel === 'accounts' && !accounts.saving ? () => setPanel(settings ? null : 'profile') : undefined}>
       {panel === 'profile' && props.variant !== 'settings'
         ? <SheetInset style={[pickerStyles.panel, pickerStyles.readable]}>
         <Text style={pickerStyles.email}>{props.email}</Text>
         {connectionOptions}
-        <Pressable accessibilityRole="button" accessibilityLabel={t("更新 Codex GUI")} style={pickerStyles.option}
+        <Pressable accessibilityRole="button" accessibilityLabel={t("client.app.updateCodexGui")} style={pickerStyles.option}
           onPress={() => setPanel('update')}>
           <Feather name="download" size={22} color={color(palette.ink, 'ink')} />
-          <View style={pickerStyles.copy}><Text style={styles.title}>{t("更新 Codex GUI")}</Text>
-            <Text style={styles.subtitle}>{t("检查并更新当前电脑上的 Codex GUI")}</Text></View>
-          <Feather name="chevron-right" size={18} color={color(palette.muted, 'muted')} />
-        </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel={t("Token 汇总")} style={pickerStyles.option}
-          onPress={() => { setPanel(null); props.openTokenSummary(); }}>
-          <Feather name="bar-chart-2" size={22} color={color(palette.ink, 'ink')} />
-          <View style={pickerStyles.copy}><Text style={styles.title}>{t("Token 汇总")}</Text>
-            <Text style={styles.subtitle}>{t("查看用量趋势与消耗排行")}</Text></View>
+          <View style={pickerStyles.copy}><Text style={styles.title}>{t("client.app.updateCodexGui")}</Text>
+            <Text style={styles.subtitle}>{t("client.app.checkAndUpdateCodexGuiOnThisComputer")}</Text></View>
           <Feather name="chevron-right" size={18} color={color(palette.muted, 'muted')} />
         </Pressable>
       </SheetInset> : <View style={pickerStyles.panel}>
         <SheetInset style={[pickerStyles.fields, pickerStyles.readable]}>
-          <TextInput accessibilityLabel={t("搜索账户")} placeholder={t("搜索名称或备注")} value={query} onChangeText={setQuery}
+          <TextInput accessibilityLabel={t("client.chat.searchAccounts")} placeholder={t("client.chat.searchNamesOrNotes")} value={query} onChangeText={setQuery}
             autoCapitalize="none" autoCorrect={false} style={styles.search} />
-          {!ready && <Text style={styles.subtitle}>{t("连接电脑后即可切换账户。")}</Text>}
-          {accounts.loading && <ActivityIndicator color={color(palette.green, 'accent')} accessibilityLabel={t("正在同步账户")} />}
+          {!ready && <Text style={styles.subtitle}>{t("client.chat.connectToYourComputerToSwitchAccounts")}</Text>}
+          {accounts.loading && <ActivityIndicator color={color(palette.green, 'accent')} accessibilityLabel={t("client.mobile.syncingAccounts")} />}
           {ready && accounts.snapshot && !accounts.snapshot.running &&
-            <Text style={styles.subtitle}>{t("电脑上的聊天暂不可用，请在电脑上重新打开 Remote AI。")}</Text>}
+            <Text style={styles.subtitle}>{t("client.chat.chatIsUnavailableOnYourComputerReopenRemoteAiOn")}</Text>}
           {!!accounts.error && <View style={styles.row}>
-            <Text accessibilityRole="alert" style={[styles.error, styles.fill]}>{t(accounts.error)}</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel={t("重试读取账户")}
+            <Text accessibilityRole="alert" style={[styles.error, styles.fill]}>{displayError(accounts.error)}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("client.chat.reloadAccounts")}
               disabled={!ready || accounts.loading || Boolean(accounts.saving)} onPress={accounts.refresh}>
-              <Text style={styles.buttonText}>{t("重试")}</Text>
+              <Text style={styles.buttonText}>{t("client.terminal.retry")}</Text>
             </Pressable>
           </View>}
         </SheetInset>
@@ -129,15 +123,15 @@ export function ChatProfileMenu(props: Props) {
               <View style={pickerStyles.copy}>
                 <Text numberOfLines={1} style={styles.title}>{choice.name}</Text>
                 <Text style={styles.subtitle}>{choice.detail}</Text>
-                {!choice.available && <Text style={styles.subtitle}>{t("此账户暂不可用")}</Text>}
+                {!choice.available && <Text style={styles.subtitle}>{t("client.chat.thisAccountIsUnavailable")}</Text>}
               </View>
               {accounts.saving === `${choice.kind}:${choice.id}`
-                ? <ActivityIndicator color={color(palette.green, 'accent')} accessibilityLabel={t("正在切换")} />
-                : selected && <Text style={styles.buttonText}>{t("当前")}</Text>}
+                ? <ActivityIndicator color={color(palette.green, 'accent')} accessibilityLabel={t("client.mobile.switching")} />
+                : selected && <Text style={styles.buttonText}>{t("client.accounts.current")}</Text>}
             </Pressable>;
           })}
           {!choices.length && accounts.snapshot?.running && !accounts.loading && <Text style={pickerStyles.empty}>
-            {accounts.snapshot.choices.length ? t("没有找到匹配的账户。") : t("暂无可选账户，请先在电脑上添加账户。")}</Text>}
+            {accounts.snapshot.choices.length ? t("client.chat.noMatchingAccounts") : t("client.chat.noAccountsAvailableAddAnAccountOnYourComputerFirst")}</Text>}
         </SheetScrollView>
       </View>}
     </BottomSheet>

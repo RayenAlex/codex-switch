@@ -1,3 +1,4 @@
+import { defaultText } from '../localization/messages';
 import type { AccessMode, Model } from './client/types';
 import { object } from './protocol';
 
@@ -12,7 +13,7 @@ export interface ComposerSnapshot {
 }
 export interface ComposerModelsResponse { data: Model[]; nextCursor: string | null; composer?: ComposerSnapshot }
 export const COMPOSER_EVENT = 'chat/composer/updated';
-export const MODEL_CATALOG_ERROR = '模型列表暂时无法更新，请稍后重试。';
+export const MODEL_CATALOG_ERROR = "client.conversation.couldNotUpdateTheModelListPleaseTryAgainShortly";
 export const DEFAULT_COMPOSER: ComposerSettings = { model: '', effort: '', access: 'workspace-write' };
 export function composerThreadId(value: unknown): string | null | undefined {
   if (value === undefined || value === null) return value;
@@ -20,20 +21,20 @@ export function composerThreadId(value: unknown): string | null | undefined {
   throw new Error('请选择聊天后重试。');
 }
 export const EFFORT_LABELS: Record<string, string> = {
-  none: '无', minimal: '极低', low: '低', medium: '中', high: '高', xhigh: '极高', max: '最高', ultra: 'Ultra',
+  none: "client.shared.none", minimal: "client.shared.minimal", low: "client.shared.low", medium: "client.shared.medium", high: "client.shared.high", xhigh: "client.shared.extraHigh", max: "client.shared.maximum", ultra: 'Ultra',
 };
 
-export function composerLabel(models: Model[], settings: ComposerSettings, translate = (text: string) => text) {
+export function composerLabel(models: Model[], settings: ComposerSettings, translate = defaultText) {
   const model = models.find((entry) => entry.model === settings.model);
   const name = model?.displayName || settings.model;
-  if (!name) return translate('正在同步模型…');
+  if (!name) return translate("client.shared.syncingModels");
   const effort = translate(EFFORT_LABELS[settings.effort] || settings.effort);
   return effort ? `${name} · ${effort}` : name;
 }
 export const ACCESS_OPTIONS = [
-  { value: 'read-only', label: '请求批准', description: '需要更多权限时，先由你确认。' },
-  { value: 'workspace-write', label: '帮我批准', description: '自动判断风险，批准安全操作。' },
-  { value: 'danger-full-access', label: '完全访问', description: '可访问电脑上的所有文件和网络，无需逐次确认。' },
+  { value: 'read-only', label: "client.shared.askForApproval", description: "client.shared.askYouBeforeUsingAdditionalPermissions" },
+  { value: 'workspace-write', label: "client.shared.approveForMe", description: "client.shared.assessRiskAndApproveSafeActionsAutomatically" },
+  { value: 'danger-full-access', label: "client.shared.fullAccess", description: "client.shared.accessAllFilesAndTheNetworkWithoutAskingEachTime" },
 ] satisfies { value: AccessMode; label: string; description: string }[];
 
 export function composerPatch(value: unknown): Partial<ComposerSettings> {

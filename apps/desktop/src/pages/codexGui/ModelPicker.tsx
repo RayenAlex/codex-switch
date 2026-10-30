@@ -1,9 +1,10 @@
-import { guiText } from "../../i18n/guiText";
+import { displayText } from '../../i18n/uiText';
+import { uiText } from "../../i18n/uiText";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Button, Input, Popover, Tooltip } from "antd";
 import { Check, ChevronLeft, ChevronRight, RefreshCw, RotateCcw, Search, Zap } from "lucide-react";
 import type { Model } from "./types";
-import { resolveModelSelection, type ModelSelection } from "./modelSelection";
+import { modelSelectionError, resolveModelSelection, type ModelSelection } from "./modelSelection";
 import styles from "./ModelPicker.module.less";
 import { GuiSpeedButton } from './GuiSpeedButton';
 import { EFFORT_LABELS, type RequestSpeed } from '../../../../../shared/remote-chat/composer';
@@ -40,20 +41,20 @@ function ModelList({ models, model, onSelect, onBack, onRefresh, refreshing }: {
     .filter((option) => `${option.label} ${option.value}`.toLowerCase().includes(query.trim().toLowerCase()));
   return <div className={styles.models}>
     <div className={styles.listHeader}>
-      <button className={styles.listHeading} onClick={onBack} aria-label={guiText("返回推理强度设置")}>
-        <ChevronLeft size={12} /><span>{guiText("选择模型")}</span>
+      <button className={styles.listHeading} onClick={onBack} aria-label={uiText("client.chat.backToReasoningEffort")}>
+        <ChevronLeft size={12} /><span>{uiText("client.shared.chooseModel")}</span>
       </button>
-      <Tooltip title={guiText("刷新")} styles={{ root: { maxWidth: 400 } }}>
+      <Tooltip title={uiText("client.chat.refresh")} styles={{ root: { maxWidth: 400 } }}>
         <Button type="text" size="small" className={styles.refresh} icon={<RefreshCw size={14} />}
-          aria-label={guiText("刷新")} aria-busy={refreshing} loading={refreshing}
+          aria-label={uiText("client.chat.refresh")} aria-busy={refreshing} loading={refreshing}
           disabled={!onRefresh || refreshing} onClick={onRefresh} />
       </Tooltip>
     </div>
     {models.length > MODEL_SEARCH_THRESHOLD && <Input size="small" className={styles.search}
       prefix={<Search size={12} />}
-      placeholder={guiText("搜索模型")} aria-label={guiText("搜索模型")} value={query} allowClear
+      placeholder={uiText("client.chat.searchModels")} aria-label={uiText("client.chat.searchModels")} value={query} allowClear
       onChange={(event) => setQuery(event.target.value)} />}
-    <div className={styles.modelList} role="menu" aria-label={guiText("选择模型")} onKeyDown={moveModelFocus}>
+    <div className={styles.modelList} role="menu" aria-label={uiText("client.shared.chooseModel")} onKeyDown={moveModelFocus}>
       {options.map((option) => <button key={option.value} type="button" role="menuitemradio"
         className={styles.modelOption} aria-checked={model === option.value}
         autoFocus={models.length <= MODEL_SEARCH_THRESHOLD && model === option.value}
@@ -61,7 +62,7 @@ function ModelList({ models, model, onSelect, onBack, onRefresh, refreshing }: {
         <span>{option.label}</span>
         {model === option.value && <Check size={14} />}
       </button>)}
-      {!options.length && <p className={styles.hint}>{guiText("未找到模型")}</p>}
+      {!options.length && <p className={styles.hint}>{uiText("client.chat.noModelsFound")}</p>}
     </div>
   </div>;
 }
@@ -69,6 +70,7 @@ function ModelList({ models, model, onSelect, onBack, onRefresh, refreshing }: {
 export function ModelPicker(props: ModelPickerProps) {
   const { models, onChange } = props;
   const { model, effort } = resolveModelSelection(models, props);
+  const unavailable = modelSelectionError(models, { model, effort });
   const disabled = props.disabled || !model;
   const [open, setOpen] = useState(false);
   const [choosingModel, setChoosingModel] = useState(false);
@@ -81,15 +83,15 @@ export function ModelPicker(props: ModelPickerProps) {
     finally { refreshPending.current = false; setRefreshing(false); }
   };
   const selected = models.find((entry) => entry.model === model);
-  const modelLabel = selected?.displayName || model || guiText("正在加载模型…");
-  const effortLabel = guiText(EFFORT_LABELS[effort] || effort);
+  const modelLabel = selected?.displayName || model || uiText("client.chat.loadingModels");
+  const effortLabel = displayText(EFFORT_LABELS[effort] || effort);
   const speedBolts = speedBoltCount(props.speed ?? 'normal');
   const recommended = resolveModelSelection(models, { model, effort: "" });
   const levels = [...(selected?.supportedReasoningEfforts ?? [])].sort((left, right) =>
     EFFORT_ORDER.indexOf(left.reasoningEffort) - EFFORT_ORDER.indexOf(right.reasoningEffort));
   const index = Math.max(0, levels.findIndex((level) =>
     level.reasoningEffort === (effort || selected?.defaultReasoningEffort)));
-  // A successful refresh briefly blocks selections while reconciling saved settings.
+  // A source refresh briefly blocks selections until the new catalog is ready.
   useEffect(() => { if (props.disabled && props.error) setOpen(false); }, [props.disabled, props.error]);
   const changeOpen = (next: boolean) => {
     setOpen(next);
@@ -107,32 +109,33 @@ export function ModelPicker(props: ModelPickerProps) {
       onBack={() => setChoosingModel(false)} /> : <div className={styles.reasoning}>
       <div className={styles.summary}>
         <span className={styles.speed}><GuiSpeedButton active={open && !disabled} /></span>
-        <button className={styles.modelHeading} onClick={() => setChoosingModel(true)} aria-label={guiText("选择模型")}>
+        <button className={styles.modelHeading} onClick={() => setChoosingModel(true)} aria-label={uiText("client.shared.chooseModel")}>
           <span className={styles.effortName}>{effortLabel}<ChevronRight size={12} /></span>
           <span className={styles.modelName}>{modelLabel}</span>
         </button>
-        <Tooltip title={guiText("恢复推荐推理强度")} styles={{ root: { maxWidth: 400 } }}>
+        <Tooltip title={uiText("client.chat.resetToRecommendedReasoningEffort")} styles={{ root: { maxWidth: 400 } }}>
           <Button type="text" size="small" className={styles.reset} icon={<RotateCcw size={14} />}
-            disabled={effort === recommended.effort} aria-label={guiText("恢复推荐推理强度")}
+            disabled={!selected || effort === recommended.effort}
+            aria-label={uiText("client.chat.resetToRecommendedReasoningEffort")}
             onClick={() => onChange(recommended)} />
         </Tooltip>
       </div>
       {levels.length > 0 ? <div className={styles.sliderWrap}>
         <input type="range" className={styles.slider} min={0} max={Math.max(1, levels.length - 1)} step={1}
-          value={index} disabled={levels.length < 2} aria-label={guiText("推理强度")}
-          aria-valuetext={guiText(EFFORT_LABELS[levels[index].reasoningEffort] || levels[index].reasoningEffort)}
+          value={index} disabled={levels.length < 2} aria-label={uiText("client.shared.reasoningEffort")}
+          aria-valuetext={displayText(EFFORT_LABELS[levels[index].reasoningEffort] || levels[index].reasoningEffort)}
           onChange={(event) => onChange({ model, effort: levels[Number(event.target.value)].reasoningEffort })} />
         <div className={styles.stops} aria-hidden="true">
           {levels.map((level) => <i key={level.reasoningEffort} />)}
         </div>
-      </div> : <p className={styles.hint}>{guiText("该模型不支持调整推理强度")}</p>}
+      </div> : <p className={styles.hint}>{uiText("client.chat.thisModelDoesNotSupportAdjustableReasoningEffort")}</p>}
     </div>}
   </div>;
   if (!model || (props.disabled && props.error)) {
     const loading = (props.disabled && !props.error) || refreshing;
-    let label = guiText("暂无可用模型，点击重试");
-    if (loading) label = guiText("正在加载模型…");
-    else if (props.error) label = guiText("模型加载失败，点击重试");
+    let label = uiText("client.chat.noModelsAvailableClickToRetry");
+    if (loading) label = uiText("client.chat.loadingModels");
+    else if (props.error) label = uiText("client.chat.couldNotLoadModelsClickToRetry");
     return <button type="button" className={`${styles.trigger} ${styles.catalogStatus}`}
       disabled={loading || !props.onRetry}
       aria-busy={loading} onClick={refresh}>
@@ -142,9 +145,11 @@ export function ModelPicker(props: ModelPickerProps) {
   return <Popover trigger="click" placement="topRight" arrow={false} open={open && !disabled}
     onOpenChange={changeOpen} content={panel} styles={{ root: { maxWidth: 400 },
       body: { padding: 0, borderRadius: 16, overflow: "hidden", boxShadow: "0 4px 16px rgb(0 0 0 / 8%)" } }}>
+    <Tooltip title={unavailable ? uiText(unavailable) : undefined} styles={{ root: { maxWidth: 400 } }}>
     <button type="button" className={styles.trigger} disabled={disabled} aria-expanded={open && !disabled}
-      aria-label={guiText("模型与推理强度：{value1} {value2}", { value1: modelLabel, value2: effortLabel })
-        + requestSpeedSuffix(props.speed, guiText)}>
+      data-model-unavailable={unavailable ? true : undefined}
+      aria-label={uiText("client.conversation.modelAndReasoningEffort", { value1: modelLabel, value2: effortLabel })
+        + requestSpeedSuffix(props.speed, displayText)}>
       <span className={styles.triggerModel}>{modelLabel}</span>
       {effortLabel && <span className={styles.triggerEffort}>{effortLabel}</span>}
       {speedBolts > 0 && <span className={styles.triggerSpeed} aria-hidden="true" data-speed={props.speed}>
@@ -152,5 +157,6 @@ export function ModelPicker(props: ModelPickerProps) {
         {Array.from({ length: speedBolts }, (_, index) => <Zap key={index} size="1em" />)}
       </span>}
     </button>
+    </Tooltip>
   </Popover>;
 }

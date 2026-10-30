@@ -93,6 +93,21 @@ test('account overview, private details, 2FA, and nested sheets', async ({ page 
 });
 
 test('2FA search, sorting, eight digits, editing and failed clipboard', async ({ page }, info) => {
+  await navigate(page, '发现');
+  const navigation = page.locator(info.project.name === 'desktop' ? '.desktop-sidebar nav' : '.mobile-tabbar');
+  await expect(navigation.getByText('设备', { exact: true })).toHaveCount(0);
+  await expect(navigation.getByText('2FA', { exact: true })).toHaveCount(0);
+  await expect(page.locator('.discovery-row')).toHaveCount(4);
+  await noOverflow(page);
+  await page.screenshot({ path: info.outputPath('discover.png') });
+  await page.locator('.discovery-list').getByRole('button', { name: '设备', exact: true }).click();
+  await expect(page.locator('.devices-page')).toBeVisible();
+  await page.getByRole('button', { name: '返回发现', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '发现', exact: true })).toBeVisible();
+  await navigate(page, '2FA');
+  await expect(navigation.locator('.active, .adm-tab-bar-item-active')).toHaveText('发现');
+  await page.getByRole('button', { name: '返回发现', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '发现', exact: true })).toBeVisible();
   await navigate(page, '2FA');
   await page.getByRole('button', { name: '同步 2FA 密钥', exact: true }).click();
   await expect(page.locator('.verification-card')).toHaveCount(3);

@@ -58,7 +58,7 @@ const messageOf = (error: unknown) => {
   if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
     return error.message;
   }
-  return t("发生未知错误");
+  return t("client.app.anUnexpectedErrorOccurred");
 };
 
 export const bootstrapApp = createAsyncThunk("auth/bootstrap", async () => {
@@ -103,7 +103,7 @@ export const refreshAll = createAsyncThunk("data/refreshAll", async (_, { getSta
     const result = await runRemoteUsage({ accounts, devices: data.devices,
       selectedDeviceId: current.selectedChatDeviceId, action: 'refresh' });
     return { ...data, accounts: result.accounts, error: result.failed
-      ? t('{count} 个账号的用量未刷新，请稍后重试。', { count: result.failed }) : null };
+      ? t("client.accountUsage.usageCouldNotBeRefreshedForAccountsTryAgainLater", { count: result.failed }) : null };
   } catch (error) {
     assertUsageOwner(owner);
     // Metadata still updates when the selected PC is unavailable.
@@ -118,7 +118,7 @@ export const refreshOneAccount = createAsyncThunk("data/refreshAccount", async (
   const result = await runRemoteUsage({ accounts: state.accounts.filter(account => account.id === accountId),
     devices: state.devices, selectedDeviceId: state.selectedChatDeviceId, action: 'refresh' });
   const usage = result.accounts[0]?.usage;
-  if (!usage || usage.error) throw new Error(usage?.error || t('用量刷新失败，请稍后重试。'));
+  if (!usage || usage.error) throw new Error(usage?.error || t("client.accountUsage.couldNotRefreshUsagePleaseTryAgainLater"));
   return { accountId, usage };
 }, { condition: (_, { getState }) => !usageBusy(getState() as { data: DataState }) });
 

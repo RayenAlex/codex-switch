@@ -10,9 +10,11 @@ import { applyHistoryDelta, historyVersion, type HistoryDelta } from '../../../.
 import { ChatOperations } from './operations';
 import { guiApi } from '../pages/codexGui/api';
 import { ChatSettings } from '../../../web/src/chat/ChatSettings';
+import { useDesktopLayout } from '../../../web/src/useDesktopLayout';
 
 vi.mock('../pages/codexGui/api', () => ({ guiApi: { request: vi.fn() } }));
 vi.mock('../api/backend', () => ({ invoke: vi.fn(), hasLocalBackend: false }));
+vi.mock('../../../web/src/useDesktopLayout', () => ({ useDesktopLayout: vi.fn(() => false) }));
 vi.mock('../../../web/src/components/AdaptiveSheet', () => ({
   AdaptiveSheet: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
@@ -90,7 +92,7 @@ it('shows and updates context in settings even while daily usage is still loadin
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   const container = document.createElement('div');
   const root = createRoot(container);
-  const readUsage = vi.fn(() => new Promise<never>(() => {}));
+  const readUsage = vi.fn<() => Promise<unknown>>(() => new Promise<never>(() => {}));
   const readConversationMetrics = vi.fn().mockResolvedValue({
     totalOutputTokens: 0, totalOutputTimeMs: 0, outputRequestCount: 0,
   });
@@ -108,12 +110,29 @@ it('shows and updates context in settings even while daily usage is still loadin
   try {
     await render(usage);
     expect(container.textContent).toContain('上下文 121.3K / 258K Token（47% 已用）');
+    expect(container.querySelector('.chat-context-progress [role="progressbar"]')
+      ?.getAttribute('aria-valuenow')).toBe('47');
     expect(container.textContent).toContain('正在读取今日用量…');
     await render({ ...usage, last: { totalTokens: 25_800 } });
     expect(container.textContent).toContain('10% 已用');
+    expect(container.querySelector('.chat-context-progress [role="progressbar"]')
+      ?.getAttribute('aria-valuenow')).toBe('10');
     await render();
     expect(container.textContent).toContain('暂无上下文用量');
     expect(container.textContent).not.toContain('10% 已用');
+    expect(container.querySelector('.chat-context-progress [role="progressbar"]')
+      ?.hasAttribute('aria-valuenow')).toBe(false);
     expect(readUsage).toHaveBeenCalledTimes(1);
+    readUsage.mockResolvedValue({ totalTokens: 123, estimatedCostUsd: 2,
+      primaryRemainingPercent: 20, estimatedQuota: { remainingUsd: 25, capacityUsd: 125 } });
+    // Reopen the drawer so the read belongs to its new active subscription.
+    await act(async () => root.render(null));
+    await render();
+    expect(container.querySelector('.cs-quota-progress')).not.toBeNull();
+    expect(container.textContent).toContain('25USD 剩余 · 125USD 总额度');
+    vi.mocked(useDesktopLayout).mockReturnValue(true);
+    await render();
+    expect(container.querySelector('.cs-quota-progress')).toBeNull();
+    expect(container.textContent).toContain('25USD 剩余额度 · 125USD 总额度');
   } finally { await act(async () => root.unmount()); }
 });

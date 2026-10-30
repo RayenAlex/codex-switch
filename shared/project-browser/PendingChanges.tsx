@@ -1,3 +1,4 @@
+import { remoteErrorText } from '../localization/errors';
 import { useEffect, useRef } from 'react';
 import type { BrowserTranslate } from './ProjectTree';
 
@@ -12,7 +13,7 @@ export function PendingChanges({ saving, connected, error, path, cancel, discard
     return () => { if (opener instanceof HTMLElement && opener.isConnected) opener.focus(); };
   }, []);
   return <div className="pf-confirm-backdrop">
-    <section ref={host} role="alertdialog" aria-modal="true" aria-label={t('保留文件修改？')} className="pf-confirm"
+    <section ref={host} role="alertdialog" aria-modal="true" aria-label={t("client.projectBrowser.keepYourChanges")} className="pf-confirm"
       onKeyDown={event => {
         if (event.key === 'Escape') { event.stopPropagation(); if (!saving) cancel(); return; }
         if (event.key !== 'Tab') return;
@@ -21,14 +22,14 @@ export function PendingChanges({ saving, connected, error, path, cancel, discard
         event.preventDefault();
         buttons[(index + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length]?.focus();
       }}>
-      <strong>{t('保留文件修改？')}</strong><p>{path.split(/[\\/]/).at(-1)}<br />{t('此文件有未保存的修改。')}</p>
+      <strong>{t("client.projectBrowser.keepYourChanges")}</strong><p>{path.split(/[\\/]/).at(-1)}<br />{t("client.projectBrowser.thisFileHasUnsavedChanges")}</p>
       <div>
-        <button type="button" disabled={saving} onClick={cancel}>{t('取消')}</button>
-        <button type="button" disabled={saving} onClick={discard}>{t('放弃修改')}</button>
+        <button type="button" disabled={saving} onClick={cancel}>{t("client.accounts.cancel")}</button>
+        <button type="button" disabled={saving} onClick={discard}>{t("client.projectBrowser.discardChanges")}</button>
         <button type="button" className="pf-save" disabled={!connected || saving} onClick={save}>
-          {t(saving ? '正在保存…' : '保存并继续')}</button>
+          {t(saving ? "client.projectBrowser.saving" : "client.composer.saveAndContinue")}</button>
       </div>
-      {error && <p role="alert">{t(error)}</p>}
+      {error && <p role="alert">{remoteErrorText(error)}</p>}
     </section>
   </div>;
 }

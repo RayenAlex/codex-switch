@@ -15,16 +15,16 @@ export function GitCommitMenu({ commit, panel, connected, onPatch, children }: {
   const mutationDisabled = disabled || !panel.changes || panel.changes.files.some(file => file.conflict);
   return <GitContextMenu overlayClassName="git-commit-context-menu"
     menu={{ items: [
-      { key: 'copy', label: t('复制提交哈希'), icon: <Copy size={16} /> },
-      { key: 'patch', label: t('创建补丁…'), icon: <FileDown size={16} />, disabled: disabled || !onPatch },
+      { key: 'copy', label: t("client.git.copyRevisionNumber"), icon: <Copy size={16} /> },
+      { key: 'patch', label: t("client.git.createPatch"), icon: <FileDown size={16} />, disabled: disabled || !onPatch },
       { type: 'divider' },
-      { key: 'checkout', label: t('检出此提交…'), icon: <GitCommitHorizontal size={16} />,
+      { key: 'checkout', label: t("client.git.checkoutRevision"), icon: <GitCommitHorizontal size={16} />,
         disabled: mutationDisabled },
       { type: 'divider' },
-      { key: 'reset', label: t('重置当前分支到此提交…'), icon: <Undo2 size={16} />,
+      { key: 'reset', label: t("client.git.resetCurrentBranchToHere"), icon: <Undo2 size={16} />,
         disabled: mutationDisabled || !panel.changes?.branch },
     ], onClick: ({ key }) => {
-      if (key === 'copy') void copyText(t('提交哈希'), commit.hash);
+      if (key === 'copy') void copyText(t("client.git.revisionNumber"), commit.hash);
       else if (key === 'patch' && onPatch) {
         void panel.performHistoryAction(() => onPatch(commit), '已加入下载管理。');
       } else if (key === 'checkout' || key === 'reset') panel.requestRevisionAction(key, commit);

@@ -26,8 +26,8 @@ export async function shareBrowserDownload(task: DownloadTask) {
   // Reading and verifying a large file can outlast the browser's user activation.
   // Share from a fresh click in that case, without loading every completed file into memory.
   if (navigator.userActivation && !navigator.userActivation.isActive) {
-    const confirmed = await Dialog.confirm({ title: t('分享文件'), content: task.name,
-      confirmText: t('分享'), cancelText: t('取消'), bodyStyle: { maxWidth: 400, overflowWrap: 'anywhere' } });
+    const confirmed = await Dialog.confirm({ title: t("client.downloads.shareFile"), content: task.name,
+      confirmText: t("client.downloads.share"), cancelText: t("client.accounts.cancel"), bodyStyle: { maxWidth: 400, overflowWrap: 'anywhere' } });
     if (!confirmed) return;
   }
   try { await navigator.share({ files: [file] }); }

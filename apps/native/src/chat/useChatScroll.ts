@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FlatList, LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent, ViewToken } from 'react-native';
 import type { ChatMessagesProps } from '../../../../shared/remote-chat/client/messageProps';
-import { isNearHistoryStart, shouldShowScrollToBottom } from '../../../../shared/chat/scrollPosition';
+import { isNearHistoryStart, shouldFollowScroll, shouldShowScrollToBottom }
+  from '../../../../shared/chat/scrollPosition';
 import { useHistoryContinuation } from '../../../../shared/chat/useHistoryContinuation';
 import type { Item } from './types';
 import { useNativeChatScroll } from './useNativeChatScroll';
@@ -100,8 +101,11 @@ export function useChatScroll<Entry extends { id: string } = Item>(
   }, []);
   const updateFollowing = ({ nativeEvent }: ScrollEvent) => {
     if (loadingOlder.current || loadingMore) return;
-    following.current = nativeEvent.contentSize.height - nativeEvent.layoutMeasurement.height
-      - nativeEvent.contentOffset.y < SCROLL_EDGE_DISTANCE;
+    const movement = nativeEvent.contentOffset.y - nativePosition.current;
+    // Drag/momentum completion can repeat the last offset; keep the reader's existing intent.
+    if (movement === 0) return;
+    following.current = shouldFollowScroll({ contentHeight: nativeEvent.contentSize.height,
+      viewportHeight: nativeEvent.layoutMeasurement.height, offset: nativeEvent.contentOffset.y, movement });
     setPreservePosition(!following.current);
   };
   const scrollToBottom = () => {

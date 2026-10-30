@@ -24,7 +24,7 @@ vi.mock('react', async original => ({ ...await original<typeof React>(),
 }));
 vi.mock('react-native', () => ({ Pressable: 'Button', Text: 'Text', View: 'View', ScrollView: 'HorizontalScroll' }));
 vi.mock('../theme/styles', () => ({ createThemedStyles: () => () => ({}) }));
-vi.mock('../i18n', () => ({ useLanguage() {}, t: (text: string) => text }));
+vi.mock('../i18n', async () => ({ ...await vi.importActual<typeof import('../i18n')>('../i18n'), useLanguage() {} }));
 vi.mock('./styles', () => ({ useStyles: () => ({}), palette: {} }));
 vi.mock('./SelectableChatText', () => ({ SelectableChatText: 'SelectableText' }));
 vi.mock('./CopyTextButton', () => ({ INLINE_COPY_WIDTH: 20 }));

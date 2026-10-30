@@ -1,10 +1,10 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Remote AI",
-  "version": "2.0.17",
+  "version": "2.1.10",
   "identifier": "dev.codex.switch",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "node ../../scripts/prepare-x-server.mjs && npm run dev",
     "devUrl": "http://127.0.0.1:1420",
     "beforeBuildCommand": "npm run build",
     "beforeBundleCommand": "node ../../scripts/prepare-desktop-bundle.mjs",
@@ -29,12 +29,13 @@
     "security": {
       "csp": {
         "default-src": "'self'",
-        "img-src": "'self' data: http: https:",
+        "script-src": "'self' 'wasm-unsafe-eval'",
+        "img-src": "'self' data: blob: http: https:",
         "style-src": "'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src": "'self' https://fonts.gstatic.com",
         "frame-src": "'self' http://127.0.0.1:*",
         "object-src": "http://127.0.0.1:*",
-        "media-src": "'self' http://127.0.0.1:*",
+        "media-src": "'self' blob: http://127.0.0.1:*",
         "worker-src": "'self' blob:",
         "connect-src": "'self' ipc: http://ipc.localhost https://api.github.com ws: wss:"
       }
@@ -63,9 +64,12 @@
       "resources/dream-skin/assets/**/*",
       "resources/dream-skin/LICENSE",
       "resources/dream-skin/NOTICE.md",
+      "resources/pet-dock/LICENSE",
+      "resources/pet-dock/NOTICE.md",
       "resources/remote-desktop/**/*",
       "resources/desktop-service/**/*",
-      "resources/chat-connectivity/*"
+      "resources/chat-connectivity/*",
+      "resources/x-server/**/*"
     ],
     "icon": [
       "icons/32x32.png",
@@ -80,7 +84,7 @@
     "windows": {
       "wix": {
         "upgradeCode": "f65516b1-807b-5d58-952e-3cd240f3fbad",
-        "version": "2.0.17",
+        "version": "2.1.10",
         "fragmentPaths": [
           "windows/installer-lifecycle.wxs"
         ],
@@ -99,6 +103,7 @@
       "files": {
         "Resources/en.lproj/InfoPlist.strings": "locales/en.lproj/InfoPlist.strings",
         "Resources/ru.lproj/InfoPlist.strings": "locales/ru.lproj/InfoPlist.strings",
+        "Resources/ja.lproj/InfoPlist.strings": "locales/ja.lproj/InfoPlist.strings",
         "Resources/zh-Hans.lproj/InfoPlist.strings": "locales/zh-Hans.lproj/InfoPlist.strings",
         "Resources/zh-Hant.lproj/InfoPlist.strings": "locales/zh-Hant.lproj/InfoPlist.strings"
       },

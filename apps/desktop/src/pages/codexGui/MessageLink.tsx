@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useContext, type ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { FileMenu } from "./FileMenu";
@@ -23,7 +23,7 @@ export function MessageLink({ href, children }: { href?: string; children?: Reac
   const environment = useContext(FileEnvironmentContext);
   const openBrowser = () => openWebsiteInBrowser(href ?? '', environment?.resolveWebsite);
   if (href && localImageSource(href)) return <MessageImage src={href}
-    alt={typeof children === "string" ? children : guiText("图片")} />;
+    alt={typeof children === "string" ? children : uiText("client.chat.image")} />;
   const file = href ? parseFileReference(href) : undefined;
   if (file) return <FileMenu {...file} preview>{children}</FileMenu>;
   if (!isWebsiteUrl(href)) return <span>{children}</span>;

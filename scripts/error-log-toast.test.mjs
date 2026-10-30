@@ -22,10 +22,10 @@ function toastHarness({ failLog = false, failMirror = false } = {}) {
       useRef: () => ({ current: undefined }),
       useState: () => [null, message => shown.push(message)],
     },
-    "../../../../shared/i18n/backend/translateBackendMessage": {
-      translateBackendMessage: (_language, message) => message,
+    "../../../../shared/localization/errors": {
+      formatRemoteError: (_language, message) => message,
     },
-    "../i18n/guiText": { guiLanguage: () => "zh" },
+    "../i18n/uiText": { guiLanguage: () => "zh" },
     "../i18n/useGuiLanguage": { useGuiLanguage: () => "zh" },
     "../api/errorLogs": {
       recordToastLog: async message => {

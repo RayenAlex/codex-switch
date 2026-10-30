@@ -20,17 +20,17 @@ function CommandText({ text, command = false, empty = '' }: { text: string; comm
     <ScrollView nestedScrollEnabled style={command ? commandStyles.command : commandStyles.output}
       contentContainerStyle={command ? commandStyles.commandContent : commandStyles.outputContent}>
       <SelectableChatText style={styles.code}
-        copy={text ? { text, label: command ? t("复制命令") : t("复制输出") } : undefined}>
+        copy={text ? { text, label: command ? t("client.chat.copyCommand") : t("client.chat.copyOutput") } : undefined}>
         {text.slice(page * OUTPUT_PAGE_CHARACTERS, (page + 1) * OUTPUT_PAGE_CHARACTERS).trimEnd() || empty}
       </SelectableChatText>
     </ScrollView>
     {pages > 1 && <View style={commandStyles.paging}>
-      <Text style={styles.subtitle}>{t("内容较长，分段显示")}</Text>
+      <Text style={styles.subtitle}>{t("client.chat.longContentIsShownInSections")}</Text>
       <Pressable accessibilityRole="button" disabled={!page} onPress={() => setPage(page - 1)}>
-        <Text style={[styles.subtitle, !page && styles.disabled]}>{t("上一段")}</Text></Pressable>
+        <Text style={[styles.subtitle, !page && styles.disabled]}>{t("client.chat.previousSection")}</Text></Pressable>
       <Text style={styles.subtitle}>{page + 1} / {pages}</Text>
       <Pressable accessibilityRole="button" disabled={page === pages - 1} onPress={() => setPage(page + 1)}>
-        <Text style={[styles.subtitle, page === pages - 1 && styles.disabled]}>{t("下一段")}</Text></Pressable>
+        <Text style={[styles.subtitle, page === pages - 1 && styles.disabled]}>{t("client.chat.nextSection")}</Text></Pressable>
     </View>}
   </View>;
 }
@@ -46,10 +46,10 @@ export function ChatCommandDetails({ item }: { item: Item }) {
     </View>
     <CommandText text={item.command ?? ''} command />
     <CommandText text={item.aggregatedOutput ?? ''}
-      empty={item.status === 'inProgress' ? t("等待输出…") : t("没有文本输出")} />
+      empty={item.status === 'inProgress' ? t("client.chat.waitingForOutput") : t("client.chat.noTextOutput")} />
     <View style={commandStyles.toolbar}>
       <Text style={[styles.subtitle, styles.fill, item.exitCode !== 0 && commandStyles.failed]}>
-        {item.exitCode != null ? t("退出码：{value1}", { value1: item.exitCode }) : ''}</Text>
+        {item.exitCode != null ? t("client.mobile.exitCode", { value1: item.exitCode }) : ''}</Text>
     </View>
   </View>;
 }

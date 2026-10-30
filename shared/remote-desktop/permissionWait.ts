@@ -1,11 +1,9 @@
+import canonicalCopy from '@remoteai/i18n/copy/client/permissionWait';
 import { desktopFailure } from './diagnostics';
 import type { DesktopPermissionStatus, DesktopSystemPermission } from './protocol';
 
 const POLL_INTERVAL_MS = 3000;
-const WAITING: Record<DesktopSystemPermission, string> = {
-  screenRecording: '请在 Mac 上允许屏幕录制，必要时重启 Remote AI，随后将自动连接。已开启仍无效？请在 Mac 的远程设置中修复权限。',
-  accessibility: '请在 Mac 上允许辅助功能，必要时重启 Remote AI，随后将自动连接。已开启仍无效？请在 Mac 的远程设置中修复权限。',
-};
+const WAITING: Record<DesktopSystemPermission, string> = canonicalCopy;
 
 export function desktopPermission(message: string): DesktopSystemPermission | undefined {
   const code = desktopFailure(message).desktopError;

@@ -1,6 +1,7 @@
 import { ChatConnection } from '../../../shared/remote-chat/client/connection';
 import { ChatLink } from '../../../shared/remote-chat/link';
 import { keyPair } from '../../../shared/remote-chat/cipher';
+import { createBrowserPacketCompression } from '../../../shared/remote-chat/browserPacketCompression';
 import { RtcPeer } from '../../../shared/remote-chat/rtcPeer';
 import type { PeerOptions, RpcMessage, Signal } from '../../../shared/remote-chat/protocol';
 import { downloadFixture, fileDownloadResponse } from './file-download-fixture';
@@ -61,6 +62,7 @@ function createPeer(options: PeerOptions) {
 }
 
 const phone = new ChatConnection({ deviceId: 'computer',
+  createPacketCompression: createBrowserPacketCompression,
   authorize: async () => ({ baseUrl: endpoint.replace(/^ws/, 'http'), accessToken: 'test' }),
   randomBytes: (size) => crypto.getRandomValues(new Uint8Array(size)), createPeer,
   mode, error: (message) => errors.push(message), event: (event) => events.push(event),
@@ -97,6 +99,7 @@ async function receive(frame: Record<string, unknown>) {
   if (frame.type === 'peer-open') {
     resume = { sessionId: String(frame.sessionId), resumeToken: String(frame.resumeToken) };
     link = new ChatLink({ ...resume, desktop: true, secret: keys.secret, publicKey: String(frame.publicKey),
+      createPacketCompression: createBrowserPacketCompression,
       transportVersion: 2, iceServers: [], createPeer, signal: send, relayBuffered: () => socket?.bufferedAmount ?? 0,
       reconnectRelay: reconnect, mode, error: (message) => errors.push(message), message: respond,
     });

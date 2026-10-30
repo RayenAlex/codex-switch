@@ -9,6 +9,7 @@ import { forkRemoteConversation } from './forkConversation';
 import { pinRemoteThread } from './threadActions';
 
 const host = vi.hoisted(() => ({ getSnapshot: vi.fn(), connect: vi.fn(), refresh: vi.fn(), pin: vi.fn(),
+  receiveThreadListEvent: vi.fn(),
   select: vi.fn(), modelSettings: { ready: vi.fn(), created: vi.fn() } }));
 vi.mock('../pages/codexGui/session', () => ({ getGuiController: () => host }));
 vi.mock('../pages/codexGui/api', () => ({ guiApi: { request: vi.fn() } }));

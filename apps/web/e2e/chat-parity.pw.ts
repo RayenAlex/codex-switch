@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext, type Page, type TestInfo } from '@playwright/test';
-import { openChatList, connect, fixtureUrl, login, operationCount, screenshot, send, settled, state } from './chat-helpers';
+import { closeChatSettings } from './chat-settings';
+import { openChatList, connect, fixtureUrl, login, navigate, operationCount, screenshot, send, settled, state }
+  from './chat-helpers';
 
 const closeSheet = (page: Page) => page.getByRole('button', { name: /^(关闭|关闭详情抽屉)$/ }).last().click();
 async function selectChat(page: Page) {
@@ -134,7 +136,7 @@ test('sends skills, plugin and file capsules and keeps goal controls removable',
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('menuitem', { name: '文件', exact: true }).click();
   await (await chooser).setFiles({ name: 'test.txt', mimeType: 'text/plain', buffer: Buffer.from('Web file test') });
-  await expect(page.getByRole('button', { name: '移除test.txt' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '移除附件：test.txt' })).toBeVisible();
   await screenshot(page, info, 'composer-capsules');
   await page.getByRole('button', { name: '发送消息' }).click();
   await settled(page);
@@ -212,19 +214,33 @@ test('changes context capacity and opens profile, account picker and token summa
     await page.getByRole('button', { name: '查看上下文用量' }).click();
     await expect(page.getByRole('dialog', { name: '背景信息窗口' })).toContainText('对话设置：400K Token');
     await page.keyboard.press('Escape');
-  } else await closeSheet(page);
+  } else await closeChatSettings(page);
   await openChatList(page);
-  const accountMenu = page.getByRole('button', { name: '打开头像菜单', exact: true });
-  await expect(accountMenu).toHaveText('演示');
-  await expect(accountMenu.locator('svg')).toHaveCount(0);
-  expect((await page.locator('.chat-drawer-footer:visible').boundingBox())!.height).toBeLessThanOrEqual(70);
+  const accountMenu = page.getByRole('button', {
+    name: desktop ? /^切换 GUI 账户：/ : '打开头像菜单', exact: !desktop,
+  });
+  if (desktop) {
+    await expect(accountMenu).toContainText('演示账户一');
+    await expect(accountMenu.getByRole('progressbar', { name: '主用量剩余' })).toHaveAttribute('aria-valuenow', '28');
+  } else {
+    await expect(accountMenu).toHaveText('演示');
+    await expect(accountMenu.locator('svg')).toHaveCount(0);
+    expect((await page.locator('.chat-drawer-footer:visible').boundingBox())!.height).toBeLessThanOrEqual(70);
+  }
   await screenshot(page, info, 'compact-account-footer');
   await accountMenu.click();
-  await page.getByRole('button', { name: '切换账户', exact: true }).click();
-  await expect(page.getByRole('button', { name: '演示账户一', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: '演示账户二', exact: true }).click();
-  await expect(page.getByRole('button', { name: '切换账户', exact: true })).toContainText('演示账户二');
-  await page.getByRole('button', { name: 'Token 汇总', exact: true }).click();
+  if (!desktop) await page.getByRole('button', { name: '切换账户', exact: true }).click();
+  const accountChoices = desktop ? page.getByRole('region', { name: '账户列表' }) : page;
+  await expect(accountChoices.getByRole('button', { name: desktop ? /演示账户一/ : '演示账户一', exact: !desktop }))
+    .toHaveAttribute('aria-pressed', 'true');
+  await accountChoices.getByRole('button', { name: desktop ? /演示账户二/ : '演示账户二', exact: !desktop }).click();
+  await expect(desktop ? accountMenu : page.getByRole('button', { name: '切换账户', exact: true }))
+    .toContainText('演示账户二');
+  await expect(page.getByRole('button', { name: 'Token 汇总', exact: true })).toHaveCount(0);
+  if (!desktop) await closeSheet(page);
+  if (info.project.name === 'mobile') await page.locator('.chat-drawer .ant-drawer-close').click();
+  await navigate(page, '发现');
+  await page.locator('.discovery-list').getByRole('button', { name: 'Token 汇总', exact: true }).click();
   await expect(page.getByRole('heading', { name: '每日 Token 趋势' })).toBeVisible();
   await screenshot(page, info, 'token-summary');
   await page.getByRole('spinbutton', { name: '统计周数，1 至 52 周' }).fill('2');
@@ -232,6 +248,7 @@ test('changes context capacity and opens profile, account picker and token summa
   await expect.poll(async () => (await state(request)).operations.findLast(entry =>
     entry.operation === 'tokenSummary')?.weeks).toBe(2);
   await closeSheet(page);
+  await expect(page.getByRole('heading', { name: '发现', exact: true })).toBeVisible();
   const count = await operationCount(request, 'tokenSummary');
   await page.waitForTimeout(2300);
   expect(await operationCount(request, 'tokenSummary')).toBe(count);

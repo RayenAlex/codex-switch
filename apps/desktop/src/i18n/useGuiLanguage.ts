@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { getInterfaceLanguage, subscribeInterfaceLanguage } from '../../../../shared/i18n/interfaceLanguage';
+import { getInterfaceLanguage, subscribeInterfaceLanguage } from "../../../../shared/localization/interfaceLanguage";
 
 /** Memoised conversation views must update copy without remounting their editor or message state. */
 export function useGuiLanguage() {

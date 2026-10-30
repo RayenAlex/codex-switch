@@ -11,20 +11,20 @@ type UpdateState = ReturnType<typeof useAppUpdate>;
 
 function updateAction(update: UpdateState) {
   const { downloadState, updateCheck, checking } = update;
-  if (downloadState.status === 'downloaded') return { label: t("立即安装"), onPress: update.installDownloaded };
+  if (downloadState.status === 'downloaded') return { label: t("client.mobile.installNow"), onPress: update.installDownloaded };
   if (downloadState.status === 'downloading') {
-    if (downloadState.cancelling) return { label: t('正在取消…'), busy: true };
-    if (downloadState.progress?.phase === 'verifying') return { label: t('正在校验'), busy: true };
+    if (downloadState.cancelling) return { label: t("client.mobile.cancelling"), busy: true };
+    if (downloadState.progress?.phase === 'verifying') return { label: t("client.downloads.verifying"), busy: true };
     const percent = updateDownloadPercent(downloadState.progress);
-    return { label: percent === null ? t('下载中') : t('下载中 · {percent}%', { percent }), busy: true };
+    return { label: percent === null ? t("client.downloads.downloading.e2fc57") : t("client.downloads.downloading", { percent }), busy: true };
   }
-  if (checking) return { label: t("检查中"), busy: true };
+  if (checking) return { label: t("client.mobile.checking"), busy: true };
   if (updateCheck?.updateAvailable) {
-    return { label: ['failed', 'cancelled'].includes(downloadState.status) ? t("重新下载") : t("更新"),
+    return { label: ['failed', 'cancelled'].includes(downloadState.status) ? t("client.mobile.downloadAgain") : t("client.mobile.update"),
       onPress: () => update.beginDownload(updateCheck.release) };
   }
-  if (update.error) return { label: t("重试"), onPress: () => void update.checkForUpdate() };
-  return { label: updateCheck ? t("已是最新") : t("检查更新"), current: Boolean(updateCheck),
+  if (update.error) return { label: t("client.terminal.retry"), onPress: () => void update.checkForUpdate() };
+  return { label: updateCheck ? t("client.mobile.upToDate") : t("client.settings.checkForUpdates"), current: Boolean(updateCheck),
     onPress: () => void update.checkForUpdate() };
 }
 

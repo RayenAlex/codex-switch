@@ -1,3 +1,4 @@
+import { displayText } from '../../i18n/index';
 import { createThemedStyles } from '../../theme/styles';
 import { useThemeColor } from '../../theme/store';
 import { t, useLanguage } from '../../i18n';
@@ -11,9 +12,9 @@ export function DesktopStats({ stats, close }: { stats: Stats; close: () => void
   const color = useThemeColor();
   useLanguage();
   return <View style={s.panel} pointerEvents="box-none">
-    <View style={s.content} pointerEvents="none" collapsable={false}><Text style={s.text} accessibilityLabel={t("连接状态")}>
-      {desktopStatsLines(stats, t).join('\n')}</Text></View>
-    <Pressable accessibilityRole="button" accessibilityLabel={t("关闭连接状态")} onPress={close} style={s.close}>
+    <View style={s.content} pointerEvents="none" collapsable={false}><Text style={s.text} accessibilityLabel={t("client.remoteDesktop.connectionStats")}>
+      {desktopStatsLines(stats, displayText).join('\n')}</Text></View>
+    <Pressable accessibilityRole="button" accessibilityLabel={t("client.remoteDesktop.closeConnectionStats")} onPress={close} style={s.close}>
       <Ionicons name="close" size={18} color={color("#cbd5e1", 'faint')} />
     </Pressable>
   </View>;

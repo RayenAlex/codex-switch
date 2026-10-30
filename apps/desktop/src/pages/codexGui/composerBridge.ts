@@ -1,7 +1,7 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { guiApi } from './api';
 import type { GuiController } from './controller';
-import { resolveModelSelection } from './modelSelection';
+import { modelSelectionError, resolveModelSelection } from './modelSelection';
 import type { Model, ListResponse } from './types';
 import { composerPatch, DEFAULT_COMPOSER, MODEL_CATALOG_ERROR, type ComposerSettings,
   type ComposerSnapshot, type RequestSpeed } from '../../../../../shared/remote-chat/composer';
@@ -68,8 +68,7 @@ export class ComposerBridge {
   }
 
   private publishScope(threadId: string | null): ComposerSnapshot {
-    const selection = this.value.models.length ? this.binding!.modelSettings.selection(threadId)
-      : { model: '', effort: '' };
+    const selection = this.binding!.modelSettings.selection(threadId);
     const settings = { ...this.value.settings, ...selection };
     const syncing = Boolean(this.value.syncing || this.binding!.modelSettings.loading(threadId));
     const previous = this.scoped.get(threadId);
@@ -98,7 +97,7 @@ export class ComposerBridge {
       models.push(...result.data);
       cursor = result.nextCursor || undefined;
     } while (cursor);
-    if (!models.length) throw new Error(guiText(MODEL_CATALOG_ERROR));
+    if (!models.length) throw new Error(uiText(MODEL_CATALOG_ERROR));
     if (!this.binding) this.publish(models, this.value.settings);
   }
 
@@ -112,19 +111,19 @@ export class ComposerBridge {
   }
 
   async read(threadId?: string | null): Promise<ComposerSnapshot> {
-    if (threadId !== undefined && !this.binding) throw new Error(guiText("电脑尚未就绪，请稍后重试。"));
+    if (threadId !== undefined && !this.binding) throw new Error(uiText("client.composer.theComputerIsNotReadyYetPleaseTryAgainShortly"));
     await this.binding?.modelCatalog.recover();
     await Promise.all([this.readSelection(), this.speed?.read().then((speed) => this.publishSpeed(speed))
       .catch(() => { /* Model selection stays usable if the host cannot report its speed yet. */ }),
       threadId !== undefined ? this.binding!.modelSettings.ready(threadId) : undefined]);
-    if (threadId !== undefined && !this.binding) throw new Error(guiText("电脑尚未就绪，请稍后重试。"));
+    if (threadId !== undefined && !this.binding) throw new Error(uiText("client.composer.theComputerIsNotReadyYetPleaseTryAgainShortly"));
     await this.binding?.modelCatalog.ready();
     return threadId === undefined ? this.value : this.publishScope(threadId);
   }
 
   /** Discovery is an explicit remote action, separate from passive reads and polling. */
   async refreshModels(threadId?: string | null): Promise<ComposerSnapshot> {
-    if (!this.binding) throw new Error(guiText("电脑尚未就绪，请稍后重试。"));
+    if (!this.binding) throw new Error(uiText("client.composer.theComputerIsNotReadyYetPleaseTryAgainShortly"));
     await this.binding.modelCatalog.refresh();
     return this.read(threadId);
   }
@@ -134,23 +133,23 @@ export class ComposerBridge {
     const current = await this.read(threadId);
     const currentCatalog = this.binding?.modelCatalog.guard();
     const selected = current.models.find((model) => model.model === (patch.model ?? current.settings.model));
-    if (!selected) throw new Error(guiText("这个模型已不可用，请重新选择。"));
+    if (!selected) throw new Error(uiText("client.composer.thisModelIsNoLongerAvailablePleaseChooseAnother"));
     const efforts = selected.supportedReasoningEfforts.map((entry) => entry.reasoningEffort);
     if (!efforts.length) efforts.push(resolveModelSelection([selected], { model: selected.model, effort: '' }).effort);
     if (patch.effort && !efforts.includes(patch.effort)) {
-      throw new Error(guiText("这个模型不支持所选思考深度，请重新选择。"));
+      throw new Error(uiText("client.composer.thisModelDoesNotSupportTheSelectedReasoningEffortPlease"));
     }
     const settings = { ...current.settings, ...patch,
       ...(patch.model && patch.model !== current.settings.model && patch.effort === undefined ? { effort: '' } : {}) };
     const normalized = { ...resolveModelSelection(current.models, settings), access: settings.access };
     if (patch.speed !== undefined) {
-      if (!this.speed) throw new Error(guiText("请更新电脑端后再切换速度模式。"));
+      if (!this.speed) throw new Error(uiText("client.composer.updateTheDesktopAppBeforeChangingTheSpeedMode"));
       if (patch.speed !== current.settings.speed) this.publishSpeed(await this.speed.set(patch.speed));
     }
     if (patch.model !== undefined || patch.effort !== undefined || patch.access !== undefined) {
-      if (currentCatalog && !currentCatalog()) throw new Error(guiText("模型已更新，请确认后重新选择。"));
+      if (currentCatalog && !currentCatalog()) throw new Error(uiText("client.composer.theModelHasChangedReviewItAndChooseAgain"));
       if (threadId !== undefined) {
-        if (!this.binding) throw new Error(guiText("电脑尚未就绪，请稍后重试。"));
+        if (!this.binding) throw new Error(uiText("client.composer.theComputerIsNotReadyYetPleaseTryAgainShortly"));
         if (patch.access !== undefined) this.binding.settings({ access: patch.access });
         if (patch.model !== undefined || patch.effort !== undefined) {
           this.binding.modelSettings.change({ model: normalized.model, effort: normalized.effort }, threadId);
@@ -165,9 +164,11 @@ export class ComposerBridge {
 
   async validateSend(body: { threadId?: string; model?: string; effort?: string }) {
     const snapshot = await this.read(body.threadId ?? null);
+    const error = modelSelectionError(snapshot.models, snapshot.settings);
+    if (error) throw new Error(uiText(error));
     if (snapshot.syncing || !snapshot.models.length || (body.model && body.model !== snapshot.settings.model)
       || (body.effort && body.effort !== snapshot.settings.effort)) {
-      throw new Error(guiText("模型已更新，请确认后重新发送。"));
+      throw new Error(uiText("client.composer.theModelHasChangedReviewItAndSendAgain"));
     }
     return snapshot.settings;
   }

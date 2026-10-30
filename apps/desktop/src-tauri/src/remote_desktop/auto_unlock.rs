@@ -9,7 +9,7 @@ mod storage;
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
-pub(super) use windows::{apply, cancel, connect, snapshot};
+pub(super) use windows::{apply, cancel, connect_saved, snapshot};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -103,9 +103,11 @@ mod tests {
                 .validate()
                 .is_err());
         }
-        let valid: Change = serde_json::from_value(serde_json::json!({
-            "enabled":true,"username":"PC\\alice","password":" valid password "}))
-        .unwrap();
-        assert!(valid.validate().is_ok());
+        for username in ["alice", "PC\\alice"] {
+            let valid: Change = serde_json::from_value(serde_json::json!({
+                "enabled":true,"username":username,"password":" valid password "}))
+            .unwrap();
+            assert!(valid.validate().is_ok());
+        }
     }
 }

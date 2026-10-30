@@ -18,12 +18,12 @@ export function ProjectBrowserButton({ client, cwd, connected, active, className
   const visible = workspace?.tabs.visible && workspace.tabs.selected === id;
   return <>
     <button type="button" className={className} disabled={!active || !connected || !cwd}
-      aria-label={t('文件浏览')} aria-haspopup="dialog" aria-expanded={Boolean(visible)}
+      aria-label={t("client.projectBrowser.browseFiles")} aria-haspopup="dialog" aria-expanded={Boolean(visible)}
       onClick={() => {
         if (!workspace?.tabs.entries.some(tab => tab.id === id)) browsers.open(cwd);
         workspace?.tabs.open(id);
       }}>
-      <FolderSearch size={16} /><span>{t('文件浏览')}</span></button>
+      <FolderSearch size={16} /><span>{t("client.projectBrowser.browseFiles")}</span></button>
     {browsers.projects.map(project => <ProjectBrowserDrawer key={project} client={client} cwd={project}
       connected={connected} active={active && browsers.visible === project}
       desktopStyle={desktopStyle} host={host} onClose={browsers.close} />)}

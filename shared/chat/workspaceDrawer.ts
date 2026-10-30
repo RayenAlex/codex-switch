@@ -10,10 +10,12 @@ export interface WorkspaceTab {
 export interface WorkspaceTabs {
   entries: WorkspaceTab[];
   selected: string | null;
+  closed: ReadonlySet<string>;
   visible: boolean;
   content: HTMLDivElement | null;
   register: (tab: WorkspaceTab) => () => void;
   open: (id: string) => void;
+  close: (id: string, order: string[]) => string | null;
   hide: () => void;
   rememberOpener: () => void;
 }
@@ -21,7 +23,6 @@ export interface WorkspaceTabs {
 export const workspaceTabId = {
   git: (cwd: string) => `git:${cwd}`,
   files: (cwd: string) => `files:${cwd}`,
-  terminal: (cwd: string) => `terminal:${cwd}`,
 };
 
 /** Internal drawers stay within their owning conversation, including remote workspaces. */
@@ -31,8 +32,8 @@ export const WorkspaceDrawerContext = createContext<{
 } | null>(null);
 
 /** Portals retain the caller's providers and mounted state while the shared drawer changes tabs. */
-export function useWorkspaceDrawerTab({ tab, active, present = true }: {
-  tab: WorkspaceTab; active: boolean; present?: boolean;
+export function useWorkspaceDrawerTab({ tab, active, present = true, autoOpen = false }: {
+  tab: WorkspaceTab; active: boolean; present?: boolean; autoOpen?: boolean;
 }) {
   const workspace = useContext(WorkspaceDrawerContext);
   const register = workspace?.tabs.register;
@@ -42,8 +43,11 @@ export function useWorkspaceDrawerTab({ tab, active, present = true }: {
     if (present) return register?.(tab);
   }, [register, present, tab.id, tab.title, tab.icon, tab.save]);
   useEffect(() => {
-    if (present && active && opened.current !== tab.id) { opened.current = tab.id; open?.(tab.id); }
-  }, [open, present, active, tab.id]);
+    // Project tools open from their launch buttons; remounting a retained tab must not reveal the drawer.
+    if (autoOpen && present && active && opened.current !== tab.id) {
+      opened.current = tab.id; open?.(tab.id);
+    }
+  }, [open, present, active, autoOpen, tab.id]);
   return {
     host: workspace?.tabs.content,
     selected: workspace?.tabs.selected === tab.id,

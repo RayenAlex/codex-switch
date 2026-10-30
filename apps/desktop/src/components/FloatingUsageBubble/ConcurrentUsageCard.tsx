@@ -1,26 +1,10 @@
+import COPYResource from '@remoteai/i18n/copy/desktop/concurrentUsage';
 import type { Language } from "../../i18n";
 import { formatEstimatedCost, type TokenCostDisplaySettings } from "../../utils/tokenCost";
 import { formatCompactTokenCount } from "../../utils/tokenContext";
 import type { ConcurrentUsageSummary } from "./concurrentUsageSummary";
 
-const COPY = {
-  ru: {
-    accountCount: "Аккаунтов в параллельном режиме", estimatedCost: "Стоимость за сегодня",
-    title: "Общая статистика", totalTokens: "Токены за сегодня",
-  },
-  en: {
-    accountCount: "Concurrent accounts",
-    estimatedCost: "Today's estimated cost",
-    title: "Concurrent summary",
-    totalTokens: "Today's total Token usage",
-  },
-  zh: {
-    accountCount: "并发账户数",
-    estimatedCost: "今日总预估成本",
-    title: "并发汇总",
-    totalTokens: "今日总 Token 消耗",
-  },
-};
+const COPY = COPYResource;
 
 export function ConcurrentUsageCard({
   display,

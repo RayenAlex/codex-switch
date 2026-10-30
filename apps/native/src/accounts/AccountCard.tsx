@@ -46,8 +46,8 @@ function AccountUsage({ usage, plan }: { usage?: UsageWindow | null; plan: strin
   return <View style={styles.usage}>
     <View style={styles.meter}>
       <View style={styles.track} accessibilityRole="progressbar"
-        accessibilityLabel={t("剩余额度")} accessibilityValue={remaining === null
-          ? { text: t("用量暂不可用") } : { min: 0, max: 100, now: remaining }}>
+        accessibilityLabel={t("client.accounts.remainingQuota")} accessibilityValue={remaining === null
+          ? { text: t("client.accounts.usageUnavailable") } : { min: 0, max: 100, now: remaining }}>
         {remaining !== null ? <View style={[styles.fill, {
           width: `${remaining}%`, backgroundColor: fill,
           experimental_backgroundImage: gradient,
@@ -59,7 +59,7 @@ function AccountUsage({ usage, plan }: { usage?: UsageWindow | null; plan: strin
     </View>
     <View style={styles.reset}>
       <Ionicons name="time-outline" size={15} color={color(colors.muted, 'muted')} />
-      <Text style={styles.resetText}>{remaining === null ? t("用量暂不可用") : resetLabel(usage?.resetsAt)}</Text>
+      <Text style={styles.resetText}>{remaining === null ? t("client.accounts.usageUnavailable") : resetLabel(usage?.resetsAt)}</Text>
     </View>
   </View>;
 }
@@ -71,8 +71,8 @@ export function AccountCard({ account, privateMode, onOpenDetails }: AccountCard
   const email = privateMode ? maskEmail(account.email) : account.email;
   const plan = account.plan || 'ChatGPT';
   const accent = planColors(plan, color);
-  return <Pressable accessibilityRole="button" accessibilityLabel={t("{value1} 的账号信息", { value1: email })}
-    accessibilityHint={t("打开完整账号信息")} onPress={() => onOpenDetails(account)}
+  return <Pressable accessibilityRole="button" accessibilityLabel={t("client.accounts.accountDetailsFor", { value1: email })}
+    accessibilityHint={t("client.mobile.viewFullAccountDetails")} onPress={() => onOpenDetails(account)}
     style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
     <View style={styles.cardContent}>
       <View style={styles.identity}>

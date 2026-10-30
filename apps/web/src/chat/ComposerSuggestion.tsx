@@ -3,8 +3,8 @@ import './composerSuggestion.css';
 
 export function ComposerSuggestion({ text, accept }: { text: string; accept: () => void }) {
   if (!text) return null;
-  return <button type="button" className="chat-prompt-suggestion" aria-label={t('填入建议')}
+  return <button type="button" className="chat-prompt-suggestion" aria-label={t("client.chat.useSuggestion")}
     onPointerDown={event => event.preventDefault()} onClick={accept}>
-    <span>{text}</span><small>{t('填入')}</small>
+    <span>{text}</span><small>{t("client.chat.use")}</small>
   </button>;
 }

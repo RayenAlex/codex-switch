@@ -47,7 +47,7 @@ export function useWorkflowExecution() {
         }
         if (job.result) setRun(job.result);
         if (job.error) setError(job.error);
-        if (job.status === "cancelled" && !job.result) setError(msg("运行已停止。"));
+        if (job.status === "cancelled" && !job.result) setError(msg("coze.index.runStopped"));
         setBusy(false); setJobId(undefined);
       } catch (error) {
         if (!active) return;

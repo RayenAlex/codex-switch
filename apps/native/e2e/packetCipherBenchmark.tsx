@@ -6,6 +6,8 @@ import { keyPair, SessionCipher } from '../../../shared/remote-chat/cipher';
 import type { PacketCipherFactory } from '../../../shared/remote-chat/packetCipher';
 import { createNativePacketCipher } from '../src/chat/packetCipher';
 import { checkAndroidPacketCipher } from './packetCipherChecks';
+import { checkAndroidPacketCompression } from './packetCompressionChecks';
+import { checkIntegratedPackets } from './integratedPacketChecks';
 
 const MIB = 1024 * 1024;
 const PACKETS = 512;
@@ -46,7 +48,8 @@ async function run() {
   const native = createNativePacketCipher({ key: new Uint8Array(32), context: new Uint8Array(1) });
   if (!native) throw new Error('Native cipher unavailable');
   native.destroy();
-  return { checks: await checkAndroidPacketCipher(), cipher: [
+  return { checks: await checkAndroidPacketCipher(), compression: await checkAndroidPacketCompression(),
+    integrated: await checkIntegratedPackets(), cipher: [
     await benchmark(2400), await benchmark(2400, createNativePacketCipher),
     await benchmark(16000, createNativePacketCipher),
   ] };

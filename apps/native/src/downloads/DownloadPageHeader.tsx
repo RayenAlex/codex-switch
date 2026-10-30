@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Pressable, Text, View } from 'react-native';
 import { colors, useStyles } from './styles';
 
-export function DownloadPageHeader({ title, back, backLabel = t("返回上一级") }: {
+export function DownloadPageHeader({ title, back, backLabel = t("client.downloads.goBack") }: {
   title: string; back: () => void; backLabel?: string;
 }) {
   const styles = useStyles();

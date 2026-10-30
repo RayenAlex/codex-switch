@@ -29,7 +29,7 @@ export function useComposerPaste(options: Options) {
 
   const read = (files: File[] = [], missingImages = false) => {
     if (pending.current) {
-      if (!pending.current.collecting) { setError(t('文件粘贴失败，请重新复制后再试。')); return; }
+      if (!pending.current.collecting) { setError(t("client.workspaceActions.couldNotPasteFilesCopyThemAgainAndRetry")); return; }
       pending.current.files.push(...files); pending.current.missingImages ||= missingImages;
       pending.current.textOnly = false; return;
     }
@@ -44,7 +44,7 @@ export function useComposerPaste(options: Options) {
       try { native = await options.readClipboardImages?.() ?? []; }
       catch {
         if (valid() && !request.files.length && !request.textOnly) {
-          setError(t('图片粘贴失败，请重新复制后再试。'));
+          setError(t("client.runtimeErrors.couldNotPasteTheImageCopyItAgainThenRetry"));
         }
       }
       if (!valid() || request.textOnly) return;
@@ -54,7 +54,7 @@ export function useComposerPaste(options: Options) {
       if (selected.length) await latest.current.addFiles(selected);
       if (valid() && !native.length && request.missingImages) setError(t(MISSING_CLIPBOARD_IMAGES));
     })().catch(() => {
-      if (valid()) setError(t('文件粘贴失败，请重新复制后再试。'));
+      if (valid()) setError(t("client.workspaceActions.couldNotPasteFilesCopyThemAgainAndRetry"));
     }).finally(() => {
       if (pending.current === request) { pending.current = null; setReading(false); }
     });
@@ -72,7 +72,7 @@ export function useComposerPaste(options: Options) {
     if (!files.length && !hasImages && !options.readClipboardImages) return;
     event.preventDefault();
     if (!options.active || options.busy) {
-      if (textFile) setError(t('文件粘贴失败，请重新复制后再试。'));
+      if (textFile) setError(t("client.workspaceActions.couldNotPasteFilesCopyThemAgainAndRetry"));
       return;
     }
     if (text && !textFile) options.insertText?.(text, event.currentTarget);

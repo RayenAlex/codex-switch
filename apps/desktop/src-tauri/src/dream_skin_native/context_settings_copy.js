@@ -1,3 +1,4 @@
+// Generated from packages/i18n/platform/desktop/src-tauri/src/dream_skin_native/context_settings_copy.js. Do not edit.
 const contextSettingsCopy = {
   zh: {
     title: "对话上下文设置", gear: "当前对话容量设置", cancel: "取消", save: "保存", saving: "正在保存…",

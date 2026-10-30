@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useEffect, useRef, useState } from "react";
 import { Button, Input, Modal, Spin, type InputRef } from "antd";
 import { ArrowUpRight, Folder, MessageSquare, Search } from "lucide-react";
@@ -21,32 +21,32 @@ export function ThreadSearch({ state, controller, onClose }: Props) {
   const search = query.trim();
   const input = useRef<InputRef>(null);
   const loading = state.loading || search !== state.search;
-  let sectionTitle = state.archived ? guiText("已归档对话") : guiText("最近对话");
-  if (search) sectionTitle = guiText("搜索结果");
+  let sectionTitle = state.archived ? uiText("client.workspaceActions.archivedConversations") : uiText("client.workspaceActions.recentConversations");
+  if (search) sectionTitle = uiText("client.shared.searchResults");
   useEffect(() => {
     if (search === state.search || state.connection !== "ready") return;
     const timer = setTimeout(() => controller.filter(search, state.archived), SEARCH_DELAY_MS);
     return () => clearTimeout(timer);
   }, [search, state.search, state.archived, state.connection, controller]);
 
-  return <Modal open centered className={styles.modal} title={guiText("搜索对话")} footer={null}
+  return <Modal open centered className={styles.modal} title={uiText("client.workspaceActions.searchConversations")} footer={null}
     width={SEARCH_MODAL_WIDTH} onCancel={onClose}
     afterOpenChange={(open) => { if (open) input.current?.focus(); }}>
-    <p className={styles.description}>{guiText("找到之前的对话，接着聊。")}</p>
+    <p className={styles.description}>{uiText("client.workspaceActions.findAPreviousConversationAndPickUpWhereYouLeft")}</p>
     <Input ref={input} className={styles.search} prefix={<Search size={20} aria-hidden="true" />}
-      placeholder={guiText("输入关键词，搜索对话")} aria-label={guiText("搜索对话")}
+      placeholder={uiText("client.workspaceActions.enterKeywordsToSearchConversations")} aria-label={uiText("client.workspaceActions.searchConversations")}
       value={query} allowClear onChange={(event) => setQuery(event.target.value)} />
     <div className={styles.sectionHeading}>
       <span>{sectionTitle}</span>
       {!loading && <span className={styles.count}>
-        {state.threads.length}{state.cursor ? "+" : ""} {guiText("条对话")}</span>}
+        {state.threads.length}{state.cursor ? "+" : ""} {uiText("client.workspaceActions.conversations")}</span>}
     </div>
-    <div className={styles.results} aria-label={guiText("对话列表")} aria-busy={loading}>
+    <div className={styles.results} aria-label={uiText("client.mobile.conversations")} aria-busy={loading}>
       <ThreadSearchResults state={state} controller={controller} onClose={onClose} search={search} loading={loading} />
       {state.cursor && <Button type="text" block loading={loading} disabled={state.connection !== "ready"}
-        onClick={() => void controller.refresh(true)}>{guiText("加载更多")}</Button>}
+        onClick={() => void controller.refresh(true)}>{uiText("client.chat.loadMore")}</Button>}
     </div>
-    <div className={styles.footer}><span>{guiText("选择对话，继续聊天")}</span><span><kbd>Esc</kbd> {guiText("关闭")}</span></div>
+    <div className={styles.footer}><span>{uiText("client.workspaceActions.chooseAConversationToContinueChatting")}</span><span><kbd>Esc</kbd> {uiText("client.projectBrowser.close")}</span></div>
   </Modal>;
 }
 
@@ -54,12 +54,12 @@ function ThreadSearchResults({ state, controller, onClose, search, loading }: Pr
   search: string; loading: boolean;
 }) {
   if (loading) return <div className={styles.empty} role="status">
-    <Spin size="small" /><span>{guiText("正在查找对话…")}</span>
+    <Spin size="small" /><span>{uiText("client.workspaceActions.findingConversations")}</span>
   </div>;
   if (!state.threads.length) return <div className={styles.empty} role="status">
     <Search size={28} strokeWidth={1.5} aria-hidden="true" />
-    <span>{search ? guiText("没有找到匹配的对话") : guiText("还没有对话")}</span>
-    {search && <span className={styles.emptyHint}>{guiText("换个关键词试试")}</span>}
+    <span>{search ? uiText("client.workspaceActions.noMatchingConversations") : uiText("client.workspaceActions.noConversationsYet")}</span>
+    {search && <span className={styles.emptyHint}>{uiText("client.workspaceActions.tryAnotherKeyword")}</span>}
   </div>;
   return <>{state.threads.map((thread) => <button key={thread.id} className={styles.result}
     type="button" aria-label={threadTitle(thread)}

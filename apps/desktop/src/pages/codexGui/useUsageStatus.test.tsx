@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { invoke } from '../../api/backend';
 import { useUsageStatus } from './useUsageStatus';
+import { USAGE_REFRESH_INTERVAL_MS } from '../../../../../shared/remote-chat/usage';
 
 vi.mock('../../api/backend', () => ({ invoke: vi.fn() }));
 let root: Root;
@@ -28,4 +29,18 @@ it('keeps polling single-flight, reports failures, and stops while hidden', asyn
   await act(async () => root.render(<Probe active={false} />));
   await act(async () => vi.advanceTimersByTimeAsync(15_000));
   expect(invoke).toHaveBeenCalledTimes(1);
+});
+
+it('clears malformed local usage and recovers without stopping polling', async () => {
+  const usage = { totalTokens: 1_520, estimatedCostUsd: 2.5, primaryRemainingPercent: null,
+    primaryRemainingAggregated: false, providerEstimatedCost: null };
+  vi.mocked(invoke).mockResolvedValueOnce(usage).mockResolvedValueOnce({}).mockResolvedValue(usage);
+  await act(async () => root.render(<Probe />));
+  expect(result.usage).toEqual(usage);
+  await act(async () => vi.advanceTimersByTimeAsync(USAGE_REFRESH_INTERVAL_MS));
+  expect(result.usage).toBeNull();
+  expect(result.error).toBe('暂时无法刷新用量，请稍后重试。');
+  await act(async () => vi.advanceTimersByTimeAsync(USAGE_REFRESH_INTERVAL_MS));
+  expect(result.usage).toEqual(usage);
+  expect(result.error).toBe('');
 });

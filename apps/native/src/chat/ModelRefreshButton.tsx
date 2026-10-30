@@ -15,7 +15,7 @@ export function ModelRefreshButton({ ready, refreshModels }: { ready: boolean; r
     try { await refreshModels(); } finally { setRefreshing(false); }
   };
   return <Pressable accessibilityRole="button" hitSlop={5} disabled={!ready || refreshing}
-    accessibilityLabel={t(refreshing ? '正在刷新模型…' : '刷新模型')}
+    accessibilityLabel={t(refreshing ? "client.mobile.refreshingModels" : "client.mobile.refreshModels")}
     style={({ pressed }) => [styles.button, (!ready || refreshing || pressed) && styles.dimmed]}
     accessibilityState={{ disabled: !ready || refreshing, busy: refreshing }} onPress={() => { void refresh(); }}>
     {refreshing ? <ActivityIndicator size="small" color={color('#147d6b', 'accent')} />

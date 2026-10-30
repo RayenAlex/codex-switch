@@ -15,6 +15,7 @@ export interface UsageSummary {
 }
 
 export interface AccountPrivateDetails {
+  alias?: string;
   password: string;
   phoneNumber: string;
   totpSecret: string;
@@ -36,7 +37,7 @@ export interface AccountSummary {
 
 export type RemoteControlCapability =
   | 'provider-switch' | 'provider-group-switch' | 'restart-codex' | 'gui-model-switch'
-  | 'aggregate-switch' | 'gui-aggregate-switch' | 'account-usage';
+  | 'aggregate-switch' | 'gui-aggregate-switch' | 'account-usage' | 'screen-power';
 
 export interface RemoteDevice {
   guiAccountId?: string | null;
@@ -104,7 +105,8 @@ export interface ResetCreditsSummary {
   credits: ResetCredit[];
 }
 
-export type AppPage = "chat" | "accounts" | "devices" | "totp" | "settings";
+export type AppPage = "chat" | "accounts" | "discover" | "devices" | "totp" | "downloads" | "lounge"
+  | "token-summary" | "settings";
 export type TotpAlgorithm = "SHA1" | "SHA256" | "SHA512";
 
 export interface TotpEntry {

@@ -2,8 +2,8 @@ import { expect, it } from 'vitest';
 import { isNearHistoryStart, shouldShowScrollToBottom } from '../../../../shared/chat/scrollPosition';
 
 it.each([
-  { contentHeight: 2_000, viewportHeight: 500, offset: 1_399, visible: true },
-  { contentHeight: 2_000, viewportHeight: 500, offset: 1_400, visible: false },
+  { contentHeight: 2_000, viewportHeight: 500, offset: 1_249, visible: true },
+  { contentHeight: 2_000, viewportHeight: 500, offset: 1_250, visible: false },
   { contentHeight: 2_000, viewportHeight: 500, offset: 1_500, visible: false },
   { contentHeight: 2_000, viewportHeight: 500, offset: 1_520, visible: false },
   { contentHeight: 400, viewportHeight: 500, offset: 0, visible: false },

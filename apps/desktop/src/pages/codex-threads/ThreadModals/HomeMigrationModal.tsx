@@ -1,7 +1,7 @@
 import { Alert, Descriptions, Modal, Select } from "antd";
 import { homeLabel } from "../../../components/CodexHomeScope";
 import { MIGRATION_MODEL_PROVIDERS } from "../../../types/conversationMigration";
-import type { ThreadCopy } from "../copy";
+import type { ThreadCopy } from "@remoteai/i18n/copy/desktop/threads";
 import type { useHomeMigration } from "../useHomeMigration";
 import { HomeMigrationError } from "./HomeMigrationError";
 

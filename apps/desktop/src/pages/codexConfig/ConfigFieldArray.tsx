@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useEffect, useRef, useState } from "react";
 import { Button, Empty, Select } from "antd";
 import { Plus } from "lucide-react";
@@ -27,19 +27,19 @@ export function ConfigFieldArray(props: ConfigFieldProps) {
     return success;
   };
   return <div className={styles.arrayFields}>
-    {rows.map((row, index) => <ConfigField key={row.id} fieldKey={String(index + 1)} label={guiText("第 {value1} 项", { value1: index + 1 })}
+    {rows.map((row, index) => <ConfigField key={row.id} fieldKey={String(index + 1)} label={uiText("client.configEditor.item", { value1: index + 1 })}
       path={[...path, String(index)]} schema={itemSchema} value={row.value} disabled={disabled}
       onCommit={(childPath, replacement) => showResult(queue.current.edit({
         id: row.id, path: childPath.slice(path.length + 1), value: replacement,
       }, save))} />)}
-    {!rows.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={guiText("暂未添加内容")} />}
+    {!rows.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={uiText("client.configEditor.noItemsAddedYet")} />}
     <div className={styles.addRow}>
-      {untyped && <Select size="small" aria-label={guiText("新列表项类型")} value={itemType} disabled={disabled}
+      {untyped && <Select size="small" aria-label={uiText("client.configEditor.newListItemType")} value={itemType} disabled={disabled}
         className={styles.arrayType} onChange={setItemType}
         options={Object.entries(TYPE_LABELS).map(([value, label]) => ({ value, label }))} />}
       <Button type="dashed" size="small" icon={<Plus size={14} />} disabled={disabled} onClick={() => {
         void showResult(queue.current.append(initialValue(untyped ? { type: itemType } : itemSchema), save));
       }}>
-      {guiText("添加一项")}</Button></div>
+      {uiText("client.configEditor.addItem")}</Button></div>
   </div>;
 }

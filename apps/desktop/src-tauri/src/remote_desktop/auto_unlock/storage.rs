@@ -1,7 +1,10 @@
 use super::Error;
 use crate::desktop_service::configuration;
 use serde::{Deserialize, Serialize};
-use std::{io::Write, path::PathBuf};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+};
 use zeroize::{Zeroize, Zeroizing};
 
 pub(super) const REQUEST: &str = "unlock-request.bin";
@@ -38,9 +41,11 @@ pub(super) fn path(name: &str) -> Result<PathBuf, Error> {
         .join(name))
 }
 pub(super) fn read_bytes(name: &str) -> Result<Option<Vec<u8>>, Error> {
+    read_path(&path(name)?)
+}
+fn read_path(path: &Path) -> Result<Option<Vec<u8>>, Error> {
     use std::os::windows::fs::MetadataExt;
-    let path = path(name)?;
-    let metadata = match std::fs::symlink_metadata(&path) {
+    let metadata = match std::fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(_) => return Err(Error::Storage),
@@ -52,7 +57,10 @@ pub(super) fn read_bytes(name: &str) -> Result<Option<Vec<u8>>, Error> {
     std::fs::read(path).map(Some).map_err(|_| Error::Storage)
 }
 pub(super) fn load() -> Result<Option<Credentials>, Error> {
-    let Some(mut bytes) = read_bytes(SETTINGS)? else {
+    load_from(&path(SETTINGS)?)
+}
+fn load_from(path: &Path) -> Result<Option<Credentials>, Error> {
+    let Some(mut bytes) = read_path(path)? else {
         return Ok(None);
     };
     let plain =
@@ -62,15 +70,22 @@ pub(super) fn load() -> Result<Option<Credentials>, Error> {
         .map_err(|_| Error::Storage)
 }
 pub(super) fn save(value: &Credentials) -> Result<(), Error> {
+    save_to(&path(SETTINGS)?, value)
+}
+fn save_to(path: &Path, value: &Credentials) -> Result<(), Error> {
     let mut bytes = Zeroizing::new(serde_json::to_vec(value).map_err(|_| Error::Storage)?);
-    seal(SETTINGS, &mut bytes)
+    let encrypted = configuration::protect(&mut bytes, true).map_err(|_| Error::Storage)?;
+    write(path, &encrypted)
 }
 pub(super) fn seal(name: &str, bytes: &mut [u8]) -> Result<(), Error> {
     let encrypted = configuration::protect(bytes, true).map_err(|_| Error::Storage)?;
-    write(name, &encrypted)
+    write(&path(name)?, &encrypted)
 }
-fn write(name: &str, bytes: &[u8]) -> Result<(), Error> {
-    let temporary = path(&format!(".unlock-{}.tmp", uuid::Uuid::new_v4()))?;
+fn write(path: &Path, bytes: &[u8]) -> Result<(), Error> {
+    let temporary = path
+        .parent()
+        .ok_or(Error::Storage)?
+        .join(format!(".unlock-{}.tmp", uuid::Uuid::new_v4()));
     let result = (|| {
         let mut file = std::fs::OpenOptions::new()
             .write(true)
@@ -80,7 +95,7 @@ fn write(name: &str, bytes: &[u8]) -> Result<(), Error> {
         file.write_all(bytes).map_err(|_| Error::Storage)?;
         file.sync_all().map_err(|_| Error::Storage)?;
         drop(file);
-        crate::storage::replace_file(&temporary, &path(name)?).map_err(|_| Error::Storage)
+        crate::storage::replace_file(&temporary, path).map_err(|_| Error::Storage)
     })();
     if result.is_err() && temporary.exists() && std::fs::remove_file(&temporary).is_err() {
         eprintln!("automatic unlock temporary cleanup failed");
@@ -126,6 +141,40 @@ pub(super) fn request_bytes(credentials: &Credentials, attempt: &Attempt) -> Zer
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn saved_password_survives_reopening_and_replacement_on_the_host() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(SETTINGS);
+        assert!(load_from(&path).unwrap().is_none());
+        let value = Credentials {
+            owner_sid: "S-1-5-21-1001".into(),
+            device_id: "fixture".into(),
+            service_binding: "binding".into(),
+            username: "PC\\alice".into(),
+            password: "fixture-password".into(),
+            blocked: false,
+            pending: None,
+        };
+        save_to(&path, &value).unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        assert!(!bytes
+            .windows(value.password.len())
+            .any(|part| part == value.password.as_bytes()));
+        drop(value);
+        let mut reopened = load_from(&path).unwrap().unwrap();
+        assert_eq!(reopened.username, "PC\\alice");
+        assert_eq!(reopened.password, "fixture-password");
+        assert!(!reopened.blocked);
+        reopened.password = "replacement-password".into();
+        save_to(&path, &reopened).unwrap();
+        drop(reopened);
+        assert_eq!(
+            load_from(&path).unwrap().unwrap().password,
+            "replacement-password"
+        );
+        std::fs::remove_file(&path).unwrap();
+        assert!(load_from(&path).unwrap().is_none());
+    }
     #[test]
     fn stored_credentials_are_encrypted_and_tampering_is_rejected() {
         let credentials = Credentials {

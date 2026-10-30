@@ -79,6 +79,6 @@ export function ReleaseNotes({ text }: { text: string }) {
   const noteStyles = useNoteStyles();
   useLanguage();
   const nodes = useMemo(() => parseMarkdown(extractReleaseNotes(text)), [text]);
-  if (!nodes.length) return <Text style={styles.detail}>{t("本次版本未提供更新说明。")}</Text>;
+  if (!nodes.length) return <Text style={styles.detail}>{t("client.mobile.noReleaseNotesForThisVersion")}</Text>;
   return <View style={noteStyles.blocks}>{nodes.map((node, index) => <Block key={index} node={node} />)}</View>;
 }

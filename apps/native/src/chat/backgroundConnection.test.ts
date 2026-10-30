@@ -1,5 +1,7 @@
+import { formatRemoteError } from '../../../../shared/localization/errors';
+
 import { beforeEach, expect, it, vi } from 'vitest';
-import { translateText } from '../../../../shared/i18n/translate';
+
 
 const native = vi.hoisted(() => ({ start: vi.fn(async () => true), stop: vi.fn(async () => undefined),
   setPortMappingEnabled: vi.fn(async (_enabled: boolean) => true), setLabels: vi.fn() }));
@@ -12,10 +14,10 @@ const sources = { channel: '聊天连接', channelDescription: '在后台接收�
   chatTitle: 'Remote AI 聊天', chatText: '后台接收电脑回复，点击返回应用',
   mappingTitle: 'Remote AI 端口映射', mappingText: '端口映射正在运行，点击返回应用' };
 const translated = (language: 'en' | 'ru') =>
-  Object.fromEntries(Object.entries(sources).map(([key, source]) => [key, translateText(language, source)]));
+  Object.fromEntries(Object.entries(sources).map(([key, source]) => [key, formatRemoteError(language, source)]));
 // Import after resetModules so the test and the module share one language store.
 const load = async () => {
-  const language = await import('../../../../shared/i18n/interfaceLanguage');
+  const language = await import('../../../../shared/localization/interfaceLanguage');
   language.setInterfaceLanguage('zh');
   return { ...await import('./backgroundConnection'), setInterfaceLanguage: language.setInterfaceLanguage };
 };

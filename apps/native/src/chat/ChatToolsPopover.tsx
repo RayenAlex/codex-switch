@@ -39,7 +39,7 @@ export function ChatToolsPopover({ anchor, children, close }: Props) {
   useLayoutEffect(() => {
     if (!position) return;
     host.show(<>
-      <Pressable accessibilityRole="button" accessibilityLabel={t("关闭工具菜单")}
+      <Pressable accessibilityRole="button" accessibilityLabel={t("client.mobile.closeToolsMenu")}
         onPress={close} style={StyleSheet.absoluteFill} />
       <View accessibilityViewIsModal style={[popoverStyles.panel, position]}>
         <ScrollView keyboardShouldPersistTaps="always" style={popoverStyles.scroll}

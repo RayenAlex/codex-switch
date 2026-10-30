@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { externalCodePath, longMarkdown, markdown, sourceCode } from './file-preview-fixture';
 import { screenshot } from './chat-helpers';
 import { readFile } from 'node:fs/promises';
+import { dragSheet } from './sheet-drag';
 
 async function open(page: Page, path = 'verification.md') {
   await page.goto(`e2e/file-preview-harness.html?path=${encodeURIComponent(path)}`);
@@ -9,6 +10,63 @@ async function open(page: Page, path = 'verification.md') {
 async function clipboard(page: Page) {
   return page.evaluate(async () => (await navigator.clipboard.readText()).replace(/\r\n/g, '\n'));
 }
+
+test('mobile previews fill the drawer and preserve content across fullscreen changes', async ({ page }, info) => {
+  test.skip(info.project.name !== 'mobile');
+  await open(page, 'page.HTML');
+  const sheet = page.locator('.chat-file-preview-sheet');
+  const frame = page.locator('.chat-html-frame');
+  await expect(frame).toBeVisible();
+  const initial = (await sheet.boundingBox())!;
+  expect(initial.height).toBeGreaterThan(page.viewportSize()!.height * 0.9);
+  const initialFrame = (await frame.boundingBox())!;
+  expect(initialFrame.y + initialFrame.height).toBeGreaterThan(page.viewportSize()!.height - 32);
+  await page.frameLocator('.chat-html-frame').locator('body').evaluate(node => { node.dataset.retained = 'yes'; });
+  await page.getByRole('button', { name: '全屏浏览', exact: true }).click();
+  await expect(sheet).toHaveClass(/mobile-popup-fullscreen/);
+  expect((await sheet.boundingBox())!.height).toBeCloseTo(page.viewportSize()!.height, 0);
+  expect((await frame.boundingBox())!.height).toBeGreaterThan(initialFrame.height);
+  await expect(page.getByRole('button', { name: '下载', exact: true })).toBeHidden();
+  await dragSheet(page, 120, { target: page.locator('.sheet-header'), follows: false });
+  await expect(sheet).toHaveClass(/mobile-popup-fullscreen/);
+  await expect(page.frameLocator('.chat-html-frame').locator('body')).toHaveAttribute('data-retained', 'yes');
+  await screenshot(page, info, 'html-fullscreen');
+  await page.getByRole('button', { name: '源码', exact: true }).click();
+  await expect(page.locator('.chat-html-preview pre')).toContainText('<h1>页面预览</h1>');
+  await page.getByRole('button', { name: '退出全屏', exact: true }).click();
+  await expect(page.locator('.chat-html-preview pre')).toBeVisible();
+  await expect(page.getByRole('button', { name: '下载', exact: true })).toBeVisible();
+  await dragSheet(page, 30);
+  await expect(sheet).toHaveCSS('translate', '0px');
+  await page.getByRole('button', { name: '预览', exact: true }).click();
+  await expect(frame).toBeVisible();
+  await screenshot(page, info, 'html-filled-drawer');
+  await page.setViewportSize({ width: 700, height: 390 });
+  await page.getByRole('button', { name: '全屏浏览', exact: true }).click();
+  await expect(frame).toBeVisible();
+  expect((await frame.boundingBox())!.height).toBeGreaterThan(100);
+});
+
+test('mobile Markdown and code remain scrollable in fullscreen', async ({ page }, info) => {
+  test.skip(info.project.name !== 'mobile');
+  for (const path of ['long.md', 'source.ts']) {
+    await open(page, path);
+    await page.getByRole('button', { name: '全屏浏览', exact: true }).click();
+    await expect(page.getByRole('button', { name: '退出全屏', exact: true })).toBeVisible();
+    const content = page.locator('.adaptive-sheet-content');
+    if (path.endsWith('.md')) {
+      await content.evaluate(node => { node.scrollTop = node.scrollHeight; });
+      expect(await content.evaluate(node => node.scrollTop)).toBeGreaterThan(0);
+      await page.getByRole('button', { name: '原文', exact: true }).click();
+      const source = page.locator('pre');
+      await source.evaluate(node => { node.scrollTop = node.scrollHeight; });
+      expect(await source.evaluate(node => node.scrollTop)).toBeGreaterThan(0);
+    }
+    await expect(page.locator('pre')).toBeVisible();
+    await page.getByRole('button', { name: '退出全屏', exact: true }).click();
+    await expect(page.getByRole('button', { name: '下载', exact: true })).toBeAttached();
+  }
+});
 
 test('unsupported remote files only offer a local download on left and right click', async ({ page }, info) => {
   await page.goto('e2e/file-preview-harness.html?pc');

@@ -34,5 +34,5 @@ export function GitDrawer({ active, desktopDiffs, cwd = '', onClose, onVisibilit
   </WorkspaceDrawerTab>;
   return <Drawer open={active} title="Git" placement="bottom" height="90%" onClose={onClose}
     rootStyle={theme} rootClassName="chat-terminal-drawer chat-git-drawer"
-    closable={{ 'aria-label': t('关闭 Git'), placement: 'end' }}>{children(visible)}</Drawer>;
+    closable={{ 'aria-label': t("client.git.closeGit"), placement: 'end' }}>{children(visible)}</Drawer>;
 }

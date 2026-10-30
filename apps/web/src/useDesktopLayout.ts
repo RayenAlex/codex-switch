@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 
-const DESKTOP_QUERY = '(min-width: 861px)';
+export const DESKTOP_QUERY = '(min-width: 861px)';
 const subscribe = (notify: () => void) => {
   const query = window.matchMedia(DESKTOP_QUERY);
   query.addEventListener('change', notify);

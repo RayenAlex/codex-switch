@@ -35,8 +35,7 @@ function Harness() {
       <output data-testid="result">{result}</output>
       <div className="chat-composer-dock" style={{ marginTop: 'auto' }}>
         <form className="chat-composer"><textarea aria-label="聊天消息" /></form>
-        <ComposerFooter desktop={desktop} active={false} threadId={null}
-          readConversationMetrics={controller.readConversationMetrics}
+        <ComposerFooter desktop={desktop}
           connectionInfo={<ChatConnectionInfo state={state} controller={controller} device={device} active
             chooseDevice={() => setResult('choose-device')} />} />
       </div>

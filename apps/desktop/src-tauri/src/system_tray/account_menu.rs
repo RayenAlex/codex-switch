@@ -1,3 +1,4 @@
+use super::copy;
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem},
     AppHandle, Runtime,
@@ -16,20 +17,12 @@ pub(super) fn append_accounts<R: Runtime>(
         Ok(accounts) => accounts,
         Err(error) => {
             eprintln!("failed to read accounts for menu: {error}");
-            let text = if chinese {
-                "账号读取失败"
-            } else {
-                "Unable to load accounts"
-            };
+            let text = copy::text(chinese, copy::Text::UnableToLoadAccounts);
             return append_notice(app, menu, text);
         }
     };
     if accounts.is_empty() {
-        let text = if chinese {
-            "暂无账号"
-        } else {
-            "No accounts"
-        };
+        let text = copy::text(chinese, copy::Text::NoAccounts);
         return append_notice(app, menu, text);
     }
     #[cfg(windows)]

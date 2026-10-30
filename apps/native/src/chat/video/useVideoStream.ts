@@ -13,7 +13,7 @@ interface Options { threadId: string | null; path: string; ready: boolean; clien
 export function videoErrorMessage(error: unknown) {
   if (error instanceof VideoPlaybackError) return error.message;
   return error instanceof Error && /视频/.test(error.message)
-    ? error.message : t("视频暂时无法播放，请检查电脑连接后重试。");
+    ? error.message : t("client.mobile.cannotPlayTheVideoCheckYourComputerConnectionAndTry");
 }
 export function useVideoStream({ threadId, path, ready, client }: Options) {
   const [url, setUrl] = useState('');

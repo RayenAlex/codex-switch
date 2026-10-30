@@ -1,6 +1,6 @@
 [package]
 name = "csw"
-version = "1.0.21"
+version = "2.0.20"
 description = "Local multi-account manager for Codex auth.json"
 authors = ["Remote AI"]
 license = "Apache-2.0"
@@ -31,7 +31,9 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "ws"] }
+csw-ssh-client = { path = "../../../crates/ssh-client" }
 csw-chat-connectivity = { path = "../../../crates/chat-connectivity" }
+csw-provider-balance-script = { path = "../../../crates/provider-balance-script" }
 arboard = { version = "3.6.1", default-features = false, features = ["image-data"] }
 base64 = "0.22"
 bytes = "1"
@@ -54,7 +56,7 @@ keyring = "4.1.5"
 portable-pty = "0.9"
 rand = "0.9"
 reqwest = { version = "0.12", default-features = false, features = [
-  "blocking", "cookies", "json", "multipart", "rustls-tls", "socks", "stream",
+  "blocking", "cookies", "gzip", "json", "multipart", "rustls-tls", "socks", "stream",
 ] }
 rqrr = "0.10.1"
 serde = { version = "1", features = ["derive"] }
@@ -117,6 +119,7 @@ easytier-core = { path = "../../../crates/chat-connectivity/vendor/easytier-core
 core-foundation = "0.10"
 
 [target.'cfg(windows)'.dependencies]
+webview2-com = "0.38.2"
 windows-core = "0.61"
 windows-service = "0.8"
 windows-sys = { version = "0.61", features = [
@@ -151,6 +154,7 @@ windows = { version = "0.61", features = [
   "Win32_System_Com_StructuredStorage",
   "Win32_System_DataExchange",
   "Win32_System_Memory",
+  "Win32_System_Power",
   "Win32_UI_WindowsAndMessaging",
   "Data_Xml_Dom",
   "UI_Notifications",

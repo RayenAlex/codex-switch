@@ -1,6 +1,7 @@
 import type { QueueEnqueueResult, QueueSnapshot } from '../queue';
 import type { SendInput, Thread } from './types';
 import { currentRunningTurn } from '../../chat/runningTurn';
+import { isMessageQueueEnabled } from '../../chat/messageQueueSettings';
 
 const UNSUPPORTED_OPERATION = '当前手机端暂不支持此操作。';
 type Request = <T>(body: Record<string, unknown>) => Promise<T>;
@@ -25,13 +26,14 @@ export class QueueConnection {
 
   async enqueue(thread: Thread, input: SendInput): Promise<QueueEnqueueResult | null> {
     const generation = this.generation;
-    if (this.supported) {
+    if (this.supported && isMessageQueueEnabled()) {
       return this.request<QueueEnqueueResult>({ operation: 'queueEnqueue', threadId: thread.id, ...input });
     }
     const running = currentRunningTurn(thread.turns);
     if (running) {
       await this.request({ operation: 'steer', threadId: thread.id, turnId: running.id,
-        text: input.text, images: input.images ?? [], skills: input.skills ?? [] });
+        text: input.text, images: input.images ?? [], skills: input.skills ?? [],
+        ...(input.attachments?.length ? { attachments: input.attachments } : {}) });
     } else {
       await this.request({ operation: 'resume', threadId: thread.id, access: input.access });
       if (generation !== this.generation) throw new Error('连接已中断，请连接后再发送。');

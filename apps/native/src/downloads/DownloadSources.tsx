@@ -1,3 +1,4 @@
+import { displayText } from '../i18n/index';
 import { useThemeColor } from '../theme/store';
 import { t, useLanguage } from '../i18n';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,7 +15,7 @@ function SourceCard({ scope, disabled, onPress }: {
   const color = useThemeColor();
   useLanguage();
   const project = scope === 'project';
-  return <Pressable accessibilityRole="button" accessibilityLabel={project ? t("当前项目") : t("此电脑")}
+  return <Pressable accessibilityRole="button" accessibilityLabel={project ? t("client.downloads.currentProject") : t("client.downloads.thisComputer")}
     accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
     style={({ pressed }) => [styles.sourceCard, disabled && styles.disabled, pressed && styles.pressed]}>
     <View style={[styles.sourceIcon, !project && styles.computerIcon]}>
@@ -22,8 +23,8 @@ function SourceCard({ scope, disabled, onPress }: {
         color={project ? resolveThemeColor(colors.green, 'accent') : resolveThemeColor(colors.blue, 'info')} />
     </View>
     <View style={styles.sourceCopy}>
-      <Text style={styles.sourceTitle}>{project ? t("当前项目") : t("此电脑")}</Text>
-      <Text style={styles.caption}>{project ? t("浏览项目文件") : t("浏览电脑文件")}</Text>
+      <Text style={styles.sourceTitle}>{project ? t("client.downloads.currentProject") : t("client.downloads.thisComputer")}</Text>
+      <Text style={styles.caption}>{project ? t("client.mobile.browseProjectFiles") : t("client.mobile.browseComputerFiles")}</Text>
     </View>
     <Ionicons name="chevron-forward" size={12} color={color(colors.muted, 'muted')} />
   </Pressable>;
@@ -38,15 +39,15 @@ export function DownloadSources({ connection, browse }: {
   const ready = !!connection?.ready;
   const canBrowseProject = ready && !!(connection.cwd || connection.threadId);
   let hint = '';
-  if (!ready) hint = t("先在聊天中连接电脑，即可添加下载。");
-  else if (!canBrowseProject) hint = t("在聊天中选择项目，或从此电脑添加下载。");
+  if (!ready) hint = t("client.mobile.connectToAComputerInChatToAddDownloads");
+  else if (!canBrowseProject) hint = t("client.mobile.chooseAProjectInChatOrAddDownloadsFromThis");
   return <View style={styles.sources}>
     <View style={styles.sourceHeading}>
-      <Text style={styles.sectionLabel}>{t("添加下载")}</Text>
+      <Text style={styles.sectionLabel}>{t("client.mobile.addDownload")}</Text>
       <View style={styles.connection}>
         <View style={[styles.connectionDot, !ready && styles.offlineDot]} />
-        <Text style={styles.connectionName} numberOfLines={1}>{connection?.deviceName || t("尚未连接电脑")}</Text>
-        {!!connection && <Text style={styles.caption}>{t(downloadConnectionLabel(connection.mode))}</Text>}
+        <Text style={styles.connectionName} numberOfLines={1}>{connection?.deviceName || t("client.mobile.noComputerConnected")}</Text>
+        {!!connection && <Text style={styles.caption}>{displayText(downloadConnectionLabel(connection.mode))}</Text>}
       </View>
     </View>
     <View style={styles.sourceRow}>

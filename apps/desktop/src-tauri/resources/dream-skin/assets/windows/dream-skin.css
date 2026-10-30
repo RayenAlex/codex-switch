@@ -773,9 +773,13 @@ html.codex-dream-skin.dream-art-wide main.main-surface .app-shell-main-content-t
 }
 
 /* 26.928 replaced the bottom gradient with an opaque, decorative footer layer.
-   Clear both versions while keeping the composer and functional cards painted. */
+   26.1021 adds a separate sticky fade inside the transcript, outside the footer.
+   Clear only these decorative backgrounds; keep scroll geometry and cards intact. */
 html.codex-dream-skin.dream-art-wide main.main-surface
   :is(.thread-scroll-container, [data-app-action-timeline-scroll]) .bg-gradient-to-t,
+html.codex-dream-skin.dream-art-wide main.main-surface
+  :is(.thread-scroll-container, [data-app-action-timeline-scroll])
+  [aria-hidden="true"].pointer-events-none[class*="_fade_"],
 html.codex-dream-skin.dream-art-wide main.main-surface
   [data-thread-scroll-footer] > [aria-hidden="true"].pointer-events-none {
   background: transparent !important;

@@ -9,7 +9,7 @@ const [values, reader, overlay, css] = await Promise.all([
 ]);
 const settings = (await readFile(new URL("../../shared/context-usage/settings.js", import.meta.url), "utf8"))
   .replaceAll("export ", "");
-const settingsCode = (await Promise.all(["context_settings_change.js", "context_settings_runtime.js",
+const settingsCode = (await Promise.all(["context_settings_change.js", "native_registry_reader.js", "context_settings_runtime.js",
   "context_settings_adapter.js", "context_settings_copy.js", "context_settings_dialog.js"]
   .map(file => readFile(new URL(file, root), "utf8")))).join("\n");
 

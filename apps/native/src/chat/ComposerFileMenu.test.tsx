@@ -16,7 +16,7 @@ vi.mock('react-native', () => ({ FlatList: 'List', Pressable: 'Button', Text: 'T
 vi.mock('@expo/vector-icons/Feather', () => ({ default: 'Icon' }));
 vi.mock('../theme/styles', () => ({ createThemedStyles: () => () => ({}) }));
 vi.mock('../theme/store', () => ({ useThemeColor: () => () => '#777' }));
-vi.mock('../i18n', () => ({ useLanguage() {}, t: (text: string) => text }));
+vi.mock('../i18n', async () => ({ ...await vi.importActual<typeof import('../i18n')>('../i18n'), useLanguage() {} }));
 beforeEach(() => { vi.stubGlobal('React', React); searchOptions.mockClear(); });
 afterEach(() => vi.unstubAllGlobals());
 

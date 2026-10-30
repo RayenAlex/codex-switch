@@ -3,7 +3,7 @@ import { createThemedStyles } from './src/theme/styles';
 import { loadTheme, useThemeMode, useThemeColor } from './src/theme/preference';
 import { t, useLanguage } from './src/i18n';
 import { loadLanguage } from './src/i18n/preference';
-import { LoginLanguagePicker } from './src/settings/LanguageSheet';
+import { LoginLanguagePicker } from './src/settings/LanguagePicker';
 import './src/chat/backgroundConnection';
 import { mergeRemoteModelState, type RemoteModelTarget } from '../../shared/remote-chat/modelTarget';
 import { StatusBar } from 'expo-status-bar';
@@ -14,6 +14,7 @@ import {
   Alert,
   AppState,
   BackHandler,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -72,11 +73,21 @@ import { AppToastHost, Toast } from './src/components/AppToast';
 import { BottomSheet } from './src/components/BottomSheet';
 import { DeviceManagementList } from './src/devices/DeviceManagementList';
 import { useRevokeDesktopService } from './src/devices/useRevokeDesktopService';
+import { useDeviceScreenControl } from './src/devices/useDeviceScreenControl';
 import { RemoteModelSwitchSheet } from './src/components/RemoteModelSwitchSheet';
 import { QuotaConsumptionSheet } from './src/components/QuotaConsumptionSheet';
 import { TotpPage } from './src/totp/TotpPage';
+import { downloadOwner } from './src/downloads/manager';
+import { BottomNavigation } from './src/discovery/BottomNavigation';
+import { MappingProvider } from './src/portMapping/MappingProvider';
+import { PortMappingPage } from './src/portMapping/PortMappingPage';
+import { DiscoveryBackButton, DiscoveryPage } from './src/discovery/DiscoveryPage';
+import { LoungePage } from './src/lounge/LoungePage';
+import { useNativeLounge } from './src/lounge/useNativeLounge';
+import { isDiscoveryPage } from '../../shared/navigation/discovery';
 import { usePageStyles as useTotpPageStyles } from './src/totp/pageStyles';
 import { ChatPage } from './src/chat/ChatPage';
+import { PrimaryPagePager } from './src/navigation/PrimaryPagePager';
 import { palette as chatPalette } from './src/chat/styles';
 import { useChatNotificationNavigation } from './src/chat/useChatNotificationNavigation';
 import { SettingsPage } from './src/settings/SettingsPage';
@@ -129,14 +140,14 @@ class StartupErrorBoundary extends Component<{ children: ReactNode }, { error: E
 function StartupError({ error }: { error: Error }) {
   const styles = useStyles();
   return <SafeAreaView style={styles.startupError}>
-    <Text style={styles.startupErrorTitle}>{t("应用启动失败")}</Text>
-    <Text style={styles.startupErrorMessage}>{t("请关闭应用后重试；若问题持续，请重新安装最新版本。")}</Text>
+    <Text style={styles.startupErrorTitle}>{t("client.mobile.couldNotStartTheApp")}</Text>
+    <Text style={styles.startupErrorMessage}>{t("client.mobile.closeTheAppAndTryAgainIfTheProblemContinues")}</Text>
     <Text selectable style={styles.startupErrorDetail}>{error.message}</Text>
   </SafeAreaView>;
 }
 
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : t("发生未知错误，请稍后重试");
+  return error instanceof Error ? error.message : t("client.mobile.somethingWentWrongTryAgainLater");
 }
 
 function applyRemoteModelSwitch(
@@ -175,7 +186,7 @@ function LoginScreen({ initialBaseUrl, onLoggedIn }: { initialBaseUrl: string; o
       const session = await login(baseUrl, email, password);
       onLoggedIn(session);
     } catch (error) {
-      Toast.fail(t("无法登录：{value1}", { value1: errorMessage(error) }));
+      Toast.fail(t("client.mobile.couldNotSignIn", { value1: errorMessage(error) }));
     } finally {
       setSubmitting(false);
     }
@@ -190,35 +201,35 @@ function LoginScreen({ initialBaseUrl, onLoggedIn }: { initialBaseUrl: string; o
       <ScrollView contentContainerStyle={styles.loginScroll} keyboardShouldPersistTaps="handled">
         <View style={styles.logoMark}><Text style={styles.logoGlyph}>↺</Text></View>
         <Text style={styles.loginTitle}>Remote AI</Text>
-        <Text style={styles.loginSubtitle}>{t("登录后查看你的官方账号用量")}</Text>
+        <Text style={styles.loginSubtitle}>{t("client.mobile.signInToViewUsageForYourOfficialAccounts")}</Text>
         <LoginLanguagePicker />
         <View style={styles.loginCard}>
           <View style={styles.fieldLabelRow}>
-            <Text style={styles.fieldLabel}>{t("云端服务器地址")}</Text>
+            <Text style={styles.fieldLabel}>{t("client.mobile.cloudServerUrl")}</Text>
             {!usingOfficialServer ? <Pressable accessibilityRole="button" disabled={submitting}
               onPress={() => setBaseUrl(DEFAULT_CLOUD_BASE_URL)} style={({ pressed }) => [styles.officialServerButton, pressed && styles.pressed]}>
-              <Text style={styles.officialServerButtonText}>{t("使用官方服务器")}</Text>
+              <Text style={styles.officialServerButtonText}>{t("client.mobile.useOfficialServer")}</Text>
             </Pressable> : null}
           </View>
           <TextInput value={baseUrl} onChangeText={setBaseUrl} autoCapitalize="none" autoCorrect={false}
             keyboardType="url" placeholder={DEFAULT_CLOUD_BASE_URL} placeholderTextColor={color("#98a9a0", 'muted')}
             style={styles.input} editable={!submitting} />
-          <Text style={styles.fieldHint}>{t("填写部署 Remote AI 后端的根地址")}</Text>
-          <Text style={styles.fieldLabel}>{t("邮箱")}</Text>
+          <Text style={styles.fieldHint}>{t("client.mobile.enterYourRemoteAiServerSBaseUrl")}</Text>
+          <Text style={styles.fieldLabel}>{t("client.app.email")}</Text>
           <TextInput value={email} onChangeText={setEmail} autoCapitalize="none" autoCorrect={false}
             autoComplete="email" keyboardType="email-address" placeholder="name@example.com" placeholderTextColor={color("#98a9a0", 'muted')}
             style={styles.input} editable={!submitting} />
-          <Text style={styles.fieldLabel}>{t("密码")}</Text>
+          <Text style={styles.fieldLabel}>{t("client.accounts.password")}</Text>
           <TextInput value={password} onChangeText={setPassword} secureTextEntry autoComplete="password"
-            placeholder={t("输入密码")} placeholderTextColor={color("#98a9a0", 'muted')} style={styles.input} editable={!submitting}
+            placeholder={t("client.mobile.enterPassword")} placeholderTextColor={color("#98a9a0", 'muted')} style={styles.input} editable={!submitting}
             onSubmitEditing={requestLogin} />
           <AgreementConsent consent={consent} disabled={submitting} />
           <Pressable accessibilityRole="button" style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed, submitting && styles.disabled]}
             disabled={submitting} onPress={requestLogin}>
-            {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{t("登录并查看")}</Text>}
+            {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{t("client.app.signIn")}</Text>}
           </Pressable>
         </View>
-        <Text style={styles.securityNote}>{t("登录令牌仅保存于本机的系统安全存储中。")}</Text>
+        <Text style={styles.securityNote}>{t("client.mobile.yourSignInTokenIsKeptOnlyInThisDevice")}</Text>
       </ScrollView>
     </SafeAreaView>
   </KeyboardAvoidingView>;
@@ -233,7 +244,7 @@ function CompactPrimaryUsage({ usage }: { usage?: UsageWindow | null }) {
         <View style={styles.compactProgressTrack} />
         <Text style={styles.compactUsageUnavailable}>--</Text>
       </View>
-      <Text style={styles.compactResetText}>{t("主用量窗口暂不可用")}</Text>
+      <Text style={styles.compactResetText}>{t("client.mobile.primaryUsageWindowUnavailable")}</Text>
     </>;
   }
   const remaining = Math.max(0, Math.min(100, Math.round(usage.remainingPercent)));
@@ -329,10 +340,10 @@ function Dashboard({
         onTogglePrivacy={() => setPrivateMode((current) => !current)}
         onRefreshUsage={() => void onRefreshUsage()} onConsumeQuota={() => setQuotaConsumptionOpen(true)} />
       <AccountToolbar updatedAt={displayDate(latestUpdate)} onAddAccount={() => setAddAccountOpen(true)} />
-      {loading ? <View style={styles.loadingBox}><ActivityIndicator size="large" color={color(COLORS.green, 'accent')} /><Text style={styles.loadingText}>{t("正在读取账户概览…")}</Text></View> : null}
+      {loading ? <View style={styles.loadingBox}><ActivityIndicator size="large" color={color(COLORS.green, 'accent')} /><Text style={styles.loadingText}>{t("client.mobile.loadingAccountOverview")}</Text></View> : null}
       {!loading && accounts.length === 0 ? <View style={styles.emptyBox}>
-        <Text style={styles.emptyTitle}>{t("还没有可展示的账号")}</Text>
-        <Text style={styles.emptyText}>{t("点击“添加账户”，使用 ChatGPT 完成授权后即可查看账号。")}</Text>
+        <Text style={styles.emptyTitle}>{t("client.mobile.noAccountsToDisplayYet")}</Text>
+        <Text style={styles.emptyText}>{t("client.mobile.tapAddAccountAndAuthorizeWithChatgptToViewThe")}</Text>
       </View> : null}
       {!loading && accounts.map((account) => <AccountCard key={account.id} account={account}
         privateMode={privateMode}
@@ -382,15 +393,15 @@ function AndroidUpdateInstallPrompt() {
     if (downloadState.status !== 'downloaded' || promptedVersion.current === downloadState.version) return;
     promptedVersion.current = downloadState.version;
     Alert.alert(
-      t("更新已下载"),
-      t("Remote AI {value1} 已下载完成，现在安装吗？", { value1: downloadState.version }),
+      t("client.mobile.updateDownloaded"),
+      t("client.mobile.remoteAiHasDownloadedInstallNow", { value1: downloadState.version }),
       [
-        { text: t("稍后"), style: 'cancel' },
+        { text: t("client.app.later"), style: 'cancel' },
         {
-          text: t("立即安装"),
+          text: t("client.mobile.installNow"),
           onPress: () => {
             void installDownloadedAndroidUpdate(downloadState.path)
-              .catch((error) => Toast.fail(t("无法打开系统安装器：{value1}", { value1: errorMessage(error) })));
+              .catch((error) => Toast.fail(t("client.mobile.couldNotOpenTheInstaller", { value1: errorMessage(error) })));
           },
         },
       ],
@@ -429,9 +440,9 @@ function OpenAiAuthAccountDrawer({
 
   return <BottomSheet
     visible={Boolean(device)}
-    title={t("选择代理登录态账号")}
+    title={t("client.mobile.chooseProxySignInAccount")}
     subtitle={device
-      ? t("{value1} · 选择后会更新 PC 代理登录态并重启 ChatGPT/Codex", { value1: device.name })
+      ? t("client.mobile.updatesProxySignInOnTheComputerAndRestartsChatgpt", { value1: device.name })
       : undefined}
     onClose={onClose}
     dismissible={!switchingAccountId}
@@ -443,8 +454,8 @@ function OpenAiAuthAccountDrawer({
       showsVerticalScrollIndicator={false}
     >
       {!accounts.length ? <View style={styles.switchDeviceEmpty}>
-        <Text style={styles.switchDeviceEmptyTitle}>{t("暂无可选账号")}</Text>
-        <Text style={styles.switchDeviceEmptyText}>{t("请先在桌面端添加并同步账号。")}</Text>
+        <Text style={styles.switchDeviceEmptyTitle}>{t("client.mobile.noAccountsAvailable")}</Text>
+        <Text style={styles.switchDeviceEmptyText}>{t("client.mobile.addAndSyncAnAccountOnYourComputerFirst")}</Text>
       </View> : accounts.map((account) => {
         const current = device?.openaiAuthAccountId === account.id;
         const switching = switchingAccountId === account.id;
@@ -452,8 +463,8 @@ function OpenAiAuthAccountDrawer({
         return <Pressable
           key={account.id}
           accessibilityRole="button"
-          accessibilityLabel={`${account.email}${current ? t("，当前代理登录态账号") : ''}`}
-          accessibilityHint={current ? undefined : t("设为这台设备的代理登录态账号")}
+          accessibilityLabel={`${account.email}${current ? t("client.mobile.currentProxySignInAccount") : ''}`}
+          accessibilityHint={current ? undefined : t("client.mobile.useForProxySignInOnThisDevice")}
           accessibilityState={{ disabled, selected: current }}
           disabled={disabled}
           onPress={() => void handleSelect(account.id)}
@@ -469,7 +480,7 @@ function OpenAiAuthAccountDrawer({
             ? <ActivityIndicator color={color(COLORS.green, 'accent')} size="small" />
             : current
               ? <View style={styles.openAiAuthAccountCurrentBadge}>
-                <Text style={styles.openAiAuthAccountCurrentText}>{t("当前")}</Text>
+                <Text style={styles.openAiAuthAccountCurrentText}>{t("client.accounts.current")}</Text>
               </View>
               : null}
         </Pressable>;
@@ -513,6 +524,7 @@ function DeviceManagementPage({
 }) {
   useLanguage();
   const revokeService = useRevokeDesktopService(session);
+  const onScreenControl = useDeviceScreenControl(session);
   const [openAiAuthDeviceId, setOpenAiAuthDeviceId] = useState<string | null>(null);
   const [modelDeviceId, setModelDeviceId] = useState<string | null>(null);
   const sortedDevices = useMemo(() => [...devices].sort((left, right) => {
@@ -527,12 +539,12 @@ function DeviceManagementPage({
   const confirmDelete = useCallback((device: RemoteDevice) => {
     if (device.online || deletingDeviceId) return;
     Alert.alert(
-      t("删除设备"),
-      t("确定删除“{value1}”吗？删除后，该设备下次登录桌面端时会重新出现在这里。", { value1: device.name }),
+      t("client.app.removeDevice"),
+      t("client.mobile.deleteItWillReappearWhenItNextSignsInOn", { value1: device.name }),
       [
-        { text: t("取消"), style: 'cancel' },
+        { text: t("client.accounts.cancel"), style: 'cancel' },
         {
-          text: t("删除"),
+          text: t("client.projectBrowser.deleted"),
           style: 'destructive',
           onPress: () => void onDelete(device.deviceId),
         },
@@ -552,6 +564,7 @@ function DeviceManagementPage({
       onRefresh={onRefresh}
       onDelete={confirmDelete}
       onRevokeService={revokeService}
+      onScreenControl={onScreenControl}
       onSwitchModel={setModelDeviceId}
       onSelectAuthAccount={setOpenAiAuthDeviceId}
     />
@@ -583,52 +596,9 @@ function DeviceManagementPage({
   </>;
 }
 
-type AppPage = 'accounts' | 'devices' | 'chat' | 'totp' | 'admin' | 'settings' | 'about'
-  | 'token-summary' | 'downloads';
+type AppPage = 'port-mappings' | 'accounts' | 'devices' | 'chat' | 'discover' | 'totp' | 'admin' | 'settings' | 'about'
+  | 'token-summary' | 'downloads' | 'lounge';
 const DEFAULT_APP_PAGE: AppPage = 'chat';
-
-function BottomNavigation({ activePage, onChange }: {
-  activePage: AppPage;
-  onChange: (page: AppPage) => void;
-}) {
-  const resolveThemeColor = useThemeColor();
-  const styles = useStyles();
-  const totpPageStyles = useTotpPageStyles();
-  useLanguage();
-  const settingsActive = ['admin', 'about', 'settings'].includes(activePage);
-  // Keep the home-indicator area inside the navigation background.
-  return <SafeAreaView edges={['bottom']} style={styles.bottomNavigation} accessibilityRole="tablist">
-    <Pressable accessibilityRole="tab" accessibilityState={{ selected: activePage === 'chat' }}
-      onPress={() => onChange('chat')} style={styles.navItem}>
-      <Ionicons name="chatbubble-outline" size={23} color={activePage === 'chat' ? resolveThemeColor('#00c98b', 'accent') : resolveThemeColor('#858991', 'muted')} />
-      <Text style={[styles.navText, activePage === 'chat' && styles.navTextActive]}>{t("聊天")}</Text>
-    </Pressable>
-    <Pressable accessibilityRole="tab" accessibilityState={{ selected: activePage === 'accounts' }}
-      onPress={() => onChange('accounts')} style={styles.navItem}>
-      <Ionicons name={activePage === 'accounts' ? 'people' : 'people-outline'}
-        size={23} color={activePage === 'accounts' ? resolveThemeColor('#00c98b', 'accent') : resolveThemeColor('#858991', 'muted')} />
-      <Text style={[styles.navText, activePage === 'accounts' && styles.navTextActive]}>{t("账号")}</Text>
-    </Pressable>
-    <Pressable accessibilityRole="tab" accessibilityState={{ selected: activePage === 'devices' }}
-      onPress={() => onChange('devices')} style={styles.navItem}>
-      <Ionicons name="server-outline" size={23} color={activePage === 'devices' ? resolveThemeColor('#00c98b', 'accent') : resolveThemeColor('#858991', 'muted')} />
-      <Text style={[styles.navText, activePage === 'devices' && styles.navTextActive]}>{t("设备")}</Text>
-    </Pressable>
-    <Pressable accessibilityRole="tab" accessibilityState={{ selected: activePage === 'totp' }}
-      onPress={() => onChange('totp')} style={styles.navItem}>
-      <View style={activePage === 'totp' ? totpPageStyles.activeTab : totpPageStyles.tab}>
-        <Ionicons name={activePage === 'totp' ? 'shield-checkmark' : 'shield-checkmark-outline'}
-          size={23} color={activePage === 'totp' ? resolveThemeColor('#008956', 'accent') : resolveThemeColor('#858991', 'muted')} />
-        <Text style={[styles.navText, activePage === 'totp' && styles.navTextActive]}>2FA</Text>
-      </View>
-    </Pressable>
-    <Pressable accessibilityRole="tab" accessibilityState={{ selected: settingsActive }}
-      onPress={() => onChange('settings')} style={styles.navItem}>
-      <Ionicons name="settings" size={23} color={settingsActive ? resolveThemeColor('#00c98b', 'accent') : resolveThemeColor('#858991', 'muted')} />
-      <Text style={[styles.navText, settingsActive && styles.navTextActive]}>{t("设置")}</Text>
-    </Pressable>
-  </SafeAreaView>;
-}
 
 function DeviceSwitchDrawer({ account, devices, switching, onClose, onSwitch }: {
   account: AccountSummary | null;
@@ -654,15 +624,15 @@ function DeviceSwitchDrawer({ account, devices, switching, onClose, onSwitch }: 
 
   return <BottomSheet
     visible={Boolean(account)}
-    title={t("选择切换设备")}
-    subtitle={account ? t("切换到 {value1}", { value1: account.email }) : undefined}
+    title={t("client.mobile.chooseADeviceToSwitch")}
+    subtitle={account ? t("client.mobile.switchTo", { value1: account.email }) : undefined}
     onClose={onClose}
     dismissible={!switching}
   >
     <ScrollView style={styles.switchDeviceScroll} showsVerticalScrollIndicator={false}>
       {!devices.length ? <View style={styles.switchDeviceEmpty}>
-        <Text style={styles.switchDeviceEmptyTitle}>{t("暂无可用设备")}</Text>
-        <Text style={styles.switchDeviceEmptyText}>{t("请先在 PC 端登录同一个云端账号并保持应用运行。")}</Text>
+        <Text style={styles.switchDeviceEmptyTitle}>{t("client.mobile.noDevicesAvailable")}</Text>
+        <Text style={styles.switchDeviceEmptyText}>{t("client.mobile.signInToTheSameCloudAccountOnYourComputer")}</Text>
       </View> : devices.map((device) => {
         const current = !device.activeProviderId && device.activeAccountId === account?.id;
         const disabled = switching || !device.online || current;
@@ -682,13 +652,13 @@ function DeviceSwitchDrawer({ account, devices, switching, onClose, onSwitch }: 
           <View style={[styles.deviceStatusDot, device.online ? styles.deviceOnline : styles.deviceOffline]} />
           <View style={styles.switchDeviceInfo}>
             <Text style={styles.switchDeviceName} numberOfLines={1}>{device.name}</Text>
-            <Text style={styles.switchDeviceMeta}>{device.online ? t("在线") : t("离线")} · {device.platform}</Text>
+            <Text style={styles.switchDeviceMeta}>{device.online ? t("client.chat.online") : t("client.chat.offline")} · {device.platform}</Text>
           </View>
           {pendingDeviceId === device.deviceId
             ? <ActivityIndicator color={color(COLORS.green, 'accent')} size="small" />
             : <View style={[styles.switchDeviceAction, current && styles.switchDeviceActionCurrent]}>
               <Text style={[styles.switchDeviceActionText, current && styles.switchDeviceActionTextCurrent]}>
-                {current ? t("当前") : device.online ? t("切换") : t("不可用")}
+                {current ? t("client.accounts.current") : device.online ? t("client.accounts.switch") : t("client.mobile.unavailable")}
               </Text>
             </View>}
         </Pressable>;
@@ -712,6 +682,7 @@ function AppContent() {
   }, []);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [activePage, setActivePage] = useState<AppPage>(DEFAULT_APP_PAGE);
+  const openAccounts = useCallback(() => { Keyboard.dismiss(); setActivePage('accounts'); }, []);
   const openChat = useCallback(() => setActivePage('chat'), []);
   const chatNotification = useChatNotificationNavigation(session, openChat);
   const [initializing, setInitializing] = useState(true);
@@ -782,10 +753,10 @@ function AppContent() {
       const failedCount = refreshedAccounts.filter((account) => Boolean(account.usage.error)).length;
       setAccounts((current) => mergeRefreshedUsage(current, refreshedAccounts));
       lastUsageRefreshAtRef.current = Date.now();
-      if (!quiet && failedCount === 0) Toast.success(t("所有账号用量已刷新"));
-      if (!quiet && failedCount > 0) Toast.fail(t("{value1} 个账号用量刷新失败", { value1: failedCount }));
+      if (!quiet && failedCount === 0) Toast.success(t("client.mobile.usageRefreshedForAllAccounts"));
+      if (!quiet && failedCount > 0) Toast.fail(t("client.mobile.couldNotRefreshUsageForAccounts", { value1: failedCount }));
     } catch (error) {
-      if (!quiet) Toast.fail(t("刷新用量失败：{value1}", { value1: errorMessage(error) }));
+      if (!quiet) Toast.fail(t("client.mobile.couldNotRefreshUsage", { value1: errorMessage(error) }));
     } finally {
       refreshingRef.current = false;
       setRefreshingUsage(false);
@@ -806,9 +777,9 @@ function AppContent() {
           ? { ...candidate, plan: usage.plan ?? candidate.plan, usage }
           : candidate
       )));
-      Toast.success(t("当前账号用量已刷新"));
+      Toast.success(t("client.mobile.accountUsageRefreshed"));
     } catch (error) {
-      Toast.fail(t("刷新用量失败：{value1}", { value1: errorMessage(error) }));
+      Toast.fail(t("client.mobile.couldNotRefreshUsage", { value1: errorMessage(error) }));
     } finally {
       refreshingAccountIdRef.current = null;
       setRefreshingAccountId(null);
@@ -820,7 +791,7 @@ function AppContent() {
     const selectedIdSet = new Set(accountIds);
     const targets = quotaConsumptionTargets(accounts.filter((account) => selectedIdSet.has(account.id)));
     if (!targets.length) {
-      Toast.fail(t("没有可从手机直接消耗额度的账号"));
+      Toast.fail(t("client.mobile.noAccountsSupportDirectQuotaConsumptionFromYourPhone"));
       return;
     }
     refreshingRef.current = true;
@@ -836,16 +807,16 @@ function AppContent() {
       }
       const consumedCount = result.consumedAccounts.length;
       const issues: string[] = [];
-      if (result.failures.length) issues.push(t("{value1} 个账号消耗额度失败", { value1: result.failures.length }));
-      if (usageRefreshFailures) issues.push(t("{value1} 个账号用量刷新失败", { value1: usageRefreshFailures }));
+      if (result.failures.length) issues.push(t("client.mobile.couldNotConsumeQuotaForAccounts", { value1: result.failures.length }));
+      if (usageRefreshFailures) issues.push(t("client.mobile.couldNotRefreshUsageForAccounts", { value1: usageRefreshFailures }));
       if (issues.length) {
-        const completed = consumedCount ? t("已完成 {value1} 个账号的额度消耗；", { value1: consumedCount }) : '';
+        const completed = consumedCount ? t("client.mobile.consumedQuotaForAccounts", { value1: consumedCount }) : '';
         Toast.fail(`${completed}${issues.join('，')}`);
       } else {
-        Toast.success(t("已完成 {value1} 个账号的额度消耗并刷新用量", { value1: consumedCount }));
+        Toast.success(t("client.mobile.consumedQuotaAndRefreshedUsageForAccounts", { value1: consumedCount }));
       }
     } catch (error) {
-      Toast.fail(t("批量消耗额度失败：{value1}", { value1: errorMessage(error) }));
+      Toast.fail(t("client.mobile.batchQuotaConsumptionFailed", { value1: errorMessage(error) }));
     } finally {
       refreshingRef.current = false;
       setConsumingQuota(false);
@@ -898,7 +869,7 @@ function AppContent() {
               || devicesResult.status === 'rejected'
               || providersResult.status === 'rejected'
               || profileResult.status === 'rejected') {
-              Toast.fail(t("暂时无法同步云端数据，登录状态已保留"));
+              Toast.fail(t("client.mobile.couldNotSyncCloudDataYouRemainSignedIn"));
             }
           }
         }
@@ -907,7 +878,7 @@ function AppContent() {
           await clearSession();
           if (mounted) setSession(null);
         } else if (mounted) {
-          Toast.fail(t("读取本地登录信息失败，请重新打开应用"));
+          Toast.fail(t("client.mobile.couldNotReadSavedSignInDetailsReopenTheApp"));
         }
       } finally {
         if (mounted) {
@@ -1051,7 +1022,8 @@ function AppContent() {
       return undefined;
     }
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      setActivePage(activePage === 'about' ? 'settings' : DEFAULT_APP_PAGE);
+      if (isDiscoveryPage(activePage)) setActivePage('discover');
+      else setActivePage(activePage === 'about' ? 'settings' : DEFAULT_APP_PAGE);
       return true;
     });
     return () => subscription.remove();
@@ -1067,7 +1039,7 @@ function AppContent() {
         setAccounts(nextAccounts);
         lastUsageRefreshAtRef.current = Date.now();
       })
-      .catch((error) => Toast.fail(t("读取账户失败：{value1}", { value1: errorMessage(error) })))
+      .catch((error) => Toast.fail(t("client.mobile.couldNotLoadAccounts", { value1: errorMessage(error) })))
       .finally(() => setLoading(false));
     void fetchRemoteDevices(nextSession)
       .then((nextDevices) => {
@@ -1075,13 +1047,13 @@ function AppContent() {
         setDevices(nextDevices);
         setDevicesLoaded(true);
       })
-      .catch((error) => Toast.fail(t("读取设备失败：{value1}", { value1: errorMessage(error) })));
+      .catch((error) => Toast.fail(t("client.mobile.couldNotLoadDevices", { value1: errorMessage(error) })));
     void fetchRemoteProviders(nextSession)
       .then(setProviders)
-      .catch((error) => Toast.fail(t("读取 Provider 失败：{value1}", { value1: errorMessage(error) })));
+      .catch((error) => Toast.fail(t("client.mobile.couldNotLoadProviders", { value1: errorMessage(error) })));
     void fetchUserProfile(nextSession)
       .then(setProfile)
-      .catch((error) => Toast.fail(t("读取用户身份失败：{value1}", { value1: errorMessage(error) })));
+      .catch((error) => Toast.fail(t("client.mobile.couldNotLoadUserDetails", { value1: errorMessage(error) })));
   }, []);
 
   const handleGlobalRefreshMinutesChange = useCallback(async (minutes: number) => {
@@ -1094,7 +1066,7 @@ function AppContent() {
     const device = devices.find((candidate) => candidate.deviceId === deviceId);
     if (!device) return;
     if (device.online) {
-      Toast.fail(t("请先退出该设备上的桌面端，再删除设备"));
+      Toast.fail(t("client.mobile.signOutOfTheDesktopAppOnThisDeviceBefore"));
       return;
     }
 
@@ -1102,7 +1074,7 @@ function AppContent() {
     try {
       await deleteRemoteDevice(session, deviceId);
       setDevices((current) => current.filter((candidate) => candidate.deviceId !== deviceId));
-      Toast.success(t("设备已删除"));
+      Toast.success(t("client.app.deviceRemoved"));
     } catch (error) {
       if (isSessionExpiredError(error)) {
         await clearSession();
@@ -1113,7 +1085,7 @@ function AppContent() {
         setProviders([]);
         setActivePage(DEFAULT_APP_PAGE);
       } else {
-        Toast.fail(t("删除失败：{value1}", { value1: errorMessage(error) }));
+        Toast.fail(t("client.mobile.couldNotDelete", { value1: errorMessage(error) }));
         void fetchRemoteDevices(session).then(setDevices).catch(() => undefined);
       }
     } finally {
@@ -1126,9 +1098,9 @@ function AppContent() {
     setRestartingDeviceId(deviceId);
     try {
       await restartRemoteDeviceCodex(session, deviceId);
-      Toast.success(t("目标 PC 上的 ChatGPT/Codex 已重启"));
+      Toast.success(t("client.app.chatgptCodexRestartedOnTheSelectedComputer"));
     } catch (error) {
-      Toast.fail(t("重启失败：{value1}", { value1: errorMessage(error) }));
+      Toast.fail(t("client.mobile.couldNotRestart", { value1: errorMessage(error) }));
     } finally {
       setRestartingDeviceId(null);
     }
@@ -1138,21 +1110,21 @@ function AppContent() {
     const device = devices.find((candidate) => candidate.deviceId === deviceId);
     const canRestartRemotely = device?.capabilities?.includes('restart-codex') ?? false;
     const content = canRestartRemotely
-      ? t("已在官方模型与第三方 Provider 间切换。立即重启目标 PC 上的 ChatGPT/Codex 以加载当前模型。")
-      : t("已在官方模型与第三方 Provider 间切换。请在目标 PC 上手动重启 ChatGPT/Codex。");
+      ? t("client.app.restartChatgptCodexOnThatComputerToFinishSwitchingThe")
+      : t("client.app.youSwitchedBetweenAnOfficialModelAndAThirdParty");
     Alert.alert(
-      t("重启以加载当前模型？"),
+      t("client.app.restartToLoadTheCurrentModel"),
       content,
       canRestartRemotely
         ? [
-          { text: t("稍后"), style: 'cancel' },
+          { text: t("client.app.later"), style: 'cancel' },
           {
-            text: t("立即重启"),
+            text: t("client.app.restartNow"),
             style: 'destructive',
             onPress: () => void restartCodexOnDevice(deviceId),
           },
         ]
-        : [{ text: t("知道了") }],
+        : [{ text: t("client.app.gotIt") }],
     );
   }, [devices, restartCodexOnDevice]);
 
@@ -1166,13 +1138,13 @@ function AppContent() {
     try {
       const result = await switchRemoteDeviceAccount(session, deviceId, accountId, target);
       setDevices((current) => applyRemoteModelSwitch(current, result));
-      Toast.success(target === 'gui' ? t("Codex GUI 模型已切换") : t("代理接口模型已切换"));
+      Toast.success(target === 'gui' ? t("client.app.codexGuiModelSwitched") : t("client.app.proxyApiModelSwitched"));
       if (result.requiresRestart) {
         setTimeout(() => promptModelRestart(deviceId), 0);
       }
       return true;
     } catch (error) {
-      Toast.fail(t("切换失败：{value1}", { value1: errorMessage(error) }));
+      Toast.fail(t("client.mobile.couldNotSwitch", { value1: errorMessage(error) }));
       void fetchRemoteDevices(session).then(setDevices).catch(() => undefined);
       return false;
     } finally {
@@ -1190,13 +1162,13 @@ function AppContent() {
     try {
       const result = await switchRemoteDeviceProvider(session, deviceId, providerId, target);
       setDevices((current) => applyRemoteModelSwitch(current, result));
-      Toast.success(target === 'gui' ? t("Codex GUI 模型已切换") : t("代理接口模型已切换"));
+      Toast.success(target === 'gui' ? t("client.app.codexGuiModelSwitched") : t("client.app.proxyApiModelSwitched"));
       if (result.requiresRestart) {
         setTimeout(() => promptModelRestart(deviceId), 0);
       }
       return true;
     } catch (error) {
-      Toast.fail(t("切换失败：{value1}", { value1: errorMessage(error) }));
+      Toast.fail(t("client.mobile.couldNotSwitch", { value1: errorMessage(error) }));
       void fetchRemoteDevices(session).then(setDevices).catch(() => undefined);
       return false;
     } finally {
@@ -1213,11 +1185,11 @@ function AppContent() {
     try {
       const result = await switchRemoteDeviceProviderGroup(session, deviceId, group);
       setDevices((current) => applyRemoteModelSwitch(current, result));
-      Toast.success(t("PC 端已启动分组“{value1}”", { value1: group }));
+      Toast.success(t("client.mobile.startedGroupOnTheComputer", { value1: group }));
       if (result.requiresRestart) setTimeout(() => promptModelRestart(deviceId), 0);
       return true;
     } catch (error) {
-      Toast.fail(t("切换失败：{value1}", { value1: errorMessage(error) }));
+      Toast.fail(t("client.mobile.couldNotSwitch", { value1: errorMessage(error) }));
       void fetchRemoteDevices(session).then(setDevices).catch(() => undefined);
       return false;
     } finally {
@@ -1232,7 +1204,7 @@ function AppContent() {
     if (!session || switchingOpenAiAuth) return false;
     const device = devices.find((candidate) => candidate.deviceId === deviceId);
     if (!device?.online) {
-      Toast.fail(t("设备已离线，暂时无法控制代理登录态账号"));
+      Toast.fail(t("client.mobile.theDeviceIsOfflineItsProxySignInAccountCannot"));
       return false;
     }
 
@@ -1247,7 +1219,7 @@ function AppContent() {
           lastSeenAt: new Date().toISOString(),
         }
         : candidate));
-      Toast.success(t("PC 端代理登录态账号已更新"));
+      Toast.success(t("client.mobile.theComputerSProxySignInAccountWasUpdated"));
       return true;
     } catch (error) {
       if (isSessionExpiredError(error)) {
@@ -1259,7 +1231,7 @@ function AppContent() {
         setProviders([]);
         setActivePage(DEFAULT_APP_PAGE);
       } else {
-        Toast.fail(t("更新代理登录态失败：{value1}", { value1: errorMessage(error) }));
+        Toast.fail(t("client.mobile.couldNotUpdateProxySignIn", { value1: errorMessage(error) }));
         void fetchRemoteDevices(session).then(setDevices).catch(() => undefined);
       }
       return false;
@@ -1282,35 +1254,52 @@ function AppContent() {
     setActivePage(DEFAULT_APP_PAGE);
   }, []);
 
-  const showBottomNavigation = activePage !== 'token-summary' && activePage !== 'downloads';
+  const lounge = useNativeLounge(session);
+  const showBottomNavigation = !['token-summary', 'downloads', 'lounge'].includes(activePage);
   if (initializing) return <View style={styles.boot}><ThemeStatusBar /><ActivityIndicator size="large" color={color(COLORS.green, 'accent')} /><Text style={styles.bootText}>Remote AI</Text></View>;
   if (!session) return <View style={styles.app}>
     <ThemeStatusBar /><LoginScreen initialBaseUrl={DEFAULT_CLOUD_BASE_URL} onLoggedIn={handleLogin} />
   </View>;
-  return <SafeAreaView edges={showBottomNavigation ? ['top', 'left', 'right'] : undefined}
+  return <MappingProvider session={session} devices={devices}>
+    <SafeAreaView edges={showBottomNavigation ? ['left', 'right'] : ['left', 'right', 'bottom']}
     style={[styles.app, activePage === 'totp' && totpPageStyles.page,
     activePage === 'accounts' && accountStyles.page,
+    activePage === 'discover' && styles.discoveryCanvas,
     activePage === 'chat' && styles.chatCanvas,
     (activePage === 'settings' || activePage === 'about' || activePage === 'downloads') && styles.settingsCanvas]}>
     <ThemeStatusBar />
-    <ChatPage session={session} devices={devices} active={activePage === 'chat' || activePage === 'token-summary'}
+    <PrimaryPagePager page={activePage} onChange={setActivePage} pageStyles={{
+      chat: activePage === 'token-summary' ? styles.app : styles.chatCanvas,
+      accounts: accountStyles.page, discover: styles.discoveryCanvas, settings: styles.settingsCanvas,
+    }} pages={{
+    chat: <ChatPage session={session} devices={devices} active={activePage === 'chat' || activePage === 'token-summary'}
+      openAccounts={openAccounts}
       devicesLoaded={devicesLoaded}
-      tokenSummary={activePage === 'token-summary'} openTokenSummary={() => setActivePage('token-summary')}
-      closeTokenSummary={() => setActivePage('chat')}
+      tokenSummary={activePage === 'token-summary'} closeTokenSummary={() => setActivePage('discover')}
       notification={chatNotification.target} notificationError={chatNotification.error}
-      notificationHandled={chatNotification.handled} />
-    {activePage === 'downloads' && <DownloadManagerPage session={session} onBack={() => setActivePage('settings')} />}
-    {activePage === 'chat' || activePage === 'token-summary' || activePage === 'downloads'
-      ? null : activePage === 'accounts'
-      ? <Dashboard session={session} accounts={accounts} devices={devices} loading={loading}
+      notificationHandled={chatNotification.handled} />,
+    discover: <DiscoveryPage owner={session ? downloadOwner(session) : undefined}
+      loungeUnread={lounge.state.unread} onOpen={setActivePage} />,
+    accounts: <Dashboard session={session} accounts={accounts} devices={devices} loading={loading}
         syncingServer={syncingServer} refreshingUsage={refreshingUsage} consumingQuota={consumingQuota}
         refreshingAccountId={refreshingAccountId} switchingAccountId={switchingAccountId}
         onRefreshServer={refreshServerData} onRefreshUsage={refreshAllUsage} onConsumeQuota={consumeSelectedQuota}
         onRefreshAccount={refreshAccount} onSwitch={handleRemoteSwitch}
         onAccountUpdated={(updated) => setAccounts((current) => current.map((account) => (
           account.id === updated.id ? { ...account, ...updated } : account
-        )))} />
-      : activePage === 'devices'
+        )))} />,
+    settings: <SettingsPage session={session} profile={profile} globalRefreshMinutes={globalRefreshMinutes}
+      onGlobalRefreshMinutesChange={handleGlobalRefreshMinutesChange}
+      onOpenAbout={() => setActivePage('about')} onOpenAdmin={() => setActivePage('admin')}
+      onLogout={handleLogout} totpManager={totpManager} />,
+    }}>
+    {activePage === 'downloads' && <DownloadManagerPage session={session} onBack={() => setActivePage('discover')} />}
+    {isDiscoveryPage(activePage) && !['downloads', 'token-summary', 'lounge', 'port-mappings'].includes(activePage)
+      && <DiscoveryBackButton onBack={() => setActivePage('discover')} />}
+    {activePage === 'port-mappings'
+      && <PortMappingPage devices={devices} onBack={() => setActivePage('discover')} />}
+    {activePage === 'lounge' && <LoungePage controller={lounge.controller} onBack={() => setActivePage('discover')} />}
+    {activePage === 'devices'
         ? <DeviceManagementPage session={session} accounts={accounts} providers={providers} devices={devices}
           refreshing={syncingServer} deletingDeviceId={deletingDeviceId}
           switchingAccountId={switchingAccountId} switchingProvider={switchingProvider}
@@ -1325,15 +1314,11 @@ function AppContent() {
             ? <AdminArea session={session} profile={profile} onExit={() => setActivePage('settings')} />
             : activePage === 'about'
               ? <AboutPage onBack={() => setActivePage('settings')} />
-              : <SettingsPage session={session} profile={profile} globalRefreshMinutes={globalRefreshMinutes}
-                onGlobalRefreshMinutesChange={handleGlobalRefreshMinutesChange}
-                onOpenAbout={() => setActivePage('about')}
-                onOpenAdmin={() => setActivePage('admin')}
-                onOpenDownloads={() => setActivePage('downloads')}
-                onLogout={handleLogout}
-                totpManager={totpManager} />}
-    {showBottomNavigation && <BottomNavigation activePage={activePage} onChange={setActivePage} />}
-  </SafeAreaView>;
+              : null}
+    </PrimaryPagePager>
+    {showBottomNavigation && <BottomNavigation activePage={activePage}
+      owner={session ? downloadOwner(session) : undefined} loungeUnread={lounge.state.unread} onChange={setActivePage} />}
+  </SafeAreaView></MappingProvider>;
 }
 
 function ThemeStatusBar() {
@@ -1360,6 +1345,7 @@ export default function App() {
 }
 
 const useStyles = createThemedStyles((color) => ({
+  discoveryCanvas: { backgroundColor: color('#ededed', 'canvas') },
   settingsCanvas: { backgroundColor: color('#fff', 'surface') },
   chatCanvas: { backgroundColor: color(chatPalette.background, 'canvas') },
   flex: { flex: 1 }, app: { flex: 1, backgroundColor: color(COLORS.canvas, 'canvas') }, boot: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: color(COLORS.canvas, 'canvas'), gap: 12 }, bootText: { color: color(COLORS.ink, 'ink'), fontSize: 18, fontWeight: '700' }, startupError: { flex: 1, padding: 28, justifyContent: 'center', backgroundColor: color(COLORS.canvas, 'canvas') }, startupErrorTitle: { color: color(COLORS.ink, 'ink'), fontSize: 22, fontWeight: '800' }, startupErrorMessage: { color: color(COLORS.muted, 'muted'), fontSize: 15, lineHeight: 22, marginTop: 12 }, startupErrorDetail: { color: color(COLORS.danger, 'danger'), fontSize: 12, marginTop: 20 },
@@ -1401,15 +1387,4 @@ const useStyles = createThemedStyles((color) => ({
   switchDeviceEmptyTitle: { color: color(COLORS.ink, 'ink'), fontSize: 16, fontWeight: '800' },
   switchDeviceEmptyText: { color: color(COLORS.muted, 'muted'), fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 7 },
   settingsTitle: { color: color(COLORS.ink, 'ink'), fontSize: 28, fontWeight: '800' }, settingsSubtitle: { color: color(COLORS.muted, 'muted'), fontSize: 13, marginTop: 4 }, sectionLabel: { color: color(COLORS.muted, 'muted'), fontSize: 13, fontWeight: '700', marginLeft: 3, marginBottom: 9, marginTop: 2 },
-  bottomNavigation: {
-    flexDirection: 'row', backgroundColor: color(COLORS.card, 'surface'), borderTopWidth: 1, borderTopColor: color(COLORS.border, 'border'),
-    shadowColor: '#314c3d', shadowOpacity: 0.08, shadowRadius: 8, elevation: 10,
-  },
-  navItem: { flex: 1, minHeight: 58, alignItems: 'center', justifyContent: 'center', gap: 2 },
-  // Give Android room to draw every glyph instead of using the exact intrinsic text width.
-  navText: {
-    alignSelf: 'stretch', textAlign: 'center', paddingHorizontal: 4, includeFontPadding: true,
-    color: color('#7b8c82', 'muted'), fontSize: 11, lineHeight: 18, fontWeight: '700',
-  },
-  navTextActive: { color: color(COLORS.green, 'accent') },
 }));

@@ -1,8 +1,8 @@
 import { ArrowRight, ArrowUpRight, Bookmark, BookOpen, Bot, Boxes, ChartNoAxesCombined, Code } from 'lucide-react';
-import { resourceCount, resourceGroups, type AiResource, type ResourceGroup } from '../content/resources';
-import { resourcesCopy } from '../content/resources-copy';
-import { resourceDescription, resourceGroupText } from '../content/resource-text';
-import type { Language } from '../content/types';
+import { resourceCount, resourceGroups, type AiResource, type ResourceGroup } from '@remoteai/i18n/website-content/resources';
+import { resourcesCopy } from '@remoteai/i18n/website-content/resources-copy';
+import { resourceDescription, resourceGroupText } from '@remoteai/i18n/website-content/resource-text';
+import type { Language } from '@remoteai/i18n/website-content/types';
 import { href } from '../lib/site';
 
 const categoryIcons = { models: Bot, docs: Code, 'open-tools': Boxes, agents: BookOpen, learn: ChartNoAxesCombined };

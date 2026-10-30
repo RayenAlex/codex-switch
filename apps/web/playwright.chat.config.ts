@@ -1,3 +1,4 @@
+import { testBrowserChannel, testBrowserLaunchOptions } from '../../scripts/test-browser.mjs';
 import { defineConfig } from '@playwright/test';
 
 const fixturePort = process.env.CHAT_TEST_API_PORT ?? '1490';
@@ -13,15 +14,17 @@ export default defineConfig({
     '**/image-editor.pw.ts',
     '**/file-preview.pw.ts', '**/chat-devices.pw.ts', '**/image-editor-csp.pw.ts', '**/chat-diff.pw.ts',
     '**/chat-terminal.pw.ts', '**/chat-terminal-display.pw.ts', '**/chat-activities.pw.ts', '**/downloads.pw.ts',
-    '**/thread-actions.pw.ts', '**/chat-markdown.pw.ts', '**/chat-git.pw.ts', '**/task-review.pw.ts',
+    '**/thread-actions.pw.ts', '**/project-menus.pw.ts', '**/chat-markdown.pw.ts', '**/chat-git.pw.ts', '**/task-review.pw.ts',
     '**/connection-health.pw.ts', '**/connection-info.pw.ts', '**/text-selection.pw.ts', '**/download-actions.pw.ts',
     '**/download-sharing.pw.ts',
     '**/preview-downloads.pw.ts', '**/chat-steering.pw.ts', '**/tablet-layout.pw.ts', '**/chat-accounts.pw.ts',
-    '**/tool-details.pw.ts', '**/chat-sidebar-resize.pw.ts'],
+    '**/tool-details.pw.ts', '**/chat-sidebar-resize.pw.ts', '**/chat-setting-segments.pw.ts'],
   workers: 1, timeout: 150_000,
   outputDir: '../../.codex-tmp/h5-chat-playwright',
   reporter: [['list'], ['html', { outputFolder: '../../.codex-tmp/h5-chat-report', open: 'never' }]],
-  use: { baseURL: webUrl, channel: process.env.CHAT_TEST_BROWSER ?? 'msedge',
+  use: {
+    launchOptions: testBrowserLaunchOptions(),
+    baseURL: webUrl, channel: testBrowserChannel(process.env.CHAT_TEST_BROWSER),
     locale: 'zh-CN', headless: true, actionTimeout: 15_000, navigationTimeout: 20_000,
     screenshot: 'only-on-failure', trace: 'retain-on-failure' },
   projects: [

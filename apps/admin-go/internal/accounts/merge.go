@@ -20,7 +20,7 @@ var accountFields = []string{
 var providerFields = []string{"kind", "name", "group", "baseUrl", "apiKey", "model", "models", "modelReasoningEfforts",
 	"modelContextWindows", "modelApiFormats", "imageInputModels", "contextWindow", "modelSelectionControlledByCodex",
 	"fastModeEnabled", "apiFormat", "balancePlatform", "balanceQueryUrl", "balanceQueryToken", "walletQueryUrl",
-	"walletQueryToken", "walletUsername", "walletPassword", "requestOptions"}
+	"walletQueryToken", "walletUsername", "walletPassword", "requestOptions", "balanceScript", "marketSource"}
 
 func accountDTO(row account) object {
 	result := object{
@@ -45,13 +45,19 @@ func accountDTO(row account) object {
 		"phoneNumber": str(row.PrivateDetails["phoneNumber"]),
 		"totpSecret":  str(row.PrivateDetails["totpSecret"]),
 	}
-	if first(private["password"], private["phoneNumber"], private["totpSecret"]) != "" {
+	if has(row.PrivateDetails, "alias") {
+		private["alias"] = str(row.PrivateDetails["alias"])
+	}
+	if has(private, "alias") || first(private["password"], private["phoneNumber"], private["totpSecret"]) != "" {
 		result["privateDetails"] = private
 	}
 	return result
 }
 
 func mergeAccount(existing *account, owner string, incoming object) (*account, bool, error) {
+	if err := normalizeAccountAlias(obj(incoming["privateDetails"])); err != nil {
+		return nil, false, err
+	}
 	if existing != nil && existing.DeletedAt != nil {
 		return nil, false, nil
 	}
@@ -98,6 +104,10 @@ func mergeAccount(existing *account, owner string, incoming object) (*account, b
 }
 
 func applyAccountField(current, incoming object, key string) {
+	if key == "privateDetails" {
+		current[key] = preserveAccountAlias(obj(incoming[key]), obj(current[key]))
+		return
+	}
 	current[key] = valueOr(incoming[key], fieldDefault(key))
 	if key == "auth" {
 		for _, field := range []string{"email", "plan", "accountId"} {
@@ -219,6 +229,9 @@ func mergeProvider(existing *provider, owner string, incoming object) (*provider
 		oldVersions := versions(existing.FieldModifiedAt, iso(existing.LastModifiedAt), providerFields)
 		changed := false
 		for _, key := range providerFields {
+			if (key == "balanceScript" || key == "marketSource") && !has(incoming, key) {
+				continue
+			}
 			if key == "requestOptions" && incoming[key] == nil {
 				continue
 			}
@@ -237,6 +250,12 @@ func mergeProvider(existing *provider, owner string, incoming object) (*provider
 	values["lastModifiedAt"] = latest(obj(values["fieldModifiedAt"]))
 	row := &provider{}
 	err := decodeMap(values, row)
+	if err == nil {
+		err = validateBalanceScript(row.BalanceScript, row.BaseURL)
+	}
+	if err == nil {
+		err = validateMarketSource(row.MarketSource)
+	}
 	return row, err
 }
 

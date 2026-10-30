@@ -1,9 +1,10 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Settings } from "lucide-react";
 import type { Account, AggregateApi, Provider } from "../../types";
 import { maskAccountEmail } from "../../utils/accountPrivacy";
 import { GuiAccountList } from "./GuiAccountList";
+import { providerWebsiteOrigin } from '../../../../../shared/provider-market/providerWebsite';
 import { GuiAccountMenu } from "./GuiAccountMenu";
 import type { GuiComputerNavigation } from "./remote/types";
 import { ProxyAccountSummary } from "./ProxyAccountSummary";
@@ -37,7 +38,7 @@ export function ProxyAccountPicker(props: ProxyAccountPickerProps) {
   const account = props.accounts.find((entry) => entry.active);
   const thirdParty = Boolean(provider || aggregate);
   const email = account?.email && (props.privacyMode ? maskAccountEmail(account.email) : account.email);
-  const name = aggregate?.name || provider?.name || email || guiText("选择 GUI 账户");
+  const name = aggregate?.name || provider?.name || email || uiText("client.conversation.chooseGuiAccount");
   const disabled = props.busy || props.loading || saving;
   // `official` describes account-pool provenance, not whether the account can use the official API.
   const accounts = props.accounts.map((entry) => ({
@@ -49,6 +50,7 @@ export function ProxyAccountPicker(props: ProxyAccountPickerProps) {
   }));
   const providers = props.providers.map((entry) => ({
     kind: "provider" as const, id: entry.id, name: entry.name, detail: entry.group || entry.model,
+    websiteUrl: providerWebsiteOrigin(entry),
     selected: !aggregate && entry.active,
   }));
   const aggregates = props.aggregateApis.map((entry) => ({
@@ -66,8 +68,8 @@ export function ProxyAccountPicker(props: ProxyAccountPickerProps) {
     setError("");
     try {
       if (await switchAccount(id)) { setOpen(false); trigger.current?.focus(); }
-      else setError(guiText("切换未完成，请重试。"));
-    } catch { setError(guiText("切换未完成，请重试。")); }
+      else setError(uiText("client.errors.theSwitchDidNotCompletePleaseTryAgain"));
+    } catch { setError(uiText("client.errors.theSwitchDidNotCompletePleaseTryAgain")); }
     finally { switching.current = false; setSaving(false); }
   };
   const panel = (devicePicker: ReactNode) => <GuiAccountList choices={[...accounts, ...providers, ...aggregates]}
@@ -77,9 +79,9 @@ export function ProxyAccountPicker(props: ProxyAccountPickerProps) {
     onSelectProvider={(id) => void select(id, props.onSwitchProvider)} footer={<>
       {error && <p className={styles.error} role="alert">{error}</p>}
       {props.selectionError && <p className={styles.error} role="alert">{props.selectionError}</p>}
-      <button type="button" className={styles.settings} aria-label={guiText("Codex GUI 设置")} aria-haspopup="dialog"
+      <button type="button" className={styles.settings} aria-label={uiText("client.workspaceSettings.codexGuiSettings")} aria-haspopup="dialog"
         disabled={saving || props.loading} onClick={() => { setOpen(false); setSettingsOpen(true); }}>
-        <Settings size={19} />{guiText("设置")}</button>
+        <Settings size={19} />{uiText("client.app.settings")}</button>
     </>} />;
   return <><GuiAccountMenu active={props.active} open={open} name={name} trigger={trigger}
     computers={props.computers} busy={saving} accounts={panel}

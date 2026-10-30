@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import type { ReactNode } from "react";
 import { Dropdown, type MenuProps } from "antd";
 import { ChevronRight, Copy, File, FileDiff, FileSearch, FolderOpen, Save } from "lucide-react";
@@ -27,43 +27,43 @@ export function FileMenu({ path, line, column, children, className, onReview, pr
     icon: <FileApplicationIcon application={app} />,
     onClick: () => openApplication(app.id),
   }));
-  const saveItem = { key: "saveAs", label: guiText(menu.remote ? "下载到本机…" : "另存为…"),
+  const saveItem = { key: "saveAs", label: uiText(menu.remote ? "client.composer.downloadToThisComputer" : "client.composer.saveAs"),
     icon: <Save size={16} />, disabled: !menu.desktop,
     onClick: ({ domEvent }: Parameters<NonNullable<MenuProps['onClick']>>[0]) => {
       void menu.perform({ type: "saveAs" }, downloadOrigin(domEvent));
     } };
   const items: MenuProps["items"] = menu.downloadOnly ? [saveItem] : [
-    ...(previewsFile ? [{ key: "preview", label: guiText("预览文件"), icon: <FileSearch size={16} />,
+    ...(previewsFile ? [{ key: "preview", label: uiText("client.composer.previewFile"), icon: <FileSearch size={16} />,
       onClick: () => { void menu.preview(); } }] : []),
-    { key: "open", label: guiText(menu.remote ? "在远程电脑上打开" : "打开文件"), icon: <File size={16} />,
+    { key: "open", label: uiText(menu.remote ? "client.composer.openOnRemoteComputer" : "client.mobile.openFile"), icon: <File size={16} />,
       disabled: !menu.desktop,
       onClick: () => openApplication("default") },
-    ...(vscode ? [{ key: "vscode", label: guiText("在 VS Code 中打开"),
+    ...(vscode ? [{ key: "vscode", label: uiText("client.composer.openInVsCode"),
       icon: <FileApplicationIcon application={vscode} />, onClick: () => openApplication("vscode") }] : []),
-    { key: "openWith", label: guiText("打开方式"), icon: <FolderOpen size={16} />, disabled: !menu.desktop,
+    { key: "openWith", label: uiText("client.composer.openWith"), icon: <FolderOpen size={16} />, disabled: !menu.desktop,
       popupClassName: `${styles.popup} ${styles.submenu}`, children: [
-        { key: "default", label: guiText("默认应用"), icon: <File size={16} />, onClick: () => openApplication("default") },
+        { key: "default", label: uiText("client.composer.defaultApp"), icon: <File size={16} />, onClick: () => openApplication("default") },
         ...applications,
-        ...(menu.loading ? [{ key: "loading", label: guiText("正在查找应用…"), disabled: true }] : []),
-        ...(menu.failed ? [{ key: "failed", label: guiText("未能读取应用，请重新打开菜单"), disabled: true }] : []),
+        ...(menu.loading ? [{ key: "loading", label: uiText("client.composer.findingApps"), disabled: true }] : []),
+        ...(menu.failed ? [{ key: "failed", label: uiText("client.composer.couldNotLoadAppsPleaseReopenTheMenu"), disabled: true }] : []),
       ] },
     { type: "divider" },
-    ...(onReview ? [{ key: "review", label: guiText("查看差异"), icon: <FileDiff size={16} />, onClick: onReview }] : []),
+    ...(onReview ? [{ key: "review", label: uiText("client.composer.viewChanges"), icon: <FileDiff size={16} />, onClick: onReview }] : []),
     saveItem,
-    { key: "copyFile", label: guiText(menu.remote ? "在远程电脑上复制文件" : "复制文件"), icon: <Copy size={16} />,
+    { key: "copyFile", label: uiText(menu.remote ? "client.composer.copyFileOnRemoteComputer" : "client.composer.copyFile"), icon: <Copy size={16} />,
       disabled: !menu.desktop,
       onClick: () => { void menu.perform({ type: "copyFile" }); } },
-    { key: "copyPath", label: guiText("复制路径"), icon: <Copy size={16} />,
+    { key: "copyPath", label: uiText("client.composer.copyPath"), icon: <Copy size={16} />,
       onClick: () => { void menu.perform({ type: "copyPath" }); } },
-    { key: "copyContents", label: guiText("复制文件内容"), icon: <Copy size={16} />, disabled: !menu.desktop,
+    { key: "copyContents", label: uiText("client.chat.copyFileContents"), icon: <Copy size={16} />, disabled: !menu.desktop,
       onClick: () => { void menu.perform({ type: "copyContents" }); } },
-    { key: "reveal", label: guiText(menu.remote ? "在远程文件管理器中显示" : "在文件管理器中显示"),
+    { key: "reveal", label: uiText(menu.remote ? "client.composer.showInRemoteFileManager" : "client.composer.showInFileManager"),
       icon: <FolderOpen size={16} />, disabled: !menu.desktop,
       onClick: () => { void menu.perform({ type: "reveal" }); } },
   ];
   // The browser retains its existing diff shortcut; local file operations belong to the desktop.
   if (!menu.desktop && onReview) return <button type="button" className={className}
-    onClick={onReview} aria-label={guiText("查看 {value1} 的差异", { value1: path })}>{children}</button>;
+    onClick={onReview} aria-label={uiText("client.composer.viewChangesTo", { value1: path })}>{children}</button>;
   return <Dropdown trigger={onReview || previewsFile ? ["contextMenu"] : ["click", "contextMenu"]}
     open={menu.open} onOpenChange={menu.setOpen} autoFocus
     overlayClassName={styles.popup} overlayStyle={{ maxWidth: 400 }}
@@ -71,7 +71,7 @@ export function FileMenu({ path, line, column, children, className, onReview, pr
       expandIcon: <ChevronRight size={14} aria-hidden="true" />,
       onClick: () => menu.setOpen(false) }} disabled={menu.busy}>
     <button type="button" className={className ?? styles.link}
-      aria-label={onReview ? guiText("查看 {value1} 的差异", { value1: path }) : guiText("{value1}：{value2}", { value1: guiText(previewsFile ? "预览文件" : "文件操作"), value2: path })}
+      aria-label={onReview ? uiText("client.composer.viewChangesTo", { value1: path }) : uiText("client.desktopGuiErrors.message", { value1: uiText(previewsFile ? "client.composer.previewFile" : "client.projectBrowser.fileActions"), value2: path })}
       onClick={() => {
         if (onReview) { menu.setOpen(false); onReview(); }
         else if (previewsFile) void menu.preview();

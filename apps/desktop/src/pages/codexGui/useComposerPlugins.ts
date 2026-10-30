@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useEffect, useState } from "react";
 import { guiApi } from "./api";
 import type { ComposerPlugin, PluginsResponse } from "./attachmentTypes";
@@ -14,9 +14,9 @@ export function useComposerPlugins({ cwd, active }: { cwd: string; active: boole
       const plugins = [...new Map(response.marketplaces.flatMap((marketplace) => marketplace.plugins)
         .filter((plugin) => plugin.installed && plugin.enabled).map((plugin) => [plugin.id, plugin])).values()];
       setResult({ cwd, plugins, loading: false,
-        error: response.marketplaceLoadErrors.length ? guiText("部分插件未能加载，请重新打开菜单重试。") : "" });
+        error: response.marketplaceLoadErrors.length ? uiText("client.workspaceActions.somePluginsCouldNotLoadReopenTheMenuToRetry") : "" });
     }).catch(() => {
-      if (!cancelled) setResult({ cwd, plugins: [], loading: false, error: guiText("插件暂时无法加载，请重新打开菜单重试。") });
+      if (!cancelled) setResult({ cwd, plugins: [], loading: false, error: uiText("client.workspaceActions.pluginsAreUnavailableReopenTheMenuToRetry") });
     });
     return () => { cancelled = true; };
   }, [cwd, active]);

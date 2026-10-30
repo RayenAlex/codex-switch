@@ -23,13 +23,14 @@ interface Options {
   active: boolean;
   disabled: boolean;
   subscribe?: SubscribeFileDrop;
-  addPaths?: (paths: string[], current: () => boolean) => Promise<void>;
-  addFiles: (files: File[]) => void | Promise<void>;
+  addPaths?: (paths: string[], current: () => boolean, target: Element | null) => Promise<void>;
+  addFiles: (files: File[], target: Element | null) => void | Promise<void>;
+  onTargetChange?: (target: Element | null) => void;
   report: (error: unknown) => void;
 }
 
-function contains(target: HTMLElement | null, position: { x: number; y: number }) {
-  if (!target) return false;
+function nativeDropTarget(target: HTMLElement | null, position: { x: number; y: number }) {
+  if (!target) return null;
   const rect = target.getBoundingClientRect();
   const scale = window.devicePixelRatio || 1;
   const x = position.x / scale;
@@ -37,7 +38,7 @@ function contains(target: HTMLElement | null, position: { x: number; y: number }
   const inside = rect.width > 0 && rect.height > 0
     && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
   const hovered = document.elementFromPoint?.(x, y);
-  return inside && (!hovered || target.contains(hovered));
+  return inside && (!hovered || target.contains(hovered)) ? hovered ?? target : null;
 }
 
 /** Only the visible composer accepts files; late reads must not enter another draft. */
@@ -76,13 +77,14 @@ export function useFileDrop(options: Options) {
     void options.subscribe(event => {
       if (disposed) return;
       const value = latest.current;
-      const inside = event.type !== 'leave' && contains(value.target.current, event.position);
-      const allowed = inside && value.active && !value.disabled && !pending.current;
+      const target = event.type === 'leave' ? null : nativeDropTarget(value.target.current, event.position);
+      const allowed = Boolean(target) && value.active && !value.disabled && !pending.current;
+      if (allowed) value.onTargetChange?.(target);
       setDragging(allowed && event.type !== 'drop');
       const addPaths = value.addPaths;
       if (allowed && event.type === 'drop' && event.paths?.length && addPaths) {
         const paths = event.paths;
-        acceptRef.current(current => addPaths(paths, current));
+        acceptRef.current(current => addPaths(paths, current, target));
       }
     }).then(stop => { if (disposed) stop(); else unlisten = stop; }).catch(error => {
       if (!disposed) latest.current.report(error);
@@ -95,6 +97,7 @@ export function useFileDrop(options: Options) {
     event.preventDefault(); event.stopPropagation();
     const allowed = options.active && !options.disabled && !pending.current;
     event.dataTransfer.dropEffect = allowed ? 'copy' : 'none';
+    if (allowed) options.onTargetChange?.(event.target instanceof Element ? event.target : null);
     setDragging(allowed);
   };
   const onDragLeave = (event: DragEvent<HTMLElement>) => {
@@ -106,9 +109,10 @@ export function useFileDrop(options: Options) {
     // Native WebViews deliver paths separately; handling both events would duplicate attachments.
     if (options.subscribe) return;
     const files = Array.from(event.dataTransfer.files);
-    if (files.length) accept(() => options.addFiles(files));
+    const target = event.target instanceof Element ? event.target : null;
+    if (files.length) accept(() => options.addFiles(files, target));
   };
   // Native drops can arrive before React commits the loading state; send handlers need the live guard.
-  return { reading, dragging, isReading: () => pending.current,
+  return { reading, dragging, isReading: () => pending.current, clearDrag: () => setDragging(false),
     handlers: { onDragOver, onDragEnter: onDragOver, onDragLeave, onDrop } };
 }

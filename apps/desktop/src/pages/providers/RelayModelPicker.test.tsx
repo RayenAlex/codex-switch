@@ -2,6 +2,7 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import fixtures from "../../../../../shared/model-order/fixtures.json";
 import type { Translate } from "../../i18n";
 import { RelayModelPicker } from "./RelayModelPicker";
 import { modelReasoningConfigs, type ModelReasoningConfig } from "./providerUtils";
@@ -12,7 +13,11 @@ vi.mock("antd", () => ({
   Button: ({ children, disabled, onClick }: {
     children: ReactNode; disabled: boolean; onClick: () => void;
   }) => <button disabled={disabled} onClick={onClick}>{children}</button>,
-  Select: () => null,
+  Select: ({ id, options, value }: {
+    id?: string; options: { label: string; value: string }[]; value?: string;
+  }) => <select id={id} value={value} onChange={() => undefined}>
+    {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+  </select>,
 }));
 vi.mock("./ModelReasoningEditor", () => ({ ModelReasoningEditor: () => null }));
 
@@ -28,12 +33,13 @@ const existingConfigs = modelReasoningConfigs(["gpt-5.6-sol"], {
 });
 
 function renderPicker(options: {
-  providerId?: string; apiKey?: string; baseUrl?: string; modelConfigs?: ModelReasoningConfig[];
+  providerId?: string; apiKey?: string; baseUrl?: string;
+  modelConfigs?: ModelReasoningConfig[]; activeModel?: string;
 } = {}) {
   return act(async () => root.render(<RelayModelPicker
     baseUrl={options.baseUrl ?? "https://relay.example/v1"} apiKey={options.apiKey ?? ""}
     providerId={options.providerId} enabled disabled={false} modelConfigs={options.modelConfigs ?? existingConfigs}
-    activeModel="gpt-5.6-sol" onModelConfigsChange={onModelConfigsChange}
+    activeModel={options.activeModel ?? "gpt-5.6-sol"} onModelConfigsChange={onModelConfigsChange}
     onActiveModelChange={onActiveModelChange} t={t} />));
 }
 
@@ -64,9 +70,8 @@ it("refreshes with a saved key only on demand and preserves existing model setti
   expect(container.querySelector("button")!.disabled).toBe(false);
   await refresh();
   expect(backend.fetchRelayModels).toHaveBeenCalledWith("https://relay.example/v1", "", "saved-provider");
-  const configs = onModelConfigsChange.mock.calls[0][0];
-  expect(configs[0]).toEqual(existingConfigs[0]);
-  expect(configs[1].reasoningEfforts).toContain("ultra");
+  const configs: ModelReasoningConfig[] = onModelConfigsChange.mock.calls[0][0];
+  expect(configs).toEqual(expect.arrayContaining(existingConfigs));
   expect(onActiveModelChange).toHaveBeenCalledWith("gpt-5.6-sol");
 });
 
@@ -86,7 +91,7 @@ it("auto-fetches model defaults and keeps custom reasoning on repeated refreshes
   await act(async () => vi.advanceTimersByTimeAsync(1000));
   const fetched: ModelReasoningConfig[] = onModelConfigsChange.mock.calls[0][0];
   expect(fetched.map(({ reasoningEfforts }) => reasoningEfforts)).toEqual([
-    ["low", "high", "max"], ["none", "low", "high", "max"],
+    ["none", "low", "high", "max"], ["low", "high", "max"],
     ["high"], ["none", "low", "medium", "xhigh"],
   ]);
   const edited = fetched.map((config): ModelReasoningConfig => ({
@@ -108,7 +113,8 @@ it("uses the latest user settings when an in-flight refresh finishes", async () 
   });
   await renderPicker({ providerId: "saved-provider", modelConfigs: edited });
   await act(async () => complete(["gpt-5.6-sol", "glm-5.3"]));
-  expect(onModelConfigsChange.mock.calls[0][0][0]).toEqual(edited[0]);
+  const configs: ModelReasoningConfig[] = onModelConfigsChange.mock.calls[0][0];
+  expect(configs.find(({ model }) => model === "gpt-5.6-sol")).toEqual(edited[0]);
 });
 
 it("keeps polling responsive during a request and avoids duplicate manual or automatic requests", async () => {
@@ -156,4 +162,39 @@ it("ignores a response after closing the editor", async () => {
   await act(async () => root.render(null));
   await act(async () => complete(["stale-model"]));
   expect(onModelConfigsChange).not.toHaveBeenCalled();
+});
+
+it.each(fixtures)("sorts $name and preserves every saved model configuration", async ({ input, expected }) => {
+  const saved: ModelReasoningConfig[] = input.map((model, index) => ({
+    model,
+    reasoningEfforts: index % 2 === 0 ? [] : ["none", "max"],
+    contextWindowK: String(384 + index),
+    apiFormat: index % 2 === 0 ? "openaiChat" : "anthropicMessages",
+    supportsImageInput: index % 2 === 0,
+    unitCost: index,
+  }));
+  const activeModel = input[input.length - 1];
+  backend.fetchRelayModels.mockResolvedValue(input);
+  await renderPicker({ providerId: "saved-provider", modelConfigs: saved, activeModel });
+  await refresh();
+  const configs: ModelReasoningConfig[] = onModelConfigsChange.mock.calls[0][0];
+  expect(configs.map(({ model }) => model)).toEqual(expected);
+  expect(configs).toHaveLength(saved.length);
+  for (const savedConfig of saved) {
+    expect(configs.find(({ model }) => model === savedConfig.model)).toEqual(savedConfig);
+  }
+  expect(onActiveModelChange).toHaveBeenLastCalledWith(activeModel);
+  await renderPicker({ providerId: "saved-provider", modelConfigs: configs, activeModel });
+  const options = [...container.querySelectorAll<HTMLOptionElement>("#relay-active-model option")];
+  expect(options.map(({ value }) => value)).toEqual(expected);
+  expect(container.querySelector<HTMLSelectElement>("#relay-active-model")?.value).toBe(activeModel);
+  await refresh();
+  expect(onModelConfigsChange).toHaveBeenLastCalledWith(configs);
+});
+
+it.each(fixtures)("uses the first sorted $name model when the previous selection is missing", async (fixture) => {
+  backend.fetchRelayModels.mockResolvedValue(fixture.input);
+  await renderPicker({ providerId: "saved-provider", modelConfigs: [], activeModel: "removed-model" });
+  await refresh();
+  expect(onActiveModelChange).toHaveBeenLastCalledWith(fixture.expected[0]);
 });

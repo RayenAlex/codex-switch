@@ -60,7 +60,10 @@ export class LinkSocketFixture {
     socket.setNoDelay(true);
     const id = String(++this.sequence);
     const state: SocketState = { socket, chunks: [], ended: false };
-    socket.on('data', data => { state.chunks.push(data); state.wake?.(); state.wake = undefined; });
+    socket.on('data', data => {
+      state.chunks.push(Buffer.isBuffer(data) ? data : Buffer.from(data));
+      state.wake?.(); state.wake = undefined;
+    });
     socket.on('close', () => { state.ended = true; state.wake?.(); state.wake = undefined; });
     socket.on('error', () => socket.destroy());
     this.sockets.set(id, state);

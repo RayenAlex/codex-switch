@@ -1,4 +1,8 @@
+mod deep_seek;
 mod json_targets;
+mod messages;
+#[cfg(test)]
+mod protocol_tests;
 pub(crate) mod runtime_paths;
 mod yaml_targets;
 
@@ -44,10 +48,24 @@ pub(crate) enum ThirdPartyAppId {
 }
 
 pub(crate) fn provider_protocol(provider: &ProviderProfile) -> ProviderProtocol {
-    if provider.name.eq_ignore_ascii_case("Claude Code") {
-        return ProviderProtocol::Anthropic;
-    }
-    match provider.api_format {
+    // Model-specific configuration is also authoritative in the local proxy.
+    let format = provider
+        .model_api_formats
+        .get(&provider.model)
+        .copied()
+        .or_else(|| {
+            let mut formats = provider.model_api_formats.values();
+            let first = *formats.next()?;
+            formats.all(|format| *format == first).then_some(first)
+        })
+        .unwrap_or_else(|| {
+            if provider.name.eq_ignore_ascii_case("Claude Code") {
+                ProviderApiFormat::AnthropicMessages
+            } else {
+                provider.api_format
+            }
+        });
+    match format {
         crate::models::ProviderApiFormat::OpenaiResponses => ProviderProtocol::OpenaiResponses,
         crate::models::ProviderApiFormat::OpenaiChat => ProviderProtocol::OpenaiChat,
         crate::models::ProviderApiFormat::AnthropicMessages => ProviderProtocol::Anthropic,
@@ -196,7 +214,7 @@ fn sync_yaml_targets(
         }
     }
     if should_write_app(settings, ThirdPartyAppId::DeepSeekHarness) {
-        if let Err(error) = yaml_targets::sync_deep_seek(home, provider) {
+        if let Err(error) = deep_seek::sync(home, provider) {
             errors.push(format!("DeepSeek Harness：{error}"));
         }
     }
@@ -301,6 +319,7 @@ fn official_local_proxy_profile(
         models
     };
     ProviderProfile {
+        account_alias: None,
         request_options: Default::default(),
         id: MANAGED_PROVIDER_ID.to_string(),
         kind: ProviderKind::OpenAi,
@@ -320,6 +339,8 @@ fn official_local_proxy_profile(
         fast_mode_enabled: true,
         websocket_enabled: false,
         api_format: ProviderApiFormat::OpenaiResponses,
+        balance_script: None,
+        market_source: None,
         balance_platform: None,
         balance_query_url: None,
         balance_query_token: None,
@@ -342,6 +363,7 @@ pub(crate) mod tests {
 
     pub(crate) fn provider() -> ProviderProfile {
         ProviderProfile {
+            account_alias: None,
             request_options: Default::default(),
             id: MANAGED_PROVIDER_ID.to_string(),
             kind: ProviderKind::Custom,
@@ -361,6 +383,8 @@ pub(crate) mod tests {
             fast_mode_enabled: false,
             websocket_enabled: false,
             api_format: ProviderApiFormat::OpenaiChat,
+            balance_script: None,
+            market_source: None,
             balance_platform: None,
             balance_query_url: None,
             balance_query_token: None,

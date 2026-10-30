@@ -1,3 +1,4 @@
+import { displayText, displayError } from '../../i18n/index';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Clipboard, Grid2X2, Hand, Keyboard, Maximize, Monitor, Mouse, Settings2, Shield, Volume2, VolumeX, X } from 'lucide-react';
@@ -32,30 +33,33 @@ import { DesktopInputSurface } from './DesktopInputSurface';
 import { DesktopKeyboard } from './DesktopKeyboard';
 import { useDesktopOrientation } from './useDesktopOrientation';
 import { DesktopErrorBoundary } from './DesktopErrorBoundary';
+import { DesktopTakeover } from './DesktopTakeover';
 import './desktop.css';
 
 const createPeer = (configuration: RTCConfiguration) => new RTCPeerConnection(configuration);
 
 interface Props {
   client: DesktopClient; active: boolean; close: () => void; localClipboard?: LocalDesktopClipboard;
+  /** Hide a retained computer's viewer without ending its media session or resetting its window. */
+  visible?: boolean;
   connected?: boolean;
   nativeWindow?: boolean;
   windowState?: DesktopWindowState;
 }
 
 export function RemoteDesktop(props: Props) {
-  return <DesktopErrorBoundary active={props.active} close={props.close}>
+  return <DesktopErrorBoundary active={props.active && props.visible !== false} close={props.close}>
     <DesktopViewer {...props} />
   </DesktopErrorBoundary>;
 }
 
-function DesktopViewer({ client, active, connected = true, close, localClipboard, nativeWindow = false,
+function DesktopViewer({ client, active, visible = true, connected = true, close, localClipboard, nativeWindow = false,
   windowState }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const windowControls = useDesktopWindow(root, active, windowState);
-  const shown = active && !windowControls.minimized;
-  const visible = usePageVisibility();
-  const session = useDesktopSession({ client, active: active && visible, connected, createPeer });
+  const shown = active && visible && !windowControls.minimized;
+  const pageVisible = usePageVisibility();
+  const session = useDesktopSession({ client, active: active && pageVisible, connected, createPeer });
   const statusAction = desktopStatusAction(session);
   const viewOnly = session.capabilities.control === false;
   const [display, setDisplay] = useState(false);
@@ -109,9 +113,9 @@ function DesktopViewer({ client, active, connected = true, close, localClipboard
   };
   if (!active) return null;
   return createPortal(<><div ref={root} tabIndex={-1} className="rd-root" style={keyboardViewport}
-    hidden={windowControls.minimized}
+    hidden={!shown}
     role="dialog" aria-modal="true"
-    aria-label={t('远程桌面')} onContextMenu={event => event.preventDefault()}>
+    aria-label={t("client.remoteDesktop.remoteDesktop")} onContextMenu={event => event.preventDefault()}>
     {desktopWindow && <DesktopTitlebar displays={session.displays} selected={session.settings.displayId}
       nativeWindow={nativeWindow} controls={windowControls} close={close}
       disabled={session.saving || !session.stream}
@@ -130,11 +134,12 @@ function DesktopViewer({ client, active, connected = true, close, localClipboard
       {session.stream && !hardware && <DesktopMouse pointer={session.pointer} viewport={viewport} panel={panel}
         visible={panelVisible} wheel={wheel}
         horizontal={!!session.capabilities.horizontalScroll} />}
-      {session.status && !security && <div className={`rd-status${session.stream ? '' : ' rd-status-empty'}`} role="status">
-        <span>{t(session.status)}</span>
+      {session.status && !security && !session.takeover.pending
+        && <div className={`rd-status${session.stream ? '' : ' rd-status-empty'}`} role="status">
+        <span>{displayError(session.status)}</span>
         <button disabled={!connected || session.saving} onClick={statusAction.run}>
-          {t(statusAction.label)}</button></div>}
-      {windowControls.error && <div className="rd-clipboard-notice" role="alert">{t(windowControls.error)}</div>}
+          {displayText(statusAction.label)}</button></div>}
+      {windowControls.error && <div className="rd-clipboard-notice" role="alert">{displayError(windowControls.error)}</div>}
       {display && <DisplaySettings settings={session.settings} displays={session.displays} update={session.update}
         resolution={session.resolution}
         saving={session.saving || !session.stream}
@@ -143,47 +148,53 @@ function DesktopViewer({ client, active, connected = true, close, localClipboard
       {clipboard.open && <DesktopClipboardPanel clipboard={clipboard} />}
       {security && <SecuritySettings {...desktopSecuritySettings(session, () => setSecurity(false))} />}
       <DesktopClipboardNotice clipboard={clipboard} />
-      {viewOnly && session.stream && <div className="rd-clipboard-notice" role="status">{t('仅观看')}</div>}
+      {shown && session.takeover.pending && <DesktopTakeover {...session.takeover} disabled={!connected} />}
+      {viewOnly && session.stream && <div className="rd-clipboard-notice" role="status">{t("client.remoteDesktop.viewOnly")}</div>}
       {!viewOnly && hardware && session.stream && !session.capabilities.keyboard && !clipboard.status
         && <div className="rd-clipboard-notice" role="status">
-          {t('请更新远程电脑上的应用，启用实体键盘和剪贴板。')}</div>}
+          {t("client.remoteDesktop.updateTheAppOnTheRemoteComputerToEnablePhysical")}</div>}
     </div>
-    <nav className="rd-toolbar" aria-label={t('远程桌面操作')}>
-      {!hardware && <button disabled={viewOnly} aria-label={t(direct ? '切换为鼠标模式' : '切换为触屏模式')} className="rd-mode"
-        onClick={() => switchMode(!direct)}>{direct ? <Hand /> : <Mouse />}<span>{t(direct ? '触屏' : '鼠标')}</span></button>}
+    <nav className="rd-toolbar" aria-label={t("client.remoteDesktop.remoteDesktopControls")}>
+      {!hardware && <button disabled={viewOnly} aria-label={t(direct ? "client.remoteDesktop.switchToMouseMode" : "client.remoteDesktop.switchToTouchMode")} className="rd-mode"
+        onClick={() => switchMode(!direct)}>{direct ? <Hand /> : <Mouse />}<span>{t(direct ? "client.remoteDesktop.touch" : "client.remoteDesktop.mouse")}</span></button>}
       <button disabled={viewOnly} aria-pressed={keyboard} onClick={() => {
         setKeyboard(!keyboard); setDisplay(false); setSecurity(false); clipboard.setOpen(false);
       }}>
-        <Keyboard /><span>{t('键盘')}</span></button>
+        <Keyboard /><span>{t("client.remoteDesktop.keyboard")}</span></button>
       <button aria-pressed={clipboard.open} disabled={!session.security.clipboardSync} onClick={() => {
         clipboard.setOpen(!clipboard.open); setKeyboard(false); setDisplay(false); setSecurity(false);
-      }}><Clipboard /><span>{t('剪贴板')}</span></button>
-      <button aria-label={t(audioUnavailable ? '声音暂不可用' : silent ? '开启声音' : '静音')}
+      }}><Clipboard /><span>{t("client.remoteDesktop.clipboard")}</span></button>
+      <button aria-label={t(audioUnavailable ? "client.remoteDesktop.soundUnavailable" : silent ? "client.remoteDesktop.enableSound" : "client.remoteDesktop.mute")}
         aria-pressed={!silent && !audioUnavailable} disabled={audioUnavailable} onClick={toggleAudio}>
-        {silent || audioUnavailable ? <VolumeX /> : <Volume2 />}<span>{t(silent ? '开启声音' : '声音')}</span></button>
+        {silent || audioUnavailable ? <VolumeX /> : <Volume2 />}<span>{t(silent ? "client.remoteDesktop.enableSound" : "client.remoteDesktop.sound")}</span></button>
       <button disabled={viewOnly} onClick={() => session.input({ kind: 'key', key: 'desktop' })}>
-        <Monitor /><span>{t('显示桌面')}</span></button>
+        <Monitor /><span>{t("client.remoteDesktop.showDesktop")}</span></button>
       <button disabled={viewOnly} onClick={() => session.input({ kind: 'key', key: 'windows' })}>
-        <Grid2X2 /><span>{t('所有窗口')}</span></button>
+        <Grid2X2 /><span>{t("client.remoteDesktop.allWindows")}</span></button>
+      {session.capabilities.privacyScreen && <button aria-pressed={session.privacyScreen}
+        aria-label={t(session.privacyScreen ? 'client.deviceScreen.restore' : 'client.deviceScreen.turnOff')}
+        disabled={viewOnly || session.saving || !session.stream} onClick={() => void session.togglePrivacy()}>
+        <Monitor /><span>{t(session.privacyScreen ? 'client.deviceScreen.restoreShort' : 'client.deviceScreen.turnOffShort')}</span>
+      </button>}
       <button aria-pressed={security} onClick={() => {
         setSecurity(!security); setDisplay(false); setKeyboard(false); clipboard.setOpen(false);
-      }}><Shield /><span>{t('安全选项')}</span></button>
+      }}><Shield /><span>{t("client.remoteDesktop.security")}</span></button>
       <button aria-pressed={display} onClick={() => {
         setDisplay(!display); setKeyboard(false); setSecurity(false); clipboard.setOpen(false);
       }}>
-        <Settings2 /><span>{t('显示')}</span></button>
+        <Settings2 /><span>{t("client.remoteDesktop.display")}</span></button>
       {!desktopWindow && document.fullscreenEnabled
-        && <button onClick={fullscreen}><Maximize /><span>{t('全屏')}</span></button>}
-      {!desktopWindow && <button onClick={close}><X /><span>{t('关闭')}</span></button>}
+        && <button onClick={fullscreen}><Maximize /><span>{t("client.runtimeErrors.fullscreen")}</span></button>}
+      {!desktopWindow && <button onClick={close}><X /><span>{t("client.projectBrowser.close")}</span></button>}
     </nav>
     </div>
     {keyboard && <DesktopKeyboard input={session.input} close={() => setKeyboard(false)}
       platform={session.capabilities.platform} mobile={!hardware}
       supported={!!session.capabilities.keyboard} />}
   </div>
-    {windowControls.minimized && !windowState && <button type="button" className="rd-restore"
-      aria-label={t('恢复远程桌面')} onClick={windowControls.restore}>
-      <Monitor size={22} /><span>{t('远程桌面')}</span>
+    {visible && windowControls.minimized && !windowState && <button type="button" className="rd-restore"
+      aria-label={t("client.remoteDesktop.restoreRemoteDesktop")} onClick={windowControls.restore}>
+      <Monitor size={22} /><span>{t("client.remoteDesktop.remoteDesktop")}</span>
     </button>}
   </>, document.body);
 }

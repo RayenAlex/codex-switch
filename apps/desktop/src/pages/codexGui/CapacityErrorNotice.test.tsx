@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Messages } from "./Messages";
 import { conversation, reduceConversation } from "./events";
 import { MODEL_CAPACITY_MESSAGE } from "./requestError";
+import { uiText } from '../../i18n/uiText';
 import { CONTINUE_MESSAGE } from "./continuation";
 
 let root: Root;
@@ -35,7 +36,7 @@ it("shows capacity cards inline with a countdown only on the latest failure, and
   const render = (seconds: number) => act(async () => root.render(<Messages value={value} selected="one"
     retry={{ threadId: "one", turnId: "failed", seconds }} onCancelRetry={onCancelRetry} />));
   await render(3);
-  expect(container.textContent?.split(MODEL_CAPACITY_MESSAGE)).toHaveLength(3);
+  expect(container.textContent?.split(uiText('client.chat.modelAtCapacity'))).toHaveLength(3);
   expect(container.textContent).not.toContain("查看报错详情");
   expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
   expect(container.textContent).toContain("3 秒后自动重试");
@@ -48,7 +49,7 @@ it("shows capacity cards inline with a countdown only on the latest failure, and
   expect(onCancelRetry).toHaveBeenCalledOnce();
   await act(async () => root.render(<Messages value={value} selected="one" />));
   expect(container.textContent).not.toContain("秒后自动重试");
-  expect(container.textContent).toContain(MODEL_CAPACITY_MESSAGE);
+  expect(container.textContent).toContain(uiText('client.chat.modelAtCapacity'));
 });
 
 it("hides the automatic continuation instruction after a failed turn", async () => {

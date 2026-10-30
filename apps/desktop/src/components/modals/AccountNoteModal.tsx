@@ -60,6 +60,7 @@ export function AccountNoteModal({
   t: Translate;
 }) {
   const [note, setNote] = useState(account.note);
+  const [alias, setAlias] = useState(account.privateDetails.alias ?? "");
   const [expiresAt, setExpiresAt] = useState(account.expiresAt);
   const [password, setPassword] = useState(account.privateDetails.password);
   const [phoneNumber, setPhoneNumber] = useState(account.privateDetails.phoneNumber);
@@ -77,6 +78,7 @@ export function AccountNoteModal({
 
   useLayoutEffect(() => {
     setNote(account.note);
+    setAlias(account.privateDetails.alias ?? "");
     setExpiresAt(account.expiresAt);
     setPassword(account.privateDetails.password);
     setPhoneNumber(account.privateDetails.phoneNumber);
@@ -88,6 +90,7 @@ export function AccountNoteModal({
   }, [
     account.expiresAt,
     account.note,
+    account.privateDetails.alias,
     account.privateDetails.password,
     account.privateDetails.phoneNumber,
     account.privateDetails.totpSecret,
@@ -147,7 +150,7 @@ export function AccountNoteModal({
     const saved = await onSave({
       expiresAt,
       note,
-      privateDetails: { password, phoneNumber: phoneNumber.trim(), totpSecret: normalizedTotpSecret },
+      privateDetails: { alias: alias.trim(), password, phoneNumber: phoneNumber.trim(), totpSecret: normalizedTotpSecret },
     });
     setSaving(false);
     if (saved) onClose();
@@ -170,6 +173,12 @@ export function AccountNoteModal({
           <h2 id="account-note-title">{t("note.title")}</h2>
           <p>{t("note.description", { email: account.email })}</p>
           <div className="account-details-grid">
+            <div className="account-form-field">
+              <label className="account-note-label" htmlFor="account-alias">{t("note.alias")}</label>
+              <Input id="account-alias" value={alias} maxLength={16} placeholder={t("note.aliasPlaceholder")}
+                onChange={(event) => setAlias(event.target.value)} allowClear />
+              <span className="account-expiration-hint">{t("note.aliasHint")}</span>
+            </div>
             <div className="account-form-field">
               <label className="account-note-label" htmlFor="account-expiration-date">
                 {t("note.expirationDate")}

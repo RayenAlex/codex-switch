@@ -1,6 +1,7 @@
+import { SheetGestureScrollView as ScrollView } from '../components/SheetScrollGesture';
 import { t, useLanguage } from '../i18n';
 import { useState } from 'react';
-import { ScrollView, Text, TextInput } from 'react-native';
+import { Text, TextInput } from 'react-native';
 import { changePassword } from '../api/client';
 import { Toast } from '../components/AppToast';
 import { BottomSheet } from '../components/BottomSheet';
@@ -17,38 +18,38 @@ export function PasswordSheet({ session, onClose }: { session: AuthSession; onCl
   const [error, setError] = useState('');
   const submit = async () => {
     if (saving) return;
-    if (currentPassword.length < 6) return setError(t("当前密码至少需要 6 位"));
-    if (newPassword.length < 8) return setError(t("新密码至少需要 8 位"));
-    if (newPassword !== confirmPassword) return setError(t("两次输入的新密码不一致"));
+    if (currentPassword.length < 6) return setError(t("client.mobile.theCurrentPasswordMustHaveAtLeast6Characters"));
+    if (newPassword.length < 8) return setError(t("client.mobile.theNewPasswordMustHaveAtLeast8Characters"));
+    if (newPassword !== confirmPassword) return setError(t("client.settings.theNewPasswordsDoNotMatch"));
     setSaving(true);
     setError('');
     try {
       await changePassword(session, currentPassword, newPassword);
-      Toast.success(t("密码已修改，下次登录请使用新密码"));
+      Toast.success(t("client.mobile.passwordChangedUseYourNewPasswordNextTime"));
       onClose();
     } catch (error) {
-      setError(error instanceof Error ? error.message : t("修改失败，请稍后重试"));
+      setError(error instanceof Error ? error.message : t("client.mobile.couldNotUpdateTryAgainLater"));
     } finally {
       setSaving(false);
     }
   };
-  return <BottomSheet visible title={t("修改密码")} subtitle={t("验证当前密码后设置新的登录密码")}
+  return <BottomSheet visible title={t("client.settings.changePassword")} subtitle={t("client.mobile.verifyYourCurrentPasswordToSetANewOne")}
     onClose={onClose} dismissible={!saving} tall actions={[
-      { label: t("取消"), onPress: onClose, disabled: saving },
-      { label: t("确认修改"), tone: 'primary', onPress: submit, loading: saving },
+      { label: t("client.accounts.cancel"), onPress: onClose, disabled: saving },
+      { label: t("client.settings.changePassword.4c62c9"), tone: 'primary', onPress: submit, loading: saving },
     ]}>
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetBody}>
-      <Text style={styles.detailLabel}>{t("当前密码")}</Text>
-      <TextInput accessibilityLabel={t("当前密码")} value={currentPassword} onChangeText={setCurrentPassword}
-        secureTextEntry autoComplete="current-password" placeholder={t("输入当前密码")}
+      <Text style={styles.detailLabel}>{t("client.settings.currentPassword")}</Text>
+      <TextInput accessibilityLabel={t("client.settings.currentPassword")} value={currentPassword} onChangeText={setCurrentPassword}
+        secureTextEntry autoComplete="current-password" placeholder={t("client.mobile.enterCurrentPassword")}
         style={styles.input} editable={!saving} />
-      <Text style={styles.detailLabel}>{t("新密码")}</Text>
-      <TextInput accessibilityLabel={t("新密码")} value={newPassword} onChangeText={setNewPassword}
-        secureTextEntry autoComplete="new-password" placeholder={t("至少 8 位")}
+      <Text style={styles.detailLabel}>{t("client.settings.newPassword")}</Text>
+      <TextInput accessibilityLabel={t("client.settings.newPassword")} value={newPassword} onChangeText={setNewPassword}
+        secureTextEntry autoComplete="new-password" placeholder={t("client.mobile.atLeast8Characters")}
         style={styles.input} editable={!saving} />
-      <Text style={styles.detailLabel}>{t("确认新密码")}</Text>
-      <TextInput accessibilityLabel={t("确认新密码")} value={confirmPassword} onChangeText={setConfirmPassword}
-        secureTextEntry autoComplete="new-password" placeholder={t("再次输入新密码")}
+      <Text style={styles.detailLabel}>{t("client.settings.confirmNewPassword")}</Text>
+      <TextInput accessibilityLabel={t("client.settings.confirmNewPassword")} value={confirmPassword} onChangeText={setConfirmPassword}
+        secureTextEntry autoComplete="new-password" placeholder={t("client.mobile.enterTheNewPasswordAgain")}
         style={styles.input} editable={!saving} onSubmitEditing={() => void submit()} />
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
     </ScrollView>

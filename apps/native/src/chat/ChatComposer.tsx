@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import { useComposerSuggestion } from '../../../../shared/chat/useComposerSuggestion';
 import { useComposerFileReferences } from '../../../../shared/chat/ChatFileReferences';
 import { ComposerSuggestion } from './ComposerSuggestion';
@@ -161,8 +162,8 @@ export function ChatComposer({ projectPicker, suggestions, models, selection, se
     const size = submittedPhotos.reduce((total, photo) => total + photo.dataUrl.length, 0)
       + submittedAttachments.reduce((total, item) => total + (item.data?.length ?? 0), 0);
     try { validateUploadedFiles(submittedAttachments); }
-    catch (cause) { setAttachmentError(cause instanceof Error ? cause.message : t("文件无法发送，请重新选择。")); return; }
-    if (size > chatAttachmentDataLimit()) { setAttachmentError(t("附件总大小过大，请减少照片或文件后再试。")); return; }
+    catch (cause) { setAttachmentError(cause instanceof Error ? cause.message : t("client.chat.couldNotSendTheFilePleaseChooseItAgain")); return; }
+    if (size > chatAttachmentDataLimit()) { setAttachmentError(t("client.chat.attachmentsAreTooLargeRemoveSomePhotosOrFilesAnd")); return; }
     setAttachmentError('');
     const text = replyWithQuotes(action === 'continue' ? CONTINUE_MESSAGE : draft.text, submittedQuotes);
     const sent = await draft.submit({ text, goalMode: goalMode.enabled,
@@ -203,11 +204,11 @@ export function ChatComposer({ projectPicker, suggestions, models, selection, se
     {queue && <ChatQueue {...queue} {...queueEditor} />}
     {projectPicker}
     <View style={[styles.composer, compactField && styles.composerCompact]}>
-    {!!draft.error && <Text accessibilityRole="alert" style={styles.error}>{t(draft.error)}</Text>}
-    {compacting && <Text style={styles.subtitle}>{t("正在压缩上下文…")}</Text>}
+    {!!draft.error && <Text accessibilityRole="alert" style={styles.error}>{displayError(draft.error)}</Text>}
+    {compacting && <Text style={styles.subtitle}>{t("client.chat.compactingContext")}</Text>}
     {!!(attachmentError || attachments.error) && <Text accessibilityRole="alert" style={styles.error}>
-      {t(attachmentError || attachments.error)}</Text>}
-    {attachments.busy && <Text style={styles.status}>{t("正在读取文件…")}</Text>}
+      {displayError(attachmentError || attachments.error)}</Text>}
+    {attachments.busy && <Text style={styles.status}>{t("client.chat.loadingFile")}</Text>}
     {(adding || menu.open) && <ComposerPopover anchor={anchor} anchorHeight={anchorHeight} wide={!adding}
       close={() => { setAdding(false); menu.close(); }}>
       {menuContent()}
@@ -228,18 +229,18 @@ export function ChatComposer({ projectPicker, suggestions, models, selection, se
           else goalMode.exit();
         }} />}
       <ComposerSuggestion text={suggestion.text} accept={suggestion.accept} />
-      <ComposerInput ref={menu.input} accessibilityLabel={t("聊天消息")} compact={compactField}
+      <ComposerInput ref={menu.input} accessibilityLabel={t("client.chat.chatMessage")} compact={compactField}
         multiline value={draft.text} maxLength={100_000} selection={menu.selection} editable={!queueEditor.loading}
         onSelectionChange={(event) => menu.setSelection(event.nativeEvent.selection)}
         onChangeText={text => {
           if (text) suggestion.dismiss(); else suggestion.restore();
           draft.setText(text);
         }}
-        placeholder={ready ? (goalMode.enabled ? t("描述想完成的目标…")
-          : t("% 引用文件，@ 引用对话…")) : t("连接后发消息")} />
+        placeholder={ready ? (goalMode.enabled ? t("client.chat.describeYourGoal")
+          : t("client.fileReferences.filesConversations")) : t("client.chat.connectToSendAMessage")} />
       </ScrollView>
       <View pointerEvents="box-none" style={[styles.composerActions, compactField && styles.composerActionsCompact]}>
-        <Pressable accessibilityRole="button" accessibilityLabel={t("添加内容")} style={styles.composerAdd}
+        <Pressable accessibilityRole="button" accessibilityLabel={t("client.chat.addContent")} style={styles.composerAdd}
           accessibilityState={{ expanded: adding }} onPress={() => { menu.close(); setAdding((current) => !current); }}>
           <Text style={styles.composerAddText}>+</Text>
         </Pressable>

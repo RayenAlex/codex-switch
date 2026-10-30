@@ -1,9 +1,12 @@
+import { resources as clientResources } from '@remoteai/i18n/client';
+const accountsEnglish: Readonly<Record<string, string>> = clientResources.en;
+const accountsRussian: Readonly<Record<string, string>> = clientResources.ru;
 import { describe, expect, it } from 'vitest';
-import { accountsEnglish, accountsRussian } from '../../../../shared/i18n/backend/accounts';
-import { translateBackendMessage } from '../../../../shared/i18n/backend/translateBackendMessage';
 
-const en = (message: string) => translateBackendMessage('en', message);
-const ru = (message: string) => translateBackendMessage('ru', message);
+import { formatRemoteError } from "../../../../shared/localization/errors";
+
+const en = (message: string) => formatRemoteError('en', message);
+const ru = (message: string) => formatRemoteError('ru', message);
 
 describe('account backend messages', () => {
   it('defines every source in both English and Russian', () => {
@@ -11,12 +14,12 @@ describe('account backend messages', () => {
   });
 
   it('translates sign-in toasts and keeps Chinese unchanged', () => {
-    expect(ru('登录成功，账户已保存，可手动切换'))
+    expect(ru("client.errorsAccounts.signedInAccountSavedYouCanSwitchToItManually"))
       .toBe('Вход выполнен, аккаунт сохранён. Переключиться на него можно вручную');
     expect(en('网页登录成功，账户已添加')).toBe('Signed in on the web. Account added');
     expect(ru('登录失败：access_denied')).toBe('Не удалось войти: access_denied');
     expect(en('登录失败：授权响应缺少 code')).toBe('Sign-in failed: the authorization response has no code');
-    expect(translateBackendMessage('zh', '登录失败：access_denied')).toBe('登录失败：access_denied');
+    expect(formatRemoteError('zh', '登录失败：access_denied')).toBe('登录失败：access_denied');
   });
 
   it('fills templates from Rust messages and keeps OS details verbatim', () => {

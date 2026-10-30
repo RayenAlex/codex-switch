@@ -1,9 +1,11 @@
+import { formatRemoteError } from '../../../../../shared/localization/errors';
+
 // @vitest-environment jsdom
 import { act, createRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { translateText } from '../../../../../shared/i18n/translate';
-import { setGuiLanguage } from '../../i18n/guiText';
+import { translateMessage } from "../../../../../shared/localization/messages";
+import { setGuiLanguage } from "../../i18n/uiText";
 import { quickMenuLanguage } from './language';
 import { MenuPanel } from './MenuPanel';
 import type { MenuEntry, MenuSnapshot } from './types';
@@ -57,8 +59,8 @@ it('renders menu chrome and errors in the tray language', async () => {
     ['账号', '快捷菜单', '关闭菜单', '选择模型', '返回', '操作未完成，请重新打开菜单再试。'],
     ['Accounts', 'Quick menu', 'Close menu', 'Choose model', 'Back',
       'The action did not complete. Reopen the menu and try again.'],
-    ['Аккаунты', 'Быстрое меню', 'Закрыть меню', 'Выбрать модель', translateText('ru', '返回'),
-      translateText('ru', '操作未完成，请重新打开菜单再试。')],
+    ['Аккаунты', 'Быстрое меню', 'Закрыть меню', 'Выбрать модель', translateMessage('ru', "client.mobile.back"),
+      translateMessage('ru', "client.desktopQuickMenu.theActionDidNotCompleteReopenTheMenuAndTry")],
   ] as const;
   for (const [header, menuLabel, closeLabel, modelSection, backLabel, error] of cases) {
     await render(snapshot(header), '操作未完成，请重新打开菜单再试。');
@@ -78,7 +80,7 @@ it('shows the loading state and load errors before the first snapshot in the GUI
   await render(null, '菜单暂时无法加载，请重新打开。');
   expect(container.querySelector('.quick-menu-notice')?.textContent).toBe('Загрузка…');
   expect(container.querySelector('[role="alert"]')?.textContent)
-    .toBe(translateText('ru', '菜单暂时无法加载，请重新打开。'));
+    .toBe(translateMessage('ru', "client.desktopQuickMenu.couldNotLoadTheMenuReopenIt"));
 });
 
 it('has English and Russian copy for every quick menu error', () => {
@@ -86,7 +88,7 @@ it('has English and Russian copy for every quick menu error', () => {
   expect(new Set(errors).size).toBe(3);
   for (const error of errors) {
     for (const language of ['en', 'ru'] as const) {
-      const text = translateText(language, error);
+      const text = formatRemoteError(language, error);
       expect(text, `${language}: ${error}`).not.toBe(error);
       expect(text, `${language}: ${error}`).not.toMatch(chinese);
     }

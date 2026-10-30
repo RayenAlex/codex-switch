@@ -5,10 +5,13 @@ import { useDiffText } from "../../../../../shared/chat/diffText";
 import styles from "./EditedFilesSummary.module.less";
 
 const COLLAPSED_FILE_COUNT = 3;
+const UNAPPLIED_STATUSES = [
+  'client.chat.notApplied', 'client.chat.editFailed', 'client.chat.editing', 'client.chat.reverted',
+] as const;
 
 function Counts({ added, removed }: { added: number; removed: number }) {
   const t = useDiffText();
-  return <span className={styles.counts} aria-label={t("新增 {added} 行，删除 {removed} 行", { added, removed })}>
+  return <span className={styles.counts} aria-label={t("client.chat.linesAddedLinesRemoved", { added, removed })}>
     <span className={styles.added}>+{added}</span><span className={styles.removed}>−{removed}</span>
   </span>;
 }
@@ -36,31 +39,31 @@ export function EditedFilesSummary({ files, title, status, onReview, onReviewFil
   const summary = useMemo(() => summarizeFiles(files), [files]);
   const added = summary.reduce((sum, file) => sum + file.added, 0);
   const removed = summary.reduce((sum, file) => sum + file.removed, 0);
-  const changed = !["未应用", "修改失败", "正在修改", "已撤销"].includes(status ?? "");
+  const changed = !UNAPPLIED_STATUSES.some(key => status === key || status === t(key));
   const hiddenCount = summary.length - COLLAPSED_FILE_COUNT;
   const visibleFiles = expanded ? summary : summary.slice(0, COLLAPSED_FILE_COUNT);
   return <section className={styles.card} aria-label={t(title)}>
     <header className={styles.header}>
       <span className={styles.icon}><FileDiff size={21} aria-hidden="true" /></span>
       <div className={styles.overview}>
-        <strong>{t(changed ? "已编辑" : status ?? "已编辑")} {t("{count} 个文件", { count: summary.length })}</strong>
+        <strong>{t(changed ? "client.chat.edited" : status ?? "client.chat.edited")} {t("client.chat.files", { count: summary.length })}</strong>
         <Counts added={added} removed={removed} />
       </div>
       {undo}{beforeReview}<button type="button" className={styles.review} onClick={onReview}
-        aria-label={t("查看{title}：{count} 个文件，新增 {added} 行，删除 {removed} 行",
-          { title: t(title), count: summary.length, added, removed })}>{t("审核")}</button>
+        aria-label={t("client.chat.viewFilesLinesAddedLinesRemoved",
+          { title: t(title), count: summary.length, added, removed })}>{t("client.chat.review")}</button>
     </header>
     <ul className={styles.files} id={listId}>
       {visibleFiles.map((file) => <li key={file.path}>
         {renderFile ? renderFile({ path: file.path, className: styles.path, onReview: () => onReviewFile(file.path) })
           : <button type="button" className={styles.path} onClick={() => onReviewFile(file.path)}
-            aria-label={t("查看 {path} 的差异", { path: file.path })}>{file.path}</button>}
+            aria-label={t("client.chat.viewDiffFor", { path: file.path })}>{file.path}</button>}
         <Counts added={file.added} removed={file.removed} />
       </li>)}
     </ul>
     {hiddenCount > 0 && <button type="button" className={styles.toggle} aria-expanded={expanded}
       aria-controls={listId} onClick={() => setExpanded((value) => !value)}>
-      {expanded ? t("收起文件列表") : t("再显示 {count} 个文件", { count: hiddenCount })}
+      {expanded ? t("client.chat.collapseFileList") : t("client.chat.showMoreFiles", { count: hiddenCount })}
       <ChevronDown size={16} className={expanded ? styles.rotated : undefined} aria-hidden="true" />
     </button>}
   </section>;

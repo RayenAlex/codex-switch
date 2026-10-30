@@ -19,7 +19,8 @@ vi.mock('react', async (importOriginal) => ({
   useSyncExternalStore: (_subscribe: unknown, snapshot: () => unknown) => snapshot(),
 }));
 vi.mock('react-native', () => ({ Pressable: 'Pressable', SectionList: 'SectionList', Text: 'Text',
-  View: 'View', ActivityIndicator: 'Spinner', StyleSheet: { create: <T,>(value: T) => value } }));
+  View: 'View', ActivityIndicator: 'Spinner', Platform: { OS: 'android' },
+  StyleSheet: { create: <T,>(value: T) => value } }));
 vi.mock('@expo/vector-icons/Feather', () => ({ default: 'Icon' }));
 vi.mock('./useThreadListScroll', () => ({ useThreadListScroll: () => ({}) }));
 beforeEach(() => { hooks.states = []; hooks.slot = 0; vi.stubGlobal('React', React); });
@@ -28,7 +29,7 @@ afterEach(() => vi.unstubAllGlobals());
 function render(state: ChatState) {
   hooks.slot = 0;
   return ChatThreadList({ state, controller: {} as ChatController, select: vi.fn(), newChat: vi.fn(),
-    openActions: vi.fn(), bottomInset: 0 }).props;
+    openActions: vi.fn(), openProjectActions: vi.fn(), bottomInset: 0 }).props;
 }
 const ids = (group: { data: Thread[] }) => group.data.map(thread => thread.id);
 
@@ -37,6 +38,27 @@ it('shows pull-to-refresh progress only for an explicit refresh', () => {
   expect(render(state).refreshing).toBe(false);
   expect(render({ ...state, listRefreshing: true }).refreshing).toBe(true);
   expect(render({ ...state, loading: false, listRefreshing: false }).refreshing).toBe(false);
+});
+
+it('opens project actions by long press or accessibility without collapsing the folder', () => {
+  const state = { ...initialChatState(), ready: true, threads: [
+    { id: 'chat', name: '项目对话', preview: '', cwd: '/project', updatedAt: 1 },
+  ] };
+  const openProjectActions = vi.fn();
+  const list = ChatThreadList({ state, controller: {} as ChatController, select: vi.fn(), newChat: vi.fn(),
+    openActions: vi.fn(), openProjectActions, bottomInset: 0 });
+  const section = list.props.sections[0];
+  const heading = list.props.renderSectionHeader({ section }).props.children[0];
+  heading.props.onLongPress();
+  expect(openProjectActions).toHaveBeenCalledWith(section);
+  expect(render(state).sections[0].collapsed).toBe(false);
+  heading.props.onAccessibilityAction({ nativeEvent: { actionName: 'longpress' } });
+  expect(openProjectActions).toHaveBeenCalledTimes(2);
+  heading.props.onPress();
+  expect(render(state).sections[0].collapsed).toBe(true);
+  const recent = list.props.renderSectionHeader({ section: { ...section, cwd: '' } }).props.children[0];
+  expect(recent.props.onLongPress).toBeUndefined();
+  expect(recent.props.accessibilityActions).toBeUndefined();
 });
 
 it.each(['/project', ''])('moves running native rows to the front of %j and restores their positions', (cwd) => {

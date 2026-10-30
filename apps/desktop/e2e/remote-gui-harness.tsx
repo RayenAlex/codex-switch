@@ -14,11 +14,18 @@ import { guiFontStyle, useGuiFontSize } from '../src/pages/codexGui/guiAppearanc
 import { createAsyncGitFixture } from '../../../shared/remote-chat/testing/gitFixture';
 import { WindowControls } from '../src/components/WindowControls';
 import { translate } from '../src/i18n';
+import { useGuiLanguage } from '../src/i18n/useGuiLanguage';
+import { DesktopUsageContext } from '../../../shared/chat/DesktopUsageContext';
 import 'antd/dist/reset.css';
 
 const localGit = createAsyncGitFixture();
+const localUsage = { totalTokens: 0, estimatedCostUsd: 0,
+  primaryRemainingPercent: DEMO_ACCOUNTS[0].usage.primary?.remainingPercent ?? null,
+  primaryRemainingAggregated: false, providerEstimatedCost: null };
 
 function Harness() {
+  // The real desktop root rerenders when its language preference changes.
+  useGuiLanguage();
   const fontSize = useGuiFontSize();
   const [localDraft, setLocalDraft] = useState('Local unsent draft');
   const [project, setProject] = useState('/local/workspace');
@@ -28,6 +35,7 @@ function Harness() {
   const device = computers.current;
   return <ConfigProvider><header hidden={focused} style={{ height: 48 }}>Codex GUI</header>
     <main style={{ ...guiFontStyle(fontSize), height: focused ? '100vh' : 'calc(100vh - 48px)' }}>
+    <DesktopUsageContext.Provider value={{ usage: localUsage, visible: !device }}>
     <div hidden={Boolean(device)} style={{ height: '100%' }}>
       <DetailsWorkspace active={!device} selected={project}>
       <div className={`${styles.page} local-workspace`}><aside className={styles.sidebar}>
@@ -44,7 +52,7 @@ function Harness() {
             hostPicker={<GuiHostPicker navigation={computers} active={!device} />} />
           <textarea aria-label="本机草稿" value={localDraft} onChange={event => setLocalDraft(event.target.value)} />
         </div>
-      </div></div></DetailsWorkspace></div>
+      </div></div></DetailsWorkspace></div></DesktopUsageContext.Provider>
     {computers.identity && <RemoteGuiWorkspaces active identity={computers.identity}
       current={device} computers={computers} privacyMode={false}
       focusMode={{ focused, onToggleFocus: () => setFocused(value => !value) }}

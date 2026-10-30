@@ -17,6 +17,7 @@ pub(super) struct InputDesktop {
 impl InputDesktop {
     pub fn enter() -> Result<Option<Self>> {
         if !WORKER.load(Ordering::Relaxed) {
+            super::session_access::check()?;
             return Ok(None);
         }
         Self::bind().map(Some)

@@ -6,19 +6,19 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 
 export type ComposerAddAction = 'camera' | 'library' | 'projectPhotos' | 'file' | 'projectFiles' | 'plugins';
 const OPTIONS = [
-  { action: 'camera', get label() { return t("相机"); }, icon: 'camera' },
-  { action: 'library', get label() { return t("手机照片"); }, icon: 'image' },
-  { action: 'projectPhotos', get label() { return t("电脑照片"); }, icon: 'image' },
-  { action: 'file', get label() { return t("手机文件"); }, icon: 'paperclip' },
-  { action: 'projectFiles', get label() { return t("电脑文件"); }, icon: 'monitor' },
-  { action: 'plugins', get label() { return t("插件"); }, icon: 'box' },
+  { action: 'camera', get label() { return t("client.mobile.camera"); }, icon: 'camera' },
+  { action: 'library', get label() { return t("client.mobile.phonePhotos"); }, icon: 'image' },
+  { action: 'projectPhotos', get label() { return t("client.mobile.computerPhotos"); }, icon: 'image' },
+  { action: 'file', get label() { return t("client.mobile.phoneFiles"); }, icon: 'paperclip' },
+  { action: 'projectFiles', get label() { return t("client.mobile.computerFiles"); }, icon: 'monitor' },
+  { action: 'plugins', get label() { return t("client.chat.plugins"); }, icon: 'box' },
 ] as const;
 
 export function ComposerAddMenu({ busy, choose }: { busy: boolean; choose: (action: ComposerAddAction) => void }) {
   const menuStyles = useMenuStyles();
   const color = useThemeColor();
   useLanguage();
-  return <ScrollView accessibilityLabel={t("添加内容菜单")} keyboardShouldPersistTaps="always" style={menuStyles.list}>
+  return <ScrollView accessibilityLabel={t("client.mobile.attachmentMenu")} keyboardShouldPersistTaps="always" style={menuStyles.list}>
     {OPTIONS.map(({ action, label, icon }) => <Pressable key={action} accessibilityRole="menuitem"
       accessibilityLabel={label} disabled={busy && action !== 'plugins'} onPress={() => choose(action)}
       style={({ pressed }) => [menuStyles.option, pressed && menuStyles.pressed,

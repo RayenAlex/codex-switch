@@ -62,7 +62,8 @@
   .chat-composer, .chat-queue { background: var(--gui-composer-surface); }
   .chat-composer { color: var(--ink); font-size: var(--gui-font-size, 14px); }
   .chat-composer textarea { background: transparent; color: var(--ink); font-size: var(--gui-font-size, 14px); }
-  .chat-composer textarea::placeholder { color: var(--muted); }
+  // The composer draws its own placeholder; native text would overlap it at larger font sizes.
+  .chat-composer textarea::placeholder { color: transparent; }
   .chat-composer-hint { font-size: calc(var(--gui-font-size, 14px) - 4px); }
   .chat-composer-access, .chat-composer .chat-model, .chat-composer-status {
     font-size: calc(var(--gui-font-size, 14px) - 2px); }

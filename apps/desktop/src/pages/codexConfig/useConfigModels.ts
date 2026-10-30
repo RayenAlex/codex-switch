@@ -1,7 +1,7 @@
 import { createContext, useCallback, useEffect, useRef, useState } from "react";
 import { hasLocalBackend } from "../../api/backend";
 import { readCodexConfigModelNames } from "../../api/codexConfig";
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 
 export const ConfigModelsContext = createContext<{ models: string[]; loading: boolean }>({
   models: [], loading: false,
@@ -27,7 +27,7 @@ export function useConfigModels(active: boolean) {
     pending.current = readCodexConfigModelNames().then((names) => {
       if (mounted.current) setModels(names);
     }).catch(() => {
-      if (mounted.current) setError(guiText("模型列表暂时无法更新，请稍后重试。"));
+      if (mounted.current) setError(uiText("client.conversation.couldNotUpdateTheModelListPleaseTryAgainShortly"));
     }).finally(() => {
       pending.current = undefined;
       if (mounted.current) setLoading(false);

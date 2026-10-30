@@ -1,8 +1,10 @@
-import { t, useLanguage } from '../i18n';
+import { displayText } from '../i18n/index';
+import { getLanguage, t, useLanguage } from '../i18n';
+import { petDockText } from '@remoteai/i18n/copy/petDock';
 import { useState } from 'react';
 import { Button, Dialog, Switch } from 'antd-mobile';
-import { ChevronRight, Grid2X2, IdCard, Info, LockKeyhole, LogOut,
-  Download, Languages, Monitor, RefreshCw, ShieldCheck, UserRound } from 'lucide-react';
+import { ChevronRight, Grid2X2, Info, LockKeyhole, LogOut,
+  Monitor, PawPrint, RefreshCw, ShieldCheck, Type } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../hooks';
 import { signOut } from '../store';
 import type { useTotpVault } from '../useTotpVault';
@@ -14,24 +16,23 @@ import { loadRefreshMinutes } from './refreshInterval';
 import { RefreshIntervalSheet } from './RefreshIntervalSheet';
 import { PasswordSheet } from './PasswordSheet';
 import { AboutPage } from './AboutPage';
-import { LanguageSheet } from './LanguageSheet';
+import { LanguageSettingsRow } from './LanguageSettingsRow';
 import { ThemeSheet } from './ThemeSheet';
-import { useThemeMode } from '../theme/preference';
-import { Contrast } from 'lucide-react';
-import { getLanguage, languageLabel } from '../i18n';
+import { ThemeSettingsRow } from './ThemeSettingsRow';
 import { profileRole } from '../i18n/profile';
 import './styles.css';
-import { DownloadManagerPage } from '../downloads/DownloadManagerPage';
-import { downloadOwner } from '../downloads/manager';
 import { AutoSaveSettings } from '../../../../shared/project-browser/AutoSaveSettings';
+import { JsonHighlightSettings } from '../../../../shared/file-preview/JsonHighlightSettings';
 import { useBrowserPreferences } from '../../../../shared/project-browser/useBrowserPreferences';
+import { GlobalFontSettings } from '../../../../shared/appearance/GlobalFontSettings';
+import { useGlobalFontSize } from '../../../../shared/appearance/fontSize';
 
-type Panel = 'profile' | 'identity' | 'refresh' | 'totp' | 'password' | 'about'
-  | 'language' | 'downloads' | 'desktop' | 'theme' | 'files' | null;
+type Panel = 'profile' | 'refresh' | 'totp' | 'password' | 'about'
+  | 'desktop' | 'theme' | 'files' | 'font' | 'petDock' | null;
 
 export function SettingsPage({ totpManager }: { totpManager: ReturnType<typeof useTotpVault> }) {
   useLanguage();
-  const mode = useThemeMode();
+  const fontSize = useGlobalFontSize();
   const filePreferences = useBrowserPreferences();
   const dispatch = useAppDispatch();
   const session = useAppSelector(state => state.auth.session);
@@ -42,64 +43,78 @@ export function SettingsPage({ totpManager }: { totpManager: ReturnType<typeof u
   const role = profileRole(profile);
   const close = () => setPanel(null);
   const logout = async () => {
-    const confirmed = await Dialog.confirm({ title: t("退出当前账号？"),
-      content: t("退出后需要重新登录，云端数据会保留。"), confirmText: t("退出登录"), cancelText: t("继续使用") });
+    const confirmed = await Dialog.confirm({ title: t("client.settings.signOutOfThisAccount"),
+      content: t("client.settings.youWillNeedToSignInAgainYourCloudData"), confirmText: t("client.app.signOut"), cancelText: t("client.settings.staySignedIn") });
     if (confirmed) void dispatch(signOut());
   };
   if (panel === 'about') return <AboutPage onBack={close} />;
-  if (panel === 'downloads' && session) return <DownloadManagerPage owner={downloadOwner(session)} onBack={close} />;
   return <>
     <div className="page-body settings-page">
-      <div className="settings-layout"><section className="settings-group settings-profile-group">
-        <button type="button" className="settings-profile" onClick={() => setPanel('profile')} aria-label={t("查看用户信息")}>
+      <div className="settings-layout"><div className="settings-profile-group">
+      <section className="settings-group">
+        <button type="button" className="settings-profile" onClick={() => setPanel('profile')} aria-label={t("client.settings.viewProfile")}>
           <span className="settings-avatar">{email.slice(0, 2).toUpperCase()}</span>
-          <span><strong>{email}</strong><small>{t("Remote AI 云端账号")}</small></span><ChevronRight size={20} /></button>
-        <SettingsRow label={t("用户信息")} value={email} icon={UserRound} tone="blue" onClick={() => setPanel('profile')} />
-        <SettingsRow label={t("身份信息")} value={role} icon={IdCard} tone="blue" onClick={() => setPanel('identity')} />
+          <span><strong>{email}</strong><small>{t("client.settings.remoteAiCloudAccount")}</small></span><ChevronRight size={20} /></button>
       </section>
+      <section className="settings-group">
+        <ThemeSettingsRow onOpen={() => setPanel('theme')} />
+        <LanguageSettingsRow />
+      </section>
+      </div>
       <div className="settings-preferences">
         <section className="settings-group">
-          <SettingsRow label={t('外观')} value={t(mode === 'dark' ? '暗黑' : '明亮')} icon={Contrast}
-            onClick={() => setPanel('theme')} />
-          <SettingsRow label={t('下载管理')} icon={Download} onClick={() => setPanel('downloads')} />
-          <SettingsRow label={t('文件自动保存')} icon={RefreshCw} onClick={() => setPanel('files')} />
-          <SettingsRow label={t("语言")} value={languageLabel(getLanguage())} icon={Languages}
-            onClick={() => setPanel('language')} />
-          <SettingsRow label={t("自动刷新用量")} value={t("{value1} 分钟", { value1: minutes })} icon={RefreshCw}
+          <SettingsRow label={t('client.appearance.globalFontSize')} value={`${fontSize}px`} icon={Type}
+            onClick={() => setPanel('font')} />
+          <SettingsRow label={t("client.projectBrowser.fileBrowserSettings")} icon={RefreshCw}
+            onClick={() => setPanel('files')} />
+          <SettingsRow label={t("client.settings.autoRefreshUsage")} value={t("client.settings.minutes", { value1: minutes })} icon={RefreshCw}
             onClick={() => setPanel('refresh')} />
-          <SettingsRow label={t("2FA 密钥")} value={totpManager.cloudSyncEnabled ? t("已开启") : t("未开启")} icon={ShieldCheck}
+          <SettingsRow label={t("client.app.2faKeys")} value={totpManager.cloudSyncEnabled ? t("client.settings.on") : t("client.settings.off")} icon={ShieldCheck}
             onClick={() => setPanel('totp')} />
+          <SettingsRow label={petDockText(getLanguage(), 'settings.petDock.title')}
+            icon={PawPrint} onClick={() => setPanel('petDock')} />
         </section>
         {profile?.role === 'admin' && <section className="settings-group">
-          <SettingsRow label={t("管理控制台")} icon={Grid2X2}
+          <SettingsRow label={t("client.settings.adminConsole")} icon={Grid2X2}
             onClick={() => window.location.assign(`${session?.baseUrl ?? window.location.origin}/admin`)} />
         </section>}
-        <section className="settings-group"><SettingsRow label={t("修改密码")} icon={LockKeyhole} tone="orange"
+        <section className="settings-group"><SettingsRow label={t("client.settings.changePassword")} icon={LockKeyhole} tone="orange"
           onClick={() => setPanel('password')} /></section>
         <section className="settings-group">
-          <SettingsRow label={t('电脑端版本')} icon={Monitor} tone="blue" onClick={() => setPanel('desktop')} />
-          <SettingsRow label={t("关于 Remote AI")} value={`v${version}`}
+          <SettingsRow label={t("client.settings.desktopVersion")} icon={Monitor} tone="blue" onClick={() => setPanel('desktop')} />
+          <SettingsRow label={t("client.settings.aboutRemoteAi")} value={`v${version}`}
           icon={Info} tone="blue" onClick={() => setPanel('about')} /></section>
       </div></div>
       <Button className="settings-logout" block color="danger" fill="outline" onClick={() => void logout()}>
-        <LogOut size={21} />{t("退出登录")}</Button>
+        <LogOut size={21} />{t("client.app.signOut")}</Button>
     </div>
-    <AdaptiveSheet open={panel === 'files'} title={t('文件浏览设置')} onClose={close} width={400}>
-      <div className="settings-sync"><AutoSaveSettings preferences={filePreferences} t={t} /></div>
+    <AdaptiveSheet open={panel === 'petDock'} title={petDockText(getLanguage(), 'settings.petDock.title')}
+      onClose={close} width={400}>
+      <div className="settings-sync">
+        <p>{petDockText(getLanguage(), 'settings.petDock.cloudHint')}</p>
+        <p>{petDockText(getLanguage(), 'settings.petDock.labelsHint')}</p>
+        <p>{petDockText(getLanguage(), 'settings.petDock.averageHint')}</p>
+      </div>
     </AdaptiveSheet>
-    <AdaptiveSheet open={panel === 'profile' || panel === 'identity'} onClose={close} width={400}
-      title={panel === 'identity' ? t("身份信息") : t("用户信息")}>
-      <dl className="settings-profile-details"><dt>{t("邮箱")}</dt><dd>{email}</dd><dt>{t("身份")}</dt><dd>{role}</dd></dl>
+    <AdaptiveSheet open={panel === 'files'} title={t("client.projectBrowser.fileBrowserSettings")} onClose={close} width={400}>
+      <div className="settings-sync"><div>
+        <AutoSaveSettings preferences={filePreferences} t={displayText} /><JsonHighlightSettings t={displayText} />
+      </div></div>
     </AdaptiveSheet>
-    <AdaptiveSheet open={panel === 'totp'} title={t("2FA 密钥")} onClose={close} width={400}>
-      <div className="settings-sync"><div><strong>{t("云端同步")}</strong>
-        <p>{t("开启后，在手机和网页上使用同一组 2FA 密钥。")}</p></div>
-        <Switch aria-label={t("云端同步")} checked={totpManager.cloudSyncEnabled} disabled={totpManager.syncing}
+    <AdaptiveSheet open={panel === 'font'} title={t('client.appearance.globalFontSize')} onClose={close} width={480}>
+      <GlobalFontSettings t={t} />
+    </AdaptiveSheet>
+    <AdaptiveSheet open={panel === 'profile'} onClose={close} width={400} title={t("client.settings.profile")}>
+      <dl className="settings-profile-details"><dt>{t("client.app.email")}</dt><dd>{email}</dd><dt>{t("client.settings.role")}</dt><dd>{role}</dd></dl>
+    </AdaptiveSheet>
+    <AdaptiveSheet open={panel === 'totp'} title={t("client.app.2faKeys")} onClose={close} width={400}>
+      <div className="settings-sync"><div><strong>{t("client.settings.cloudSync")}</strong>
+        <p>{t("client.settings.useTheSame2faKeysOnYourPhoneAndThe")}</p></div>
+        <Switch aria-label={t("client.settings.cloudSync")} checked={totpManager.cloudSyncEnabled} disabled={totpManager.syncing}
           onChange={totpManager.setCloudSyncEnabled} /></div>
     </AdaptiveSheet>
     {panel === 'refresh' && <RefreshIntervalSheet minutes={minutes} onSaved={setMinutes} onClose={close} />}
     {panel === 'password' && <PasswordSheet onClose={close} />}
-    {panel === 'language' && <LanguageSheet onClose={close} />}
     {panel === 'theme' && <ThemeSheet onClose={close} />}
     {panel === 'desktop' && <DesktopVersionSheet onClose={close} />}
   </>;

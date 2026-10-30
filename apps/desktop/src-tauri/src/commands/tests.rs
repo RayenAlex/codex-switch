@@ -38,6 +38,7 @@ mod compatible_json_import_tests {
     #[test]
     fn private_account_details_normalize_phone_and_base32_key() {
         let details = AccountPrivateDetails {
+            alias: None,
             password: "kept exactly ".to_string(),
             phone_number: "  +65 6123 4567  ".to_string(),
             totp_secret: "jbsw-y3dp ehpk3pxp==".to_string(),

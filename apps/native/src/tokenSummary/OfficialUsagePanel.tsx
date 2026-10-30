@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useLanguage } from '../i18n';
 import type { TokenSummary } from '../../../../shared/remote-chat/tokenSummary';
-import { officialUsageLabels } from '../../../../shared/officialUsageLabels';
+import { officialUsageLabels } from '@remoteai/i18n/copy/client/officialUsageLabels';
 import { formatTokens } from '../../../../shared/remote-chat/usage';
 import { useSummaryStyles as useS } from './styles';
 

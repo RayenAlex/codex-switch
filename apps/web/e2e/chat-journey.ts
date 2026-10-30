@@ -146,11 +146,12 @@ async function synchronizeComposer({ page, request, info }: Journey) {
   await openChatSettings(page);
   if (isDesktop(page)) await expectComposerSelection(page);
   else {
-    await expect(page.locator('.chat-setting-entry')).toHaveCount(4);
-    await expect(page.getByRole('button', { name: '设置速度模式', exact: true })).toBeVisible();
-    await expect(page.getByRole('radio')).toHaveCount(0);
+    await expect(page.locator('.chat-setting-entry')).toHaveCount(1);
+    await expect(page.getByRole('radiogroup', { name: '速度模式', exact: true })).toBeVisible();
+    await expect(page.getByRole('radiogroup')).toHaveCount(3);
     await expect(page.getByRole('button', { name: '设置模型' })).toContainText('第二模型');
-    await expect(page.getByRole('button', { name: '设置推理强度' })).toContainText('极高');
+    await expect(page.getByRole('radiogroup', { name: '推理强度' })
+      .getByRole('radio', { name: '极高', exact: true })).toBeChecked();
     await screenshot(page, info, '05-settings-menu');
     await click(page.getByRole('button', { name: '设置模型' }));
     await expect(page.getByRole('radio', { name: '第二模型', exact: true })).toBeChecked();

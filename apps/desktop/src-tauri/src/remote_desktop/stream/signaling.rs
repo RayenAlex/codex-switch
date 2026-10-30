@@ -15,6 +15,7 @@ impl Peer {
             .await
             .map_err(|_| DesktopError::Platform)?;
         Ok(Offer {
+            display_state: None,
             sdp,
             direct_upgrade: true,
             relay_standby: false,

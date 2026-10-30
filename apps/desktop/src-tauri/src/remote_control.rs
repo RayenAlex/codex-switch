@@ -20,6 +20,11 @@ mod app_update;
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 enum ServerMessage {
+    ScreenPower {
+        #[serde(rename = "commandId")]
+        command_id: String,
+        action: crate::platform::screen_power::Action,
+    },
     AccountUsage {
         #[serde(rename = "commandId")]
         command_id: String,
@@ -150,6 +155,8 @@ fn run_connection<R: Runtime>(
     if remote_commands_enabled {
         capabilities.push("remote-command");
     }
+    #[cfg(windows)]
+    capabilities.push("screen-power");
     socket
         .send(Message::Text(
             json!({
@@ -201,6 +208,11 @@ fn run_connection<R: Runtime>(
                 let message = serde_json::from_str::<ServerMessage>(&text)
                     .map_err(|error| format!("Invalid remote control message: {error}"))?;
                 match message {
+                    ServerMessage::ScreenPower { command_id, action } => {
+                        let result = crate::platform::screen_power::set(action)
+                            .map_err(|_| "client.deviceScreen.failed".to_owned());
+                        send_command_result(&mut socket, command_id, result, "Screen power")?;
+                    }
                     ServerMessage::AccountUsage {
                         command_id,
                         account_id,

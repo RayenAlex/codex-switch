@@ -2,7 +2,7 @@ import { Button, Input } from 'antd';
 import { AppWindow } from 'lucide-react';
 import type { Language } from '../../i18n';
 import { useChatGptLaunchPath } from '../../hooks/useChatGptLaunchPath';
-import { chatGptLaunchPathCopy } from './chatgptLaunchPathCopy';
+import { chatGptLaunchPathCopy } from '@remoteai/i18n/copy/desktop/chatgptLaunchPathCopy';
 import styles from './ChatGptLaunchPathCard.module.less';
 
 export function ChatGptLaunchPathCard({ language }: { language: Language }) {

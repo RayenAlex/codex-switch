@@ -1,3 +1,4 @@
+import { testBrowserChannel, testBrowserLaunchOptions } from '../../../scripts/test-browser.mjs';
 // Local emulator fixture only. It never connects to a cloud account or an AI provider.
 import http from 'node:http';
 import { createRequire } from 'node:module';
@@ -192,11 +193,11 @@ await new Promise((resolve) => httpServer.listen(apiPort, '127.0.0.1', resolve))
 const vite = await createServer({ optimizeDeps: { entries: ['e2e/chat-harness.html'] },
   cacheDir: process.env.CHAT_TEST_CACHE, server: { port: uiPort, host: '127.0.0.1' } });
 await vite.listen();
-const browser = await chromium.launch({ channel: process.env.CHAT_TEST_BROWSER
-  ?? (process.platform === 'win32' ? 'msedge' : 'chromium'), headless: true,
+const browser = await chromium.launch(testBrowserLaunchOptions({
+  channel: testBrowserChannel(process.env.CHAT_TEST_BROWSER), headless: true,
   // The emulator cannot resolve the host browser's .local candidates on its virtual NAT.
   args: process.env.CHAT_TEST_REMOTE_DESKTOP === '1' ? ['--disable-features=WebRtcHideLocalIpsWithMdns'] : [],
-});
+}));
 page = await browser.newPage();
 page.on('pageerror', (error) => console.error(error.message));
 page.on('console', (message) => { if (message.type() === 'error') console.error(message.text()); });

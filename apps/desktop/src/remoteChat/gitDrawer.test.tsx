@@ -14,16 +14,17 @@ let container: HTMLDivElement;
 const visibility = vi.fn();
 const panel = () => container.querySelector<HTMLElement>('[role="dialog"]')!;
 const button = (label: string) => container.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!;
-function Fixture() {
-  return <DetailsWorkspace active selected="/project"><Tools /></DetailsWorkspace>;
+function Fixture({ cwd = '/project' }: { cwd?: string }) {
+  return <DetailsWorkspace active selected={cwd}><Tools cwd={cwd} /></DetailsWorkspace>;
 }
-function Tools() {
+function Tools({ cwd }: { cwd: string }) {
   const [open, setOpen] = useState(true);
   const workspace = useContext(WorkspaceDrawerContext)!;
   return <>
-    <button onClick={() => workspace.tabs.open(workspaceTabId.git(''))}>打开 Git</button>
+    <button onClick={() => workspace.tabs.open(workspaceTabId.git(cwd))}>打开 Git</button>
     <ConversationChangesButton />
-    {open && <GitDrawer active desktopDiffs onClose={() => setOpen(false)} onVisibilityChange={visibility}>
+    {open && <GitDrawer key={cwd} cwd={cwd} active desktopDiffs
+      onClose={() => setOpen(false)} onVisibilityChange={visibility}>
       {() => <input aria-label="草稿" defaultValue="draft" />}</GitDrawer>}
   </>;
 }
@@ -34,6 +35,8 @@ beforeEach(async () => {
   localStorage.clear(); visibility.mockClear();
   container = document.createElement('div'); document.body.append(container); root = createRoot(container);
   await act(async () => root.render(<Fixture />));
+  expect(panel().hidden).toBe(true);
+  await act(async () => [...container.querySelectorAll('button')].find(node => node.textContent === '打开 Git')!.click());
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); });
 
@@ -85,4 +88,16 @@ it('keeps Git mounted and pauses its refresh while another tab is selected, incl
   await act(async () => draft.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
   expect(panel().hidden).toBe(true);
   expect(visibility).toHaveBeenLastCalledWith(false);
+});
+
+it.each(['关闭详情抽屉', '最小化详情抽屉'])('preserves %s when Git remounts for another project', async label => {
+  await act(async () => button(label).click());
+  for (const cwd of ['/other-project', '/project', '/other-project']) {
+    await act(async () => root.render(<Fixture cwd={cwd} />));
+    expect(panel().hidden).toBe(true);
+    expect(visibility).toHaveBeenLastCalledWith(false);
+  }
+  await act(async () => [...container.querySelectorAll('button')].find(node => node.textContent === '打开 Git')!.click());
+  expect(panel().hidden).toBe(false);
+  expect(visibility).toHaveBeenLastCalledWith(true);
 });

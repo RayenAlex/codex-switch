@@ -4,6 +4,7 @@ import { ChatController } from '../../../shared/remote-chat/client/controller';
 import type { GuiEvent } from '../../../shared/remote-chat/client/types';
 import { ChatThreads } from '../src/chat/ChatThreads';
 import { ChatSidebar } from '../src/chat/ChatSidebar';
+import { ChatThreadFilter } from '../src/chat/ChatThreadFilter';
 import '../src/styles.css';
 import '../src/chat/chat.css';
 
@@ -35,7 +36,8 @@ function Harness() {
   const state = useSyncExternalStore(controller.subscribe, controller.snapshot);
   useEffect(() => { controller.start(); return () => controller.stop(); }, [controller]);
   return <main className="chat-page" style={{ height: '100dvh' }}>
-    <ChatSidebar desktop={window.innerWidth > 860} open={open} onClose={() => setOpen(false)}>
+    <ChatSidebar desktop={window.innerWidth > 860} open={open} onClose={() => setOpen(false)}
+      headingExtra={<ChatThreadFilter state={state} controller={controller} />}>
       <ChatThreads state={state} controller={controller} newChat={() => {}} onClose={() => setOpen(false)}
         openSearch={() => {}} profile={null} />
     </ChatSidebar>

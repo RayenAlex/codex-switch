@@ -1,5 +1,6 @@
+import { displayError } from '../../i18n/uiText';
 import { guiApi } from './api';
-import { guiText } from '../../i18n/guiText';
+
 import { projectFileReference, useProjectFileCandidates,
   type ProjectFileSearch } from '../../../../../shared/chat/useProjectFileCandidates';
 import type { AttachmentReference } from './attachmentTypes';
@@ -16,5 +17,5 @@ export function useComposerFileOptions(options: {
     label: file.name, description: file.relativePath ?? file.path, directory: file.directory,
     enabled: options.connected, command: { enabled: options.connected,
       run: () => options.choose?.(projectFileReference(file)) } }));
-  return { ...result, error: result.error ? guiText(result.error) : '', options: items };
+  return { ...result, error: result.error ? displayError(result.error) : '', options: items };
 }

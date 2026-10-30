@@ -13,11 +13,13 @@ import { BrowserDesktopDirectHost, type BrowserDesktopPeer } from './directHost'
 import { BrowserDesktopRelayHost } from './relayHost';
 import { configureDesktopSender } from './videoSender';
 import { DesktopNetworkSampler } from './networkSample';
+import { requiresDesktopSetup } from '../../../../shared/remote-desktop/diagnostics';
 
 const HEARTBEAT_TIMEOUT = 12_000;
 const SETUP_TIMEOUT = 30_000;
 const STATS_INTERVAL = 2000;
 const MAX_CANDIDATES = 128;
+const ERROR_DELIVERY_TIMEOUT_MS = 1000;
 
 export class DesktopHostSession {
   private pc: RTCPeerConnection;
@@ -25,7 +27,7 @@ export class DesktopHostSession {
   private readonly capture = new DesktopCapture();
   private readonly adaptation = new DesktopAdaptation();
   private readonly network = new DesktopNetworkSampler();
-  private readonly controls = new DesktopControls(this.capture, () => this.fail(), message => {
+  private readonly controls = new DesktopControls(this.capture, error => this.fail(error), message => {
     if (this.channel.readyState === 'open') this.channel.send(JSON.stringify(message));
   });
   private channel: RTCDataChannel;
@@ -40,6 +42,7 @@ export class DesktopHostSession {
   private candidates: RTCIceCandidateInit[] = [];
   private receivedCandidates = 0;
   private stopped = false;
+  private failing = false;
   private timer?: ReturnType<typeof setTimeout>;
   private expires: ReturnType<typeof setTimeout>;
   private lastStats = 0;
@@ -88,7 +91,7 @@ export class DesktopHostSession {
     });
     channel.addEventListener('close', () => { if (this.pc === pc) void this.recover(pc); });
     channel.addEventListener('message', ({ data }) => {
-      if (this.stopped) return;
+      if (this.stopped || this.failing) return;
       const standby = typeof data === 'string' && this.standby?.receive(peer, data);
       if (standby === 'ignored') return;
       if (standby) {
@@ -179,16 +182,16 @@ export class DesktopHostSession {
   async renew(expiresAt: number) { this.expiresAt = expiresAt; await this.capture.renew(expiresAt); }
 
   private async tick() {
-    if (this.stopped) return;
+    if (this.stopped || this.failing) return;
     const started = performance.now();
     try {
       const profile = this.adaptation.profile();
       await this.capture.frame(profile.width);
       this.frames += 1;
       if (started - this.lastStats >= STATS_INTERVAL) await this.updateStats(started);
-      if (!this.stopped) this.timer = setTimeout(() => { void this.tick(); },
+      if (!this.stopped && !this.failing) this.timer = setTimeout(() => { void this.tick(); },
         Math.max(0, 1000 / profile.fps - (performance.now() - started)));
-    } catch { this.fail(); }
+    } catch (error) { this.fail(error); }
   }
 
   private async updateStats(now: number) {
@@ -234,9 +237,17 @@ export class DesktopHostSession {
     await configureDesktopSender(this.sender, profile);
   }
 
-  private fail() {
+  private fail(error?: unknown) {
+    if (this.stopped || this.failing) return;
+    this.failing = true;
+    const message = requiresDesktopSetup(error)
+      ? String(error instanceof Error ? error.message : error) : '无法访问桌面，请确认电脑已解锁后重试。';
     if (this.channel.readyState === 'open') {
-      this.channel.send(JSON.stringify({ kind: 'error', message: '无法访问桌面，请确认电脑已解锁后重试。' }));
+      this.channel.send(JSON.stringify({ kind: 'error', message }));
+      // Leave time for the reliable channel to deliver the reason; the receiver closes on receipt.
+      clearTimeout(this.timer); this.controls.close();
+      clearTimeout(this.expires); this.expires = setTimeout(() => this.close(), ERROR_DELIVERY_TIMEOUT_MS);
+      return;
     }
     this.close();
   }

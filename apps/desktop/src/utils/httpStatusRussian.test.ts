@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { httpStatusOptions } from "./httpStatusOptions";
-import { HTTP_STATUS_RU } from "./httpStatusRussian";
+import { httpStatusOptions } from "@remoteai/i18n/copy/desktop/httpStatusOptions";
+import { HTTP_STATUS_RU } from "@remoteai/i18n/copy/desktop/httpStatusRussian";
 
 const HAN = /\p{Script=Han}/u;
 const CYRILLIC = /\p{Script=Cyrillic}/u;

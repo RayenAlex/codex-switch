@@ -1,4 +1,5 @@
-import { guiText } from "../i18n/guiText";
+import inlineCopy from '@remoteai/i18n/copy/inline/desktop/components/DailyTokenUsageTooltip';
+import { uiText } from "../i18n/uiText";
 import type { Language } from "../i18n";
 import { formatCompactTokenCount } from "../utils/tokenContext";
 
@@ -22,26 +23,26 @@ export function DailyTokenUsageTooltip({ totals, language }: {
   totals: TokenTypeTotals;
   language: Language;
 }) {
-  const labels = (language === "ru" ? {
-      title: guiText("今日 Token 用量", {}, language),
-      input: guiText("输入", {}, language),
-      output: guiText("输出", {}, language),
-      reasoning: guiText("推理", {}, language),
-      cached: guiText("缓存", {}, language),
+  const labels = (language !== "zh" && language !== "en" ? {
+      title: uiText("client.usage.todaySTokenUsage", {}, language),
+      input: uiText("client.chat.input", {}, language),
+      output: uiText("client.chat.output", {}, language),
+      reasoning: uiText("client.chat.reasoning", {}, language),
+      cached: uiText("client.chat.cached", {}, language),
     } : language === "zh"
     ? {
-      title: "今日 Token 用量",
-      input: "输入",
-      output: "输出",
-      reasoning: "推理",
-      cached: "缓存",
+      title: inlineCopy["Token_ce3351b6"],
+      input: inlineCopy["text_2087c777"],
+      output: inlineCopy["text_fb04addb"],
+      reasoning: inlineCopy["text_132411ba"],
+      cached: inlineCopy["text_e3ca04a9"],
     }
     : {
-      title: "Today's Token usage",
-      input: "Input",
-      output: "Output",
-      reasoning: "Reasoning",
-      cached: "Cached",
+      title: inlineCopy["Todays_Token_usage_6d7b75c8"],
+      input: inlineCopy["Input_36ecb4f8"],
+      output: inlineCopy["Output_b2439bcb"],
+      reasoning: inlineCopy["Reasoning_d8211e24"],
+      cached: inlineCopy["Cached_a251c182"],
     });
   const values = [totals.input, totals.output, totals.reasoning, totals.cached];
 

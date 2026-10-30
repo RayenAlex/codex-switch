@@ -1,10 +1,12 @@
+import { pluginSearch } from '@remoteai/i18n/copy/desktop/pluginSearch';
+import { displayError } from '../../../i18n/uiText';
 import { useEffect, useState } from "react";
 import { Globe, LoaderCircle, Power, Settings2 } from "lucide-react";
 import { useChromePlugin } from "./useChromePlugin";
 import { ChromeSetup } from "./ChromeSetup";
 import type { ChromePluginStatus } from "../../../api/chromePlugin";
 import { translate } from "../../../i18n";
-import { guiText } from "../../../i18n/guiText";
+import { uiText } from "../../../i18n/uiText";
 import { useGuiLanguage } from "../../../i18n/useGuiLanguage";
 import styles from "./index.module.less";
 
@@ -15,19 +17,18 @@ interface Props {
 }
 
 export function chromePluginMatches(query: string) {
-  return "chrome 浏览器助手 browser assistant extension remote ai 点击 输入 截图 браузерный помощник расширение"
-    .includes(query.trim().toLocaleLowerCase());
+  return pluginSearch.chrome.includes(query.trim().toLocaleLowerCase());
 }
 
 function connectionText(status: ChromePluginStatus | null, busy: boolean) {
-  if (!status) return guiText("正在检查…");
-  if (!status.supported) return guiText("当前系统暂不支持");
-  if (!status.installed) return guiText(busy ? "正在准备浏览器助手…" : "尚未就绪，请点击启用");
-  if (status.needsRepair) return guiText("插件设置需要修复");
-  if (!status.enabled) return guiText("已停用");
-  if (!status.connectedBrowsers) return guiText("等待 Chrome 连接");
-  if (!status.activeBrowsers) return guiText("浏览器控制已暂停");
-  return guiText("已连接 {count} 个浏览器", { count: status.connectedBrowsers });
+  if (!status) return uiText("client.desktopChromePlugin.checking");
+  if (!status.supported) return uiText("client.desktopChromePlugin.notSupportedOnThisSystem");
+  if (!status.installed) return uiText(busy ? "client.desktopChromePlugin.preparingTheBrowserAssistant" : "client.desktopChromePlugin.notReadyClickEnable");
+  if (status.needsRepair) return uiText("client.desktopChromePlugin.pluginSettingsNeedRepair");
+  if (!status.enabled) return uiText("client.desktopChromePlugin.disabled");
+  if (!status.connectedBrowsers) return uiText("client.desktopChromePlugin.waitingForChromeToConnect");
+  if (!status.activeBrowsers) return uiText("client.desktopChromePlugin.browserControlPaused");
+  return uiText("client.desktopChromePlugin.connectedBrowsers", { count: status.connectedBrowsers });
 }
 
 export function ChromePluginCard({ homeId, active, onBusyChange }: Props) {
@@ -38,26 +39,26 @@ export function ChromePluginCard({ homeId, active, onBusyChange }: Props) {
   return <article className={`skill-card ${styles.card}`}>
     <div className={`skill-card-preview ${styles.preview}`}>
       <div className={styles.icon}><Globe size={45} /></div>
-      <span className="skill-official-badge">{guiText("内置插件")}</span>
+      <span className="skill-official-badge">{uiText("client.desktopChromePlugin.builtInPlugin")}</span>
       {status?.version && <span className="skill-version">v{status.version}</span>}
     </div>
     <div className="skill-card-body">
-      <div className="skill-card-title"><h3>{guiText("Chrome 浏览器助手")}</h3></div>
-      <p>{guiText("在你允许的网站上读取页面、点击、输入和截图，支持已有标签页。")}</p>
+      <div className="skill-card-title"><h3>{uiText("client.desktopChromePlugin.chromeBrowserAssistant")}</h3></div>
+      <p>{uiText("client.desktopChromePlugin.readsPagesClicksTypesAndTakesScreenshotsOnSitesYou")}</p>
       <div className={styles.connection} role="status">{connectionText(status, busy)}</div>
-      {error && <div className={styles.error} role="alert">{guiText(error)}</div>}
-      <div className="skill-card-meta"><span>Remote AI</span><span>{guiText("浏览器")}</span></div>
+      {error && <div className={styles.error} role="alert">{displayError(error)}</div>}
+      <div className="skill-card-meta"><span>Remote AI</span><span>{uiText("client.configLabels.browser")}</span></div>
       <div className={styles.cardActions}>
         <button className="refresh-all" disabled={busy || !status?.supported || !status.installed}
           onClick={() => setSetup(true)}>
-          <Settings2 size={15} />{guiText("安装与连接")}
+          <Settings2 size={15} />{uiText("client.desktopChromePlugin.installAndConnect")}
         </button>
         <button className={`official-plugin-toggle${status?.enabled ? " active" : ""}`}
           disabled={busy || !status?.supported}
           onClick={() => void run(status?.enabled ? "disable" : "enable")}>
           {busy ? <LoaderCircle className="spin" size={16} /> : <Power size={16} />}
           {/* The shared "启用" entry is the "Enabled" state label; this is the Enable action. */}
-          {status?.enabled ? guiText("停用") : translate(language, "skills.official.enable")}
+          {status?.enabled ? uiText("client.desktopChromePlugin.disable") : translate(language, "skills.official.enable")}
         </button>
       </div>
     </div>

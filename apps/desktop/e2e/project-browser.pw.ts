@@ -105,8 +105,8 @@ test('mobile tool menu, file navigation, plain text, find, unsaved guard and key
 test('large/binary notices and drafts survive disconnection and viewport changes', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await openBrowser(page);
-  await page.getByRole('treeitem', { name: 'huge.txt', exact: true }).click();
-  await expect(page.getByText('文件超过 2 MB，暂不支持在这里编辑。', { exact: true })).toBeVisible();
+  await page.getByRole('treeitem', { name: 'huge.png', exact: true }).click();
+  await expect(page.getByText('此文件超过 64 MB，请下载后查看。', { exact: true })).toBeVisible();
   await page.getByRole('treeitem', { name: 'archive.zip', exact: true }).click();
   await expect(page.getByText('此文件暂不支持预览。', { exact: true })).toBeVisible();
   await openCode(page);

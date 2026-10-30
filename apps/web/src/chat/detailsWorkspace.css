@@ -2,6 +2,6 @@
 .chat-diff-layout { display: flex; }
 .chat-page:not(.gui-remote-workspace) .chat-diff-workspace {
   --ink: var(--app-ink, var(--chat-ink)); --muted: var(--app-muted, var(--chat-muted)); --line: var(--app-border, var(--chat-border));
-  --panel: #fbfcfa; --bg: var(--chat-background); --green: var(--app-accent, var(--chat-green));
+  --panel: var(--app-surface, #fbfcfa); --bg: var(--chat-background); --green: var(--app-accent, var(--chat-green));
   --green-soft: var(--chat-pale); --green-dark: var(--app-ink, var(--chat-green));
 }

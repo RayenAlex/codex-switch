@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import { useEffect, useMemo, useRef, type KeyboardEvent } from "react";
 import { App, Button, Space } from "antd";
 import { Copy, Trash2 } from "lucide-react";
@@ -43,11 +44,11 @@ function WorkflowCanvas({ graph, selected, onSelect, onChange, history }: Props)
     const edge = fromConnection(connection);
     const base = { ...graph, edges: graph.edges.filter((item) => edgeId(item) !== replaced) };
     const error = connectionError(base, edge);
-    if (error) { void message.info(t(error)); return; }
+    if (error) { void message.info(displayError(error)); return; }
     onChange({ ...base, edges: [...base.edges, edge] });
   };
   const add = (type: string) => {
-    if (graph.nodes.length >= MAX_NODES) { void message.info(t("节点数量已达到上限。")); return; }
+    if (graph.nodes.length >= MAX_NODES) { void message.info(t("coze.index.youVeReachedTheMaximumNumberOfNodes")); return; }
     const rect = container.current?.getBoundingClientRect();
     if (!rect) return;
     const position = flow.screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
@@ -63,7 +64,7 @@ function WorkflowCanvas({ graph, selected, onSelect, onChange, history }: Props)
     const node = graph.nodes.find((node) => node.id === selected);
     if (!node || node.type === "start" || graph.nodes.length >= MAX_NODES) return;
     // The copy's name becomes user data: localize the suffix once, now.
-    const copy = { ...node, id: newNode(node.type, 0).id, name: t("{name} 副本", { name: node.name }),
+    const copy = { ...node, id: newNode(node.type, 0).id, name: t("coze.index.copy.a0c42c", { name: node.name }),
       x: node.x + 40, y: node.y + 140 };
     onChange({ ...graph, nodes: [...graph.nodes, copy] }); onSelect(copy.id);
   };
@@ -82,7 +83,7 @@ function WorkflowCanvas({ graph, selected, onSelect, onChange, history }: Props)
   const hasSelection = nodes.some((node) => node.selected) || edges.some((edge) => edge.selected);
   const selectedEdges = edges.filter((edge) => edge.selected).length;
   const onlyEdges = selectedEdges > 0 && !nodes.some((node) => node.selected);
-  return <div ref={container} className="workflow-canvas" aria-label={t("工作流画布")} tabIndex={0}
+  return <div ref={container} className="workflow-canvas" aria-label={t("coze.index.workflowCanvas")} tabIndex={0}
     onKeyDown={shortcut} onPointerDownCapture={() => container.current?.focus({ preventScroll: true })}>
     <ReactFlow nodes={nodes} edges={interactiveEdges} nodeTypes={nodeTypes} onNodesChange={(changes) => {
       onNodesChange(changes);
@@ -111,15 +112,15 @@ function WorkflowCanvas({ graph, selected, onSelect, onChange, history }: Props)
         edges: graph.edges.filter((edge) => edgeId(edge) !== reconnecting.current) }, fromConnection(connection))}>
       <Background color="var(--border)" gap={20} size={1.5} />
       <Panel position="top-left"><Space><NodePalette onAdd={add} />{hasSelection && <>
-        <Button aria-label={t("复制节点")} icon={<Copy size={15} />} onClick={duplicate}
+        <Button aria-label={t("coze.index.duplicateNode")} icon={<Copy size={15} />} onClick={duplicate}
           disabled={!selected || graph.nodes.find((node) => node.id === selected)?.type === "start"} />
-        <Button danger aria-label={t("删除所选")} icon={<Trash2 size={15} />} onClick={remove}>
-          {onlyEdges ? t("删除连线") : t("删除所选")}</Button>
+        <Button danger aria-label={t("coze.index.deleteSelected")} icon={<Trash2 size={15} />} onClick={remove}>
+          {onlyEdges ? t("coze.index.deleteConnections") : t("coze.index.deleteSelected")}</Button>
         {onlyEdges && <span className="edge-selection-hint" role="status">
-          {t("已选中 {count} 条连线 · Delete 删除", { count: selectedEdges })}</span>}
+          {t("coze.index.connectionsSelectedPressDeleteToRemove", { count: selectedEdges })}</span>}
       </>}</Space></Panel>
       <CanvasControls graph={graph} onChange={onChange} history={history} />
-      <Panel position="bottom-right" className="canvas-hint">{t("拖拽圆点连线 · 滚轮缩放 · Shift 框选")}</Panel>
+      <Panel position="bottom-right" className="canvas-hint">{t("coze.index.dragADotToConnectScrollToZoomShiftTo")}</Panel>
     </ReactFlow>
   </div>;
 }

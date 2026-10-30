@@ -42,6 +42,8 @@ export function acknowledgedEvents(thread: Thread): GuiEvent[] {
       const index = userMessageIndex++;
       return item.localEcho ? [{ method: MESSAGE_ACKNOWLEDGED,
         params: { threadId: thread.id, turnId: turn.id, item, userMessageIndex: index,
+          turn: { id: turn.id, status: turn.status, items: [], startedAt: turn.startedAt,
+            completedAt: turn.completedAt, durationMs: turn.durationMs },
           afterItemId: turn.items[position - 1]?.id, beforeItemId: turn.items[position + 1]?.id } }] : [];
     });
     acknowledgedTurns.set(turn, { threadId: thread.id, events });

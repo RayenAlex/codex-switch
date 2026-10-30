@@ -35,11 +35,11 @@ export function ResolutionDropdown({ options, current, saving, change }: {
   const [menuViewport, setMenuViewport] = useState({ width: viewport.width, height: viewport.height });
   const trigger = useRef<View>(null);
   const list = useRef<ScrollView>(null);
-  const label = current ? `${current.width} × ${current.height}` : t('选择分辨率');
+  const label = current ? `${current.width} × ${current.height}` : t("client.remoteDesktop.chooseAResolution");
   // Opening an Android modal changes system-bar insets without changing orientation.
   useEffect(() => { setAnchor(null); }, [saving, landscape]);
   return <>
-    <Pressable ref={trigger} disabled={saving} accessibilityRole="combobox" accessibilityLabel={t('分辨率')}
+    <Pressable ref={trigger} disabled={saving} accessibilityRole="combobox" accessibilityLabel={t("client.remoteDesktop.resolution")}
       accessibilityValue={{ text: label }} accessibilityState={{ expanded: !!anchor && !saving, disabled: saving }}
       style={[s.resolutionSelect, saving && s.disabled]} onPress={() => {
         trigger.current?.measureInWindow((x, y, width, height) => setAnchor({ x, y, width, height }));
@@ -52,7 +52,7 @@ export function ResolutionDropdown({ options, current, saving, change }: {
       supportedOrientations={['portrait', 'landscape-left', 'landscape-right']} onRequestClose={() => setAnchor(null)}>
       <View style={s.resolutionOverlay} onLayout={({ nativeEvent }) => setMenuViewport(nativeEvent.layout)}>
         <Pressable style={s.resolutionBackdrop} onPress={() => setAnchor(null)}
-          accessibilityRole="button" accessibilityLabel={t('关闭分辨率列表')} />
+          accessibilityRole="button" accessibilityLabel={t("client.remoteDesktop.closeResolutionList")} />
         <ScrollView ref={list} style={[s.resolutionList, menuPosition(anchor, menuViewport)]}
           keyboardShouldPersistTaps="handled" indicatorStyle="white">
           {options.map(size => {

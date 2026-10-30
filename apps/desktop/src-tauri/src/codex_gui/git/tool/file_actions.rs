@@ -40,7 +40,25 @@ fn selected_paths(
     Ok(paths.into_iter().collect())
 }
 
-fn validate_file(root: &Path, path: &str) -> Result<()> {
+/// Resolve the real write set before admission; execution validates it again under the Git index lock.
+pub(super) fn affected_paths(
+    root: &Path,
+    head: Option<&str>,
+    action: Action,
+    selected: &[SelectedFile],
+) -> Result<Vec<String>> {
+    let current = changes::read(root)?;
+    if current.head.as_deref() != head {
+        return Err(GitError::Changed);
+    }
+    let paths = selected_paths(&current, selected, action)?;
+    for path in &paths {
+        validate_file(root, path)?;
+    }
+    Ok(paths)
+}
+
+pub(super) fn validate_file(root: &Path, path: &str) -> Result<()> {
     validate_path(path)?;
     let target = root.join(path);
     let mut parent = target.parent();

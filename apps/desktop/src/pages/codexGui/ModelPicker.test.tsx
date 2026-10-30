@@ -57,14 +57,17 @@ it("updates an open menu and accepts selections while usage polling waits for a 
   expect(menu.textContent).toContain("deepseek-v3");
   expect(menu.textContent).not.toContain("kimi-k3");
   expect(menu.textContent).not.toContain("默认");
-  expect(container.querySelector("button")?.textContent).toBe("deepseek-v3高");
+  expect(container.querySelector("button")?.textContent).toBe("kimi-k3高");
+  expect(container.querySelector("button")?.getAttribute("data-model-unavailable")).toBe("true");
   await act(async () => {
     await vi.advanceTimersByTimeAsync(15_000);
     menu.querySelector<HTMLButtonElement>("button")!.click();
   });
   expect(controller.getSnapshot().settings.model).toBe("deepseek-v3");
   expect(invoke).toHaveBeenCalledTimes(2);
-  await act(async () => finish.forEach((resolve) => resolve({ totalTokens: 123, running: true })));
+  await act(async () => finish.forEach((resolve) => resolve({
+    totalTokens: 123, estimatedCostUsd: 0.1, running: true,
+  })));
   expect(container.textContent).toContain("123");
   expect(controller.getSnapshot().settings.model).toBe("deepseek-v3");
 });

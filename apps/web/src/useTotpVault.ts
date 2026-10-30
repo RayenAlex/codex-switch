@@ -62,7 +62,7 @@ export function useTotpVault(session: AuthSession | null) {
       const remote = await putTotpVault(next);
       persist(activeSession, mergeTotpVaults(vaultRef.current, remote));
     } catch {
-      Toast.show({ icon: 'fail', content: t("云端同步失败，本机密钥已保留，请稍后重试") });
+      Toast.show({ icon: 'fail', content: t("client.settings.cloudSyncFailedYourLocalKeysAreSafePleaseTry") });
     } finally {
       setSyncing(false);
     }

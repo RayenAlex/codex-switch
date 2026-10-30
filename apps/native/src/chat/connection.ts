@@ -10,6 +10,7 @@ import type { AuthSession } from '../types';
 import { ChatConnection, type ConnectionEvents } from '../../../../shared/remote-chat/client/connection';
 import { RtcPeer } from '../../../../shared/remote-chat/rtcPeer';
 import { createNativePacketCipher } from './packetCipher';
+import { createMobilePacketCompression } from './packetCompression';
 import { MultipathPeer } from '../../../../shared/remote-chat/multipathPeer';
 import { NativeTcpNetwork } from './tcpNetwork';
 import { createMobileNativePath } from './nativePath';
@@ -35,6 +36,7 @@ export class MobileChatConnection extends ChatConnection {
       tcpPunch: Platform.OS === 'android' || Platform.OS === 'ios',
       createNativePath: createMobileNativePath,
       createPacketCipher: createNativePacketCipher,
+      createPacketCompression: createMobilePacketCompression,
       clientInfo: { name: Platform.OS === 'android' ? Platform.constants.Model : 'iPhone / iPad',
         platform: Platform.OS === 'android' ? 'Android' : 'iOS' },
       authorize: async () => { await fetchUserProfile(session); return session; },

@@ -6,16 +6,23 @@ import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.WritableMap
+import com.facebook.react.bridge.Promise
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import java.util.UUID
 import javax.crypto.Cipher
 
 class ChatPacketCipherModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
   private val sessions = mutableMapOf<String, PacketCipher>()
+  private val packets = ThreadPoolExecutor(2, 2, 0, TimeUnit.SECONDS, ArrayBlockingQueue<Runnable>(128))
   private var invalidated = false
   private val available = runCatching { Cipher.getInstance(PacketCipher.TRANSFORMATION) }.isSuccess
 
   override fun getName() = "ChatPacketCipher"
-  override fun getConstants(): Map<String, Any> = mapOf("available" to available)
+  override fun getConstants(): Map<String, Any> = mapOf("available" to available,
+    "binaryPackets" to true, "compressedPackets" to true)
 
   // These calls do no I/O: each packet is at most 20 KB, with one synchronous bridge crossing.
   @ReactMethod(isBlockingSynchronousMethod = true)
@@ -50,6 +57,32 @@ class ChatPacketCipherModule(context: ReactApplicationContext) : ReactContextBas
     Arguments.createMap().apply { putString("text", text) }
   }.getOrNull()
 
+  @ReactMethod(isBlockingSynchronousMethod = true)
+  fun decryptPacketHex(handle: String, payload: String): String? =
+    runCatching { session(handle)?.decryptPacketHex(payload) }.getOrNull()
+
+  @ReactMethod
+  fun encryptWithCompression(handle: String, input: ReadableMap, nonce: String, promise: Promise) {
+    submit(promise) { requireNotNull(session(handle)).encryptWithCompression(plaintext(input), nonce) }
+  }
+
+  @ReactMethod
+  fun decryptWithDecompression(handle: String, payload: String, promise: Promise) {
+    submit(promise) {
+      val text = requireNotNull(session(handle)).decryptWithDecompression(payload)
+      Arguments.createMap().apply { putString("text", text) }
+    }
+  }
+
+  private fun submit(promise: Promise, action: () -> Any) {
+    try {
+      packets.execute {
+        try { promise.resolve(action()) }
+        catch (_: Exception) { promise.reject("INVALID_PACKET", "Invalid encrypted packet") }
+      }
+    } catch (_: RejectedExecutionException) { promise.reject("INVALID_PACKET", "Packet worker unavailable") }
+  }
+
   @Synchronized
   private fun session(handle: String): PacketCipher? = sessions[handle]
 
@@ -63,6 +96,7 @@ class ChatPacketCipherModule(context: ReactApplicationContext) : ReactContextBas
   @Synchronized
   override fun invalidate() {
     invalidated = true
+    packets.shutdown()
     sessions.values.forEach { it.destroy() }
     sessions.clear()
     super.invalidate()

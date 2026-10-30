@@ -1,3 +1,4 @@
+import { testText } from './i18n-fixture.mjs';
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -69,7 +70,7 @@ function createEditorHarness(options = {}) {
   };
   const { useTomlEditor } = loadModule("../apps/desktop/src/pages/codexConfig/useTomlEditor.ts", {
     react: hooks.react,
-    "../../i18n/guiText": { guiText: (source) => source },
+    "../../i18n/uiText": { uiText: testText },
     "../../api/codexConfig": { validateCodexConfigDocument: options.validate ?? (async () => null) },
   }, { window: {
     setTimeout(callback) { timers.set(++timerId, callback); return timerId; },

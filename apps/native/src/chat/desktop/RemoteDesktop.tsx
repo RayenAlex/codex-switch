@@ -1,3 +1,4 @@
+import { displayError, displayText } from '../../i18n/index';
 import { useThemeColor } from '../../theme/store';
 import { t, useLanguage } from '../../i18n';
 import { useState } from 'react';
@@ -8,6 +9,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import type { DesktopClient } from '../../../../../shared/remote-desktop/protocol';
 import { useDesktopSession } from '../../../../../shared/remote-desktop/useDesktopSession';
+import { DesktopTakeover } from './DesktopTakeover';
 import { desktopStatusAction } from '../../../../../shared/remote-desktop/statusAction';
 import { useTerminalOrientation } from '../terminal/useTerminalOrientation';
 import { DesktopMouse } from './MousePad';
@@ -75,23 +77,29 @@ export function RemoteDesktop({ client, active, close }: {
   if (!orientation.landscape || Platform.OS === 'ios') safeEdges.push('bottom');
   const tools: { label: string; action?: string; icon: keyof typeof Ionicons.glyphMap | 'mouse';
     run: () => void; selected?: boolean; disabled?: boolean }[] = [
-    { label: direct ? t("触屏") : t("鼠标"), action: direct ? t("切换为鼠标模式") : t("切换为触屏模式"),
+    { label: direct ? t("client.remoteDesktop.touch") : t("client.remoteDesktop.mouse"), action: direct ? t("client.remoteDesktop.switchToMouseMode") : t("client.remoteDesktop.switchToTouchMode"),
       icon: direct ? 'hand-left-outline' : 'mouse', run: () => switchMode(!direct), selected: true, disabled: viewOnly },
-    { label: t("键盘"), icon: 'keypad-outline', run: () => {
+    { label: t("client.remoteDesktop.keyboard"), icon: 'keypad-outline', run: () => {
       setKeyboard(!keyboard); setDisplay(false); setSecurity(false); },
       selected: keyboard, disabled: viewOnly },
-    { label: session.muted ? t("开启声音") : t("声音"),
-      action: audioUnavailable ? t("声音暂不可用") : session.muted ? t("开启声音") : t("静音"),
+    { label: session.muted ? t("client.remoteDesktop.enableSound") : t("client.remoteDesktop.sound"),
+      action: audioUnavailable ? t("client.remoteDesktop.soundUnavailable") : session.muted ? t("client.remoteDesktop.enableSound") : t("client.remoteDesktop.mute"),
       icon: session.muted || audioUnavailable ? 'volume-mute-outline' : 'volume-high-outline',
       run: () => session.mute(!session.muted), selected: !session.muted && !audioUnavailable, disabled: audioUnavailable },
-    { label: t("显示桌面"), icon: 'desktop-outline', run: () => session.input({ kind: 'key', key: 'desktop' }), disabled: viewOnly },
-    { label: t("所有窗口"), icon: 'grid-outline', run: () => session.input({ kind: 'key', key: 'windows' }), disabled: viewOnly },
-    { label: t("安全选项"), icon: 'shield-checkmark-outline', run: () => {
+    { label: t("client.remoteDesktop.showDesktop"), icon: 'desktop-outline', run: () => session.input({ kind: 'key', key: 'desktop' }), disabled: viewOnly },
+    { label: t("client.remoteDesktop.allWindows"), icon: 'grid-outline', run: () => session.input({ kind: 'key', key: 'windows' }), disabled: viewOnly },
+    ...(session.capabilities.privacyScreen ? [{
+      label: t(session.privacyScreen ? 'client.deviceScreen.restoreShort' : 'client.deviceScreen.turnOffShort'),
+      action: t(session.privacyScreen ? 'client.deviceScreen.restore' : 'client.deviceScreen.turnOff'),
+      icon: 'desktop-outline' as const, run: () => { void session.togglePrivacy(); },
+      selected: session.privacyScreen, disabled: viewOnly || session.saving || !session.stream,
+    }] : []),
+    { label: t("client.remoteDesktop.security"), icon: 'shield-checkmark-outline', run: () => {
       setSecurity(!security); setDisplay(false); setKeyboard(false); }, selected: security },
-    { label: t("显示"), icon: 'options-outline', run: () => {
+    { label: t("client.remoteDesktop.display"), icon: 'options-outline', run: () => {
       setDisplay(!display); setKeyboard(false); setSecurity(false); }, selected: display },
-    { label: t("旋转"), icon: 'phone-landscape-outline', run: orientation.rotate },
-    { label: t("关闭"), icon: 'close', run: close },
+    { label: t("client.mobile.rotate"), icon: 'phone-landscape-outline', run: orientation.rotate },
+    { label: t("client.projectBrowser.close"), icon: 'close', run: close },
   ];
   const buttons = tools.map(tool =>
     <Pressable key={tool.label} accessibilityRole="button" accessibilityLabel={tool.action ?? tool.label}
@@ -122,21 +130,22 @@ export function RemoteDesktop({ client, active, close }: {
                 }
               }} />}
             <View key={direct ? 'direct' : 'trackpad'} style={s.fill} {...trackpad.panHandlers}
-              accessibilityLabel={t("远程桌面触控区域")} />
+              accessibilityLabel={t("client.remoteDesktop.remoteDesktopTouchpad")} />
             {session.stats && statsVisible && !keyboard
               && <DesktopStats stats={session.stats} close={() => setStatsVisible(false)} />}
             {session.stream && <DesktopMouse pointer={session.pointer} viewport={viewport} panel={panel}
               visible={panelVisible} wheel={wheel}
               horizontal={!!session.capabilities.horizontalScroll} />}
-            {!security && !!(session.status || orientation.error) && <View pointerEvents="box-none" style={s.messageLayer}>
+            {!security && !session.takeover.pending && !!(session.status || orientation.error)
+              && <View pointerEvents="box-none" style={s.messageLayer}>
               <View style={s.message}>
                 <Text accessibilityRole="alert" style={[s.text, s.messageText]}>
-                  {t(session.status || orientation.error)}</Text>
+                  {displayError(session.status || orientation.error)}</Text>
                 <Pressable accessibilityRole="button" style={s.retry} disabled={session.saving} onPress={statusAction.run}>
-                  <Text style={s.text}>{t(statusAction.label)}</Text></Pressable>
+                  <Text style={s.text}>{displayText(statusAction.label)}</Text></Pressable>
               </View></View>}
             {viewOnly && !session.status && <View pointerEvents="none" style={s.messageLayer}>
-              <View style={s.message}><Text style={s.text}>{t("仅观看")}</Text></View></View>}
+              <View style={s.message}><Text style={s.text}>{t("client.remoteDesktop.viewOnly")}</Text></View></View>}
             {display && <DisplaySettings settings={session.settings} displays={session.displays} update={session.update}
               resolution={session.resolution}
               saving={session.saving || !session.stream}
@@ -144,6 +153,7 @@ export function RemoteDesktop({ client, active, close }: {
               close={() => setDisplay(false)} />}
             {security && <SecuritySettings {...desktopSecuritySettings(session, () => setSecurity(false))}
               clipboardActions={securityClipboard} />}
+            {session.takeover.pending && <DesktopTakeover {...session.takeover} />}
           </View>
           {orientation.landscape
             ? <ScrollView style={s.rail} contentContainerStyle={[s.toolbar, s.railContent]}

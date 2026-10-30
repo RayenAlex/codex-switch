@@ -2,13 +2,19 @@
   "tools": [
     {
       "name": "gui_create_conversation",
-      "description": "Create a real conversation in this host's Codex GUI and send its first message. Use only when the user requests another conversation or explicitly delegates work. Prefer this tool to desktop clicks. Supply a new requestId for each intended message; retry with the SAME requestId and arguments after an uncertain result to retrieve the receipt without sending twice. Omit cwd for an independent projectless chat, or provide the exact project directory. New conversations use workspace-write access. Model and reasoning effort default to the invoking conversation's current turn; pass model and/or effort only to override that choice. The new conversation saves its own settings without changing the caller or GUI draft. Returns threadId and turnId; acceptance does not mean the task is finished. Use gui_read_conversation to check progress. Does not switch the user's selected conversation.",
+      "description": "Create a real conversation in this host's Codex GUI and send its first message. Call this tool when the user asks to do or continue work in a new conversation, including '新会话去做', '另开对话继续', or 'do this in a new chat'. This authorizes creation and sending the task; do not merely return text for the user to paste or ask again for permission already given. A quoted example, hypothetical discussion, request only to draft a handoff prompt, or instruction to wait before creating does not authorize creation. If asked to choose a task first, choose it and then create the conversation. Preserve any review or approval required before implementation in the new task. Prefer this tool to desktop clicks. Supply a new requestId for each intended message; retry with the SAME requestId and arguments after an uncertain result to retrieve the receipt without sending twice. New conversations use workspace-write access. Model and reasoning effort default to the invoking conversation's current turn; pass model and/or effort only to override that choice. The new conversation saves its own settings without changing the caller or GUI draft. Confirm creation and sending only after a receipt with status sent, threadId and turnId; if unavailable or failed, explain the limitation instead of claiming success. Acceptance does not mean the task is finished. Use gui_read_conversation to check progress. Does not switch the user's selected conversation.",
       "inputSchema": {
         "type": "object", "additionalProperties": false,
         "properties": {
           "requestId": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_-]+$"},
-          "message": {"type": "string", "minLength": 1, "maxLength": 64000},
-          "cwd": {"type": "string", "description": "Absolute existing project directory on the GUI host. Omit for a projectless chat."},
+          "message": {
+            "type": "string", "minLength": 1, "maxLength": 64000,
+            "description": "Self-contained task with the selected work, relevant context, constraints and required approval steps. The new conversation does not automatically inherit this chat's history. Tell it to perform the task there; do not forward the instruction to create another conversation."
+          },
+          "cwd": {
+            "type": "string",
+            "description": "Absolute existing project directory on the GUI host. For work continuing in the same project, supply its known exact directory. Omit for an independent projectless chat."
+          },
           "model": {
             "type": "string", "minLength": 1, "maxLength": 200,
             "description": "Exact model ID for the new conversation. Omit to inherit the invoking conversation's model."

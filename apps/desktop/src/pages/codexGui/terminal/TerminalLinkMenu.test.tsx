@@ -1,3 +1,4 @@
+import { defaultText } from '../../../../../../shared/localization/messages';
 // @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -26,7 +27,7 @@ async function render() {
   await act(async () => root.render(<DetailsContext.Provider value={{ openWebsite, open: vi.fn(), update: vi.fn(),
     close, openFile: vi.fn(), setConversationChanges: vi.fn(), visible: false, showingChanges: false }}>
     <TerminalLinkMenu target={{ url: 'http://localhost:3002/path?q=1#here', x: 20, y: 20 }} id="terminal"
-      api={api} close={close} translate={value => value} />
+      api={api} close={close} translate={defaultText} />
   </DetailsContext.Provider>));
 }
 async function click(text: string) {

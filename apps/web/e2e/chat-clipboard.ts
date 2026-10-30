@@ -53,7 +53,7 @@ export async function clipboardJourney(page: Page, request: APIRequestContext) {
     node.dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }));
   }, image.toString('base64'));
   await expect(page.getByRole('img', { name: '待发送图片 3' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '移除notes.txt' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '移除附件：notes.txt' })).toBeVisible();
   await expect(page.getByRole('button', { name: '移除sample.dat' })).toBeVisible();
   await expect(input).toHaveValue('保留草稿和粘贴的文字');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();

@@ -1,6 +1,26 @@
 use super::*;
 
 #[test]
+fn conversation_timing_binding_keeps_request_identity_and_rejects_malformed_payloads() {
+    let expression = conversation_metrics_response(
+        r#"{"conversationId":"timing-binding-test-missing-thread","requestId":17}"#,
+    )
+    .unwrap();
+    assert!(expression.contains("receiveTiming?.(\"timing-binding-test-missing-thread\", 17,"));
+    assert!(expression.contains("\"outputRequestCount\":0"));
+    for payload in ["null", "{}", r#"{"conversationId":"one","requestId":-1}"#] {
+        assert!(conversation_metrics_response(payload).is_err());
+    }
+    assert!(conversation_metrics_response(&"x".repeat(513)).is_err());
+    let event = json!({ "method": "Runtime.bindingCalled", "params": {
+        "name": CONVERSATION_METRICS_BINDING, "payload": "{}" } });
+    assert_eq!(
+        renderer_binding_call(&event).unwrap().name,
+        CONVERSATION_METRICS_BINDING
+    );
+}
+
+#[test]
 fn publishes_language_before_a_usage_query_fails() {
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
     let port = listener.local_addr().unwrap().port();

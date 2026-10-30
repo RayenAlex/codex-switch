@@ -375,7 +375,7 @@ fn aggregate_stream_drop_uses_observed_terminal_events_but_keeps_cancellation_ne
 }
 
 #[test]
-fn aggregate_responses_eof_does_not_reward_done_or_malformed_completion() {
+fn aggregate_responses_require_valid_completion_including_large_frames() {
     for body in [
         "data: [DONE]\n\n",
         "event: response.completed\ndata: {broken\n\n",
@@ -399,6 +399,6 @@ fn aggregate_responses_eof_does_not_reward_done_or_malformed_completion() {
     drop(capture.observe(body.as_bytes()));
     assert!(matches!(
         aggregate_response_outcome(&mut capture),
-        aggregate_scheduler::MemberOutcome::Neutral
+        aggregate_scheduler::MemberOutcome::Success
     ));
 }

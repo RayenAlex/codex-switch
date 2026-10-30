@@ -1,5 +1,7 @@
+import inlineCopy from '@remoteai/i18n/copy/inline/desktop/components/TokenUsageDashboard/ConsumptionCharts';
+import { interpolate as interpolateCopy } from '@remoteai/i18n';
 import { getLocale } from "../../i18n";
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useMemo } from "react";
 import type { EChartsCoreOption } from "echarts/core";
 import type { Language } from "../../i18n";
@@ -27,9 +29,9 @@ function consumptionOption(options: {
   const byDate = new Map(daily.map((entry) => [entry.date, entry]));
   return {
     animationDurationUpdate: 280,
-    aria: { enabled: true, label: { description: (language === "ru" ? guiText("每日 Token 消耗堆叠柱状图，可通过图例切换分类。分类累计值和占比显示在图表上方。", {}, language) : language === "zh"
-      ? "每日 Token 消耗堆叠柱状图，可通过图例切换分类。分类累计值和占比显示在图表上方。"
-      : "Daily stacked token usage. Use the legend to toggle categories; totals and shares appear above.") } },
+    aria: { enabled: true, label: { description: (language !== "zh" && language !== "en" ? uiText("client.usage.dailyTokenUsageByCategoryUseTheLegendToToggle", {}, language) : language === "zh"
+      ? inlineCopy["Token_3504c862"]
+      : inlineCopy["Daily_stacked_token_usage_Use_ba34dad9"]) } },
     color: [palette.series[0], "#cb8b41", palette.muted],
     tooltip: { trigger: "axis", confine: true, extraCssText: COMPACT_TOOLTIP_STYLE,
       axisPointer: { type: "shadow" },
@@ -67,12 +69,12 @@ function ConsumptionPanel({ props, title, hint, definitions }: {
       </div>)}
     </div> : null}
     {error ? <p className={styles.tokenUsageError} role="alert">
-      {(language === "ru" ? guiText("消耗统计刷新失败，请重试。", {}, language) : language === "zh" ? "消耗统计刷新失败，请重试。" : "Could not refresh consumption statistics. Please retry.")}
+      {(language !== "zh" && language !== "en" ? uiText("client.usage.couldNotRefreshUsageStatisticsPleaseTryAgain", {}, language) : language === "zh" ? inlineCopy["text_38868339"] : inlineCopy["Could_not_refresh_consumption_statistics_ff56d170"])}
     </p> : null}
     {error ? null : totalTokens > 0 ? <EChart option={option} label={title} />
       : <div className={styles.tokenDashboardEmpty}>
-      {loading ? ((language === "ru" ? guiText("正在加载…", {}, language) : language === "zh" ? "正在加载…" : "Loading…"))
-        : ((language === "ru" ? guiText("所选时段暂无 Token 消耗记录", {}, language) : language === "zh" ? "所选时段暂无 Token 消耗记录" : "No token usage in this period"))}
+      {loading ? ((language !== "zh" && language !== "en" ? uiText("client.projectBrowser.loading", {}, language) : language === "zh" ? inlineCopy["text_21bd738e"] : inlineCopy["Loading_ba3bbbe1"]))
+        : ((language !== "zh" && language !== "en" ? uiText("client.mobile.noTokenUsageInThisPeriod", {}, language) : language === "zh" ? inlineCopy["Token_494cfd50"] : inlineCopy["No_token_usage_in_this_812fc274"]))}
     </div>}
   </section>;
 }
@@ -80,29 +82,29 @@ function ConsumptionPanel({ props, title, hint, definitions }: {
 export function ConsumptionCharts(props: ConsumptionProps) {
   const { language } = props;
   const zh = language === "zh";
-  const ru = language === "ru";
-  const unknown = ru ? guiText("未识别", {}, language) : zh ? "未识别" : "Unknown";
+  const localized = language !== "zh" && language !== "en";
+  const unknown = localized ? uiText("client.chat.unknown", {}, language) : zh ? inlineCopy["text_52e83fa7"] : inlineCopy["Unknown_b764cdc0"];
   const threshold = new Intl.NumberFormat(getLocale(language)).format(props.thresholdTokens);
   const contextDefinitions: SeriesDefinition[] = [
-    { name: ru ? guiText("短上下文", {}, language) : zh ? "短上下文" : "Short context", field: "shortContextTokens" },
-    { name: ru ? guiText("长上下文", {}, language) : zh ? "长上下文" : "Long context", field: "longContextTokens" },
+    { name: localized ? uiText("client.chat.shortContext", {}, language) : zh ? inlineCopy["text_5a81a590"] : inlineCopy["Short_context_2c449ebc"], field: "shortContextTokens" },
+    { name: localized ? uiText("client.chat.longContext", {}, language) : zh ? inlineCopy["text_1fa7f3cc"] : inlineCopy["Long_context_45aa7e73"], field: "longContextTokens" },
     { name: unknown, field: "unknownContextTokens" },
   ];
   const modeDefinitions: SeriesDefinition[] = [
-    { name: ru ? guiText("普通模式", {}, language) : zh ? "普通模式" : "Standard mode", field: "standardModeTokens" },
-    { name: ru ? guiText("快速模式", {}, language) : zh ? "快速模式" : "Fast mode", field: "fastModeTokens" },
+    { name: localized ? uiText("client.chat.standardMode", {}, language) : zh ? inlineCopy["text_47bd3769"] : inlineCopy["Standard_mode_9b38d742"], field: "standardModeTokens" },
+    { name: localized ? uiText("client.chat.fastMode.6e02d1", {}, language) : zh ? inlineCopy["text_6e02d1ce"] : inlineCopy["Fast_mode_1b7f9ecb"], field: "fastModeTokens" },
     { name: unknown, field: "unknownModeTokens" },
   ];
   return <div className={`${styles.tokenDashboardGrid} ${styles.consumptionGrid}`}>
     <ConsumptionPanel props={props} definitions={contextDefinitions}
-      title={ru ? guiText("短 / 长上下文消耗", {}, language) : zh ? "短 / 长上下文消耗" : "Short / Long Context Usage"}
-      hint={ru ? guiText("单次输入超过 {value1} Tokens（含缓存）计为长上下文，累计整次请求的消耗。", { value1: threshold }, language)
-        : zh ? `单次输入超过 ${threshold} Tokens（含缓存）计为长上下文，累计整次请求的消耗。`
-        : `Inputs above ${threshold} tokens (including cache) are long context. Totals include the whole request.`} />
+      title={localized ? uiText("client.chat.shortLongContextUsage", {}, language) : zh ? inlineCopy["text_b79dac36"] : inlineCopy["Short_Long_Context_Usage_46668a14"]}
+      hint={localized ? uiText("client.mobile.inputsAboveTokensIncludingCacheCountAsLongContextUsage", { value1: threshold }, language)
+        : zh ? interpolateCopy(inlineCopy["value1_Tokens_16dc6f8c"], { value1: String(threshold) })
+        : interpolateCopy(inlineCopy["Inputs_above_value1_tokens_including_be832757"], { value1: String(threshold) })} />
     <ConsumptionPanel props={props} definitions={modeDefinitions}
-      title={ru ? guiText("普通 / 快速模式消耗", {}, language) : zh ? "普通 / 快速模式消耗" : "Standard / Fast Mode Usage"}
-      hint={ru ? guiText("按每日实际 Token 数统计；缺少模式记录的消耗归入“未识别”。", {}, language)
-        : zh ? "按每日实际 Token 数统计；缺少模式记录的消耗归入“未识别”。"
-        : "Actual tokens per day; usage without a known mode is shown as unknown."} />
+      title={localized ? uiText("client.chat.standardFastModeUsage", {}, language) : zh ? inlineCopy["text_43b356d9"] : inlineCopy["Standard_Fast_Mode_Usage_94e45531"]}
+      hint={localized ? uiText("client.chat.dailyTokenTotalsUsageWithoutARecordedModeIsShown", {}, language)
+        : zh ? inlineCopy["Token_a37b528e"]
+        : inlineCopy["Actual_tokens_per_day_usage_7a0ca3e0"]} />
   </div>;
 }

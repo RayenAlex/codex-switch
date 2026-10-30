@@ -1,6 +1,6 @@
 import { t } from '../i18n';
 import { AppRegistry, DeviceEventEmitter, NativeModules, Platform } from 'react-native';
-import { subscribeInterfaceLanguage } from '../../../../shared/i18n/interfaceLanguage';
+import { subscribeInterfaceLanguage } from "../../../../shared/localization/interfaceLanguage";
 
 export const CHAT_SERVICE_STOPPED = 'codexChatConnectionStopped';
 export interface ConnectionLabels {
@@ -19,9 +19,9 @@ let chatEnabled = false;
 const mappingLeases = new Set<symbol>();
 
 export const connectionLabels = (): ConnectionLabels => ({
-  channel: t('聊天连接'), channelDescription: t('在后台接收电脑上的聊天回复'),
-  chatTitle: t('Remote AI 聊天'), chatText: t('后台接收电脑回复，点击返回应用'),
-  mappingTitle: t('Remote AI 端口映射'), mappingText: t('端口映射正在运行，点击返回应用'),
+  channel: t("client.runtimeErrors.chatConnection"), channelDescription: t("client.runtimeErrors.receivesChatRepliesFromYourComputerInTheBackground"),
+  chatTitle: t("client.runtimeErrors.remoteAiChat"), chatText: t("client.runtimeErrors.receivingRepliesFromYourComputerInTheBackgroundTapTo"),
+  mappingTitle: t("client.runtimeErrors.remoteAiPortMapping"), mappingText: t("client.runtimeErrors.portMappingIsRunningTapToReturnToTheApp"),
 });
 
 if (Platform.OS === 'android') {
@@ -42,7 +42,7 @@ export function keepChatConnected(enabled: boolean): Promise<void> {
   chatEnabled = enabled;
   const next = operation.then(async () => {
     if (Platform.OS !== 'android') return;
-    if (!native) throw new Error(t("请安装新版应用以使用后台聊天。"));
+    if (!native) throw new Error(t("client.mobile.installTheLatestAppToUseBackgroundChat"));
     if (enabled) await native.start();
     else if (!mappingLeases.size) await native.stop();
   });

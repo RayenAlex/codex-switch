@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import { createThemedStyles } from '../theme/styles';
 import { t, useLanguage } from '../i18n';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
@@ -15,21 +16,21 @@ export function ChatContextSettings({ threadId, api, onClose }: {
   useLanguage();
   const editor = useContextSettings(threadId, api);
   const save = async () => { if (await editor.save()) onClose(); };
-  return <BottomSheet visible fullWidthContent title={t("对话上下文设置")} onClose={onClose}
+  return <BottomSheet visible fullWidthContent title={t("client.chat.conversationContext")} onClose={onClose}
     onBack={editor.saving ? undefined : onClose}
     dismissible={!editor.saving} actions={[
-      { label: t("取消"), onPress: onClose, disabled: editor.saving },
-      { label: t("保存"), tone: 'primary', onPress: save, loading: editor.saving,
+      { label: t("client.accounts.cancel"), onPress: onClose, disabled: editor.saving },
+      { label: t("client.projectBrowser.save"), tone: 'primary', onPress: save, loading: editor.saving,
         disabled: editor.loading || !editor.loaded },
     ]}>
     <SheetScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.settings}>
-      <Text style={styles.subtitle}>{t("仅用于当前对话。保存后立即应用；正在回复时会先暂停，修改后自动继续。")}</Text>
-      {editor.loading && <ActivityIndicator accessibilityLabel={t("正在读取上下文设置")} />}
+      <Text style={styles.subtitle}>{t("client.chat.appliesToThisConversationImmediatelyAnActiveReplyWillPause")}</Text>
+      {editor.loading && <ActivityIndicator accessibilityLabel={t("client.mobile.loadingContextSettings")} />}
       {editor.loaded && <>
-        <Text style={styles.title}>{t("上下文容量（K Token）")}</Text>
-        <TextInput accessibilityLabel={t("上下文容量（K Token）")} keyboardType="decimal-pad"
+        <Text style={styles.title}>{t("client.chat.contextCapacityKTokens")}</Text>
+        <TextInput accessibilityLabel={t("client.chat.contextCapacityKTokens")} keyboardType="decimal-pad"
           value={editor.value} onChangeText={editor.setValue} editable={!editor.saving}
-          placeholder={t("选择或输入容量")} style={[styles.input, styles.questionInput]}
+          placeholder={t("client.chat.selectOrEnterCapacity")} style={[styles.input, styles.questionInput]}
           onSubmitEditing={() => { void save(); }} />
         <View style={presetStyles.options}>
           {CONTEXT_CAPACITY_PRESETS_K.map((capacity) => <Pressable key={capacity}
@@ -41,16 +42,16 @@ export function ChatContextSettings({ threadId, api, onClose }: {
             <Text style={styles.buttonText}>{capacity}K</Text>
           </Pressable>)}
         </View>
-        <Text style={styles.subtitle}>{t("1 K = 1000 Token；留空使用默认容量。")}</Text>
-        <Text style={styles.subtitle}>{t("用量会在收到回复后更新。程序会预留部分空间，显示的可用容量可能略小。")}</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel={t("恢复默认")} disabled={editor.saving}
+        <Text style={styles.subtitle}>{t("client.chat.1K1000TokensLeaveBlankToUseThe")}</Text>
+        <Text style={styles.subtitle}>{t("client.chat.usageUpdatesAfterAReplySomeSpaceIsReservedSo")}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={t("client.chat.restoreDefaults")} disabled={editor.saving}
           accessibilityState={{ disabled: editor.saving }} style={styles.button} onPress={() => editor.setValue('')}>
-          <Text style={styles.buttonText}>{t("恢复默认")}</Text>
+          <Text style={styles.buttonText}>{t("client.chat.restoreDefaults")}</Text>
         </Pressable>
       </>}
-      {!!editor.error && <Text accessibilityRole="alert" style={styles.error}>{t(editor.error)}</Text>}
-      {!editor.loading && !editor.loaded && <Pressable accessibilityRole="button" accessibilityLabel={t("重试")}
-        style={styles.button} onPress={editor.retry}><Text style={styles.buttonText}>{t("重试")}</Text></Pressable>}
+      {!!editor.error && <Text accessibilityRole="alert" style={styles.error}>{displayError(editor.error)}</Text>}
+      {!editor.loading && !editor.loaded && <Pressable accessibilityRole="button" accessibilityLabel={t("client.terminal.retry")}
+        style={styles.button} onPress={editor.retry}><Text style={styles.buttonText}>{t("client.terminal.retry")}</Text></Pressable>}
     </SheetScrollView>
   </BottomSheet>;
 }

@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "../../api/backend";
 import type { SystemPromptRule } from "../../types";
@@ -25,7 +25,7 @@ export function useGuiSystemPrompts() {
       const saved = await invoke<GuiSystemPromptSettings>("codex_gui_system_prompt_settings");
       if (request === revision.current) setSettings(saved);
     } catch {
-      if (request === revision.current) setError(guiText("暂时无法读取系统提示词，请重试。"));
+      if (request === revision.current) setError(uiText("client.workspaceActions.couldNotLoadTheSystemPromptPleaseTryAgain"));
     } finally {
       if (request === revision.current) setLoading(false);
     }
@@ -48,7 +48,7 @@ export function useGuiSystemPrompts() {
       setSettings(saved);
       return true;
     } catch {
-      if (request === revision.current) setError(guiText("系统提示词未保存，请重试。"));
+      if (request === revision.current) setError(uiText("client.workspaceActions.couldNotSaveTheSystemPromptPleaseTryAgain"));
       return false;
     } finally {
       pending.current = false;

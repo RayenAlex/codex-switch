@@ -13,14 +13,14 @@ export function ChatAttachmentPreviews({ images, busy, remove, add, edit, upload
   return <div className="chat-attachment-previews">
     {images.map((image, index) => <div key={image.id}
       className={`chat-attachment-preview${upload ? ' is-uploading' : ''}`}>
-      <img src={image.url} alt={t("待发送图片 {value1}", { value1: index + 1 })} />
+      <img src={image.url} alt={t("client.chat.attachedImage", { value1: index + 1 })} />
       <ChatUploadProgress progress={itemUploadProgress(upload, 'image', index)} reconnecting={reconnecting} />
-      <button type="button" className="chat-attachment-edit" aria-label={t("标注图片 {value1}", { value1: index + 1 })}
-        disabled={busy} onClick={() => edit(image.id)}>{t("标注")}</button>
-      <button type="button" aria-label={t("移除图片 {value1}", { value1: index + 1 })} disabled={busy}
+      <button type="button" className="chat-attachment-edit" aria-label={t("client.chat.annotateImage", { value1: index + 1 })}
+        disabled={busy} onClick={() => edit(image.id)}>{t("client.chat.annotate")}</button>
+      <button type="button" aria-label={t("client.chat.removeImage", { value1: index + 1 })} disabled={busy}
         onClick={() => remove(image.id)}><X size={16} /></button>
     </div>)}
     {images.length < MAX_CHAT_IMAGES && <button type="button" className="chat-attachment-more"
-      aria-label={t("继续添加图片")} disabled={busy} onClick={add}><Plus size={24} /></button>}
+      aria-label={t("client.chat.addMoreImages")} disabled={busy} onClick={add}><Plus size={24} /></button>}
   </div>;
 }

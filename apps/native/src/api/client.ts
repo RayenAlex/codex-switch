@@ -41,7 +41,7 @@ export class ApiError extends Error {
 
 export class SessionExpiredError extends ApiError {
   constructor(status = 401) {
-    super(t("登录已过期，请重新登录"), status);
+    super(t("client.app.yourSessionHasExpiredPleaseSignInAgain"), status);
     this.name = 'SessionExpiredError';
   }
 }
@@ -56,10 +56,10 @@ function normalizeBaseUrl(value: string) {
   try {
     url = new URL(baseUrl);
   } catch {
-    throw new ApiError(t("请输入有效的服务器地址，例如 https://api.example.com"));
+    throw new ApiError(t("client.mobile.enterAValidServerUrlSuchAsHttpsApiExample"));
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new ApiError(t("服务器地址必须以 http:// 或 https:// 开头"));
+    throw new ApiError(t("client.mobile.theServerUrlMustStartWithHttpOrHttps"));
   }
   return baseUrl;
 }
@@ -75,7 +75,7 @@ async function parseError(response: Response) {
   } catch {
     // Fall through to the generic status message when the body is not JSON.
   }
-  return t("请求失败（HTTP {value1}）", { value1: response.status });
+  return t("client.app.requestFailedHttp", { value1: response.status });
 }
 
 function objectValue(value: unknown): Record<string, unknown> | undefined {
@@ -98,7 +98,7 @@ function accountPrivateDetails(value: unknown) {
 }
 
 function upstreamErrorMessage(error: unknown) {
-  return error instanceof Error && error.message ? error.message : t("Codex 查询失败");
+  return error instanceof Error && error.message ? error.message : t("client.mobile.couldNotQueryCodex");
 }
 
 async function codexResponseObject(response: Response, context: string) {
@@ -106,16 +106,16 @@ async function codexResponseObject(response: Response, context: string) {
   try {
     payload = await response.json();
   } catch {
-    throw new ApiError(t("{value1}：响应不是有效 JSON", { value1: context }));
+    throw new ApiError(t("client.mobile.theResponseIsNotValidJson", { value1: context }));
   }
   const body = objectValue(payload);
-  if (!body) throw new ApiError(t("{value1}：响应格式无效", { value1: context }));
+  if (!body) throw new ApiError(t("client.mobile.invalidResponseFormat", { value1: context }));
   return body;
 }
 
 async function parseCodexError(response: Response) {
   if (response.status === 401 || response.status === 403) {
-    return t("Codex 登录凭据已过期，请先在桌面端刷新并同步该账号");
+    return t("client.mobile.codexCredentialsExpiredRefreshAndSyncThisAccountOnYour");
   }
   try {
     const payload: unknown = await response.json();
@@ -131,7 +131,7 @@ async function parseCodexError(response: Response) {
   } catch {
     // Fall through to the generic upstream status message.
   }
-  return t("Codex 请求失败（HTTP {value1}）", { value1: response.status });
+  return t("client.mobile.codexRequestFailedHttp", { value1: response.status });
 }
 
 export async function requestCodexDirect(
@@ -141,7 +141,7 @@ export async function requestCodexDirect(
 ): Promise<Response> {
   const accessToken = account.codexAccessToken?.trim();
   if (!accessToken) {
-    throw new ApiError(t("该账号没有可用于手机直连的 Codex Token，请先在桌面端重新同步"));
+    throw new ApiError(t("client.mobile.thisAccountHasNoCodexTokenForADirectPhone"));
   }
   const headers = new Headers(init.headers);
   headers.set('Authorization', `Bearer ${accessToken}`);
@@ -153,8 +153,8 @@ export async function requestCodexDirect(
   try {
     response = await fetch(url, { ...init, headers });
   } catch {
-    if (init.signal?.aborted) throw new ApiError(t("Codex 请求超时，请稍后重试"));
-    throw new ApiError(t("无法从手机直接连接 Codex，请检查网络或 VPN"));
+    if (init.signal?.aborted) throw new ApiError(t("client.mobile.codexRequestTimedOutTryAgainLater"));
+    throw new ApiError(t("client.mobile.cannotConnectToCodexFromYourPhoneCheckYourNetwork"));
   }
   if (!response.ok) {
     throw new ApiError(await parseCodexError(response), response.status);
@@ -181,7 +181,7 @@ function usageWindow(value: unknown): UsageWindow | null {
 
 export async function fetchAccountUsage(account: AccountSummary): Promise<UsageSummary> {
   const response = await requestCodexDirect(account, CODEX_USAGE_URL);
-  const body = await codexResponseObject(response, t("解析 Codex 用量失败"));
+  const body = await codexResponseObject(response, t("client.mobile.couldNotReadCodexUsage"));
   const rateLimit = objectValue(body.rate_limit);
   const plan = typeof body.plan_type === 'string' && body.plan_type.trim()
     ? body.plan_type.trim()
@@ -289,7 +289,7 @@ export function clearSession() {
 
 export async function login(baseUrlInput: string, email: string, password: string): Promise<AuthSession> {
   const baseUrl = normalizeBaseUrl(baseUrlInput);
-  if (!email.trim() || !password) throw new ApiError(t("请填写邮箱和密码"));
+  if (!email.trim() || !password) throw new ApiError(t("client.app.enterYourEmailAndPassword"));
   let response: Response;
   try {
     response = await fetch(`${baseUrl}/auth/login`, {
@@ -298,11 +298,11 @@ export async function login(baseUrlInput: string, email: string, password: strin
       body: JSON.stringify({ email: email.trim(), password }),
     });
   } catch {
-    throw new ApiError(t("无法连接服务器，请检查地址和网络"));
+    throw new ApiError(t("client.mobile.cannotConnectToTheServerCheckTheUrlAndYour"));
   }
   if (!response.ok) throw new ApiError(await parseError(response), response.status);
   const payload = await response.json() as AuthResponse;
-  if (!payload.accessToken || !payload.refreshToken) throw new ApiError(t("服务器返回的登录信息无效"));
+  if (!payload.accessToken || !payload.refreshToken) throw new ApiError(t("client.app.theServerReturnedInvalidSignInDetails"));
   const session: AuthSession = {
     baseUrl,
     accessToken: payload.accessToken,
@@ -325,14 +325,14 @@ async function performSessionRefresh(session: AuthSession): Promise<AuthSession>
       body: JSON.stringify({ refreshToken: session.refreshToken }),
     });
   } catch {
-    throw new ApiError(t("无法连接服务器，请检查网络"));
+    throw new ApiError(t("client.mobile.cannotConnectToTheServerCheckYourConnection"));
   }
   if (response.status === 401 || response.status === 403) {
     throw new SessionExpiredError(response.status);
   }
   if (!response.ok) throw new ApiError(await parseError(response), response.status);
   const payload = await response.json() as AuthResponse;
-  if (!payload.accessToken || !payload.refreshToken) throw new ApiError(t("服务器返回的登录信息无效"));
+  if (!payload.accessToken || !payload.refreshToken) throw new ApiError(t("client.app.theServerReturnedInvalidSignInDetails"));
   const next = { ...session, accessToken: payload.accessToken, refreshToken: payload.refreshToken };
   await persistSession(next);
   // Refresh tokens are rotated by the backend. Keep the in-memory session in
@@ -352,14 +352,14 @@ export function refreshSession(session: AuthSession): Promise<AuthSession> {
   return pending;
 }
 
-async function authorizedRequest(session: AuthSession, path: string, init: RequestInit = {}): Promise<Response> {
+export async function authorizedRequest(session: AuthSession, path: string, init: RequestInit = {}): Promise<Response> {
   const request = async (accessToken: string) => {
     const headers = new Headers(init.headers);
     headers.set('Authorization', `Bearer ${accessToken}`);
     try {
       return await fetch(`${session.baseUrl}${path}`, { ...init, headers });
     } catch {
-      throw new ApiError(t("无法连接服务器，请检查网络"));
+      throw new ApiError(t("client.mobile.cannotConnectToTheServerCheckYourConnection"));
     }
   };
   const response = await request(session.accessToken);
@@ -393,7 +393,7 @@ export async function loadGlobalRefreshMinutes(): Promise<number> {
 
 export async function saveGlobalRefreshMinutes(value: number): Promise<void> {
   if (!Number.isInteger(value) || value < 1 || value > 1440) {
-    throw new ApiError(t("全局刷新间隔需要设置为 1 到 1440 分钟"));
+    throw new ApiError(t("client.mobile.setTheRefreshIntervalTo11440Minutes"));
   }
   await SecureStore.setItemAsync(GLOBAL_REFRESH_INTERVAL_KEY, String(value));
 }
@@ -413,7 +413,7 @@ export async function fetchAccountSummary(session: AuthSession): Promise<Account
   if (!response.ok) throw new ApiError(await parseError(response), response.status);
   const payload: unknown = await response.json();
   if (!payload || typeof payload !== 'object' || !Array.isArray((payload as { accounts?: unknown }).accounts)) {
-    throw new ApiError(t("服务器返回的账户数据无效"));
+    throw new ApiError(t("client.mobile.theServerReturnedInvalidAccountData"));
   }
   return (payload as { accounts: AccountSummary[] }).accounts.map((account) => ({
     ...account,
@@ -444,9 +444,9 @@ export async function fetchAccountUsageSummaries(
 
 export async function fetchResetCredits(account: AccountSummary): Promise<ResetCreditsSummary> {
   const response = await requestCodexDirect(account, CODEX_RESET_CREDITS_URL);
-  const body = await codexResponseObject(response, t("解析 Codex 重置卡失败"));
+  const body = await codexResponseObject(response, t("client.mobile.couldNotReadCodexResetCredits"));
   if (!Array.isArray(body?.credits)) {
-    throw new ApiError(t("Codex 返回的重置卡数据无效"));
+    throw new ApiError(t("client.mobile.codexReturnedInvalidResetCreditData"));
   }
   const credits = body.credits.map((value) => {
     const credit = objectValue(value);
@@ -461,7 +461,7 @@ export async function fetchResetCredits(account: AccountSummary): Promise<ResetC
 
 export async function consumeResetCredit(account: AccountSummary): Promise<void> {
   const current = await fetchResetCredits(account);
-  if (!current.credits.length) throw new ApiError(t("当前账号没有可用重置卡"));
+  if (!current.credits.length) throw new ApiError(t("client.mobile.thisAccountHasNoResetCredits"));
 
   const response = await requestCodexDirect(account, CODEX_RESET_CREDIT_CONSUME_URL, {
     method: 'POST',
@@ -470,14 +470,14 @@ export async function consumeResetCredit(account: AccountSummary): Promise<void>
       redeem_request_id: `codex-switch-mobile-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     }),
   });
-  const code = (await codexResponseObject(response, t("解析 Codex 重置卡使用结果失败"))).code;
+  const code = (await codexResponseObject(response, t("client.mobile.couldNotReadTheCodexResetResult"))).code;
   if (code === 'reset' || code === 'already_redeemed') return;
-  if (code === 'no_credit') throw new ApiError(t("当前账号没有可用重置卡"));
+  if (code === 'no_credit') throw new ApiError(t("client.mobile.thisAccountHasNoResetCredits"));
   if (code === 'nothing_to_reset') {
-    throw new ApiError(t("当前账号当前没有需要重置的用量窗口"));
+    throw new ApiError(t("client.mobile.thisAccountHasNoUsageWindowsToReset"));
   }
-  if (typeof code === 'string') throw new ApiError(t("Codex 重置卡接口返回未知状态：{value1}", { value1: code }));
-  throw new ApiError(t("Codex 重置卡接口响应缺少 code"));
+  if (typeof code === 'string') throw new ApiError(t("client.mobile.unknownResetStatusFromCodex", { value1: code }));
+  throw new ApiError(t("client.mobile.codexDidNotReturnAResetStatus"));
 }
 
 export async function fetchRemoteDevices(session: AuthSession): Promise<RemoteDevice[]> {
@@ -485,7 +485,7 @@ export async function fetchRemoteDevices(session: AuthSession): Promise<RemoteDe
   if (!response.ok) throw new ApiError(await parseError(response), response.status);
   const payload: unknown = await response.json();
   if (!payload || typeof payload !== 'object' || !Array.isArray((payload as { devices?: unknown }).devices)) {
-    throw new ApiError(t("服务器返回的设备数据无效"));
+    throw new ApiError(t("client.mobile.theServerReturnedInvalidDeviceData"));
   }
   return (payload as { devices: RemoteDevice[] }).devices.map((device) => ({
     ...device,
@@ -503,7 +503,7 @@ export async function fetchRemoteProviders(
   if (!response.ok) throw new ApiError(await parseError(response), response.status);
   const payload: unknown = await response.json();
   if (!payload || typeof payload !== 'object' || !Array.isArray((payload as { providers?: unknown }).providers)) {
-    throw new ApiError(t("服务器返回的 Provider 数据无效"));
+    throw new ApiError(t("client.mobile.theServerReturnedInvalidProviderData"));
   }
   return (payload as { providers: RemoteProviderSummary[] }).providers.map((provider) => ({
     ...provider,
@@ -615,11 +615,11 @@ export async function fetchUserProfile(session: AuthSession): Promise<UserProfil
   if (!response.ok) throw new ApiError(await parseError(response), response.status);
   const payload: unknown = await response.json();
   if (!payload || typeof payload !== 'object') {
-    throw new ApiError(t("服务器返回的用户信息无效"));
+    throw new ApiError(t("client.mobile.theServerReturnedInvalidUserDetails"));
   }
   const profile = payload as Partial<UserProfile>;
   if (!profile.id || !profile.email || !profile.role) {
-    throw new ApiError(t("服务器返回的用户信息无效"));
+    throw new ApiError(t("client.mobile.theServerReturnedInvalidUserDetails"));
   }
   const nextProfile = profile as UserProfile;
   session.email = nextProfile.email;
@@ -744,9 +744,9 @@ export async function syncTotpVault(session: AuthSession, vault: TotpVault): Pro
   });
   if (!response.ok) throw new ApiError(await parseError(response), response.status);
   const payload: unknown = await response.json();
-  if (!payload || typeof payload !== 'object') throw new ApiError(t("服务器返回的 2FA 数据无效"));
+  if (!payload || typeof payload !== 'object') throw new ApiError(t("client.mobile.theServerReturnedInvalid2faData"));
   const normalized = normalizeTotpVault(payload);
-  if (!normalized) throw new ApiError(t("服务器返回的 2FA 数据无效"));
+  if (!normalized) throw new ApiError(t("client.mobile.theServerReturnedInvalid2faData"));
   return normalized;
 }
 
@@ -754,10 +754,10 @@ export async function fetchTotpVault(session: AuthSession): Promise<TotpVault | 
   const response = await authorizedRequest(session, '/sync/totp');
   if (!response.ok) throw new ApiError(await parseError(response), response.status);
   const payload: unknown = await response.json();
-  if (!payload || typeof payload !== 'object') throw new ApiError(t("服务器返回的 2FA 数据无效"));
+  if (!payload || typeof payload !== 'object') throw new ApiError(t("client.mobile.theServerReturnedInvalid2faData"));
   const candidate = payload as Partial<TotpVault> & { modifiedAt?: string | null };
   if (candidate.modifiedAt === null) return null;
   const vault = normalizeTotpVault(payload);
-  if (!vault) throw new ApiError(t("服务器返回的 2FA 数据无效"));
+  if (!vault) throw new ApiError(t("client.mobile.theServerReturnedInvalid2faData"));
   return vault;
 }

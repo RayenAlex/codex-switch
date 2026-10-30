@@ -1,3 +1,4 @@
+import { displayText } from '../../i18n/index';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { autoUnlockDescription, type SecuritySettingsProps } from '../../../../../shared/remote-desktop/security';
@@ -11,35 +12,35 @@ export function AutoUnlockSettings(props: SecuritySettingsProps) {
   const state = props.value.autoUnlock;
   const disabled = !props.connected || !props.control || !props.supported || props.saving || !state;
   return <View>
-    <Pressable accessibilityRole="switch" accessibilityLabel={t('自动解锁被控端')}
+    <Pressable accessibilityRole="switch" accessibilityLabel={t("client.remoteDesktop.automaticallyUnlockRemoteComputer")}
       accessibilityState={{ checked: state?.enabled ?? false, disabled }} disabled={disabled}
       onPress={form.toggle} style={[s.option, disabled && s.disabled]}>
       <MaterialCommunityIcons name="lock-open-outline" size={23} color="#a8c8ff" />
-      <View style={s.copy}><Text style={s.title}>{t('自动解锁被控端')}</Text>
-        <Text style={s.hint} accessibilityLiveRegion="polite">{t(autoUnlockDescription(state))}</Text></View>
+      <View style={s.copy}><Text style={s.title}>{t("client.remoteDesktop.automaticallyUnlockRemoteComputer")}</Text>
+        <Text style={s.hint} accessibilityLiveRegion="polite">{displayText(autoUnlockDescription(state))}</Text></View>
       <View style={[s.track, state?.enabled && s.trackOn]}>
         <View style={[s.thumb, state?.enabled && s.thumbOn]} /></View>
     </Pressable>
     {state?.enabled && !form.editing && <Pressable accessibilityRole="button"
-      accessibilityLabel={t('修改登录信息')} disabled={disabled} onPress={form.edit} style={s.button}>
-      <Text style={s.text}>{t('修改登录信息')}</Text></Pressable>}
+      accessibilityLabel={t("client.remoteDesktop.editSignInDetails")} disabled={disabled} onPress={form.edit} style={s.button}>
+      <Text style={s.text}>{t("client.remoteDesktop.editSignInDetails")}</Text></Pressable>}
     {form.editing && <View style={s.form}>
-      <Text style={s.title}>{t('Windows 账号')}</Text>
-      <TextInput accessibilityLabel={t('Windows 账号')} value={form.username} onChangeText={form.setUsername}
+      <Text style={s.title}>{t("client.remoteDesktop.windowsAccount")}</Text>
+      <TextInput accessibilityLabel={t("client.remoteDesktop.windowsAccount")} value={form.username} onChangeText={form.setUsername}
         autoCapitalize="none" autoCorrect={false} autoComplete="off" textContentType="none"
         importantForAutofill="noExcludeDescendants" maxLength={256} editable={!disabled} style={s.input}
-        placeholder={t('例如：电脑名\\用户名')} placeholderTextColor="#aab6c9" />
-      <Text style={s.title}>{t('Windows 登录密码')}</Text>
-      <TextInput accessibilityLabel={t('Windows 登录密码')} value={form.password} onChangeText={form.setPassword}
+        placeholder={t("client.remoteDesktop.windowsUsernamePlaceholder")} placeholderTextColor="#aab6c9" />
+      <Text style={s.title}>{t("client.remoteDesktop.windowsPassword")}</Text>
+      <TextInput accessibilityLabel={t("client.remoteDesktop.windowsPassword")} value={form.password} onChangeText={form.setPassword}
         secureTextEntry autoCapitalize="none" autoCorrect={false} autoComplete="off" textContentType="none"
         importantForAutofill="noExcludeDescendants" maxLength={256} editable={!disabled} style={s.input} />
-      <Text style={s.hint}>{t('请填写账号密码，不是 PIN。密码仅加密保存在远程电脑；关闭后会删除。')}</Text>
+      <Text style={s.hint}>{t("client.remoteDesktop.useYourAccountPasswordNotAPinItIsStored")}</Text>
       <View style={s.actions}>
-        <Pressable accessibilityRole="button" accessibilityLabel={t('取消')} onPress={form.cancel} style={s.button}>
-          <Text style={s.text}>{t('取消')}</Text></Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel={t('保存并启用')}
+        <Pressable accessibilityRole="button" accessibilityLabel={t("client.accounts.cancel")} onPress={form.cancel} style={s.button}>
+          <Text style={s.text}>{t("client.accounts.cancel")}</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={t("client.remoteDesktop.saveAndEnable")}
           disabled={disabled || !form.username.trim() || !form.password} onPress={form.save} style={s.button}>
-          <Text style={s.text}>{t('保存并启用')}</Text></Pressable>
+          <Text style={s.text}>{t("client.remoteDesktop.saveAndEnable")}</Text></Pressable>
       </View>
     </View>}
   </View>;

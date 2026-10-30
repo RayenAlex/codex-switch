@@ -1,3 +1,4 @@
+import { displayText } from '../i18n/index';
 import { createThemedStyles } from '../theme/styles';
 import { useThemeMode } from '../theme/store';
 import { t, useLanguage, getLocale } from '../i18n';
@@ -5,20 +6,25 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
-import { editedImageMessage, imageEditorHtml } from '../../../../shared/chat/imageEditorHtml';
+import { editedImageMessage, imageEditorHtml,
+  type ImageEditorOutputLimits } from '../../../../shared/chat/imageEditorHtml';
+import type { ConnectionMode } from '../../../../shared/remote-chat/protocol';
 import type { ChatPhoto } from './chatPhotos';
 
-interface Props { photo: ChatPhoto; save: (dataUrl: string) => void; close: () => void }
+interface Props {
+  photo: Pick<ChatPhoto, 'dataUrl'>; save: (dataUrl: string) => void; close: () => void;
+  mode?: ConnectionMode; outputLimits?: ImageEditorOutputLimits;
+}
 
-export function ChatPhotoEditor({ photo, save, close }: Props) {
+export function ChatPhotoEditor({ photo, save, close, mode, outputLimits }: Props) {
   const styles = useStyles();
   const language = useLanguage();
   const themeMode = useThemeMode();
   const initialTheme = useRef(themeMode);
   const webview = useRef<WebView>(null);
-  const source = useMemo(() => ({ html: imageEditorHtml(photo.dataUrl, t, getLocale(), {
-    themeMode: initialTheme.current,
-  }) }), [photo.dataUrl, language]);
+  const source = useMemo(() => ({ html: imageEditorHtml(photo.dataUrl, displayText, getLocale(), {
+    themeMode: initialTheme.current, mode, outputLimits,
+  }) }), [photo.dataUrl, language, mode, outputLimits]);
   const themeScript = `document.documentElement.dataset.theme = ${JSON.stringify(themeMode)}; true;`;
   // Update only the page colors so an appearance change preserves unsaved annotations.
   useEffect(() => { webview.current?.injectJavaScript(themeScript); }, [themeScript]);
@@ -26,11 +32,11 @@ export function ChatPhotoEditor({ photo, save, close }: Props) {
   const receive = (raw: string) => {
     try {
       if (raw === '{"type":"cancel"}') { close(); return; }
-      const dataUrl = editedImageMessage(raw);
+      const dataUrl = editedImageMessage(raw, mode);
       if (!dataUrl) return;
       save(dataUrl);
       close();
-    } catch { setError(t("图片未保存，请减少标注或照片后重试。")); }
+    } catch { setError(t("client.mobile.imageNotSavedUseFewerAnnotationsOrPhotosAndTry")); }
   };
   return <Modal visible animationType="slide" onRequestClose={close}
     supportedOrientations={['portrait', 'landscape-left', 'landscape-right']}>
@@ -42,11 +48,11 @@ export function ChatPhotoEditor({ photo, save, close }: Props) {
         setSupportMultipleWindows={false} javaScriptCanOpenWindowsAutomatically={false}
         onShouldStartLoadWithRequest={({ url }) => url === 'about:blank'}
         onMessage={({ nativeEvent }) => receive(nativeEvent.data)}
-        onError={() => setError(t("图片无法编辑，请关闭后重试。"))} />
+        onError={() => setError(t("client.mobile.couldNotEditTheImageCloseItAndTryAgain"))} />
       {!!error && <View style={styles.notice}>
         <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
         <Pressable accessibilityRole="button" onPress={close} style={styles.close}>
-          <Text style={styles.error}>{t("关闭编辑")}</Text>
+          <Text style={styles.error}>{t("client.mobile.closeEditor")}</Text>
         </Pressable>
       </View>}
     </SafeAreaView></SafeAreaProvider>

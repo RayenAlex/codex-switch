@@ -1,4 +1,7 @@
+import { displayText } from '../../i18n/uiText';
+import { useContext } from 'react';
 import { ImageViewer } from "../../../../../shared/chat/ImageViewer";
+import { FileEnvironmentContext } from './fileEnvironment';
 import { useImageMenu } from "./useImageMenu";
 import styles from "./ImagePreview.module.less";
 
@@ -13,6 +16,7 @@ interface Props {
 
 export function ImagePreview(props: Props) {
   const menu = useImageMenu(props.prepare);
-  return <span className={styles.preview}><ImageViewer {...props} {...menu} translate={guiText} /></span>;
+  const environment = useContext(FileEnvironmentContext);
+  return <span className={styles.preview}><ImageViewer {...props} {...menu}
+    autoLoadOriginal={!environment?.remote} inlineViewControls translate={displayText} /></span>;
 }
-import { guiText } from "../../i18n/guiText";

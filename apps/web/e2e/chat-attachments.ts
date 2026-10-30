@@ -1,6 +1,34 @@
 import { expect, type Page, type APIRequestContext, type TestInfo } from '@playwright/test';
 import { connect, send, settled, screenshot, state } from './chat-helpers';
 
+export async function fileCancelJourney(page: Page) {
+  await connect(page);
+  const draft = page.getByRole('textbox', { name: '聊天消息' });
+  await draft.fill('Keep this draft');
+  const open = async () => {
+    await page.getByRole('button', { name: '添加内容', exact: true }).click();
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('menuitem', { name: '文件', exact: true }).click();
+    return chooser;
+  };
+  const file = { name: 'picker-retry.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') };
+  await (await open()).setFiles(file);
+  const attachment = page.locator('.chat-composer-capsules').getByText(file.name, { exact: true });
+  await expect(attachment).toBeVisible();
+  for (let cycle = 0; cycle < 3; cycle++) {
+    const picker = await open();
+    // Exercise both cancellation and browsers that notify an empty selection through change.
+    await picker.element().dispatchEvent('cancel');
+    await picker.setFiles([]);
+    await expect(draft).toHaveValue('Keep this draft');
+    await expect(attachment).toBeVisible();
+    await expect(page.getByRole('button', { name: '发送消息', exact: true })).toBeEnabled();
+    await expect(page.locator('.chat-error')).toHaveCount(0);
+  }
+  await (await open()).setFiles(file);
+  await expect(attachment).toHaveCount(2);
+}
+
 async function choosePhotos(page: Page, count: number) {
   await page.getByRole('button', { name: '添加内容', exact: true }).click();
   const chooser = page.waitForEvent('filechooser');

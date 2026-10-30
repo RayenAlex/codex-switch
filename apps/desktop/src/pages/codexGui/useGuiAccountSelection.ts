@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hasLocalBackend, invoke, loadAggregateApis, subscribeToProviderEvents } from "../../api/backend";
 import type { Account, AggregateApi, Provider } from "../../types";
@@ -29,7 +29,7 @@ export function useGuiAccountSelection(options: { active: boolean; accounts: Acc
       ]);
       if (request === generation.current) { setSelection(next); setAggregates(available); setError(""); }
     } catch {
-      if (request === generation.current) setError(guiText("暂时无法读取 Codex GUI 账户，请重新打开页面重试。"));
+      if (request === generation.current) setError(uiText("client.workspaceActions.couldNotLoadTheCodexGuiAccountReopenThePage"));
     } finally { if (request === generation.current) setLoading(false); }
   }, []);
 
@@ -46,7 +46,7 @@ export function useGuiAccountSelection(options: { active: boolean; accounts: Acc
       stop = unsubscribe;
       void refresh();
     }).catch(() => {
-      if (!disposed) { setLoading(false); setError(guiText("账户更新暂时不可用，请重新打开页面重试。")); }
+      if (!disposed) { setLoading(false); setError(uiText("client.workspaceActions.accountUpdatesAreUnavailableReopenThePageToRetry")); }
     });
     return () => { disposed = true; generation.current++; stop?.(); };
   }, [options.active, refresh]);
@@ -62,7 +62,7 @@ export function useGuiAccountSelection(options: { active: boolean; accounts: Acc
         const available = await loadAggregateApis();
         if (!disposed) setAggregates(available);
       } catch {
-        if (!disposed) setError(guiText("暂时无法读取 Codex GUI 账户，请重新打开页面重试。"));
+        if (!disposed) setError(uiText("client.workspaceActions.couldNotLoadTheCodexGuiAccountReopenThePage"));
       } finally { pending = false; }
     });
     return () => { disposed = true; stop(); };

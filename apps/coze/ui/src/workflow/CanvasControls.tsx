@@ -13,12 +13,12 @@ export function CanvasControls({ graph, onChange, history }: Props) {
   const { zoom } = useViewport();
   const t = useT();
   const controls = [
-    { id: "undo", label: t("撤销 (Ctrl+Z)"), Icon: Undo2, disabled: !history.canUndo, action: history.undo },
-    { id: "redo", label: t("重做 (Ctrl+Shift+Z)"), Icon: Redo2, disabled: !history.canRedo, action: history.redo },
-    { id: "zoom-out", label: t("缩小"), Icon: Minus, action: () => void flow.zoomOut() },
-    { id: "zoom-in", label: t("放大"), Icon: Plus, action: () => void flow.zoomIn() },
-    { id: "fit", label: t("适应画布"), Icon: Maximize, action: () => void flow.fitView({ padding: 0.2, duration: 200 }) },
-    { id: "arrange", label: t("自动整理"), Icon: Workflow, action: () => {
+    { id: "undo", label: t("coze.index.undoCtrlZ"), Icon: Undo2, disabled: !history.canUndo, action: history.undo },
+    { id: "redo", label: t("coze.index.redoCtrlShiftZ"), Icon: Redo2, disabled: !history.canRedo, action: history.redo },
+    { id: "zoom-out", label: t("coze.index.zoomOut"), Icon: Minus, action: () => void flow.zoomOut() },
+    { id: "zoom-in", label: t("coze.index.zoomIn"), Icon: Plus, action: () => void flow.zoomIn() },
+    { id: "fit", label: t("coze.index.fitToScreen"), Icon: Maximize, action: () => void flow.fitView({ padding: 0.2, duration: 200 }) },
+    { id: "arrange", label: t("coze.index.autoArrange"), Icon: Workflow, action: () => {
       onChange(arrangeGraph(graph));
       requestAnimationFrame(() => void flow.fitView({ padding: 0.2, duration: 200 }));
     } },
@@ -26,7 +26,7 @@ export function CanvasControls({ graph, onChange, history }: Props) {
   return <Panel position="bottom-left" className="canvas-controls"><Space size={2}>
     {controls.map(({ id, label, Icon, action, disabled }) => <Tooltip key={id} title={label}>
       <Button type="text" aria-label={label} disabled={disabled} icon={<Icon size={16} />} onClick={action} />
-    </Tooltip>)}<Button type="text" aria-label={t("重置缩放")} onClick={() => void flow.zoomTo(1)}>
+    </Tooltip>)}<Button type="text" aria-label={t("coze.index.resetZoom")} onClick={() => void flow.zoomTo(1)}>
       {Math.round(zoom * 100)}%</Button>
   </Space></Panel>;
 }

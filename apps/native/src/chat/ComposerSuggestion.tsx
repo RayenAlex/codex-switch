@@ -6,10 +6,10 @@ export function ComposerSuggestion({ text, accept }: { text: string; accept: () 
   const color = useThemeColor();
   if (!text) return null;
   const ink = color('#25332b', 'ink');
-  return <Pressable accessibilityRole="button" accessibilityLabel={t('填入建议')}
+  return <Pressable accessibilityRole="button" accessibilityLabel={t("client.chat.useSuggestion")}
     onPress={accept} style={styles.button}>
     <Text style={[styles.text, { color: ink }]}>{text}</Text>
-    <Text style={[styles.hint, { color: ink, borderColor: ink }]}>{t('填入')}</Text>
+    <Text style={[styles.hint, { color: ink, borderColor: ink }]}>{t("client.chat.use")}</Text>
   </Pressable>;
 }
 const styles = StyleSheet.create({

@@ -52,12 +52,12 @@ async fn acknowledged_tasks_block_their_worktree_until_completion() {
     submit(&activity, "host", &main, 1).await.unwrap();
     assert!(matches!(
         activity.change(main.clone()).await,
-        Err(GuiError::WorkspaceBusy)
+        Err(GuiError::WorkspaceConflict(_))
     ));
     acknowledge(&activity, 1).await;
     assert!(matches!(
         activity.change(main.clone()).await,
-        Err(GuiError::WorkspaceBusy)
+        Err(GuiError::WorkspaceConflict(_))
     ));
     let other = activity
         .change(workspace("another-worktree"))

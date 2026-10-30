@@ -129,7 +129,7 @@ it("renders deltas between arrivals, preserves code blocks, and flushes when sto
   expect(container.querySelector("[data-processing-phase]")).toBeNull();
 });
 
-function expectHistory() {
+function expectHistory(messageCount = 2) {
   expect(container.textContent).toContain("检查这个项目");
   expect(guiApi.request).toHaveBeenCalledWith({ operation: "imagePreview", threadId: "one",
     source: "D:/screenshot.png", variant: "thumbnail" });
@@ -138,7 +138,7 @@ function expectHistory() {
   expect(container.textContent).toContain("先检查项目的测试结果");
   expect(container.textContent).toContain("PASS: project tests");
   expect(container.textContent).toContain("项目检查通过");
-  expect(container.querySelectorAll("article")).toHaveLength(2);
+  expect(container.querySelectorAll("article")).toHaveLength(messageCount);
 }
 
 async function openHistory() {
@@ -178,7 +178,8 @@ it("keeps visible messages and expanded activity after completion, reopening, an
   await openHistory();
   expectHistory();
   await act(async () => { expect(await controller.send("继续检查", [])).toBe(true); });
-  expectHistory();
+  expectHistory(3);
+  expect(container.querySelectorAll("article")[2].textContent).toContain("继续检查");
   expect(container.querySelector("[data-processing-phase]")?.textContent).toContain("等待响应");
 });
 

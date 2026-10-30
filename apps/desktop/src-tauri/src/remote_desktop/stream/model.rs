@@ -124,6 +124,9 @@ pub(crate) enum UpgradeAction {
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Offer {
+    #[cfg(any(windows, target_os = "macos"))]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_state: Option<super::super::privacy::Snapshot>,
     pub sdp: String,
     #[serde(default)]
     pub direct_upgrade: bool,

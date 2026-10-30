@@ -1,8 +1,9 @@
-import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from 'react';
+import { displayText, displayError } from '../i18n/uiText';
+import { lazy, Suspense, useEffect, useSyncExternalStore } from 'react';
 import { Alert, Button, Input, Modal } from 'antd';
 import { Handshake } from 'lucide-react';
 import type { CloudAuthState } from '../types';
-import { guiText } from '../i18n/guiText';
+import { uiText } from "../i18n/uiText";
 import { useGuiLanguage } from '../i18n/useGuiLanguage';
 import { assistanceStore as store, liveInvitation, type AssistanceInvitation } from './store';
 import styles from './assistance.module.less';
@@ -11,13 +12,13 @@ const POLL_INTERVAL_MS = 3_000;
 const AssistanceViewer = lazy(() => import('./AssistanceViewer')
   .then(module => ({ default: module.AssistanceViewer })));
 const STATE_LABELS = {
-  pending: '正在请求', accepted: '远程协助中', declined: '对方已拒绝', ended: '协助已结束', expired: '邀请已过期',
+  pending: "client.remoteAssistance.requestingAssistance", accepted: "client.remoteAssistance.remoteAssistanceActive", declined: "client.remoteAssistance.invitationDeclined", ended: "client.remoteAssistance.assistanceEnded", expired: "client.remoteAssistance.invitationExpired",
 } as const;
 
 export function RemoteAssistance({ auth, onLogin }: { auth: CloudAuthState; onLogin: () => void }) {
   useGuiLanguage();
   const state = useSyncExternalStore(store.subscribe, store.snapshot);
-  const [email, setEmail] = useState('');
+  const { email } = state;
   useEffect(() => {
     store.reset(auth.authenticated);
     if (!auth.authenticated) return;
@@ -33,59 +34,64 @@ export function RemoteAssistance({ auth, onLogin }: { auth: CloudAuthState; onLo
     && request.state === 'accepted' && liveInvitation(request));
   const viewer = accepted?.id === state.viewerId ? accepted : undefined;
   const end = (request: AssistanceInvitation) => { void store.respond(request.id, 'end'); };
-  const invite = async () => { if (await store.invite(email)) setEmail(''); };
+  const invite = async () => { if (await store.inviteSelected()) store.setEmail(''); };
   return <>
     {(active || accepted) && !viewer && <div className={styles.status} role="status">
       <Handshake size={16} aria-hidden="true" />
-      <span>{active ? guiText(STATE_LABELS[active.state]) : guiText('远程协助中')}</span>
+      <span>{active ? displayText(STATE_LABELS[active.state]) : uiText("client.remoteAssistance.remoteAssistanceActive")}</span>
       {active && <span className={styles.email}>{active.helperEmail}</span>}
-      {accepted && <Button size="small" onClick={() => store.view(accepted.id)}>{guiText('打开远程桌面')}</Button>}
+      {accepted && <Button size="small" onClick={() => store.view(accepted.id)}>{uiText("client.remoteDesktop.openRemoteDesktop")}</Button>}
       <Button size="small" danger disabled={state.busy} onClick={() => end(active ?? accepted!)}>
-        {guiText(active?.state === 'pending' ? '取消邀请' : '结束协助')}
+        {uiText(active?.state === 'pending' ? "client.remoteAssistance.cancelInvitation" : "client.remoteAssistance.endAssistance")}
       </Button>
-      {state.error && <span className={styles.error}>{guiText(state.error)}</span>}
+      {state.error && <span className={styles.error}>{displayError(state.error)}</span>}
     </div>}
-    <Modal title={guiText('远程协助')} open={state.dialog} onCancel={store.dismiss}
+    <Modal title={uiText("client.remoteAssistance.remoteAssistance")} open={state.dialog} onCancel={store.dismiss}
       footer={null} width={440} styles={{ body: { maxWidth: 400 } }}>
       <div className={styles.content}>
-        <p>{guiText('邀请对方查看并操作本机。你可以随时结束协助。')}</p>
-        {state.error && <Alert type="error" message={guiText(state.error)} showIcon />}
+        <p>{uiText("client.remoteAssistance.inviteSomeoneToViewAndControlThisComputerYouCan")}</p>
+        {state.error && <Alert type="error" message={displayError(state.error)} showIcon />}
         {!state.authenticated ? <Button type="primary" onClick={() => { store.dismiss(); onLogin(); }}>
-          {guiText('登录后使用')}
+          {uiText("client.remoteAssistance.signInToContinue")}
         </Button> : <>
-          <label htmlFor="assistance-email">{guiText('对方的登录邮箱')}</label>
-          <Input id="assistance-email" type="email" autoFocus value={email} maxLength={254}
-            placeholder="name@example.com" disabled={state.busy || !!active}
-            onChange={event => setEmail(event.target.value)} onPressEnter={() => { if (!active) void invite(); }} />
-          <p className={styles.hint}>{guiText('请对方在电脑上登录 Remote AI。邀请在 5 分钟内有效。')}</p>
-          <Button type="primary" loading={state.busy} disabled={!email.trim() || !!active}
+          {state.recipient ? <p>
+            {uiText('client.lounge.assistance.recipient', { email: state.recipient.account })}
+          </p> : <>
+            <label htmlFor="assistance-email">{uiText("client.remoteAssistance.theirSignInEmail")}</label>
+            <Input id="assistance-email" type="email" autoFocus value={email} maxLength={254}
+              placeholder="name@example.com" disabled={state.busy || !!active}
+              onChange={event => store.setEmail(event.target.value)}
+              onPressEnter={() => { if (!active) void invite(); }} />
+          </>}
+          <p className={styles.hint}>{uiText("client.remoteAssistance.askThemToSignInToRemoteAiOnTheir")}</p>
+          <Button type="primary" loading={state.busy} disabled={!state.recipient && !email.trim() || !!active}
             onClick={() => void invite()}>
-            {guiText('发送邀请')}
+            {uiText("client.remoteAssistance.sendInvitation")}
           </Button>
           {outgoing.slice(-3).reverse().map(request => <div className={styles.request} key={request.id}>
-            <span>{request.helperEmail}</span><span>{guiText(STATE_LABELS[request.state])}</span>
+            <span>{request.helperEmail}</span><span>{displayText(STATE_LABELS[request.state])}</span>
             {liveInvitation(request) && <Button size="small" danger disabled={state.busy} onClick={() => end(request)}>
-              {guiText(request.state === 'pending' ? '取消邀请' : '结束协助')}
+              {uiText(request.state === 'pending' ? "client.remoteAssistance.cancelInvitation" : "client.remoteAssistance.endAssistance")}
             </Button>}
           </div>)}
         </>}
       </div>
     </Modal>
-    <Modal title={guiText('收到远程协助邀请')} open={!!incoming && !viewer} width={440}
+    <Modal title={uiText("client.remoteAssistance.remoteAssistanceInvitation")} open={!!incoming && !viewer} width={440}
       styles={{ body: { maxWidth: 400 } }} closable={false} maskClosable={false} keyboard={false}
       footer={incoming && <>
         <Button disabled={state.busy} onClick={() => void store.respond(incoming.id, 'decline')}>
-          {guiText('拒绝')}
+          {uiText("client.chat.deny")}
         </Button>
         <Button type="primary" loading={state.busy} disabled={!!accepted}
-          onClick={() => void store.respond(incoming.id, 'accept')}>{guiText('接受并连接')}</Button>
+          onClick={() => void store.respond(incoming.id, 'accept')}>{uiText("client.remoteAssistance.acceptAndConnect")}</Button>
       </>}>
       {incoming && <div className={styles.content}>
         <strong>{incoming.hostEmail}</strong>
-        <p>{guiText('希望你远程控制这台电脑，帮助解决问题。')}</p>
+        <p>{uiText("client.remoteAssistance.wouldLikeYouToControlThisComputerAndHelpResolve")}</p>
         <span>{incoming.hostName}</span>
-        <p className={styles.hint}>{guiText('接受后将打开对方的桌面。双方都可以随时结束协助。')}</p>
-        {state.error && <Alert type="error" message={guiText(state.error)} showIcon />}
+        <p className={styles.hint}>{uiText("client.remoteAssistance.acceptToOpenTheirDesktopEitherPersonCanEndAssistance")}</p>
+        {state.error && <Alert type="error" message={displayError(state.error)} showIcon />}
       </div>}
     </Modal>
     {viewer && state.identity && <Suspense fallback={null}>

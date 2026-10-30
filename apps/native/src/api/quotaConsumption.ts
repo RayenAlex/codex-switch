@@ -92,10 +92,10 @@ export async function consumeAccountQuota(account: AccountSummary): Promise<void
       signal: controller.signal,
     });
     if (!quotaConsumptionCompleted(await response.text())) {
-      throw new ApiError(t("Codex 未确认额度消耗完成，请稍后重试"));
+      throw new ApiError(t("client.mobile.codexHasNotConfirmedQuotaConsumptionTryAgainLater"));
     }
   } catch (error) {
-    if (controller.signal.aborted) throw new ApiError(t("Codex 请求超时，请稍后重试"));
+    if (controller.signal.aborted) throw new ApiError(t("client.mobile.codexRequestTimedOutTryAgainLater"));
     throw error;
   } finally {
     clearTimeout(timeout);
@@ -103,7 +103,7 @@ export async function consumeAccountQuota(account: AccountSummary): Promise<void
 }
 
 function failureMessage(error: unknown) {
-  return error instanceof Error && error.message ? error.message : t("额度消耗失败");
+  return error instanceof Error && error.message ? error.message : t("client.mobile.quotaConsumptionFailed");
 }
 
 export async function consumeAccountsQuota(

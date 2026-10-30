@@ -1,3 +1,4 @@
+import { displayText, displayError } from '../i18n/index';
 import { createThemedStyles } from '../theme/styles';
 import { t, useLanguage } from '../i18n';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -23,40 +24,40 @@ export function ChatCommandMenu({ catalog, query, skillsOnly, compactReason, cho
   const search = query.toLocaleLowerCase();
   const skills = catalog.skills.filter((skill) =>
     `${skill.name} ${skillLabel(skill)} ${skillDescription(skill, language)}`.toLocaleLowerCase().includes(search));
-  const showCompact = !skillsOnly && `compact 压缩 上下文 ${t('压缩此对话的上下文')}`.toLocaleLowerCase().includes(search);
-  const showGoal = !!goal && !skillsOnly && `goal 目标 持续推进 ${t('持续推进，直到完成目标')}`.toLocaleLowerCase().includes(search);
-  return <View style={menuStyles.panel} accessibilityLabel={t("命令和技能")}>
+  const showCompact = !skillsOnly && `compact 压缩 上下文 ${t("client.chat.compactThisConversationSContext")}`.toLocaleLowerCase().includes(search);
+  const showGoal = !!goal && !skillsOnly && `goal 目标 持续推进 ${t("client.chat.keepWorkingUntilTheGoalIsComplete")}`.toLocaleLowerCase().includes(search);
+  return <View style={menuStyles.panel} accessibilityLabel={t("client.chat.commandsAndSkills")}>
     <View style={menuStyles.heading}>
-      <Text style={styles.buttonText}>{t("命令和技能")}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={t("关闭命令和技能")} onPress={close} hitSlop={8}>
+      <Text style={styles.buttonText}>{t("client.chat.commandsAndSkills")}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={t("client.chat.closeCommandsAndSkills")} onPress={close} hitSlop={8}>
         <Text style={styles.buttonText}>×</Text>
       </Pressable>
     </View>
     <FlatList data={skills} keyExtractor={(skill) => skill.path} style={menuStyles.list}
       keyboardShouldPersistTaps="always" nestedScrollEnabled
-      ListHeaderComponent={<>{showCompact ? <Pressable accessibilityRole="button" accessibilityLabel={t("压缩上下文")}
+      ListHeaderComponent={<>{showCompact ? <Pressable accessibilityRole="button" accessibilityLabel={t("client.chat.compactContext.d36946")}
         disabled={compactReason !== null} accessibilityState={{ disabled: compactReason !== null }}
         onPress={compact} style={[menuStyles.option, compactReason !== null && styles.disabled]}>
-        <Text style={styles.buttonText}>{t("压缩")}{' '}<Text style={styles.subtitle}>/compact</Text></Text>
-        <Text style={styles.subtitle}>{t(compactReason ?? "压缩此对话的上下文")}</Text>
+        <Text style={styles.buttonText}>{t("client.chat.compact")}{' '}<Text style={styles.subtitle}>/compact</Text></Text>
+        <Text style={styles.subtitle}>{displayText(compactReason ?? "client.chat.compactThisConversationSContext")}</Text>
       </Pressable> : null}
-      {showGoal && <Pressable accessibilityRole="button" accessibilityLabel={t("目标模式")} onPress={goal}
+      {showGoal && <Pressable accessibilityRole="button" accessibilityLabel={t("client.chat.goalMode")} onPress={goal}
         style={menuStyles.option}>
-        <Text style={styles.buttonText}>{t("目标")}{' '}<Text style={styles.subtitle}>/goal</Text></Text>
-        <Text style={styles.subtitle}>{t("持续推进，直到完成目标")}</Text>
+        <Text style={styles.buttonText}>{t("client.chat.goal")}{' '}<Text style={styles.subtitle}>/goal</Text></Text>
+        <Text style={styles.subtitle}>{t("client.chat.keepWorkingUntilTheGoalIsComplete")}</Text>
       </Pressable>}</>}
       renderItem={({ item: skill }) => <Pressable accessibilityRole="button"
-        accessibilityLabel={t("使用技能 {value1}", { value1: skillLabel(skill) })} disabled={!skill.enabled}
+        accessibilityLabel={t("client.chat.useSkill", { value1: skillLabel(skill) })} disabled={!skill.enabled}
         accessibilityState={{ disabled: !skill.enabled }} onPress={() => choose(skill)}
         style={[menuStyles.option, !skill.enabled && styles.disabled]}>
-        <Text style={styles.buttonText}>{skillLabel(skill)}{!skill.enabled && t("（已停用）")}</Text>
+        <Text style={styles.buttonText}>{skillLabel(skill)}{!skill.enabled && t("client.chat.disabled")}</Text>
         <Text numberOfLines={2} style={styles.subtitle}>{skillDescription(skill, language)}</Text>
       </Pressable>}
       ListFooterComponent={<>
-        {!catalog.loaded && catalog.loading && <Text style={menuStyles.message}>{t("正在加载技能…")}</Text>}
-        {!!catalog.error && <Text style={menuStyles.message}>{t(catalog.error)}</Text>}
+        {!catalog.loaded && catalog.loading && <Text style={menuStyles.message}>{t("client.chat.loadingSkills")}</Text>}
+        {!!catalog.error && <Text style={menuStyles.message}>{displayError(catalog.error)}</Text>}
         {catalog.loaded && !skills.length && !showCompact && !showGoal
-          && <Text style={menuStyles.message}>{t("没有找到匹配的命令或技能")}</Text>}
+          && <Text style={menuStyles.message}>{t("client.chat.noMatchingCommandsOrSkills")}</Text>}
       </>} />
   </View>;
 }

@@ -65,3 +65,45 @@ it('sends a trimmed recipient and records local consent only after successful cr
   store.reset(false);
   expect(store.allows('invite')).toBe(false);
 });
+
+it('opens an email form for group chat without sending an invitation', () => {
+  store.request();
+  expect(store.snapshot()).toMatchObject({ dialog: true, email: '', busy: false });
+  expect(invoke).not.toHaveBeenCalled();
+});
+
+it('checks host permissions before inviting a chat account without exposing its email',
+  async () => {
+    invoke.mockResolvedValueOnce({ enabled: false, control: false });
+    store.request({ id: 'bob-id', account: 'bob' });
+    await vi.waitFor(() => expect(store.snapshot().busy).toBe(false));
+    expect(invoke).toHaveBeenCalledExactlyOnceWith('remote_desktop_permissions');
+    expect(store.snapshot()).toMatchObject({ dialog: true, email: '', requests: [] });
+    expect(store.snapshot().error).toContain('允许远程桌面和键鼠控制');
+    invoke.mockResolvedValueOnce({ enabled: true, control: true }).mockResolvedValueOnce(reply());
+    expect(await store.inviteSelected()).toBe(true);
+    expect(invoke).toHaveBeenLastCalledWith('remote_assistance', {
+      request: { kind: 'inviteAccount', userId: 'bob-id' },
+    });
+    store.reset(false);
+    expect(store.snapshot().email).toBe('');
+  });
+
+it('invites the confirmed chat account by ID when account prefixes can be shared', async () => {
+  invoke.mockResolvedValueOnce({ enabled: true, control: true }).mockResolvedValueOnce(reply());
+  store.request({ id: 'bob-id', account: 'bob' });
+  await vi.waitFor(() => expect(store.snapshot().busy).toBe(false));
+  expect(invoke).toHaveBeenLastCalledWith('remote_assistance', {
+    request: { kind: 'inviteAccount', userId: 'bob-id' },
+  });
+  expect(store.allows('invite')).toBe(true);
+});
+
+it('reopens an active invitation without inviting another chat recipient', async () => {
+  invoke.mockResolvedValueOnce(reply()); await store.refresh();
+  invoke.mockClear();
+  store.request({ id: 'someone-else-id', account: 'someone-else' });
+  expect(store.snapshot().dialog).toBe(true);
+  expect(store.snapshot().requests).toEqual([invitation]);
+  expect(invoke).not.toHaveBeenCalled();
+});

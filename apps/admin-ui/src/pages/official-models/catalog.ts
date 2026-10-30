@@ -1,3 +1,5 @@
+import { catalogErrors } from '@remoteai/i18n/copy/adminModelCatalog';
+
 export type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
 export interface JsonObject { [key: string]: JsonValue }
 export interface ModelCatalog extends JsonObject { models: JsonObject[] }
@@ -31,15 +33,7 @@ function validateCatalog(catalog: ModelCatalog): CatalogError | null {
 }
 
 export function catalogErrorMessage(error: CatalogError, zh: boolean): string {
-  const messages = {
-    syntax: ["JSON 格式有误，请修正后再切换表格或保存。", "Fix the JSON syntax before switching to the table or saving."],
-    structure: ["请提供包含 models 数组的对象，每个模型需为一个对象。",
-      "Provide an object with a models array containing model objects."],
-    empty: ["请至少添加一个模型。", "Add at least one model."],
-    name: ["模型标识不能为空或重复，请检查 slug 或 id。", "Each model needs a unique, non-empty slug or id."],
-    hidden: ["请至少保留一个可见模型。", "Keep at least one model visible."],
-  };
-  return messages[error][zh ? 0 : 1];
+  return catalogErrors[error][zh ? 0 : 1];
 }
 
 export function updateModel(catalog: ModelCatalog, index: number, patch: JsonObject): ModelCatalog {

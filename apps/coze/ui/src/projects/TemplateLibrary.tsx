@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import { useEffect, useState } from "react";
 import { Alert, Button, Empty, Modal, Popconfirm, Space, Upload } from "antd";
 import { LayoutTemplate, Upload as UploadIcon } from "lucide-react";
@@ -33,35 +34,35 @@ export function TemplateLibrary({ onInstalled }: { onInstalled: (id: string) => 
   });
   const upload = (file: File) => {
     void perform(async () => {
-      if (file.size > 4 * 1024 * 1024) throw new Error(msg("请选择不超过 4 MB 的模板文件。"));
+      if (file.size > 4 * 1024 * 1024) throw new Error(msg("coze.index.chooseATemplateFileOf4MbOrLess"));
       const value: unknown = JSON.parse(await file.text());
       await api("save_template", value); await refresh();
     });
     return false;
   };
   // Built-in entries arrive in Chinese from the runtime; user templates are user data and stay as written.
-  const shown = (item: Template, text: string) => item.builtin ? t(text) : text;
-  return <><button className="studio-nav-button" aria-label={t("模板广场")} onClick={() => setOpen(true)}>
-    <LayoutTemplate size={18} /><span>{t("模板广场")}</span></button>
-    <Modal className="studio-dialog" title={t("模板广场")} width={760} open={open} centered
+  const shown = (item: Template, text: string) => item.builtin ? displayError(text) : text;
+  return <><button className="studio-nav-button" aria-label={t("coze.index.templateGallery")} onClick={() => setOpen(true)}>
+    <LayoutTemplate size={18} /><span>{t("coze.index.templateGallery")}</span></button>
+    <Modal className="studio-dialog" title={t("coze.index.templateGallery")} width={760} open={open} centered
       footer={null} onCancel={() => setOpen(false)}>
-      <div className="template-library-intro"><div><p>{t("从模板开始，让想法更快成形。")}</p>
-        <small>{t("模板包含可复用的配置，不包含私有文档和对话。")}</small></div>
+      <div className="template-library-intro"><div><p>{t("coze.index.startFromATemplateAndBringYourIdeasToLife")}</p>
+        <small>{t("coze.index.templatesIncludeReusableSettingsButNotPrivateDocumentsOrConversations")}</small></div>
         <Upload accept=".json" beforeUpload={upload} showUploadList={false} disabled={busy}>
-          <Button icon={<UploadIcon size={16} />} disabled={busy}>{t("导入模板")}</Button></Upload>
+          <Button icon={<UploadIcon size={16} />} disabled={busy}>{t("coze.index.importTemplate")}</Button></Upload>
       </div>
-      {error && <Alert type="error" message={t(error)} />}
-      {items.length === 0 ? <Empty description={t("还没有模板")} /> : <div className="template-grid">
+      {error && <Alert type="error" message={displayError(error)} />}
+      {items.length === 0 ? <Empty description={t("coze.index.noTemplatesYet")} /> : <div className="template-grid">
         {items.map((item) => <article key={item.id} className="template-card">
           <header><span className="template-icon"><LayoutTemplate size={20} /></span>
-            <small>{item.builtin ? t("内置模板") : t("自定义模板")}</small></header>
+            <small>{item.builtin ? t("coze.index.builtInTemplate") : t("coze.index.customTemplate")}</small></header>
           <h3>{shown(item, item.name)}</h3><p>{shown(item, item.description)}</p><Space wrap>
-            <Button type="primary" loading={busy} onClick={() => void install(item.id)}>{t("使用模板")}</Button>
-            <Button disabled={busy} onClick={() => void download(item.id)}>{t("导出")}</Button>
-            {!item.builtin && <Popconfirm title={t("从模板广场移除？已创建的内容会保留。")}
+            <Button type="primary" loading={busy} onClick={() => void install(item.id)}>{t("coze.index.useTemplate")}</Button>
+            <Button disabled={busy} onClick={() => void download(item.id)}>{t("coze.core.export")}</Button>
+            {!item.builtin && <Popconfirm title={t("coze.index.removeFromTheTemplateGalleryContentYouAlreadyCreatedFrom")}
               styles={{ root: { maxWidth: 400 } }} onConfirm={() => perform(async () => {
                 await api("delete_template", { id: item.id }); await refresh();
-              })}><Button danger disabled={busy}>{t("移除")}</Button></Popconfirm>}
+              })}><Button danger disabled={busy}>{t("coze.index.remove")}</Button></Popconfirm>}
           </Space></article>)}
       </div>}
     </Modal></>;

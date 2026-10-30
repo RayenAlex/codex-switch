@@ -10,15 +10,15 @@ export function ChatDevices({ devices, choose, onClose }: {
 }) {
   const styles = useStyles();
   useLanguage();
-  return <BottomSheet fullWidthContent visible title={t("选择电脑")} onClose={onClose}>
+  return <BottomSheet fullWidthContent visible title={t("client.settings.chooseAComputer")} onClose={onClose}>
     <SheetScrollView contentContainerStyle={[styles.settings, { maxWidth: SHEET_READABLE_WIDTH }]}>
       {devices.map((device) => <Pressable key={device.deviceId} accessibilityRole="button"
         style={styles.card}
         onPress={() => choose(device.deviceId)}>
         <View style={styles.row}><Text style={[styles.title, styles.fill]}>{device.name}</Text>
-          <Text style={styles.subtitle}>{device.online ? t("在线") : t("离线")}</Text></View>
+          <Text style={styles.subtitle}>{device.online ? t("client.chat.online") : t("client.chat.offline")}</Text></View>
       </Pressable>)}
-      {!devices.length && <Text style={styles.subtitle}>{t("在电脑上打开 Remote AI 并登录同一账号，即可开始聊天。")}</Text>}
+      {!devices.length && <Text style={styles.subtitle}>{t("client.chat.openRemoteAiOnYourComputerAndSignInWith")}</Text>}
     </SheetScrollView>
   </BottomSheet>;
 }

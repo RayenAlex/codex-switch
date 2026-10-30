@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { loadCodexThreadBin, restoreCodexThreads } from "../../api/backend";
 import { useTrash } from "./useTrash";
-import { threadCopy } from "./copy";
+import { threadCopy } from "@remoteai/i18n/copy/desktop/threads";
 
 vi.mock("../../components/CodexHomeScope", () => ({ useSelectedCodexHome: () => "codex-gui" }));
 vi.mock("../../api/backend", () => ({ loadCodexThreadBin: vi.fn(), restoreCodexThreads: vi.fn() }));

@@ -1,7 +1,7 @@
 import type { DesktopInput, DesktopPlatform } from './protocol';
 
 export const INPUT_TABS = [
-  { id: 'ime', label: '输入法' }, { id: 'shortcuts', label: '快捷键' }, { id: 'keyboard', label: '电脑键盘' },
+  { id: 'ime', label: "client.remoteDesktop.inputMethod" }, { id: 'shortcuts', label: "client.remoteDesktop.shortcuts" }, { id: 'keyboard', label: "client.remoteDesktop.computerKeyboard" },
 ] as const;
 export type InputTab = typeof INPUT_TABS[number]['id'];
 export interface SoftKey { code: string; label: string; weight?: number }
@@ -32,13 +32,13 @@ export const KEYBOARD_PAGES: SoftKey[][][] = [
   ],
 ];
 export const DESKTOP_SHORTCUTS = [
-  { label: 'Caps Lock', description: '大小写锁定', codes: ['CapsLock'] },
-  ...[['C', '复制'], ['V', '粘贴'], ['X', '剪切'], ['A', '全选'], ['Z', '撤销'], ['S', '保存']]
+  { label: 'Caps Lock', description: "client.remoteDesktop.capsLock", codes: ['CapsLock'] },
+  ...[['C', "client.projectBrowser.copied"], ['V', "client.projectBrowser.paste"], ['X', "client.projectBrowser.cut"], ['A', "client.projectBrowser.selectAll"], ['Z', "client.projectBrowser.undo"], ['S', "client.projectBrowser.save"]]
     .map(([key, description]) => ({ label: `Ctrl+${key}`, description, codes: ['ControlLeft', `Key${key}`] })),
-  { label: 'Win', description: '开始', codes: ['MetaLeft'] },
-  { label: 'Win+D', description: '显示桌面', codes: ['MetaLeft', 'KeyD'] },
-  { label: 'Win+Tab', description: '切换窗口', codes: ['MetaLeft', 'Tab'] },
-  { label: 'Win+L', description: '锁定屏幕', codes: ['MetaLeft', 'KeyL'] },
+  { label: 'Win', description: "client.remoteDesktop.start", codes: ['MetaLeft'] },
+  { label: 'Win+D', description: "client.remoteDesktop.showDesktop", codes: ['MetaLeft', 'KeyD'] },
+  { label: 'Win+Tab', description: "client.remoteDesktop.switchWindows", codes: ['MetaLeft', 'Tab'] },
+  { label: 'Win+L', description: "client.remoteDesktop.lockScreen", codes: ['MetaLeft', 'KeyL'] },
 ];
 
 /** Complete every chord in one turn; tab changes and disconnects cannot leave a modifier held. */
@@ -52,12 +52,12 @@ const MAC_MODIFIERS = MODIFIERS.map(key => ({ ...key,
   label: key.code === 'MetaLeft' ? 'Cmd' : key.code === 'AltLeft' ? 'Option' : key.label }));
 const MAC_SHORTCUTS = [
   DESKTOP_SHORTCUTS[0],
-  ...[['C', '复制'], ['V', '粘贴'], ['X', '剪切'], ['A', '全选'], ['Z', '撤销'], ['S', '保存']]
+  ...[['C', "client.projectBrowser.copied"], ['V', "client.projectBrowser.paste"], ['X', "client.projectBrowser.cut"], ['A', "client.projectBrowser.selectAll"], ['Z', "client.projectBrowser.undo"], ['S', "client.projectBrowser.save"]]
     .map(([key, description]) => ({ label: `Cmd+${key}`, description, codes: ['MetaLeft', `Key${key}`] })),
-  { label: 'Cmd+Space', description: '搜索', codes: ['MetaLeft', 'Space'] },
-  { label: 'F11', description: '显示桌面', codes: ['F11'] },
-  { label: 'Cmd+Tab', description: '切换窗口', codes: ['MetaLeft', 'Tab'] },
-  { label: 'Ctrl+Cmd+Q', description: '锁定屏幕', codes: ['ControlLeft', 'MetaLeft', 'KeyQ'] },
+  { label: 'Cmd+Space', description: "client.chat.search", codes: ['MetaLeft', 'Space'] },
+  { label: 'F11', description: "client.remoteDesktop.showDesktop", codes: ['F11'] },
+  { label: 'Cmd+Tab', description: "client.remoteDesktop.switchWindows", codes: ['MetaLeft', 'Tab'] },
+  { label: 'Ctrl+Cmd+Q', description: "client.remoteDesktop.lockScreen", codes: ['ControlLeft', 'MetaLeft', 'KeyQ'] },
 ];
 
 export function desktopModifiers(platform?: DesktopPlatform) { return platform === 'macos' ? MAC_MODIFIERS : MODIFIERS; }

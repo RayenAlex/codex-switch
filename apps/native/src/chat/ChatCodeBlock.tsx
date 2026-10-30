@@ -7,14 +7,15 @@ import { palette, useStyles } from './styles';
 import { HighlightedCode } from './ChatCodeHighlight';
 import { SelectableChatText } from './SelectableChatText';
 import { useCodePagination } from './useCodePagination';
+import { SwipeSafeScrollView } from '../navigation/SwipeGestureBoundary';
 
 interface Props {
   text: string; label?: string; language?: string; lineNumbers?: boolean; copyLabel?: string; replyCopy?: CopyAction;
 }
 
 /** Limit native text layout work while keeping the entire output available to read and copy. */
-export function ChatCodeBlock({ text, label = t("代码"), language = '', lineNumbers = false,
-  copyLabel = t("复制代码"), replyCopy }: Props) {
+export function ChatCodeBlock({ text, label = t("client.chat.code"), language = '', lineNumbers = false,
+  copyLabel = t("client.chat.copyCode"), replyCopy }: Props) {
   const styles = useStyles();
   const codeStyles = useCodeStyles();
   useLanguage();
@@ -24,18 +25,18 @@ export function ChatCodeBlock({ text, label = t("代码"), language = '', lineNu
   const displayed = lineNumbers
     ? visible.split('\n').map((line, index) => `${index + 1}  ${line}`).join('\n') : visible;
   const actions = [{ text, label: copyLabel }, ...replyCopy ? [replyCopy] : []];
-  const content = <SelectableChatText style={[styles.code, codeStyles.content]} copy={actions}>
-    <HighlightedCode text={displayed.trimEnd() || t("（空文件）")} language={language} />
+  const content = <SelectableChatText style={[styles.code, codeStyles.content]} copy={actions} layoutKey={displayed}>
+    <HighlightedCode text={displayed.trimEnd() || t("client.chat.emptyFile")} language={language} />
   </SelectableChatText>;
   return <View style={codeStyles.block}>
     <View style={codeStyles.toolbar}>
       <Text style={[codeStyles.label, styles.fill]}>{label}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={t("自动换行")} accessibilityState={{ selected: wrap }}
+      <Pressable accessibilityRole="button" accessibilityLabel={t("client.projectBrowser.wrapLines")} accessibilityState={{ selected: wrap }}
         onPress={() => setWrap(!wrap)} style={codeStyles.action}>
-        <Text style={[codeStyles.label, wrap && codeStyles.selected]}>{t("自动换行")}</Text></Pressable>
+        <Text style={[codeStyles.label, wrap && codeStyles.selected]}>{t("client.projectBrowser.wrapLines")}</Text></Pressable>
     </View>
     <ScrollView nestedScrollEnabled style={codeStyles.viewport} {...pagination}>
-      {wrap ? content : <ScrollView horizontal nestedScrollEnabled>{content}</ScrollView>}
+      {wrap ? content : <SwipeSafeScrollView horizontal nestedScrollEnabled>{content}</SwipeSafeScrollView>}
     </ScrollView>
   </View>;
 }

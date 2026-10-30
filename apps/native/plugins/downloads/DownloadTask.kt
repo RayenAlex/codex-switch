@@ -33,7 +33,7 @@ internal class DownloadTask(val data: JSONObject) {
   val buffered = mutableMapOf<Long, ByteArray>()
   var nextOffset = 0L
   var lastProgress = 0L
-  var sampledBytes = 0L
+  var speed: DownloadSpeed? = null
 
   fun fail() {
     status = "failed"

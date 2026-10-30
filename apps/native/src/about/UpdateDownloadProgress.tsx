@@ -9,7 +9,7 @@ export function UpdateDownloadProgress({ progress }: { progress?: AndroidDownloa
   useLanguage();
   const percent = updateDownloadPercent(progress);
   const verifying = progress?.phase === 'verifying';
-  const label = verifying ? t('正在校验') : t('下载进度');
+  const label = verifying ? t("client.downloads.verifying") : t("client.downloads.downloadProgress");
   return <View style={styles.progressDetails}>
     <View style={styles.statusHeading}>
       <Text style={styles.detail}>{label}</Text>
@@ -25,6 +25,6 @@ export function UpdateDownloadProgress({ progress }: { progress?: AndroidDownloa
         {progress.totalBytes > 0 ? ` / ${formatBytes(progress.totalBytes)}` : ''}</Text>
       {!verifying ? <Text style={styles.detail}>{formatBytes(progress.bytesPerSecond)}/s</Text> : null}
     </View> : null}
-    <Text style={styles.detail}>{t('可以继续使用应用，在此页面或通知栏查看进度。')}</Text>
+    <Text style={styles.detail}>{t("client.downloads.keepUsingTheAppCheckProgressHereOrInNotifications")}</Text>
   </View>;
 }

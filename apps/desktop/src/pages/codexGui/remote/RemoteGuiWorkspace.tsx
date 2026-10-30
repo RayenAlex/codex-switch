@@ -12,6 +12,7 @@ import { readClipboardImages } from '../clipboardImages';
 import { readDroppedFiles, subscribeFileDrop } from '../fileDrop';
 import { isDesktopApp } from '../../../api/backend';
 import { useRemoteTerminalPanel } from '../../../../../../shared/remote-chat/useRemoteTerminalPanel';
+import { TerminalWorkspaceProvider } from '../../../../../../shared/terminal/TerminalWorkspaceProvider';
 import { remoteTerminalApi } from './terminalApi';
 import { useTerminalLinkTunnels } from '../terminal/useTerminalLinkTunnels';
 import { RemoteGuiTools } from './RemoteGuiTools';
@@ -50,6 +51,7 @@ export default function RemoteGuiWorkspace(props: {
   return <section ref={workspace} className={`${styles.page} chat-page gui-remote-workspace`}
     data-dream-skin={skinStyle ? 'true' : undefined} style={skinStyle} aria-label={`Codex GUI：${device.name}`}>
     <ConfigProvider getPopupContainer={popupContainer}>
+    <TerminalWorkspaceProvider panel={terminal}>
     <RemoteFileEnvironment controller={chat.controller} ready={chat.state.ready} threadId={chat.state.selected?.id ?? null}>
     <ConnectedChat chat={chat} active={active} device={device} devices={computers.devices} email="" desktopDiffs
       cliVersion={installer.version}
@@ -65,12 +67,12 @@ export default function RemoteGuiWorkspace(props: {
           active={active} connected={chat.state.ready} />}
         <GuiRemoteDesktop client={chat.controller.guiTools.desktop} active={active}
           connected={chat.state.mode === 'direct' || chat.state.mode === 'relay'} /></>}
-      headerActions={<><RemoteGuiTools controller={chat.controller} state={chat.state}
+      headerActions={<><RemoteGuiTools controller={chat.controller} state={chat.state} active={active}
         installer={installer} terminal={terminal} />
         <span className="gui-remote-focus"><FocusModeButton {...props.focusMode} /></span></>}
       headerEnd={props.focusMode.focused && props.windowControls
         && <div className={styles.focusWindowControls}>{props.windowControls}</div>}
-      conversationFooter={terminal.tabs.length > 0 && <Suspense fallback={null}>
+      conversationFooter={(terminal.open || terminal.tabs.length > 0) && <Suspense fallback={null}>
         <TerminalPanel panel={terminal} active={active} api={terminalApi} notice={terminal.error} />
       </Suspense>}
       readClipboardImages={readClipboardImages}
@@ -80,6 +82,7 @@ export default function RemoteGuiWorkspace(props: {
       renderSidebar={actions => <RemoteGuiSidebar state={chat.state} controller={chat.controller}
         actions={actions} accountPicker={accountPicker} focusMode={props.focusMode} />} />
     </RemoteFileEnvironment>
+    </TerminalWorkspaceProvider>
     </ConfigProvider>
   </section>;
 }

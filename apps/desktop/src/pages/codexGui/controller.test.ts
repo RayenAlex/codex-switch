@@ -238,6 +238,7 @@ describe("Codex GUI controller", () => {
     let resolve!: (value: { thread: Thread }) => void;
     vi.mocked(guiApi.request).mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
     const opening = controller.select("one");
+    await vi.waitFor(() => expect(resolve).toBeTypeOf("function"));
     controller.newConversation();
     resolve({ thread });
     await opening;

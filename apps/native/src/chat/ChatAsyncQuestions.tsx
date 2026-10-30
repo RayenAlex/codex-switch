@@ -34,7 +34,7 @@ function QuestionField({ question, value, disabled, update, submit }: QuestionPr
         color={value === option ? resolveThemeColor(palette.green, 'accent') : resolveThemeColor(palette.muted, 'muted')} />
       <Text style={[styles.messageText, styles.fill]}>{option}</Text>
     </Pressable>)}
-    <TextInput accessibilityLabel={question.title} placeholder={t("输入你的回答")} placeholderTextColor={color(palette.muted, 'muted')}
+    <TextInput accessibilityLabel={question.title} placeholder={t("client.chat.enterYourAnswer")} placeholderTextColor={color(palette.muted, 'muted')}
       style={[styles.questionInput, questionStyles.input, disabled && styles.disabled]}
       multiline editable={!disabled} value={value} onChangeText={update} returnKeyType="send"
       submitBehavior="submit" onSubmitEditing={submit} />
@@ -64,23 +64,23 @@ function QuestionCard({ item, disabled, error, answer, onCancel }: Omit<Props, '
     submitting.current = true; setBusy(true); setFailure('');
     try {
       if (await answer(item, answers)) setOpen(false);
-      else setFailure(t("回答尚未确认，请查看发送进度或稍后重试。"));
-    } catch { setFailure(t("回答发送失败，请重试。")); }
+      else setFailure(t("client.chat.yourAnswerHasNotBeenConfirmedCheckItsProgressOr"));
+    } catch { setFailure(t("client.chat.couldNotSendYourAnswerPleaseTryAgain")); }
     finally { submitting.current = false; setBusy(false); }
   };
   return <>
-    <Pressable accessibilityRole="button" accessibilityLabel={t("回答补充问题：{value1}", { value1: questions[0]?.title ?? '' })}
+    <Pressable accessibilityRole="button" accessibilityLabel={t("client.chat.answerFollowUpQuestion", { value1: questions[0]?.title ?? '' })}
       style={questionStyles.entry} onPress={() => setOpen(true)}>
       <Ionicons name="chatbubble-ellipses-outline" size={18} color={color(palette.green, 'accent')} />
-      <View style={styles.fill}><Text style={styles.title}>{t("需要你的补充")}</Text>
+      <View style={styles.fill}><Text style={styles.title}>{t("client.chat.moreInformationNeeded")}</Text>
         <Text numberOfLines={1} style={styles.subtitle}>{questions[0]?.title}</Text></View>
-      <Text style={styles.buttonText}>{t("回答")}</Text>
+      <Text style={styles.buttonText}>{t("client.mobile.answer")}</Text>
       <Ionicons name="chevron-forward" size={15} color={color(palette.muted, 'muted')} />
     </Pressable>
-    <BottomSheet fullWidthContent visible={open} tall title={t("需要你的补充")} onClose={() => setOpen(false)}
-      dismissible={!busy} dragFromHeaderOnly actions={[
-        { label: t("取消回答"), disabled: busy, onPress: cancel },
-        { label: t("提交回答"), tone: 'primary', loading: busy,
+    <BottomSheet fullWidthContent visible={open} tall title={t("client.chat.moreInformationNeeded")} onClose={() => setOpen(false)}
+      dismissible={!busy} actions={[
+        { label: t("client.downloads.cancelAnswer"), disabled: busy, onPress: cancel },
+        { label: t("client.chat.submitAnswer"), tone: 'primary', loading: busy,
           disabled: disabled || answers.some((value) => !value.trim()), onPress: submit },
       ]}>
       <SheetScrollView style={questionStyles.scroll} contentContainerStyle={questionStyles.content}

@@ -6,8 +6,8 @@ export async function copyAccountValue(label: string, value: string) {
   if (!value) return;
   try {
     await Clipboard.setStringAsync(value);
-    Toast.success(t("已复制{value1}", { value1: label }));
+    Toast.success(t("client.mobile.copied", { value1: label }));
   } catch {
-    Toast.fail(t('复制失败，请重试'));
+    Toast.fail(t("client.app.couldNotCopyPleaseTryAgain"));
   }
 }

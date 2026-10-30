@@ -22,11 +22,11 @@ async function leaveRemaining(viewport: Locator, remaining: number) {
   }, remaining);
 }
 
-test('shows the bottom shortcut only beyond one fifth of the visible chat height', async ({ page }, info) => {
+test('shows the bottom shortcut only beyond half of the visible chat height', async ({ page }, info) => {
   const viewport = await open(page);
   const button = page.getByRole('button', { name: '回到底部' });
   await expect(button).toHaveCount(0);
-  const threshold = await viewport.evaluate(node => node.clientHeight * 0.2);
+  const threshold = await viewport.evaluate(node => node.clientHeight * 0.5);
   await leaveRemaining(viewport, Math.floor(threshold));
   await expect(button).toHaveCount(0);
   await leaveRemaining(viewport, Math.ceil(threshold) + 1);
@@ -59,11 +59,28 @@ test('rechecks the threshold when the visible chat area changes height', async (
   const viewport = await open(page);
   await viewport.evaluate(node => { node.parentElement!.style.flex = '0 0 500px'; });
   await expect.poll(() => viewport.evaluate(node => node.clientHeight)).toBe(500);
-  await leaveRemaining(viewport, 120);
+  await leaveRemaining(viewport, 270);
   const button = page.getByRole('button', { name: '回到底部' });
   await expect(button).toBeVisible();
   const position = await viewport.evaluate(node => node.scrollTop);
   await viewport.evaluate(node => { node.parentElement!.style.flex = '0 0 600px'; });
   await expect(button).toHaveCount(0);
   expect(await viewport.evaluate(node => node.scrollTop)).toBe(position);
+});
+
+test('keeps a small upward scroll paused until the reader moves down again', async ({ page }, info) => {
+  const viewport = await open(page);
+  await leaveRemaining(viewport, 50);
+  const position = await viewport.evaluate(node => node.scrollTop);
+  const content = viewport.locator('.chat-message-content');
+  const padding = await content.evaluate(node => parseFloat(getComputedStyle(node).paddingBottom));
+  await content.evaluate((node, value) => { (node as HTMLElement).style.paddingBottom = `${value}px`; }, padding + 30);
+  await expect.poll(() => viewport.evaluate(node => node.scrollHeight - node.clientHeight - node.scrollTop))
+    .toBeGreaterThan(70);
+  expect(await viewport.evaluate(node => node.scrollTop)).toBe(position);
+  await page.screenshot({ path: info.outputPath('small-upward-scroll.png') });
+  await leaveRemaining(viewport, 30);
+  await content.evaluate((node, value) => { (node as HTMLElement).style.paddingBottom = `${value}px`; }, padding + 60);
+  await expect.poll(() => viewport.evaluate(node => node.scrollHeight - node.clientHeight - node.scrollTop))
+    .toBeLessThan(2);
 });

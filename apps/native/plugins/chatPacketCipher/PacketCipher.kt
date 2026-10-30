@@ -3,6 +3,9 @@ package com.codexswitch.crypto
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
+import com.codexswitch.connectivity.NativeConnectivity
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
 
 /** The existing nonce + ChaCha20-Poly1305 packet format; replay policy remains in SessionCipher. */
 internal class PacketCipher(private val key: ByteArray, private val context: ByteArray) {
@@ -51,12 +54,48 @@ internal class PacketCipher(private val key: ByteArray, private val context: Byt
 
   @Synchronized
   fun decrypt(payload: String): String {
+    val plain = decryptPacket(payload)
+    try { return String(plain, Charsets.UTF_8) } finally { plain.fill(0) }
+  }
+
+  @Synchronized
+  fun decryptPacketHex(payload: String): String {
+    val plain = decryptPacket(payload)
+    try { return toHex(plain) } finally { plain.fill(0) }
+  }
+
+  /** Compression and UTF-8 stay on the same bounded native worker as encryption. */
+  @Synchronized
+  fun encryptWithCompression(plain: ByteArray, nonceHex: String): String {
+    var packed: ByteArray? = null
+    try {
+      check(!closed)
+      require(nonceHex.length == NONCE_BYTES * 2 && nonceHex.substring(8, 16) == "00000000")
+      packed = requireNotNull(NativeConnectivity.encodeChatPacket(plain))
+      val nonce = if (packed.size < plain.size) nonceHex.replaceRange(8, 16, "00000001") else nonceHex
+      return encrypt(packed, nonce)
+    } finally { plain.fill(0); packed?.fill(0) }
+  }
+
+  @Synchronized
+  fun decryptWithDecompression(payload: String): String {
+    require(payload.length >= NONCE_BYTES * 2 && payload.substring(8, 16) == "00000001")
+    val packed = decryptPacket(payload)
+    var plain: ByteArray? = null
+    try {
+      plain = requireNotNull(NativeConnectivity.decodeChatPacket(packed))
+      // Match the portable decoder's fatal UTF-8 policy, including preservation of a leading BOM.
+      return Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+        .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(plain)).toString()
+    } finally { packed.fill(0); plain?.fill(0) }
+  }
+
+  private fun decryptPacket(payload: String): ByteArray {
     check(!closed)
     require(payload.length in (NONCE_BYTES + TAG_BYTES) * 2..MAX_PACKET_HEX)
     val packet = fromHex(payload)
     val nonce = packet.copyOfRange(0, NONCE_BYTES)
-    val plain = cipher(Cipher.DECRYPT_MODE, nonce).doFinal(packet, NONCE_BYTES, packet.size - NONCE_BYTES)
-    try { return String(plain, Charsets.UTF_8) } finally { plain.fill(0) }
+    return cipher(Cipher.DECRYPT_MODE, nonce).doFinal(packet, NONCE_BYTES, packet.size - NONCE_BYTES)
   }
 
   private fun cipher(mode: Int, nonce: ByteArray): Cipher = Cipher.getInstance(TRANSFORMATION).apply {

@@ -6,7 +6,7 @@ import { useProcessingSeconds } from '../../../../shared/remote-chat/client/useP
 import type { Turn } from '../pages/codexGui/types';
 import { ChatProcessing } from '../../../web/src/chat/ChatProcessing';
 import { restoreProcessing } from '../pages/codexGui/processing';
-import { setLanguage, type Language } from '../../../web/src/i18n/language';
+import { setLanguage, type Language } from "../../../web/src/i18n/language";
 
 function Clock({ turn, active }: { turn: Turn; active: boolean }) {
   return <span>{useProcessingSeconds(turn, active).totalSeconds}</span>;

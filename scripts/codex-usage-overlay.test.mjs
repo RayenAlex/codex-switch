@@ -113,7 +113,7 @@ function createHarness({ dark = false, binding, fastModeAllowed = true, speedBin
   return {
     window, document, intervals, timeouts,
     get state() { return window[stateKey]; },
-    get usage() { return document.querySelector("[data-today-usage]"); },
+    get usage() { return window[stateKey].usageNode; },
     get requests() { return requests; },
     advance(milliseconds) { now += milliseconds; },
     flushTimeouts() {
@@ -135,7 +135,7 @@ test("daily usage renders and keeps polling without Fast controls, and respects 
   harness.flushTimeouts();
   update(harness, { primaryRemainingPercent: 80 });
   const selector = harness.document.querySelector("[data-codex-switch-speed-selector]");
-  assert.equal(selector.hidden, false);
+  assert.equal(selector.hidden, true, "daily usage no longer occupies the speed control row");
   assert.equal(harness.usage.hidden, false);
   assert.equal(harness.usage.querySelector("[data-today-tokens]").textContent, "1.2K");
   assert.equal(selector.querySelector("[data-speed-controls]").hidden, true);
@@ -149,7 +149,7 @@ test("daily usage renders and keeps polling without Fast controls, and respects 
   assert.equal(selector.hidden, true);
   update(harness);
   assert.equal(harness.usage.hidden, false);
-  assert.equal(selector.hidden, false);
+  assert.equal(selector.hidden, true);
 });
 
 test("shows the current API daily estimate while preserving global daily usage", () => {
@@ -368,6 +368,17 @@ test("localizes the injected panel and updates an existing panel when language c
   update(harness, { language: "unsupported", primaryRemainingPercent: 100 });
   assert.equal(harness.state.language, "ru");
   assert.match(harness.usage.title, /Остаток лимита аккаунта: 100%/);
+});
+
+test("Japanese also localizes the shared usage and speed controls", () => {
+  const harness = createHarness();
+  harness.state.updateLanguage("ja");
+  update(harness, { providerEstimatedCost: { amountUsd: 1.25, aggregated: true } });
+  assert.equal(harness.usage.querySelector("[data-today-label]").textContent, "今日");
+  assert.match(harness.usage.title, /集約 API の今日の推定コスト合計/);
+  const selector = harness.document.querySelector("[data-codex-switch-speed-selector]");
+  assert.equal(selector.attributes["aria-label"], "今日の使用量と速度モード");
+  assert.match(selector.querySelector("[data-speed-button]").attributes["aria-label"], /高速モード/);
 });
 
 test("updates language during a failed usage refresh without clearing data or overlapping requests", () => {

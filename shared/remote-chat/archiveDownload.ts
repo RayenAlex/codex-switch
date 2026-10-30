@@ -27,7 +27,7 @@ export function archivePercent(progress: ArchiveProgress) {
 }
 
 export const archiveStatus = (progress: ArchiveProgress) => ({
-  scanning: '正在统计文件…', compressing: '正在压缩', finalizing: '正在准备下载…',
+  scanning: "client.downloads.countingFiles", compressing: "client.downloads.compressing", finalizing: "client.downloads.preparingDownload",
 })[progress.phase];
 
 function validatePreparation(reply: ArchivePreparation) {

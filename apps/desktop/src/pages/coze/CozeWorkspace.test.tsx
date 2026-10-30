@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   COZE_DESKTOP_READY, COZE_DESKTOP_STATE, COZE_DESKTOP_STOP, COZE_DESKTOP_STOP_READY, withCozeLanguage,
 } from "../../../../../shared/coze/desktopBridge";
-import { setGuiLanguage } from "../../i18n/guiText";
+import { setGuiLanguage } from "../../i18n/uiText";
 import { CozeWorkspace } from "./CozeWorkspace";
 
 const url = "http://127.0.0.1:4321/";
@@ -110,7 +110,7 @@ it("opens the editor in the current interface language", async () => {
 it("sends language switches to the open editor without reloading it", async () => {
   const src = frame.getAttribute("src");
   const post = vi.spyOn(frame.contentWindow!, "postMessage");
-  for (const language of ["ru", "en", "zh"] as const) {
+  for (const language of ["ru", "ja", "en", "zh"] as const) {
     await act(async () => setGuiLanguage(language));
     expect(post).toHaveBeenLastCalledWith({ type: COZE_DESKTOP_STATE, busy: false, language }, origin);
     expect(host.querySelector("iframe")).toBe(frame);

@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import { getLocale, t, useLanguage } from '../i18n';
 import { useMemo, useState } from 'react';
 import type { TokenSummary } from '../../../../shared/remote-chat/tokenSummary';
@@ -15,7 +16,7 @@ export function TokenBars({ points, labels, unit }: { points: Point[]; labels: s
   const maximum = Math.max(1, ...points.flatMap(point => point.values.map(value => value ?? 0)));
   const point = points[Math.min(selected ?? points.length - 1, points.length - 1)];
   return <div className="chat-token-chart">
-    <div className="chat-token-bars" role="group" aria-label={t("选择日期查看消耗")}>{points.map((point, index) =>
+    <div className="chat-token-bars" role="group" aria-label={t("client.chat.chooseADateToViewUsage")}>{points.map((point, index) =>
       <button key={`${point.label}:${index}`} type="button" title={point.label} aria-label={point.label}
         aria-pressed={selected === index} onClick={() => setSelected(index)}>
         {point.values.map((value, position) => <span key={position} style={{
@@ -45,20 +46,20 @@ export function TokenQuota({ data }: { data: TokenSummary }) {
     label: new Date(ts).toLocaleString(getLocale()), values: [primary.get(ts) ?? null, secondary.get(ts) ?? null],
   }));
   return <section className="chat-token-card"><h3>{labels.title}</h3>
-    <div className="chat-token-controls"><select aria-label={t("选择额度账户")} value={selected?.accountId ?? ''}
+    <div className="chat-token-controls"><select aria-label={t("client.chat.chooseQuotaAccount")} value={selected?.accountId ?? ''}
       onChange={event => setAccountId(event.target.value)}>{!selected && <option value="">{labels.noAccounts}</option>}
       {data.quotaHistory.map(account => <option key={account.accountId} value={account.accountId}>
         {account.accountLabel}</option>)}</select>
-      <select aria-label={t("额度显示方式")} value={view} onChange={event => setView(event.target.value as QuotaView)}>
-        <option value="drop">{t("时段下降")}</option><option value="remaining">{t("剩余额度")}</option></select>
-      <select aria-label={t("额度统计间隔")} value={interval}
+      <select aria-label={t("client.chat.quotaDisplay")} value={view} onChange={event => setView(event.target.value as QuotaView)}>
+        <option value="drop">{t("client.chat.usagePerPeriod")}</option><option value="remaining">{t("client.accounts.remainingQuota")}</option></select>
+      <select aria-label={t("client.chat.quotaInterval")} value={interval}
         onChange={event => setInterval(event.target.value as QuotaInterval)}>
-        <option value="hour">{t("每小时")}</option><option value="sixHours">{t("每 6 小时")}</option><option value="day">{t("每天")}</option>
+        <option value="hour">{t("client.chat.hourly")}</option><option value="sixHours">{t("client.chat.every6Hours")}</option><option value="day">{t("client.chat.daily")}</option>
       </select></div>
-    {data.errors.quota ? <p className="chat-error">{t(labels.error)}</p> : chart.hasData
-      ? <TokenBars points={points} labels={[labels.primary, labels.secondary]} unit={view === 'drop' ? t("百分点") : '%'} />
+    {data.errors.quota ? <p className="chat-error">{displayError(labels.error)}</p> : chart.hasData
+      ? <TokenBars points={points} labels={[labels.primary, labels.secondary]} unit={view === 'drop' ? t("client.chat.pp") : '%'} />
       : <p className="chat-muted">{labels.empty}</p>}
-    <p className="chat-muted">{view === 'drop' ? labels.dropHint : t("展示每次刷新的剩余额度；缺少记录的时段留空。")}</p>
+    <p className="chat-muted">{view === 'drop' ? labels.dropHint : t("client.chat.showsRemainingQuotaAtEachRefreshPeriodsWithoutRecordsAre")}</p>
     <p className="chat-muted">{labels.historyHint}</p>
   </section>;
 }

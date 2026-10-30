@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveCmakeTool } from './resolve-cmake-tool.mjs';
+import { resolveVisualStudioGenerator } from './resolve-visual-studio-generator.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const source = join(root, 'apps/desktop/src-tauri/desktop-privacy');
@@ -60,7 +61,7 @@ export async function prepareDesktopPrivacy() {
   await mkdir(destination, { recursive: true });
   const build = join(cache, 'build');
   const platform = process.platform === 'win32'
-    ? ['-G', 'Visual Studio 17 2022', '-A', 'x64']
+    ? ['-G', resolveVisualStudioGenerator(cmake), '-A', 'x64']
     : ['-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64', '-DCMAKE_OSX_DEPLOYMENT_TARGET=13.0', '-DCMAKE_BUILD_TYPE=Release'];
   run(cmake, ['-S', source, '-B', build, ...platform, `-DPRIVACY_OUTPUT=${destination}`]);
   run(cmake, ['--build', build, '--config', 'Release', '--parallel']);

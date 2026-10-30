@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { invoke } from '../../api/backend';
 import type { AggregateApi, Provider } from '../../types';
 import type { GuiAccountSelection } from '../../../../../shared/remote-chat/guiAccounts';
@@ -13,10 +13,10 @@ export async function readGuiProviderModels(): Promise<Model[] | null> {
   if (selection.kind === 'aggregate') {
     const aggregates = await invoke<AggregateApi[]>('list_aggregate_apis');
     const aggregate = aggregates.find(entry => entry.id === selection.id && entry.enabled);
-    if (!aggregate) throw new Error(guiText("此中转已不可用，请重新选择。"));
+    if (!aggregate) throw new Error(uiText("client.conversation.thisProviderIsNoLongerAvailablePleaseChooseAnother"));
     return providerModels(providers, [{ ...aggregate, active: true }]);
   }
   const provider = providers.find(entry => entry.id === selection.id);
-  if (!provider) throw new Error(guiText("此中转已不可用，请重新选择。"));
+  if (!provider) throw new Error(uiText("client.conversation.thisProviderIsNoLongerAvailablePleaseChooseAnother"));
   return providerModels([{ ...provider, active: true }], []);
 }

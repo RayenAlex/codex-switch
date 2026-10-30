@@ -1,5 +1,7 @@
+import RUSSIAN_MONTH_LABELSResource from '@remoteai/i18n/copy/desktop/russianMonths';
+import inlineCopy from '@remoteai/i18n/copy/inline/desktop/components/TokenUsageDashboard/useOverviewOptions';
 import { getLocale } from "../../i18n";
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useMemo } from "react";
 import type { EChartsCoreOption as EChartsOption } from "echarts/core";
 import type { Language } from "../../i18n";
@@ -7,9 +9,7 @@ import type { DailyTokenUsage } from "../../types";
 import { COMPACT_TOOLTIP_STYLE, dateFromKey, formatTokens, type ChartPalette } from "./chartUtils";
 
 // ECharts registers only the EN and ZH locales by default, so Russian heatmap month labels are listed explicitly.
-const RUSSIAN_MONTH_LABELS = [
-  "Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек",
-] as const;
+const RUSSIAN_MONTH_LABELS = RUSSIAN_MONTH_LABELSResource;
 
 interface OverviewOptions {
   dailyUsage: DailyTokenUsage[];
@@ -55,7 +55,7 @@ function useHeatmapOption(context: OverviewContext) {
       itemWidth: 11,
       itemHeight: 11,
       itemGap: 4,
-      text: (language === "ru" ? [guiText("多", {}, language), guiText("少", {}, language)] : language === "zh" ? ["多", "少"] : ["More", "Less"]),
+      text: (language !== "zh" && language !== "en" ? [uiText("client.mobile.more", {}, language), uiText("client.mobile.less", {}, language)] : language === "zh" ? [inlineCopy["text_1940119f"], inlineCopy["text_62f99c9a"]] : [inlineCopy["More_d47d7cb0"], inlineCopy["Less_ae5239ec"]]),
       textStyle: { color: palette.muted, fontSize: 10 },
       pieces: [
         { value: 0, color: palette.heat[0] },
@@ -75,9 +75,9 @@ function useHeatmapOption(context: OverviewContext) {
       itemStyle: { color: palette.heat[0], borderColor: palette.panel, borderWidth: 2 },
       yearLabel: { show: false },
       monthLabel: { color: palette.muted, fontSize: 10,
-        nameMap: language === "ru" ? [...RUSSIAN_MONTH_LABELS] : language === "zh" ? "ZH" : "EN" },
+        nameMap: language !== "zh" && language !== "en" ? [...RUSSIAN_MONTH_LABELS] : language === "zh" ? "ZH" : "EN" },
       dayLabel: { firstDay: 0, color: palette.muted, fontSize: 10,
-        nameMap: (language === "ru" ? [guiText("日", {}, language), guiText("一", {}, language), guiText("二", {}, language), guiText("三", {}, language), guiText("四", {}, language), guiText("五", {}, language), guiText("六", {}, language)] : language === "zh" ? ["日", "一", "二", "三", "四", "五", "六"] : "EN") },
+        nameMap: (language !== "zh" && language !== "en" ? [uiText("client.mobile.sun", {}, language), uiText("client.mobile.mon", {}, language), uiText("client.mobile.tue", {}, language), uiText("client.mobile.wed", {}, language), uiText("client.mobile.thu", {}, language), uiText("client.mobile.fri", {}, language), uiText("client.mobile.sat", {}, language)] : language === "zh" ? [inlineCopy["text_85217f7a"], inlineCopy["text_51a75f46"], inlineCopy["text_084b42f6"], inlineCopy["text_a4c3313d"], inlineCopy["text_754a9d58"], inlineCopy["text_c9b87f51"], inlineCopy["text_de07b538"]] : inlineCopy["EN_69374b09"]) },
     },
     series: [{
       type: "heatmap",
@@ -173,9 +173,9 @@ function useTokenTypeOption(context: OverviewContext) {
 export function useOverviewOptions(options: OverviewOptions) {
   const { dailyUsage, language } = options;
   const locale = getLocale(language);
-  const tokenLabels = useMemo(() => (language === "ru" ? { total: guiText("总计", {}, language), input: guiText("输入", {}, language), output: guiText("输出", {}, language), reasoning: guiText("推理", {}, language), cached: guiText("缓存", {}, language) } : language === "zh"
-    ? { total: "总计", input: "输入", output: "输出", reasoning: "推理", cached: "缓存" }
-    : { total: "Total", input: "Input", output: "Output", reasoning: "Reasoning", cached: "Cached" }), [language]);
+  const tokenLabels = useMemo(() => (language !== "zh" && language !== "en" ? { total: uiText("client.chat.total.e8dc87", {}, language), input: uiText("client.chat.input", {}, language), output: uiText("client.chat.output", {}, language), reasoning: uiText("client.chat.reasoning", {}, language), cached: uiText("client.chat.cached", {}, language) } : language === "zh"
+    ? { total: inlineCopy["text_e8dc871a"], input: inlineCopy["text_2087c777"], output: inlineCopy["text_fb04addb"], reasoning: inlineCopy["text_132411ba"], cached: inlineCopy["text_e3ca04a9"] }
+    : { total: inlineCopy["Total_c9b3c382"], input: inlineCopy["Input_36ecb4f8"], output: inlineCopy["Output_b2439bcb"], reasoning: inlineCopy["Reasoning_d8211e24"], cached: inlineCopy["Cached_a251c182"] }), [language]);
   const dailyByDate = useMemo(() => new Map(dailyUsage.map((entry) => [entry.date, entry])), [dailyUsage]);
   const context = { ...options, locale, tokenLabels, dailyByDate };
   const heatmapOption = useHeatmapOption(context);

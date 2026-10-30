@@ -4,6 +4,7 @@ import { ChatOperations } from './operations';
 import { guiApi } from '../pages/codexGui/api';
 import { getGuiController } from '../pages/codexGui/session';
 import { GuiThreadTitles } from '../pages/codexGui/threadTitles';
+import { GuiController } from '../pages/codexGui/controller';
 import { fetchCloudTitleSettings } from '../api/cloudTitleSettings';
 import type { GuiEvent, Thread } from '../pages/codexGui/types';
 import { applyChatEvent } from '../../../../shared/remote-chat/client/events';
@@ -23,11 +24,14 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(fetchCloudTitleSettings).mockResolvedValue({ model: 'configured-title-model', effort: 'medium' });
   const titles = new GuiThreadTitles({ active: () => true, currentName: () => undefined, receive });
-  vi.mocked(getGuiController).mockReturnValue({ titles,
-    getSnapshot: () => ({ projectOverrides: {} }) } as ReturnType<typeof getGuiController>);
+  const controller = Object.assign(new GuiController(), { titles });
+  vi.spyOn(controller, 'receiveThreadListEvent').mockImplementation(() => {});
+  vi.spyOn(controller, 'readThreadList').mockResolvedValue({ data: [], nextCursor: null });
+  vi.mocked(getGuiController).mockReturnValue(controller);
   vi.mocked(guiApi.connect).mockResolvedValue([]);
   vi.mocked(guiApi.request).mockImplementation(async (request) => {
-    if (request.operation === 'start' || request.operation === 'resume') return { thread: structuredClone(thread) };
+    if (['start', 'resume', 'read'].includes(request.operation)) return { thread: structuredClone(thread) };
+    if (request.operation === 'send') return { turn: { id: 'turn', status: 'inProgress', items: [] } };
     if (request.operation === 'generateTitle') return { title: '手机聊天标题修复' };
     return {};
   });
@@ -75,10 +79,12 @@ it.each([
   { ...thread, name: '手动命名' },
   { ...thread, turns: [{ id: 'old', status: 'completed', items: [] }] },
 ])('preserves existing and manual titles on resume: %j', async (existing) => {
-  vi.mocked(guiApi.request).mockResolvedValue({ thread: existing });
+  vi.mocked(guiApi.request).mockImplementation(async request => request.operation === 'send'
+    ? { turn: { id: 'turn', status: 'inProgress', items: [] } } : { thread: existing });
   const host = new ChatOperations();
   await request(host, { operation: 'resume', threadId: thread.id }, 'resume');
-  await request(host, { operation: 'send', threadId: thread.id, text: '继续' }, 'send');
+  expect((await request(host, { operation: 'send', threadId: thread.id, text: '继续' }, 'send')).error)
+    .toBeUndefined();
   expect(guiApi.request).not.toHaveBeenCalledWith(expect.objectContaining({ operation: 'generateTitle' }));
 });
 

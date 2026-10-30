@@ -1,3 +1,4 @@
+import { formatRemoteError } from '../i18n';
 import { describe, expect, it } from "vitest";
 import { defaultGraph, type Graph } from "../types";
 import { arrangeGraph, connectionError, edgeId, removeSelection } from "./graphEditing";
@@ -11,12 +12,12 @@ const branch: Graph = { ...defaultGraph,
 describe("workflow connections", () => {
   it("allows both condition ports to reach the same target but rejects a duplicate port", () => {
     expect(connectionError(branch, { source: "branch", target: "answer", port: false })).toBeUndefined();
-    expect(connectionError(branch, { source: "branch", target: "answer", port: true })).toContain("已经连接");
-    expect(connectionError(branch, { source: "branch", target: "answer" })).toContain("分支");
-    expect(connectionError(branch, { source: "answer", target: "end", port: false })).toContain("分支");
+    expect(formatRemoteError('zh', connectionError(branch, { source: "branch", target: "answer", port: true }))).toContain("已经连接");
+    expect(formatRemoteError('zh', connectionError(branch, { source: "branch", target: "answer" }))).toContain("分支");
+    expect(formatRemoteError('zh', connectionError(branch, { source: "answer", target: "end", port: false }))).toContain("分支");
   });
   it("rejects self loops, cycles, incoming start and outgoing terminal connections", () => {
-    expect(connectionError(branch, { source: "answer", target: "branch" })).toContain("回路");
+    expect(formatRemoteError('zh', connectionError(branch, { source: "answer", target: "branch" }))).toContain("回路");
     expect(connectionError(branch, { source: "answer", target: "answer" })).toBeDefined();
     expect(connectionError(branch, { source: "answer", target: "start" })).toBeDefined();
     for (const type of ["end", "break", "continue"]) {

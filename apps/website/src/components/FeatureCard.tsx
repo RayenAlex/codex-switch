@@ -1,6 +1,6 @@
 import { ArrowUpRight } from 'lucide-react';
-import { featureContent, featureImageAlt } from '../content/features';
-import type { Feature, Language } from '../content/types';
+import { featureContent, featureImageAlt } from '@remoteai/i18n/website-content/features';
+import type { Feature, Language } from '@remoteai/i18n/website-content/types';
 import { href } from '../lib/site';
 import { FeatureIcon } from './FeatureIcon';
 import { ProductImage } from './ProductFigure';

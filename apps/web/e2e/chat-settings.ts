@@ -1,15 +1,25 @@
 import { expect, type Page } from '@playwright/test';
 import { click } from './chat-helpers';
+import { dragSheet } from './sheet-drag';
 
 export const isDesktop = (page: Page) => (page.viewportSize()?.width ?? 0) > 860;
 
 export async function closeChatSettings(page: Page) {
   if (isDesktop(page)) await page.keyboard.press('Escape');
-  else await click(page.getByRole('button', { name: '关闭', exact: true }).last());
+  else {
+    await dragSheet(page, 120);
+    await expect(page.locator('.chat-settings')).toHaveCount(0);
+  }
 }
 
 export async function chooseSetting(page: Page, field: string, value: string) {
   if (!isDesktop(page)) {
+    if (field !== '模型') {
+      const group = page.getByRole('radiogroup', { name: field, exact: true });
+      await click(group.getByRole('radio', { name: value, exact: true }));
+      await expect(group.getByRole('radio', { name: value, exact: true })).toBeChecked();
+      return;
+    }
     await click(page.getByRole('button', { name: `设置${field}`, exact: true }));
     await click(page.getByRole('radio', { name: value, exact: true }));
     await expect(page.getByRole('button', { name: `设置${field}`, exact: true })).toBeVisible();

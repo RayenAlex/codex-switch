@@ -15,6 +15,7 @@ test('defaults to white, and remembers dark across pages, languages and reloads'
   await expect(page.locator('html')).toHaveCSS('background-color', black);
   await page.reload();
   await expect(page.locator('html')).toHaveCSS('background-color', black);
+  await page.locator('.language-switch summary').click();
   await page.getByRole('link', { name: 'EN', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Switch to white theme' })).toBeVisible();
   const otherPage = await context.newPage();
@@ -84,7 +85,7 @@ test('white theme remains usable on narrow and tablet screens', async ({ page })
     await page.setViewportSize({ width, height: 900 });
     const paths = [
       '', 'en/', 'ru/', 'features/', 'features/remote-workspace/', 'download/', 'ru/download/', 'guide/',
-      'resources/', 'en/resources/', 'ru/resources/',
+      'resources/', 'en/resources/', 'ru/resources/', 'ja/', 'ja/download/', 'ja/resources/',
     ];
     for (const path of paths) {
       await page.goto(`${basePath}${path}`);

@@ -1,3 +1,4 @@
+import { testBrowserChannel, testBrowserLaunchOptions } from '../../../scripts/test-browser.mjs';
 import { chromium } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -25,9 +26,10 @@ audioFixture.on('error', error => { audioError = error; });
 audioFixture.on('exit', code => { audioError ??= new Error(`Audio fixture exited: ${code}`); });
 let browser;
 try {
-  browser = await chromium.launch({ channel: process.env.CSW_NATIVE_TEST_BROWSER || 'msedge', headless: true,
+  browser = await chromium.launch(testBrowserLaunchOptions({
+    channel: testBrowserChannel(process.env.CSW_NATIVE_TEST_BROWSER), headless: true,
     args: ['--autoplay-policy=no-user-gesture-required',
-      ...(process.env.CSW_NATIVE_TEST_CA_BASE64 ? ['--ignore-certificate-errors'] : [])] });
+      ...(process.env.CSW_NATIVE_TEST_CA_BASE64 ? ['--ignore-certificate-errors'] : [])] }));
   const page = await browser.newPage();
   await page.exposeFunction('nativeRequest', async (path, body) => {
     const response = await fetch(`${endpoint}${path}`, { method: 'POST',

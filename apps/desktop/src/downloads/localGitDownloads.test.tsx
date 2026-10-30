@@ -11,7 +11,7 @@ import { createAsyncGitFixture } from '../../../../shared/remote-chat/testing/gi
 
 vi.mock('../pages/codexGui/api', () => ({ guiApi: { request: vi.fn(async () => ({})) } }));
 vi.mock('../api/backend', () => ({ invoke: vi.fn() }));
-vi.mock('../i18n/guiText', () => ({ guiText: (text: string) => text }));
+vi.mock('../i18n/uiText', async () => ({ ...await vi.importActual<typeof import('../i18n/uiText')>('../i18n/uiText'),  }));
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 it('queues local and remote patches against their own computer and keeps local transfers after closing Git', async () => {

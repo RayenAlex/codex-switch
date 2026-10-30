@@ -18,6 +18,7 @@ export function modelSettingsBackend(liveUpdate?: ModelSettingsSnapshot["liveUpd
   let cacheFailed = false;
   let modelRequests = 0;
   let discoveryRequests = 0;
+  let availableModels: string[] | undefined;
   let speed: RequestSpeed = 'normal';
   let queue: QueueSnapshot = { revision: 0, threads: {} };
   const thread = (id: string) => ({ id, cwd: "", preview: id, updatedAt: 1, turns: [] });
@@ -79,7 +80,8 @@ export function modelSettingsBackend(liveUpdate?: ModelSettingsSnapshot["liveUpd
           }
           if (!request.cacheOnly) discoveryRequests++;
           if (modelsPaused) await new Promise<void>((resolve) => pendingModels.push(resolve));
-          data = { data: modelsEmpty ? [] : models, nextCursor: null };
+          data = { data: modelsEmpty ? [] : models.filter(model =>
+            !availableModels || availableModels.includes(model.model)), nextCursor: null };
         }
         if (request.operation === "list") data = { data: [thread("a"), thread("b")], nextCursor: null };
         if (["read", "resume", "start"].includes(String(request.operation))) {
@@ -88,16 +90,18 @@ export function modelSettingsBackend(liveUpdate?: ModelSettingsSnapshot["liveUpd
         if (request.operation === "send") {
           sends.push(request); data = { turn: { id: "reply", status: "completed", items: [] } };
         }
+        if (request.operation === "steer") sends.push(request);
         result = { data };
       }
       if (command === "codex_gui_usage_summary") {
         await new Promise<void>((resolve) => usage.push(resolve));
-        result = { totalTokens: 123 };
+        result = { totalTokens: 123, estimatedCostUsd: 0 };
       }
       await route.fulfill({ json: { ok: true, result } });
     });
   }
-  return { attach, sends, contextDefaults, contextOverrides,
+  return { attach, sends, saved, contextDefaults, contextOverrides, queue: () => queue,
+    availableModels: (ids?: string[]) => { availableModels = ids; },
     contextUsage: (threadId: string, tokenUsage: ThreadTokenUsage) => events.push({ name: 'codex-gui-event',
       payload: { method: 'thread/tokenUsage/updated', params: { threadId, tokenUsage } } }),
     discoveryRequests: () => discoveryRequests,

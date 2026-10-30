@@ -1,3 +1,4 @@
+// Generated from packages/i18n/platform/desktop/src-tauri/src/local_proxy/error_messages/known.rs. Do not edit.
 //! Exact legacy errors may be exposed; arbitrary internal strings must stay in diagnostics.
 const SEARCH_RESTRICTIONS: &str = concat!(
     "The selected service cannot apply the requested search restrictions. ",

@@ -1,10 +1,11 @@
+import { displayError } from '../../i18n/uiText';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Popconfirm } from "antd";
 import {
   COZE_DESKTOP_READY, COZE_DESKTOP_STATE, COZE_DESKTOP_STOP, COZE_DESKTOP_STOP_READY, type CozeDesktopState,
   withCozeLanguage,
 } from "../../../../../shared/coze/desktopBridge";
-import { guiLanguage, guiText } from "../../i18n/guiText";
+import { guiLanguage, uiText } from "../../i18n/uiText";
 import { useGuiLanguage } from "../../i18n/useGuiLanguage";
 import styles from "./CozePage.module.less";
 
@@ -39,12 +40,12 @@ export function CozeWorkspace({ url, busy, error, onStop }: CozeWorkspaceProps) 
     return () => window.removeEventListener("message", receive);
   }, [busy, onStop, origin, sendState, url]);
   return <div className={styles.workspace}>
-    {error && <Alert type="error" message={guiText(error)} />}
+    {error && <Alert type="error" message={displayError(error)} />}
     {(readyUrl !== url || !!error) && <div className={styles.workspaceControls}>
-      <Popconfirm title={guiText("停止 Coze？已保存的内容会保留。")}
-        okText={guiText("停止")} cancelText={guiText("取消")} disabled={busy}
+      <Popconfirm title={uiText("client.coze.stopCozeYourSavedContentWillBeKept")}
+        okText={uiText("client.shared.stop")} cancelText={uiText("client.accounts.cancel")} disabled={busy}
         styles={{ root: { maxWidth: 400 } }} onConfirm={onStop}>
-        <Button danger loading={busy}>{guiText("停止 Coze")}</Button>
+        <Button danger loading={busy}>{uiText("client.coze.stopCoze")}</Button>
       </Popconfirm>
     </div>}
     <iframe key={url} ref={frame} title="Coze" src={src}

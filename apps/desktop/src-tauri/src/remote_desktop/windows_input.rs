@@ -28,6 +28,9 @@ fn key(code: u16, flags: u32) -> INPUT {
     }
 }
 fn send(inputs: &[INPUT]) -> Result<()> {
+    if inputs.is_empty() {
+        return Ok(());
+    }
     // SAFETY: the slice is fully initialized and its ABI size matches INPUT for this target.
     let count = unsafe {
         SendInput(
@@ -45,16 +48,26 @@ fn send(inputs: &[INPUT]) -> Result<()> {
 pub(super) struct InputState {
     held: BTreeSet<KeyboardKey>,
     suppressed: BTreeSet<KeyboardKey>,
+    held_buttons: BTreeSet<u32>,
 }
 impl InputState {
     pub(super) fn release(&mut self) -> Result<()> {
-        let mut inputs = vec![
-            mouse(MOUSEEVENTF_LEFTUP, 0),
-            mouse(MOUSEEVENTF_RIGHTUP, 0),
-            mouse(MOUSEEVENTF_MIDDLEUP, 0),
-        ];
+        self.release_with(send)
+    }
+
+    fn release_with(&mut self, mut inject: impl FnMut(&[INPUT]) -> Result<()>) -> Result<()> {
+        let mut inputs: Vec<_> = self
+            .held_buttons
+            .iter()
+            .map(|flag| mouse(*flag, 0))
+            .collect();
         inputs.extend(self.held.iter().map(|code| physical_key(*code, false)));
-        send(&inputs)?;
+        // Even an unmatched mouse-up wakes a sleeping monitor. Cleanup owns only
+        // input pressed by this lease, not the physical user's keyboard or mouse.
+        if !inputs.is_empty() {
+            inject(&inputs)?;
+        }
+        self.held_buttons.clear();
         self.held.clear();
         self.suppressed.clear();
         Ok(())
@@ -67,7 +80,33 @@ impl InputState {
         if let DesktopInput::Keyboard { code, down } = input {
             return self.apply_keyboard(code, down, keyboard_action);
         }
+        if let DesktopInput::Button { button, down } = input {
+            return self.apply_button(button, down, send);
+        }
         input_event(input, display)
+    }
+
+    fn apply_button(
+        &mut self,
+        button: Button,
+        down: bool,
+        mut inject: impl FnMut(&[INPUT]) -> Result<()>,
+    ) -> Result<()> {
+        let (press, release) = match button {
+            Button::Left => (MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP),
+            Button::Right => (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP),
+            Button::Middle => (MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP),
+        };
+        if self.held_buttons.contains(&release) == down {
+            return Ok(());
+        }
+        inject(&[mouse(if down { press } else { release }, 0)])?;
+        if down {
+            self.held_buttons.insert(release);
+        } else {
+            self.held_buttons.remove(&release);
+        }
+        Ok(())
     }
 
     fn apply_keyboard(
@@ -80,6 +119,9 @@ impl InputState {
             if !down {
                 self.suppressed.remove(&code);
             }
+            return Ok(());
+        }
+        if !down && !self.held.contains(&code) {
             return Ok(());
         }
         if down && code.code == VK_L && self.only_windows_keys_held() {
@@ -156,17 +198,6 @@ fn input_event(input: DesktopInput, display: &super::monitors::Monitor) -> Resul
             }
             Ok(())
         }
-        DesktopInput::Button { button, down } => {
-            let flags = match (button, down) {
-                (Button::Left, true) => MOUSEEVENTF_LEFTDOWN,
-                (Button::Left, false) => MOUSEEVENTF_LEFTUP,
-                (Button::Right, true) => MOUSEEVENTF_RIGHTDOWN,
-                (Button::Right, false) => MOUSEEVENTF_RIGHTUP,
-                (Button::Middle, true) => MOUSEEVENTF_MIDDLEDOWN,
-                (Button::Middle, false) => MOUSEEVENTF_MIDDLEUP,
-            };
-            send(&[mouse(flags, 0)])
-        }
         DesktopInput::Wheel { delta, horizontal } => {
             let flags = if horizontal {
                 MOUSEEVENTF_HWHEEL
@@ -177,7 +208,7 @@ fn input_event(input: DesktopInput, display: &super::monitors::Monitor) -> Resul
         }
         DesktopInput::Text { text } => text_input(&text),
         DesktopInput::Key { key: value } => shortcut(value),
-        DesktopInput::Keyboard { .. } => Err(DesktopError::Invalid),
+        DesktopInput::Keyboard { .. } | DesktopInput::Button { .. } => Err(DesktopError::Invalid),
     }
 }
 fn text_input(text: &str) -> Result<()> {

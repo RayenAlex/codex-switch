@@ -1,6 +1,8 @@
+import { SheetGestureScrollView as ScrollView } from '../../components/SheetScrollGesture';
+import { displayError } from '../../i18n/index';
 import { useThemeColor } from '../../theme/store';
 import { t, useLanguage } from '../../i18n';
-import { ActivityIndicator, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { useEffect, useState } from 'react';
 import type { GitClient } from '../../../../../shared/remote-chat/gitTypes';
 import { useGitDiff, useRemoteGit } from '../../../../../shared/remote-chat/useRemoteGit';
@@ -39,17 +41,26 @@ export function ChatGit(props: Props) {
   const commitFiles = useGitCommitFiles(props.client, props.cwd, detail?.commit?.hash, props.active && props.connected);
   const diff = useGitDiff(props.client, props.cwd, panel.detail, props.active && props.connected);
   const { height } = useWindowDimensions();
+  const hasOverlay = Boolean(menu || panel.fileAction || panel.revisionAction);
   return <BottomSheet visible={props.active} title="Git" onClose={close}
-    onBack={detail ? panel.backDetail : undefined} tall dragFromHeaderOnly fullWidthContent compactHeader>
+    onBack={detail && !hasOverlay ? panel.backDetail : undefined}
+    tall fullWidthContent compactHeader
+    overlay={hasOverlay ? <>
+      {menu && !panel.fileAction && !panel.revisionAction && <GitMenu target={menu} panel={panel}
+        connected={props.connected} close={() => setMenu(null)} patchNotice={gitPatchNotice}
+        onPatch={props.downloads ? commit => saveGitPatch(props.downloads!, props.cwd, commit.hash) : undefined} />}
+      {panel.fileAction && <GitFileActionConfirmation panel={panel} connected={props.connected} />}
+      {panel.revisionAction && <GitRevisionConfirmation panel={panel} connected={props.connected} />}
+    </> : undefined}>
     <View style={{ height: height * .80, flexShrink: 1 }}>
       <GitToolbar panel={panel} connected={props.connected} />
-      {!props.cwd && <Text style={styles.notice}>{t("请先选择一个项目。")}</Text>}
-      {!props.connected && <Text style={styles.notice}>{t("电脑连接后即可使用 Git。")}</Text>}
-      {!!panel.error && <Text accessibilityRole="alert" style={styles.error}>{t(panel.error)}</Text>}
+      {!props.cwd && <Text style={styles.notice}>{t("client.git.chooseAProjectFirst")}</Text>}
+      {!props.connected && <Text style={styles.notice}>{t("client.git.connectToYourComputerToUseGit")}</Text>}
+      {!!panel.error && <Text accessibilityRole="alert" style={styles.error}>{displayError(panel.error)}</Text>}
       {panel.changes?.files.some(file => file.conflict) && <Text style={styles.error}>
-        {t("请先在电脑上解决冲突或完成正在进行的合并。")}</Text>}
+        {t("client.git.resolveConflictsOrFinishTheMergeOnYourComputerFirst")}</Text>}
       {!!panel.notice && <Text accessibilityRole="alert" style={styles.notice}>{panel.notice.startsWith('已提交 ')
-        ? t('已提交 {hash}', { hash: panel.notice.slice(4) }) : t(panel.notice)}</Text>}
+        ? t("client.git.committed", { hash: panel.notice.slice(4) }) : displayError(panel.notice)}</Text>}
       {panel.busy && !panel.loading &&
         <ActivityIndicator style={styles.loading} color={color(palette.green, 'accent')} />}
       {detail?.kind === 'files' && <GitCommitFiles commit={detail.commit} state={commitFiles}
@@ -57,14 +68,14 @@ export function ChatGit(props: Props) {
           commit: detail.commit, title: `${file.path} · ${detail.commit.hash.slice(0, 8)}` })} />}
       {detail?.kind === 'diff' && <>
         <Text numberOfLines={2} style={styles.detailTitle}>{detail.title}</Text>
-        {!!diff.error && <Text accessibilityRole="alert" style={styles.error}>{t(diff.error)}</Text>}
+        {!!diff.error && <Text accessibilityRole="alert" style={styles.error}>{displayError(diff.error)}</Text>}
         {!diff.value && !diff.error && props.connected && <ActivityIndicator color={color(palette.green, 'accent')} />}
         {diff.value && <ScrollView style={styles.fill}>
-          {diff.value.truncated && <Text style={styles.notice}>{t("差异较大，仅显示部分内容。")}</Text>}
+          {diff.value.truncated && <Text style={styles.notice}>{t("client.git.thisDiffIsLargeOnlyPartOfItIsShown")}</Text>}
           <ScrollView horizontal><Text selectable style={styles.diff}>{diff.value.text
             ? diff.value.text.split('\n').map((line, index) => <Text key={index}
               style={line[0] === '+' ? styles.added : line[0] === '-' ? styles.removed : undefined}>
-              {line}{'\n'}</Text>) : t("没有可显示的文本差异。")}</Text></ScrollView>
+              {line}{'\n'}</Text>) : t("client.git.noTextDiffToDisplay")}</Text></ScrollView>
         </ScrollView>}
       </>}
       {!detail && <>
@@ -72,27 +83,22 @@ export function ChatGit(props: Props) {
           <Pressable accessibilityRole="tab" accessibilityState={{ selected: panel.tab === 'changes' }}
             style={[styles.tab, panel.tab === 'changes' && styles.selectedTab]} onPress={() => panel.setTab('changes')}>
             <Text style={[styles.tabText, panel.tab === 'changes' && styles.selectedTabText]}>
-              {t("改动")}{panel.changes ? ` ${panel.changes.files.length}` : ''}</Text></Pressable>
+              {t("client.git.changes")}{panel.changes ? ` ${panel.changes.files.length}` : ''}</Text></Pressable>
           <Pressable accessibilityRole="tab" accessibilityState={{ selected: panel.tab === 'history' }}
             style={[styles.tab, panel.tab === 'history' && styles.selectedTab]} onPress={() => panel.setTab('history')}>
-            <Text style={[styles.tabText, panel.tab === 'history' && styles.selectedTabText]}>{t("提交记录")}</Text></Pressable>
+            <Text style={[styles.tabText, panel.tab === 'history' && styles.selectedTabText]}>{t("client.git.history")}</Text></Pressable>
         </View>
         {panel.loading && <View style={styles.initialLoading} accessibilityLiveRegion="polite"
           accessibilityState={{ busy: true }}>
           <ActivityIndicator color={color(palette.green, 'accent')} />
           <Text style={styles.loadingText}>
-            {t(panel.tab === 'changes' ? '正在加载改动…' : '正在加载提交记录…')}</Text>
+            {t(panel.tab === 'changes' ? "client.git.loadingChanges" : "client.git.loadingCommitHistory")}</Text>
         </View>}
         {!panel.loading && panel.tab === 'changes' && <GitChanges panel={panel} connected={props.connected}
           onMenu={row => setMenu({ kind: 'file', row })} />}
         {!panel.loading && panel.tab === 'history' && <GitHistory panel={panel} connected={props.connected}
           onMenu={commit => setMenu({ kind: 'commit', commit })} />}
       </>}
-      {menu && !panel.fileAction && !panel.revisionAction && <GitMenu target={menu} panel={panel}
-        connected={props.connected} close={() => setMenu(null)} patchNotice={gitPatchNotice}
-        onPatch={props.downloads ? commit => saveGitPatch(props.downloads!, props.cwd, commit.hash) : undefined} />}
-      {panel.fileAction && <GitFileActionConfirmation panel={panel} connected={props.connected} />}
-      {panel.revisionAction && <GitRevisionConfirmation panel={panel} connected={props.connected} />}
     </View>
   </BottomSheet>;
 }

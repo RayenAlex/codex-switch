@@ -253,7 +253,7 @@ fn dispatch_command(app: AppHandle, command: &str, args: Value) -> Result<Value,
             crate::local_proxy::get_recent_proxy_session_latency(),
         )),
         "get_proxy_session_metrics" => serialize(block_on(
-            crate::local_proxy::session_metrics::get_proxy_session_metrics(argument(&args, "threadId")?),
+            crate::local_proxy::session_metrics::get_proxy_session_metrics(app, argument(&args, "threadId")?),
         )),
         "list_token_usage_entries" => {
             serialize(block_on(crate::local_proxy::list_token_usage_entries(app)))

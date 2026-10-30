@@ -11,6 +11,28 @@ fn fallback_error_response(status: u16, message: &str) -> UpstreamPayload {
 }
 
 #[test]
+fn provider_api_configuration_change_ignores_cached_protocol() {
+    for original in [
+        ProviderApiFormat::OpenaiChat,
+        ProviderApiFormat::OpenaiResponses,
+    ] {
+        let mut provider = fallback_test_provider();
+        provider.api_format = original;
+        remember_provider_api_format(&provider, &provider.model, original);
+        provider.api_format = alternate_api_format(original);
+        let mut attempts = Vec::new();
+        let payload = forward_provider_api(&provider, b"{}", |format| {
+            attempts.push(format);
+            Ok(json_payload(200, json!({"output": []})))
+        })
+        .unwrap();
+        assert_eq!(payload.status, 200);
+        assert_eq!(attempts, [provider.api_format]);
+        provider_api_cache::forget_format(&provider.id, &provider.model);
+    }
+}
+
+#[test]
 fn provider_api_transport_failures_never_replay_or_forget_a_working_format() {
     let timeout = upstream_transport::Error::Timeout {
         phase: upstream_transport::Phase::ResponseHeaders,
@@ -37,7 +59,7 @@ fn provider_api_transport_failures_never_replay_or_forget_a_working_format() {
         assert_eq!(result.err().as_deref(), Some(error));
         assert_eq!(attempts, [ProviderApiFormat::OpenaiResponses]);
         assert_eq!(
-            provider_api_cache::cached_format(&provider.id, &provider.base_url, &provider.model),
+            provider_api_cache::cached_format(&provider, &provider.model),
             Some(ProviderApiFormat::OpenaiResponses)
         );
         provider_api_cache::forget_format(&provider.id, &provider.model);
@@ -100,11 +122,7 @@ fn provider_api_explicit_endpoint_rejections_allow_both_fallback_directions() {
             assert_eq!(payload.status, 200);
             assert_eq!(attempts, [preferred, alternate_api_format(preferred)]);
             assert_eq!(
-                provider_api_cache::cached_format(
-                    &provider.id,
-                    &provider.base_url,
-                    &provider.model
-                ),
+                provider_api_cache::cached_format(&provider, &provider.model),
                 Some(alternate_api_format(preferred))
             );
             provider_api_cache::forget_format(&provider.id, &provider.model);
@@ -146,12 +164,7 @@ fn provider_api_failed_fallback_preserves_original_response_and_traces_both_atte
             .unwrap()
             .contains("unsupported endpoint"));
         assert_eq!(attempts, 2);
-        assert!(provider_api_cache::cached_format(
-            &provider.id,
-            &provider.base_url,
-            &provider.model
-        )
-        .is_none());
+        assert!(provider_api_cache::cached_format(&provider, &provider.model).is_none());
         drop(scope);
         let events = directory.events();
         let finished: Vec<_> = events

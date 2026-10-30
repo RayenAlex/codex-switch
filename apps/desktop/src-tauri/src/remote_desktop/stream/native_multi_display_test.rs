@@ -8,12 +8,16 @@ async fn visited_displays_keep_native_connections_at_one_background_frame_per_se
     let group = uuid::Uuid::new_v4().to_string();
     let mut bridges = Vec::new();
     let mut endpoints = Vec::new();
+    let settings = tempfile::tempdir().unwrap();
     for display in displays.iter().take(2) {
         let opened = super::super::super::open(
             Some(display.info.id.clone()),
             Default::default(),
-            None,
-            Some(group.clone()),
+            super::super::super::sessions::Options {
+                expires_at: None,
+                capture_group: Some(group.clone()),
+                settings_root: settings.path().to_owned(),
+            },
         )
         .unwrap();
         let request = OpenRequest {

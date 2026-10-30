@@ -3,15 +3,15 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useConversationMetrics } from '../../../../shared/remote-chat/client/useConversationMetrics';
-import { formatConversationTps, formatConversationTtft, type ConversationMetrics,
+import { formatConversationCost, formatConversationTps, formatConversationTtft, type ConversationMetrics,
   type ReadConversationMetrics } from '../../../../shared/remote-chat/conversationMetrics';
 
 const metrics: ConversationMetrics = { totalOutputTokens: 400, totalOutputTimeMs: 4_000, outputRequestCount: 2,
-  totalFirstTokenTimeMs: 2_500, firstTokenRequestCount: 2 };
+  totalFirstTokenTimeMs: 2_500, firstTokenRequestCount: 2, estimatedCostUsd: 1.23 };
 let root: Root;
 let result: ReturnType<typeof useConversationMetrics>;
 function Probe({ read, threadId = 'first', active = true }: {
-  read: ReadConversationMetrics; threadId?: string | null; active?: boolean;
+  read: ReadConversationMetrics | undefined; threadId?: string | null; active?: boolean;
 }) {
   result = useConversationMetrics(read, threadId, active);
   return <button>{formatConversationTps(result)} TPS</button>;
@@ -39,6 +39,15 @@ it('formats measured output speed and distinguishes zero from missing or malform
   }
 });
 
+it('formats known conversation costs in USD and keeps missing or invalid costs unknown', () => {
+  expect(formatConversationCost(metrics)).toBe('1.23USD');
+  expect(formatConversationCost({ ...metrics, estimatedCostUsd: 0 })).toBe('0USD');
+  expect(formatConversationCost({ ...metrics, estimatedCostUsd: 0.0012 })).toBe('0.0012USD');
+  for (const estimatedCostUsd of [undefined, null, -1, Infinity, NaN]) {
+    expect(formatConversationCost({ ...metrics, estimatedCostUsd })).toBe('—USD');
+  }
+});
+
 it('does not overlap slow requests, including while briefly hiding and reopening settings', async () => {
   const slow = deferred();
   const read = vi.fn<ReadConversationMetrics>().mockReturnValueOnce(slow.promise).mockResolvedValue(metrics);
@@ -56,6 +65,12 @@ it('does not overlap slow requests, including while briefly hiding and reopening
   await act(async () => vi.advanceTimersByTimeAsync(6_000));
   expect(result).toBeNull();
   expect(read).toHaveBeenCalledTimes(2);
+});
+
+it('keeps unsupported conversation metrics unavailable without starting a read', async () => {
+  await act(async () => root.render(<Probe read={undefined} />));
+  expect(result).toBeNull();
+  expect(formatConversationCost(result)).toBe('—USD');
 });
 
 it('formats average TTFT without a unit and leaves missing, old or invalid measurements unknown', () => {

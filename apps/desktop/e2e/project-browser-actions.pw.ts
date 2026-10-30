@@ -34,6 +34,7 @@ test('folder actions: create, rename with draft, copy, cut, paste and delete', a
   await row(page, '新目录').click({ button: 'right' });
   await expect(menu(page, '下载为 ZIP')).toBeVisible();
   await expect(menu(page, '打开位置')).toHaveCount(0);
+  await expect(menu(page, '在终端中打开')).toHaveCount(0);
   await create(page, '草稿.txt', false);
   await page.getByRole('button', { name: '文件浏览设置' }).click();
   await page.getByLabel('文件自动保存', { exact: true }).selectOption('0');

@@ -49,6 +49,7 @@ interface ConnectionOptions extends ConnectionEvents {
   renewAuthorization?: () => Promise<void>;
   randomBytes: (length: number) => Uint8Array;
   createPacketCipher?: PacketCipherFactory;
+  createPacketCompression?: import('../packetCompression').PacketCompressionFactory;
   createPeer: (options: import('../protocol').PeerOptions) => import('../protocol').Peer;
 }
 
@@ -317,6 +318,7 @@ export class ChatConnection {
       createPeer: this.publicEndpoints.wrap(this.options.createPeer),
       nativeTraversal: input.nativeTraversal, createNativePath: this.options.createNativePath,
       createPacketCipher: this.options.createPacketCipher,
+      createPacketCompression: this.options.createPacketCompression,
       signal: (frame) => {
         if (this.socket?.readyState !== WebSocket.OPEN) throw new Error('Disconnected');
         this.socket.send(JSON.stringify(frame));

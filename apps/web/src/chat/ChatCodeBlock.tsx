@@ -10,11 +10,11 @@ const PAGE_CHARACTERS = 8_000;
 const LANGUAGE_LABELS: Record<string, string> = {
   typescript: 'TypeScript', ts: 'TypeScript', javascript: 'JavaScript', js: 'JavaScript',
   tsx: 'TSX', jsx: 'JSX', json: 'JSON', html: 'HTML', css: 'CSS', sql: 'SQL', python: 'Python',
-  rust: 'Rust', powershell: 'PowerShell', bash: 'Bash', shell: 'Shell', get text() { return t("文本"); }, get plaintext() { return t("文本"); },
+  rust: 'Rust', powershell: 'PowerShell', bash: 'Bash', shell: 'Shell', get text() { return t("client.chat.text"); }, get plaintext() { return t("client.chat.text"); },
   diff: 'Diff', patch: 'Diff',
 };
 
-export function ChatCodeBlock({ text, language = '', label, copyLabel = t("复制代码"), copyText = text,
+export function ChatCodeBlock({ text, language = '', label, copyLabel = t("client.chat.copyCode"), copyText = text,
   desktop = false, wrapMode = 'toggle' }: {
   text: string; language?: string; label?: string; copyLabel?: string; copyText?: string; desktop?: boolean;
   wrapMode?: 'toggle' | 'always';
@@ -30,9 +30,9 @@ export function ChatCodeBlock({ text, language = '', label, copyLabel = t("复�
   const more = limit < text.length;
   return <section className="chat-code-block">
     <header><span>{desktop && <Code2 size={16} aria-hidden="true" />}
-      {label || (desktop ? LANGUAGE_LABELS[language] : '') || language || t("代码")}</span>
+      {label || (desktop ? LANGUAGE_LABELS[language] : '') || language || t("client.chat.code")}</span>
       {desktop && wrapMode === 'toggle' && <button type="button" className="chat-code-wrap"
-        aria-label={t("自动换行")} aria-pressed={wrapped}
+        aria-label={t("client.projectBrowser.wrapLines")} aria-pressed={wrapped}
         onClick={() => setWrapped(value => !value)}><WrapText size={15} /></button>}
       <ChatCopyButton text={copyText} label={copyLabel} /></header>
     <pre className={desktop && wrapMode === 'toggle' && !wrapped ? 'chat-code-unwrapped' : undefined}
@@ -43,6 +43,6 @@ export function ChatCodeBlock({ text, language = '', label, copyLabel = t("复�
       }
     }}><code>{spans.map((span, index) => <span key={index} style={{ color: span.color && `var(--app-${syntaxColorRoles[span.color] ?? 'ink'}, ${span.color})` }}>{span.text}</span>)}</code></pre>
     {more && <button type="button" className="chat-text-action" onClick={() => setLimit(value => value + PAGE_CHARACTERS)}>
-      {t("显示更多内容")}</button>}
+      {t("client.chat.showMore")}</button>}
   </section>;
 }

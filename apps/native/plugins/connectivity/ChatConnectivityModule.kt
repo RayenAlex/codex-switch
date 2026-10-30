@@ -11,12 +11,15 @@ import org.json.JSONObject
 /** Rust owns bounded sessions and networking. Poll calls stay off the React Native/UI threads. */
 class ChatConnectivityModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
     private val workers = Executors.newFixedThreadPool(4)
+    private val codecs = java.util.concurrent.ThreadPoolExecutor(2, 2, 0, TimeUnit.SECONDS,
+        java.util.concurrent.ArrayBlockingQueue<Runnable>(128))
     private val bulkWrites = java.util.concurrent.ThreadPoolExecutor(2, 2, 0, TimeUnit.SECONDS,
         java.util.concurrent.ArrayBlockingQueue<Runnable>(8))
     private val owner = UUID.randomUUID().toString()
     private val bulk = NativeBulkReceiver(owner)
     override fun getName() = "ChatConnectivity"
-    override fun getConstants(): Map<String, Any> = mapOf("bulkBinaryAvailable" to true, "bulkDuplexAvailable" to true)
+    override fun getConstants(): Map<String, Any> = mapOf("bulkBinaryAvailable" to true,
+        "bulkDuplexAvailable" to true, "packetCompression" to true)
 
     @ReactMethod
     fun sendBulk(id: String, generation: Double, data: String, promise: Promise) {
@@ -35,8 +38,17 @@ class ChatConnectivityModule(context: ReactApplicationContext) : ReactContextBas
 
     @ReactMethod
     fun call(request: String, promise: Promise) {
+        submit(workers, request, promise)
+    }
+
+    @ReactMethod
+    fun packetCodec(request: String, promise: Promise) {
+        submit(codecs, request, promise)
+    }
+
+    private fun submit(executor: java.util.concurrent.ExecutorService, request: String, promise: Promise) {
         try {
-            workers.execute {
+            executor.execute {
                 try {
                     val input = JSONObject(request)
                     val reply = NativeConnectivity.call(input.put("owner", owner).toString())
@@ -55,6 +67,7 @@ class ChatConnectivityModule(context: ReactApplicationContext) : ReactContextBas
 
     override fun invalidate() {
         workers.shutdown()
+        codecs.shutdown()
         bulkWrites.shutdown()
         Thread {
             // All queued opens must finish before their owner's handles are released.

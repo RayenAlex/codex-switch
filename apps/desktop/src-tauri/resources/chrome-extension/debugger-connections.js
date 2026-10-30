@@ -36,7 +36,7 @@ export async function acquireConnection(target, signal, clientId) {
 }
 
 export function assertConnected(connection) {
-  if (connection.closed) throw new Error(t('browserConnectionEnded', '浏览器连接已结束，请重新操作。'));
+  if (connection.closed) throw new Error(t('browserConnectionEnded'));
 }
 
 export function releaseConnection(connection, keepAlive, clientId) {

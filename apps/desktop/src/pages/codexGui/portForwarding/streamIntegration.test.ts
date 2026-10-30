@@ -94,7 +94,8 @@ it('carries simultaneous binary upload/download through the mobile TCP bridge an
     const received = new Promise<Buffer>((resolve, reject) => {
       const parts: Buffer[] = []; let size = 0;
       browser.on('error', reject).on('data', data => {
-        parts.push(data); size += data.length; if (size === body.length) resolve(Buffer.concat(parts));
+        const chunk = Buffer.isBuffer(data) ? data : Buffer.from(data);
+        parts.push(chunk); size += chunk.length; if (size === body.length) resolve(Buffer.concat(parts));
       });
     });
     browser.write(body);

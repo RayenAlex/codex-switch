@@ -10,7 +10,7 @@ vi.mock('react', async () => ({ ...await vi.importActual<typeof import('react')>
 }));
 vi.mock('react-native', () => ({ View: 'View' }));
 vi.mock('react-native-webview', () => ({ WebView: 'WebView' }));
-vi.mock('../../i18n', () => ({ t: (text: string) => text, useLanguage: vi.fn() }));
+vi.mock('../../i18n', async () => ({ ...await vi.importActual<typeof import('../../i18n')>('../../i18n'), useLanguage: vi.fn() }));
 vi.mock('./focusDesktopIme', () => ({ focusDesktopIme: runtime.focus }));
 
 beforeEach(() => { vi.clearAllMocks(); runtime.effects = []; vi.stubGlobal('React', React); });

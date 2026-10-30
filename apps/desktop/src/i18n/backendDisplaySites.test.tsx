@@ -1,20 +1,22 @@
+import { resources as clientResources } from '@remoteai/i18n/client';
+const russian: Readonly<Record<string, string>> = clientResources.ru;
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { russian } from "../../../../shared/i18n/ru";
+
 import { RequestSpeedButton } from "../../../../shared/remote-chat/RequestSpeedButton";
 import { ResetCreditsPanel } from "../components/accounts/ResetCreditsPanel";
-import { threadCopy } from "../pages/codex-threads/copy";
+import { threadCopy } from "@remoteai/i18n/copy/desktop/threads";
 import { HomeMigrationError } from "../pages/codex-threads/ThreadModals/HomeMigrationError";
-import { guiText, setGuiLanguage } from "./guiText";
+import { displayText, setGuiLanguage } from "./uiText";
 
 const clipboard = vi.hoisted(() => ({ copyText: vi.fn(() => Promise.resolve()) }));
 vi.mock("../utils/clipboard", () => ({ copyText: clipboard.copyText }));
 
 // A backend message with an upstream Russian entry; the component must not show the Chinese source.
 const BACKEND_MESSAGE = "无法读取配置";
-const translated = russian[BACKEND_MESSAGE];
+const translated = russian["client.configEditor.couldNotLoadConfiguration"];
 
 let container: HTMLDivElement;
 let root: Root;
@@ -58,7 +60,7 @@ describe("backend messages at desktop display sites", () => {
   it("passes the speed button error through the caller's translator", async () => {
     await act(async () => setGuiLanguage("ru"));
     await act(async () => root.render(<RequestSpeedButton speed="normal" error={BACKEND_MESSAGE}
-      translate={(text) => guiText(text)} onChange={() => {}} />));
+      translate={displayText} onChange={() => {}} />));
     const button = container.querySelector("button")!;
     await act(async () => button.dispatchEvent(new FocusEvent("focusin", { bubbles: true })));
     await act(async () => button.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));

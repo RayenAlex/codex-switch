@@ -1,4 +1,4 @@
-//! Bounded browsing rooted at the current chat project, without following links outside it.
+//! Directory browsing rooted at the current chat project, without following links outside it.
 use super::{
     client::Client,
     error::{GuiError, Result},
@@ -12,8 +12,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const MAX_ENTRIES: usize = 500;
-const MAX_SCANNED_ENTRIES: usize = 10_000;
 const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp", "gif"];
 
 #[path = "project_file_search.rs"]
@@ -84,25 +82,13 @@ pub(super) fn browse(root: &Path, directory: &str, images_only: bool) -> Result<
         return Err(GuiError::ProjectFiles);
     }
     let mut entries = Vec::new();
-    let mut truncated = false;
-    for (index, entry) in fs::read_dir(&directory)
-        .map_err(|_| GuiError::ProjectFiles)?
-        .enumerate()
-    {
-        if entries.len() >= MAX_ENTRIES || index >= MAX_SCANNED_ENTRIES {
-            truncated = true;
-            break;
-        }
+    for entry in fs::read_dir(&directory).map_err(|_| GuiError::ProjectFiles)? {
         let entry = entry.map_err(|_| GuiError::ProjectFiles)?;
         if let Some(entry) = visible_entry(entry, images_only)? {
             entries.push(entry);
         }
     }
-    entries.sort_by(|a, b| {
-        b.directory
-            .cmp(&a.directory)
-            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-    });
+    entries.sort_by_cached_key(|entry| (!entry.directory, entry.name.to_lowercase()));
     let parent = if directory == root {
         None
     } else {
@@ -110,7 +96,7 @@ pub(super) fn browse(root: &Path, directory: &str, images_only: bool) -> Result<
     };
     Ok(
         json!({ "directory": execution_path(&directory), "parent": parent,
-        "entries": entries, "truncated": truncated }),
+        "entries": entries, "truncated": false }),
     )
 }
 

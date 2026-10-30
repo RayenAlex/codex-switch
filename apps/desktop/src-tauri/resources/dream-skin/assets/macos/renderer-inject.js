@@ -1,4 +1,12 @@
 ((cssText, artDataUrl, themeConfig) => {
+  // i18n:skin-defaults:start
+  const defaultThemeCopy = {
+    name: "Codex Dream Skin",
+    tagline: "Make something wonderful.",
+    projectPrefix: "选择项目 · ",
+    projectLabel: "◉  选择项目",
+  };
+  // i18n:skin-defaults:end
   const SHELL_MAIN_SELECTOR = 'main:is(.main-surface, [data-app-shell-main-surface], [class*="_MainContentSurface_"])';
   const COMPOSER_SURFACE_SELECTOR =
     ':is(.composer-surface-chrome, :where([data-codex-composer-root] [data-composer-layout][data-composer-surface-variant]))';
@@ -378,10 +386,10 @@
       `rgb(${overlayBase} / ${overlayAlpha(overlayFactors.mid)})`);
     setStyleProperty(root, "--ds-task-immersive-far",
       `rgb(${overlayBase} / ${overlayAlpha(overlayFactors.far)})`);
-    setStyleProperty(root, "--dream-skin-name", cssString(THEME.name || "Codex Dream Skin"));
-    setStyleProperty(root, "--dream-skin-tagline", cssString(THEME.tagline || "Make something wonderful."));
-    setStyleProperty(root, "--dream-skin-project-prefix", cssString(THEME.projectPrefix || "选择项目 · "));
-    setStyleProperty(root, "--dream-skin-project-label", cssString(THEME.projectLabel || "◉  选择项目"));
+    setStyleProperty(root, "--dream-skin-name", cssString(THEME.name || defaultThemeCopy.name));
+    setStyleProperty(root, "--dream-skin-tagline", cssString(THEME.tagline || defaultThemeCopy.tagline));
+    setStyleProperty(root, "--dream-skin-project-prefix", cssString(THEME.projectPrefix || defaultThemeCopy.projectPrefix));
+    setStyleProperty(root, "--dream-skin-project-label", cssString(THEME.projectLabel || defaultThemeCopy.projectLabel));
   };
 
   const applyArtMetadata = (root) => {

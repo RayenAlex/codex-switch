@@ -1,5 +1,10 @@
 //! Host-wide admission for tasks and worktree changes, independent of any connected UI.
+mod conflict;
+mod files;
+#[cfg(test)]
+mod files_tests;
 mod lifecycle;
+pub(super) use conflict::Conflict;
 #[cfg(test)]
 mod tests;
 
@@ -68,11 +73,20 @@ struct Session {
 #[derive(Default)]
 struct Thread {
     workspace: Option<WorkspaceKey>,
-    turns: HashMap<String, Option<WorkspaceKey>>,
+    cwd: Option<String>,
+    name: Option<String>,
+    turns: HashMap<String, Turn>,
+    goal_files: HashSet<String>,
     active_snapshot: bool,
     goal_active: bool,
     turn_revision: u64,
     goal_revision: u64,
+}
+
+#[derive(Default)]
+struct Turn {
+    workspace: Option<WorkspaceKey>,
+    files: HashSet<String>,
 }
 
 struct Pending {
@@ -82,6 +96,8 @@ struct Pending {
     turn_revision: u64,
     goal_revision: u64,
     completed: HashSet<String>,
+    name: Option<String>,
+    cwd: Option<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -149,6 +165,10 @@ impl WorkspaceActivity {
                 turn_revision,
                 goal_revision,
                 completed: HashSet::new(),
+                name: (request.method == "thread/name/set")
+                    .then(|| request.params["name"].as_str().map(str::to_owned))
+                    .flatten(),
+                cwd: request.params["cwd"].as_str().map(str::to_owned),
             },
         );
         Ok(())
@@ -159,10 +179,11 @@ impl WorkspaceActivity {
         state
             .changes
             .retain(|_, active| active.load(Ordering::Acquire));
-        if state.changes.contains_key(&key)
-            || state.sessions.values().any(|session| session.busy(&key))
-        {
+        if state.changes.contains_key(&key) {
             return Err(GuiError::WorkspaceBusy);
+        }
+        if state.sessions.values().any(|session| session.busy(&key)) {
+            return Err(GuiError::WorkspaceConflict(Conflict::tasks(&state, &key)));
         }
         let active = Arc::new(AtomicBool::new(true));
         state.changes.insert(key, Arc::clone(&active));
@@ -185,13 +206,6 @@ impl Session {
         self.requests
             .values()
             .any(|request| request.blocks && conflicts(&request.workspace, key))
-            || self.threads.values().any(|thread| {
-                ((thread.active_snapshot || thread.goal_active)
-                    && conflicts(&thread.workspace, key))
-                    || thread
-                        .turns
-                        .values()
-                        .any(|workspace| conflicts(workspace, key))
-            })
+            || self.threads.values().any(|thread| thread.busy(key))
     }
 }

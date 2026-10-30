@@ -85,8 +85,12 @@ async fn execute(call: Call, root: PathBuf) -> Result<Value, String> {
                     super::open(
                         args.display_id,
                         settings.permissions,
-                        Some(args.expires_at),
-                        args.capture_group,
+                        super::sessions::Options {
+                            expires_at: Some(args.expires_at),
+                            capture_group: args.capture_group,
+                            settings_root: crate::desktop_service::configuration::data_root()
+                                .map_err(|_| "远程桌面设置未能读取，请重试。".to_owned())?,
+                        },
                     )
                     .map_err(super::safe_error)?,
                 )

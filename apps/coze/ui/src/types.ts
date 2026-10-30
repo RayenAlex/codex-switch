@@ -23,11 +23,11 @@ export interface Graph { nodes: Node[]; edges: Edge[]; inputs?: InputField[] }
 /** Default content is user data: it is localized once, when a resource is created. */
 export function createDefaultGraph(t: Translate): Graph {
   return {
-    inputs: [{ name: "text", description: t("要处理的文本"), kind: "string", required: true }],
+    inputs: [{ name: "text", description: t("coze.core.textToProcess"), kind: "string", required: true }],
     nodes: [
-      { id: "start", name: t("开始"), type: "start", x: 30, y: 70 },
-      { id: "answer", name: t("文本处理"), type: "template", template: "{{input.text}}", x: 300, y: 70 },
-      { id: "end", name: t("结束"), type: "end", value: "{{answer.output}}", x: 570, y: 70 },
+      { id: "start", name: t("coze.core.start"), type: "start", x: 30, y: 70 },
+      { id: "answer", name: t("coze.core.textProcessing"), type: "template", template: "{{input.text}}", x: 300, y: 70 },
+      { id: "end", name: t("coze.core.end"), type: "end", value: "{{answer.output}}", x: 570, y: 70 },
     ],
     edges: [{ source: "start", target: "answer" }, { source: "answer", target: "end" }],
   };
@@ -38,13 +38,13 @@ export const defaultGraph: Graph = createDefaultGraph((source) => source);
 
 /** Column names of a new table; TableEditor's sample row uses the same names. */
 export function defaultTableColumns(t: Translate): string[] {
-  return [t("名称"), t("内容")];
+  return [t("coze.core.name"), t("coze.core.content")];
 }
 
 export function defaultDraft(kind: Kind, t: Translate): Draft {
   switch (kind) {
     case "app": return { entryId: "", resourceIds: [] };
-    case "agent": return { model: "", prompt: t("你是一位耐心、准确的助手。"), knowledgeIds: [], temperature: 0.7 };
+    case "agent": return { model: "", prompt: t("coze.core.youAreAPatientAndAccurateAssistant"), knowledgeIds: [], temperature: 0.7 };
     case "workflow": return JSON.parse(JSON.stringify(createDefaultGraph(t))) as Draft;
     case "knowledge": return {};
     case "prompt": return { text: "" };

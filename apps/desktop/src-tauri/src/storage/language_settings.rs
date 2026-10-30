@@ -11,6 +11,21 @@ use crate::models::AppSettings;
 
 const LANGUAGE_FILENAME: &str = "interface-language.json";
 
+#[path = "supported_languages.rs"]
+mod supported_languages;
+
+fn supported_language_code(value: &str) -> Option<u8> {
+    supported_languages::SUPPORTED_LANGUAGES
+        .iter()
+        .find(|(id, _)| *id == value)
+        .map(|(_, code)| *code)
+}
+
+/// Validate IPC language IDs against the generated desktop release policy.
+pub(crate) fn is_supported_interface_language(value: &str) -> bool {
+    supported_language_code(value).is_some()
+}
+
 /// Interface language for text that Rust renders itself (notifications, native dialogs,
 /// window titles, the OAuth callback page and proxy errors). Chinese is the canonical copy;
 /// a missing or unknown preference keeps the existing Chinese behavior.
@@ -19,21 +34,19 @@ pub(crate) enum InterfaceLanguage {
     Zh,
     En,
     Ru,
+    Ja,
 }
 
 impl InterfaceLanguage {
     fn from_setting(value: Option<&str>) -> Self {
-        match value {
-            Some("en") => Self::En,
-            Some("ru") => Self::Ru,
-            _ => Self::Zh,
-        }
+        Self::from_code(value.and_then(supported_language_code).unwrap_or(0))
     }
 
     fn from_code(code: u8) -> Self {
         match code {
             1 => Self::En,
             2 => Self::Ru,
+            3 => Self::Ja,
             _ => Self::Zh,
         }
     }
@@ -43,6 +56,7 @@ impl InterfaceLanguage {
             Self::Zh => 0,
             Self::En => 1,
             Self::Ru => 2,
+            Self::Ja => 3,
         }
     }
 }
@@ -114,7 +128,7 @@ pub(super) fn apply_saved_language(settings_path: &Path, settings: &mut AppSetti
     let saved = fs::read(settings_path.with_file_name(LANGUAGE_FILENAME))
         .ok()
         .and_then(|bytes| serde_json::from_slice::<String>(&bytes).ok());
-    if let Some(language) = saved.filter(|value| matches!(value.as_str(), "zh" | "en" | "ru")) {
+    if let Some(language) = saved.filter(|value| supported_language_code(value).is_some()) {
         settings.language = Some(language);
     }
     remember_language(settings.language.as_deref());
@@ -126,7 +140,7 @@ pub(crate) fn save_app_language<R: Runtime>(
     app: &tauri::AppHandle<R>,
     language: &str,
 ) -> Result<(), String> {
-    if !matches!(language, "zh" | "en" | "ru") {
+    if supported_language_code(language).is_none() {
         return Err("Unsupported interface language".to_string());
     }
     let path = app_settings_path(app)?.with_file_name(LANGUAGE_FILENAME);
@@ -140,12 +154,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_explicit_russian_or_english_leave_the_chinese_default() {
+    fn accepts_only_languages_released_for_desktop() {
+        for &(id, code) in supported_languages::SUPPORTED_LANGUAGES {
+            assert_eq!(supported_language_code(id), Some(code));
+            assert_eq!(InterfaceLanguage::from_setting(Some(id)).code(), code);
+        }
+        assert_eq!(supported_language_code("ja"), Some(3));
+        assert_eq!(supported_language_code("en-US"), None);
+        assert_eq!(supported_language_code("unknown"), None);
+    }
+
+    #[test]
+    fn explicit_supported_preferences_override_the_chinese_default() {
         for (value, expected) in [
             (None, InterfaceLanguage::Zh),
             (Some("zh"), InterfaceLanguage::Zh),
             (Some("en"), InterfaceLanguage::En),
             (Some("ru"), InterfaceLanguage::Ru),
+            (Some("ja"), InterfaceLanguage::Ja),
             (Some("ru-RU"), InterfaceLanguage::Zh),
             (Some(""), InterfaceLanguage::Zh),
         ] {

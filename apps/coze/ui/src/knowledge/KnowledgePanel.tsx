@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Drawer, Empty, Input, InputNumber, List, Popconfirm, Space, Tag } from "antd";
 import { BookOpen, Trash2 } from "lucide-react";
@@ -47,47 +48,47 @@ export function KnowledgePanel({ resource }: { resource: Resource }) {
     try { setResults(await api<Citation[]>("search", { knowledgeIds: [resource.id], query, limit: 6 })); }
     catch (error) { setError(errorText(error)); } finally { setBusy(""); }
   };
-  const chunkSize = t("分段字数");
-  const chunkOverlap = t("重叠字数");
+  const chunkSize = t("coze.index.chunkSizeCharacters");
+  const chunkOverlap = t("coze.index.overlapCharacters");
   return <div className="two-columns">
-    <section className="panel"><h2>{t("文档")} <Tag>{documents.length}</Tag></h2>
-      <p>{t("导入文件后自动整理知识，在智能体和工作流中引用。")}</p>
-      {error && <Alert type="error" message={t(error)} />}
+    <section className="panel"><h2>{t("coze.index.documents")} <Tag>{documents.length}</Tag></h2>
+      <p>{t("coze.index.importedFilesAreTurnedIntoKnowledgeAutomaticallyUseItIn")}</p>
+      {error && <Alert type="error" message={displayError(error)} />}
       <Space wrap><label>{chunkSize} <InputNumber aria-label={chunkSize} min={100} max={2000} value={size}
         onChange={(value) => setSize(value ?? 500)} /></label>
         <label>{chunkOverlap} <InputNumber aria-label={chunkOverlap} min={0} max={Math.floor(size / 2) - 1}
           value={overlap} onChange={(value) => setOverlap(value ?? 0)} /></label></Space>
       <KnowledgeImport knowledgeId={resource.id} chunk={{ size, overlap }} job={job} onError={setError} />
       {job.progress && <Space wrap><span role="status">{job.progress}</span>
-        {job.cancellable && <Button size="small" onClick={() => void job.cancel()}>{t("取消导入")}</Button>}</Space>}
-      <List dataSource={documents} locale={{ emptyText: t("还没有文档") }} renderItem={(document) => <List.Item actions={[
+        {job.cancellable && <Button size="small" onClick={() => void job.cancel()}>{t("coze.index.cancelImport")}</Button>}</Space>}
+      <List dataSource={documents} locale={{ emptyText: t("coze.index.noDocumentsYet") }} renderItem={(document) => <List.Item actions={[
         <Button key="view" type="text" onClick={() => void api<{ id: string; text: string }[]>("read_chunks",
           { id: document.id }).then((chunks) => setPreview({ name: document.name, chunks }))
-          .catch((error: unknown) => setError(errorText(error)))}>{t("查看分段")}</Button>,
-        <Popconfirm key="delete" title={t("删除此文档和它的全部分段？")} overlayStyle={{ maxWidth: 400 }}
+          .catch((error: unknown) => setError(errorText(error)))}>{t("coze.index.viewChunks")}</Button>,
+        <Popconfirm key="delete" title={t("coze.index.deleteThisDocumentAndAllItsChunks")} overlayStyle={{ maxWidth: 400 }}
           onConfirm={async () => { try { await api("delete_document", { id: document.id }); await refresh(); }
             catch (error) { setError(errorText(error)); } }}>
-          <Button type="text" danger icon={<Trash2 size={15} />} aria-label={t("删除 {name}", { name: document.name })} />
+          <Button type="text" danger icon={<Trash2 size={15} />} aria-label={t("coze.index.delete", { name: document.name })} />
         </Popconfirm>,
       ]}><List.Item.Meta avatar={<BookOpen size={20} />} title={document.name}
-        description={<><div>{t("{chunks} 个分段 · {size} KB",
+        description={<><div>{t("coze.index.chunksKb",
           { chunks: document.chunks, size: kilobytes(document.bytes, language) })}</div>
           <DocumentSource source={sources.find((source) => source.documentId === document.id)}
             busy={job.busy && refreshId === document.id} onRefresh={() => void refreshWeb(document.id)}
             onPreview={() => void api<SourceInfo>("document_source", { id: document.id }).then(setImage)
               .catch((error: unknown) => setError(errorText(error)))} /></>} /></List.Item>} />
     </section>
-    <section className="panel"><h2>{t("检索测试")}</h2><p>{t("输入问题，查看知识库能够找到的内容。")}</p>
-      <Input.Search value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("试着问一个问题")}
-        enterButton={t("检索")} loading={busy === "search"} disabled={Boolean(busy) || !documents.length}
+    <section className="panel"><h2>{t("coze.index.retrievalTest")}</h2><p>{t("coze.index.enterAQuestionToSeeWhatTheKnowledgeBaseCan")}</p>
+      <Input.Search value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("coze.index.tryAskingAQuestion")}
+        enterButton={t("coze.index.search")} loading={busy === "search"} disabled={Boolean(busy) || !documents.length}
         onSearch={() => { if (query.trim()) void search(); }} />
-      {!results.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("检索结果将显示在这里")} />}
+      {!results.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("coze.index.searchResultsWillAppearHere")} />}
       {results.map((item, index) => <article className="citation" key={item.chunkId}>
         <strong>[{index + 1}] {item.documentName}</strong><p>{item.text}</p></article>)}
     </section>
     <Drawer title={preview?.name} open={Boolean(preview)} onClose={() => setPreview(undefined)} width={600}>
       {preview?.chunks.map((chunk, index) => <article className="citation" key={chunk.id}>
-        <strong>{t("分段 {index}", { index: index + 1 })}</strong>{editing?.id === chunk.id ? <>
+        <strong>{t("coze.index.chunk", { index: index + 1 })}</strong>{editing?.id === chunk.id ? <>
           <Input.TextArea rows={8} value={editing.text} maxLength={2000}
             onChange={(event) => setEditing({ ...editing, text: event.target.value })} />
           <Space><Button loading={busy === "edit"} onClick={() => {
@@ -96,9 +97,9 @@ export function KnowledgePanel({ resource }: { resource: Resource }) {
               setPreview({ ...preview, chunks: preview.chunks.map((item) => item.id === editing.id
                 ? { ...item, text: editing.text } : item) }); setEditing(undefined);
             }).catch((error: unknown) => setError(errorText(error))).finally(() => setBusy(""));
-          }}>{t("保存分段")}</Button><Button onClick={() => setEditing(undefined)}>{t("取消")}</Button></Space>
+          }}>{t("coze.index.saveChunk")}</Button><Button onClick={() => setEditing(undefined)}>{t("coze.core.cancel")}</Button></Space>
         </> : <><p>{chunk.text}</p><Button type="text" onClick={() => setEditing({ ...chunk, previous: chunk.text })}>
-          {t("编辑分段")}</Button></>}</article>)}
+          {t("coze.index.editChunk")}</Button></>}</article>)}
     </Drawer>
     <OriginalImage source={image} onClose={() => setImage(undefined)} />
   </div>;

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import type { AgreementAction } from './types';
+import type { AgreementAction } from '@remoteai/i18n/legal/types';
 
 type Operation = () => Promise<void>;
 

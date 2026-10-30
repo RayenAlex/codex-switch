@@ -1,5 +1,34 @@
 import { test, expect } from '@playwright/test';
-import { openChatList, connect, send, state, fixtureUrl, operationCount } from './chat-helpers';
+import { openChatList, connect, send, state, fixtureUrl, operationCount, login } from './chat-helpers';
+
+test('desktop web remembers the queue setting and sends directly while a task is running', async ({ page, request }, info) => {
+  test.skip(info.project.name !== 'desktop', 'The setting is in the desktop GUI settings.');
+  await request.post(`${fixtureUrl}/test/reset`);
+  await login(page);
+  await connect(page);
+  await openChatList(page);
+  await page.getByRole('button', { name: '移动端聊天体验', exact: true }).click();
+  await send(page, 'slow queue settings');
+  await expect(page.getByRole('button', { name: '暂停生成' })).toBeVisible();
+  await page.getByRole('button', { name: 'Codex GUI 设置', exact: true }).click();
+  const toggle = page.getByRole('switch', { name: '待发送', exact: true });
+  await expect(toggle).toBeChecked();
+  await toggle.uncheck();
+  await expect(page.getByRole('dialog')).toHaveCSS('opacity', '1');
+  await expect(page.getByRole('dialog')).toHaveCSS('transform', 'none');
+  await page.screenshot({ path: info.outputPath('web-message-settings.png') });
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  const before = await operationCount(request, 'queueEnqueue');
+  await send(page, '立即发送的 Web 消息');
+  await expect.poll(async () => (await state(request)).operations
+    .filter(operation => operation.operation === 'steer').map(operation => operation.text))
+    .toEqual(['立即发送的 Web 消息']);
+  expect(await operationCount(request, 'queueEnqueue')).toBe(before);
+  await expect(page.getByRole('region', { name: '待发送消息', exact: true })).toHaveCount(0);
+  await page.reload();
+  await page.getByRole('button', { name: 'Codex GUI 设置', exact: true }).click();
+  await expect(toggle).not.toBeChecked();
+});
 
 test('queues supplements on the PC, sends one immediately and restores the rest after reconnecting',
   async ({ page, request }) => {

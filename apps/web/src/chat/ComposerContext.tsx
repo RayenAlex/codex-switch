@@ -21,8 +21,8 @@ function CapacityHint({ threadId, api }: { threadId: string; api: ContextSetting
   }, [threadId, api]);
   if (settings?.capacity == null) return null;
   return <div className="composer-context-hint">
-    <div>{t('对话设置：{capacity} Token', { capacity: formatCompactTokenCount(settings.capacity, language) })}</div>
-    <div>{t('上方用量来自最近一次回复；可用容量会扣除预留空间。')}</div>
+    <div>{t("client.chat.chatCapacityTokens", { capacity: formatCompactTokenCount(settings.capacity, language) })}</div>
+    <div>{t("client.chat.usageIsFromTheLatestReplyAvailableCapacityExcludesReserved")}</div>
   </div>;
 }
 
@@ -36,24 +36,24 @@ export function ComposerContext({ tokenUsage, threadId, contextSettings, ready, 
   const context = contextUsage(tokenUsage);
   const percent = context?.percent;
   const close = () => { setOpen(false); trigger.current?.focus(); };
-  const content = <div id={id} className="composer-context-content" role="dialog" aria-label={t('背景信息窗口')}
+  const content = <div id={id} className="composer-context-content" role="dialog" aria-label={t("client.chat.contextWindow")}
     onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); close(); } }}>
-    <div className="composer-context-heading"><span>{t('背景信息窗口')}</span>
-      <button type="button" className="composer-context-button" aria-label={t('设置当前对话的上下文容量')}
+    <div className="composer-context-heading"><span>{t("client.chat.contextWindow")}</span>
+      <button type="button" className="composer-context-button" aria-label={t("client.chat.setContextCapacityForThisChat")}
         disabled={!threadId || !ready} onClick={() => { setOpen(false); setEditing(true); }}>
         <Settings size={14} aria-hidden="true" />
       </button>
     </div>
-    {!threadId && <div className="composer-context-hint">{t('选择对话后可设置容量')}</div>}
+    {!threadId && <div className="composer-context-hint">{t("client.chat.selectAChatToSetItsCapacity")}</div>}
     {context ? <>
-      <div>{percent != null ? t('{percent}% 已用（剩余 {remaining}%）', {
+      <div>{percent != null ? t("client.chat.usedRemaining", {
         percent, remaining: FULL_PERCENT - percent,
-      }) : t('上下文容量未知')}</div>
-      <div>{t('已用 {used} Token', { used: formatCompactTokenCount(context.used, language) })}
-        {context.capacity !== null && t('，共 {capacity}', {
+      }) : t("client.chat.contextCapacityUnknown")}</div>
+      <div>{t("client.chat.tokensUsed", { used: formatCompactTokenCount(context.used, language) })}
+        {context.capacity !== null && t("client.chat.total", {
           capacity: formatCompactTokenCount(context.capacity, language),
         })}</div>
-    </> : <div>{t('暂无上下文用量')}</div>}
+    </> : <div>{t("client.shared.noContextUsageYet")}</div>}
     {open && threadId && ready && <CapacityHint threadId={threadId} api={contextSettings} />}
   </div>;
   return <>
@@ -61,7 +61,7 @@ export function ComposerContext({ tokenUsage, threadId, contextSettings, ready, 
       onOpenChange={value => { if (value) beforeOpen(); setOpen(value); }}
       styles={{ root: { maxWidth: 'min(400px, calc(100vw - 24px))', visibility: open ? 'visible' : 'hidden' },
         body: { padding: '6px 10px', borderRadius: 12 } }}>
-      <button ref={trigger} type="button" className="composer-context-button" aria-label={t('查看上下文用量')}
+      <button ref={trigger} type="button" className="composer-context-button" aria-label={t("client.chat.viewContextUsage")}
         aria-haspopup="dialog" aria-expanded={open} aria-describedby={open ? id : undefined}
         onKeyDown={event => { if (event.key === 'Escape') close(); }}>
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">

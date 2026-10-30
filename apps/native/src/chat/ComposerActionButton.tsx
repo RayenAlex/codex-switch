@@ -1,7 +1,8 @@
+import { displayText } from '../i18n/index';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { COMPOSER_ACTION_LABELS, type ComposerAction } from '../../../../shared/remote-chat/composerAction';
 import { palette, useStyles } from './styles';
-import { t, useLanguage } from '../i18n';
+import { useLanguage } from '../i18n';
 
 interface Props { action: ComposerAction; disabled: boolean; busy: boolean; onPress: () => void }
 
@@ -11,7 +12,7 @@ const ICON_COLOR = '#fff';
 export function ComposerActionButton({ action, disabled, busy, onPress }: Props) {
   const styles = useStyles();
   useLanguage();
-  return <Pressable accessibilityRole="button" accessibilityLabel={t(COMPOSER_ACTION_LABELS[action])}
+  return <Pressable accessibilityRole="button" accessibilityLabel={displayText(COMPOSER_ACTION_LABELS[action])}
     accessibilityState={{ disabled, busy }} disabled={disabled} onPress={onPress}
     style={[buttonStyles.button, disabled && styles.disabled]}>
     {busy ? <ActivityIndicator color={ICON_COLOR} /> : <View importantForAccessibility="no-hide-descendants"

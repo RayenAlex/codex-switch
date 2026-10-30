@@ -4,19 +4,8 @@ import { Button, ConfigProvider, Dropdown, Modal, theme as antdTheme } from "ant
 import enUS from "antd/locale/en_US";
 import zhCN from "antd/locale/zh_CN";
 import ruRU from "antd/locale/ru_RU";
-import {
-  CalendarClock,
-  Check,
-  CircleHelp,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Play,
-  Plus,
-  RefreshCw,
-  RotateCcw,
-  ShieldCheck,
-  X,
-} from "lucide-react";
+import jaJP from "antd/locale/ja_JP";
+import { CalendarClock, Check, CircleHelp, PanelLeftClose, PanelLeftOpen, Play, Plus, RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   chooseAndExportDiagnosticLogs,
@@ -55,8 +44,11 @@ import { FeedbackModal } from "../modals/FeedbackModal";
 import { TokenUsageHeatmap } from "../TokenUsageHeatmap";
 import { TokenUsageDashboard } from "../TokenUsageDashboard";
 import { TotpPage } from "../../pages/TotpPage";
+import { TotpCloudSyncSwitch } from "../TotpCloudSyncSwitch";
 import { LogDiagnosticsPage, type LogDiagnosticsTab } from "../../pages/LogDiagnosticsPage";
 import { DownloadsPage } from "../../pages/DownloadsPage";
+import { LoungePage } from "../../../../../shared/lounge/LoungePage";
+import { useDesktopLounge } from "../../lounge/useDesktopLounge";
 import { authenticatedDownloadOwner } from "../../downloads/useDesktopDownloads";
 import logDiagnosticsStyles from "../../pages/LogDiagnosticsPage/index.module.less";
 import { CloudLoginModal } from "../modals/CloudLoginModal";
@@ -120,13 +112,14 @@ import cozeStyles from "../../pages/coze/CozePage.module.less";
 import { useNotificationNavigation } from "../../pages/codexGui/useNotificationNavigation";
 import { useGuiTheme } from "../../pages/codexGui/guiTheme";
 import { RemoteAssistance } from '../../remoteAssistance/RemoteAssistance';
+import { assistanceStore } from '../../remoteAssistance/store';
 import codexGuiStyles from "../../pages/codexGui/styles.module.less";
 import { CODEX_CONFIG_TOPBAR_ID, CodexConfigPage } from "../../pages/CodexConfigPage";
 import codexConfigStyles from "../../pages/codexConfig/pageStyles.module.less";
 import { SystemPromptPage } from "../../pages/SystemPromptPage";
 import { NetworkProxySettingsModal } from "../../pages/settings/NetworkProxySettings";
 import type { Translate } from "../../i18n";
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { AccountDisplayTabs } from "./AccountDisplayTabs";
 import { AccountManagementToolbar } from "./AccountManagementToolbar";
 import { AccountToolbox } from "./AccountToolbox";
@@ -199,6 +192,7 @@ type SystemMenuAction =
   | "proxy-sessions"
   | "log-diagnostics"
   | "downloads"
+  | "lounge"
   | "totp"
   | "system-prompts"
   | "settings"
@@ -307,6 +301,10 @@ export function DashboardApp() {
   useOfficialModelRefreshNotification(notify, t);
   const thirdPartyAppIntegration = useThirdPartyAppIntegration(notify, t);
   const cloud = useCloudAuth(notify, t);
+  const lounge = useDesktopLounge(cloud.state);
+  useEffect(() => {
+    if (!cloud.state.authenticated && !cloud.loading && page === "lounge") setPage("codexGui");
+  }, [cloud.state.authenticated, cloud.loading, page]);
   const totpManager = useTotpEntries({
     cloudAuthenticated: cloud.state.authenticated,
     notify,
@@ -1031,6 +1029,9 @@ export function DashboardApp() {
       case "downloads":
         setPage("downloads");
         break;
+      case "lounge":
+        setPage("lounge");
+        break;
       case "system-prompts":
         setPage("systemPrompts");
         break;
@@ -1210,7 +1211,9 @@ export function DashboardApp() {
   const accountToolbox = (
     <AccountToolbox t={t}
       onSystemPrompts={isAccountManagementPage(page) ? () => setPage("systemPrompts") : undefined}
-      navigation={sidebarNavigationEnabled ? undefined : { page, onPageChange: setPage, downloadOwner }}>
+      navigation={sidebarNavigationEnabled ? undefined : {
+        page, onPageChange: setPage, downloadOwner,
+        loungeUnread: lounge.state.unread, loungeAvailable: cloud.state.authenticated }}>
       {(page === "accounts" || page === "providers") && <>
         {titlebarProxyRunning && <CloudRecycleBin t={t} disabled={!cloud.state.authenticated}
           triggerClassName="refresh-all" />}
@@ -1262,7 +1265,7 @@ export function DashboardApp() {
     : "nav.collapseSidebar");
 
   return (
-    <ConfigProvider locale={{ zh: zhCN, en: enUS, ru: ruRU }[language]} theme={{
+    <ConfigProvider locale={{ zh: zhCN, en: enUS, ru: ruRU, ja: jaJP }[language]} theme={{
       algorithm: themeMode.appliedMode === "dark"
         ? [antdTheme.darkAlgorithm, antdTheme.compactAlgorithm]
         : antdTheme.compactAlgorithm,
@@ -1298,10 +1301,13 @@ export function DashboardApp() {
             </button>
             <DashboardNavigation collapsed={navigationStyle.sidebarCollapsed}
               downloadOwner={downloadOwner}
+              loungeUnread={lounge.state.unread}
+              loungeAvailable={cloud.state.authenticated}
               onPageChange={setPage} page={page} t={t} variant="sidebar" />
           </aside>
         )}
-        <header className="app-menu" hidden={sidebarNavigationEnabled && (page === "codexGui" || page === "coze")}>
+        <header className="app-menu" hidden={sidebarNavigationEnabled &&
+          (page === "codexGui" || page === "coze" || page === "lounge")}>
           {!sidebarNavigationEnabled && (
             <button type="button" className="brand" onClick={openRepository}
               aria-label={t("help.github")} title={t("help.github")}>
@@ -1321,6 +1327,7 @@ export function DashboardApp() {
         </header>
 
         <main className={page === "accounts" ? "accounts-main"
+          : page === "lounge" ? "lounge-desktop-main"
           : page === "codexGui" ? codexGuiStyles.main
           : page === "coze" ? cozeStyles.main
           : page === "providers" ? "providers-main"
@@ -1330,7 +1337,7 @@ export function DashboardApp() {
             : page === "dreamSkin" ? "dream-skin-main"
               : page === "sessions" ? "sessions-main"
               : page === "codexConfig" ? codexConfigStyles.main : undefined}>
-          {!['tokens', 'dreamSkin', 'codexGui', 'coze', 'logDiagnostics', 'downloads'].includes(page) && (
+          {!['tokens', 'dreamSkin', 'codexGui', 'coze', 'logDiagnostics', 'downloads', 'lounge'].includes(page) && (
           <>
           {isAccountManagementPage(page) ? (
             <AccountManagementToolbar section={page} onSectionChange={setPage} t={t}
@@ -1370,10 +1377,15 @@ export function DashboardApp() {
                   {page === "skills" && <div id="skills-market-tabs" className="skills-market-tabs-slot" />}
                   {page === "settings" && <SettingsGroupsNav t={t} />}
                   {page === "codexConfig" && <p className={codexConfigStyles.subtitle}>
-                    {guiText("管理 Codex 的 config.toml 配置项", {}, language)}
+                    {uiText("client.desktopMisc.manageCodexConfigTomlSettings", {}, language)}
                   </p>}
                 </div>
               </div>
+            {page === "totp" && <div className="topbar-actions">
+              <TotpCloudSyncSwitch t={t} authenticated={cloud.state.authenticated}
+                enabled={totpManager.cloudSyncEnabled} loading={totpManager.syncing}
+                onChange={totpManager.setCloudSyncEnabled} />
+            </div>}
             {page === "settings" && (
               <div className="topbar-actions">
                 <button type="button" className="refresh-all settings-help-button" onClick={openHelp}>
@@ -1403,6 +1415,8 @@ export function DashboardApp() {
 
           {page === "totp" && <TotpPage accounts={manager.accounts} manager={totpManager} t={t} />}
           {page === "downloads" && <DownloadsPage auth={cloud.state} />}
+          {page === "lounge" && <LoungePage controller={lounge.controller} onLogin={openCloudLogin}
+            onAssistance={isDesktopApp ? assistanceStore.request : undefined} />}
           {page === "logDiagnostics" && <LogDiagnosticsPage activeTab={diagnosticsTab}
             onTabChange={setDiagnosticsTab} language={language} t={t}
             onExportLogs={() => void exportLogs()} exportingLogs={exportingLogs} />}
@@ -1459,6 +1473,7 @@ export function DashboardApp() {
               onAccountAutoRefreshSecondsChange={accountAutoRefresh.updateSeconds}
               themeColor={themeColor.color} themeColorLoading={themeColor.loading}
               onThemeColorChange={changeThemeColor}
+              themeMode={themeMode.mode} onThemeModeChange={themeMode.setMode}
               cloudBaseUrl={cloud.state.baseUrl ?? ""}
               cloudBaseUrlLoading={cloud.loading}
               cloudAuthenticated={cloud.state.authenticated}

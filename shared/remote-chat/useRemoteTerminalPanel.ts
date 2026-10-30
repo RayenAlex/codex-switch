@@ -2,13 +2,18 @@ import { useEffect, useMemo, useState, type SetStateAction } from 'react';
 import type { GuiToolsClient } from './guiTools';
 import type { TerminalInfo } from '../terminal/types';
 import { terminalBelongsToProject, terminalProjectKey } from './terminalProject';
+import { useScriptTerminalRefresh } from './useScriptTerminalRefresh';
 
 const INITIAL_SIZE = { cols: 80, rows: 24 };
 export const MAX_REMOTE_TERMINALS = 8;
-interface Tab { id: string; cwd: string; session: TerminalInfo }
+interface Tab { id: string; cwd: string; session: TerminalInfo; exited?: boolean }
 interface Panel { tabs: Tab[]; selected: string; open: boolean; busy: boolean; error: string }
 const EMPTY_PANEL: Panel = { tabs: [], selected: '', open: false, busy: false, error: '' };
-const asTab = (session: TerminalInfo): Tab => ({ id: session.id, cwd: session.cwd, session });
+const asTab = (session: TerminalInfo): Tab => ({ id: session.id, cwd: session.cwd, session, exited: session.exited });
+const restoreTab = (session: TerminalInfo, previous?: Tab): Tab => {
+  if (!previous) return asTab(session);
+  return session.exited && !previous.exited ? { ...previous, exited: true } : previous;
+};
 
 /** Both phone clients discover this project's PC shells without owning their lifetime. */
 export function useRemoteTerminalPanel(options: {
@@ -41,10 +46,17 @@ export function useRemoteTerminalPanel(options: {
   // Filtering also supports PCs running the previous, unscoped list protocol.
   const list = async () => (await client.list(cwd)).filter(session => terminalBelongsToProject(session, cwd));
   const restore = (sessions: TerminalInfo[]) => update(previous => ({
-    tabs: sessions.map(session => previous.tabs.find(tab => tab.id === session.id) ?? asTab(session)),
+    tabs: sessions.map(session => restoreTab(session, previous.tabs.find(tab => tab.id === session.id))),
     selected: sessions.some(session => session.id === previous.selected)
       ? previous.selected : sessions.at(-1)?.id ?? '',
   }));
+  useScriptTerminalRefresh({ scope, enabled: connected && panel.tabs.some(tab =>
+    tab.session.npmScript && !tab.exited && !tab.session.exited), refresh: async current => {
+    if (scope.pending) return;
+    const version = scope.generation;
+    const sessions = await list();
+    if (current() && !scope.pending && version === scope.generation) restore(sessions);
+  } });
   useEffect(() => {
     if (!connected) return;
     let cancelled = false;
@@ -58,20 +70,27 @@ export function useRemoteTerminalPanel(options: {
     return () => { cancelled = true; };
   }, [scope, connected]);
 
-  const create = async (current: () => boolean) => {
-    const session = await client.open(cwd, INITIAL_SIZE);
+  const create = async (current: () => boolean, directory = cwd, npmScript?: string) => {
+    const session = await (npmScript ? client.open(directory, INITIAL_SIZE, cwd, { npmScript })
+      : directory === cwd ? client.open(cwd, INITIAL_SIZE)
+      : client.open(directory, INITIAL_SIZE, cwd));
     // A late open remains on its original project even after switching away.
     if (!current()) return;
     update(previous => ({ tabs: [...previous.tabs.filter(tab => tab.id !== session.id), asTab(session)],
       selected: session.id, open: true }));
   };
-  const add = () => { void run(async current => {
+  const addInDirectory = (directory: string, npmScript?: string) => { void run(async current => {
+    update({ open: true });
     const sessions = await list();
     if (!current()) return;
     restore(sessions);
+    const existing = sessions.find(session => npmScript && !session.exited && session.npmScript === npmScript
+      && terminalProjectKey(session.npmScriptCwd ?? session.cwd) === terminalProjectKey(directory));
+    if (existing) { update({ selected: existing.id, open: true }); return; }
     if (sessions.length >= MAX_REMOTE_TERMINALS) { update({ error: '终端较多，请先关闭一个再试。' }); return; }
-    await create(current);
+    await create(current, directory, npmScript);
   }); };
+  const add = () => addInDirectory(cwd);
   const toggle = () => {
     if (panel.open) { update({ open: false }); return; }
     if (panel.tabs.length) { update({ open: true }); return; }
@@ -95,5 +114,13 @@ export function useRemoteTerminalPanel(options: {
   const select = (selected: SetStateAction<string>) => update(previous => ({
     selected: typeof selected === 'function' ? selected(previous.selected) : selected,
   }));
-  return { ...panel, add, remove, toggle, select, hide: () => update({ open: false }) };
+  const adopt = (session: TerminalInfo) => update(previous => ({
+    tabs: [...previous.tabs.filter(tab => tab.id !== session.id), asTab(session)],
+    selected: session.id, open: true, error: '',
+  }));
+  const exited = (id: string) => update(previous => ({
+    tabs: previous.tabs.map(tab => tab.id === id ? { ...tab, exited: true } : tab),
+  }));
+  return { ...panel, add, adopt, projectCwd: cwd, addInDirectory, remove, toggle, select, exited,
+    hide: () => update({ open: false }) };
 }

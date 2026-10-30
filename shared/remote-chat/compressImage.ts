@@ -1,6 +1,6 @@
 import { getChatPolicy, isDirectChat, KIB, type ChatPolicy } from './policy';
-import { getInterfaceLanguage } from '../i18n/interfaceLanguage';
-import { translateText } from '../i18n/translate';
+import { getInterfaceLanguage } from "../localization/interfaceLanguage";
+import { translateMessage } from "../localization/messages";
 
 const QUALITIES = [0.8, 0.65, 0.5];
 const MIN_EDGE = 128;
@@ -25,6 +25,6 @@ export async function compressChatImage<T>(
     }
     edge = Math.floor(edge / 2);
   }
-  throw new ImagePolicyError(translateText(getInterfaceLanguage(), '图片无法压缩至 {value1} KB，请换一张图片。',
+  throw new ImagePolicyError(translateMessage(getInterfaceLanguage(), "client.runtimeErrors.couldNotCompressTheImageToKbChooseADifferent",
     { value1: policy.imageTargetKb }));
 }

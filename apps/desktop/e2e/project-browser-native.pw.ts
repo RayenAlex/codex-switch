@@ -29,16 +29,18 @@ test('bundled native editor: offline assets, mobile search/fold/save and close g
   const client = createProjectBrowserClient(browserRequest);
   const emit = (message: BrowserHostMessage) => page.evaluate(value => window.projectBrowserMessage(value), message);
   let closed = false;
+  let fullscreen = false;
   let snapshot: DocumentsSnapshot | undefined;
   const references: ProjectFile[] = [];
   const quotes: FileSelection[] = [];
   await page.exposeFunction('nativeBrowserRequest', async (raw: string) => {
-    const message = JSON.parse(raw) as { type: string; snapshot?: DocumentsSnapshot };
+    const message = JSON.parse(raw) as { type: string; snapshot?: DocumentsSnapshot; active?: boolean };
     if (message.type === 'ready') {
       await emit({ type: 'settings', cwd: browserRoot, connected: true, labels: {}, autoSaveDelay: 0, snapshot,
         theme: { '--ink': '#e6e8eb', '--panel': '#1b201e', '--muted': '#a2aaa7',
           '--bg': '#121614', '--line': '#35413a', '--green': '#61d6ad', '--browser-on-accent': '#121614' } });
     } else if (message.type === 'closed') { closed = true; snapshot = message.snapshot; }
+    else if (message.type === 'fullscreen') fullscreen = !!message.active;
     else {
       const reply = await handleBrowserRequest(raw, { client, cwd: browserRoot, connected: true,
         host: { copyPath: async () => {}, reference: async entry => { references.push(entry); },
@@ -69,6 +71,22 @@ test('bundled native editor: offline assets, mobile search/fold/save and close g
   await page.getByRole('treeitem', { name: 'src', exact: true }).click();
   await page.getByRole('treeitem', { name: 'main.ts', exact: true }).click();
   const editor = page.getByRole('textbox', { name: '文件内容', exact: true });
+  const originalEditor = await editor.elementHandle();
+  await page.getByRole('button', { name: '全屏浏览', exact: true }).click();
+  await expect.poll(() => fullscreen).toBe(true);
+  for (const [language, label] of [['en', 'Exit fullscreen'], ['ru', 'Выйти из полноэкранного режима'],
+    ['ja', '全画面表示を終了'], ['zh', '退出全屏']] as const) {
+    await emit({ type: 'settings', cwd: browserRoot, connected: true, labels: {}, autoSaveDelay: 0, theme: {}, language });
+    await expect(page.getByRole('button', { name: label, exact: true })).toBeVisible();
+    expect(await originalEditor!.evaluate(element => element.isConnected)).toBe(true);
+  }
+  await emit({ type: 'close' });
+  await expect.poll(() => fullscreen).toBe(false);
+  expect(closed).toBe(false);
+  expect(await originalEditor!.evaluate(element => element.isConnected)).toBe(true);
+  await page.getByRole('button', { name: '全屏浏览', exact: true }).click();
+  await page.getByRole('button', { name: '退出全屏', exact: true }).click();
+  await expect.poll(() => fullscreen).toBe(false);
   await expect(editor).toContainText('function');
   await page.getByRole('button', { name: '全部折叠', exact: true }).click();
   await expect(page.locator('.cm-foldPlaceholder')).toHaveCount(1);

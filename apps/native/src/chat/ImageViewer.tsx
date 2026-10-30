@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import { createThemedStyles } from '../theme/styles';
 import { t, useLanguage } from '../i18n';
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -35,7 +36,7 @@ export function ImageViewer({ thumbnail, description, load, close, save }: Props
         <GestureDetector gesture={gesture}>
           <View style={styles.stage} collapsable={false} onAccessibilityEscape={close}>
             {source && <Animated.Image source={{ uri: source }} accessibilityLabel={description}
-              accessibilityHint={t("轻点关闭，双指缩放")} accessibilityActions={[{ name: 'activate', label: t("关闭预览") }]}
+              accessibilityHint={t("client.mobile.tapToClosePinchToZoom")} accessibilityActions={[{ name: 'activate', label: t("client.mobile.closePreview") }]}
               onAccessibilityAction={close} resizeMode="contain" onError={image.fail}
               fadeDuration={0} style={[styles.image, animatedStyle]} />}
           </View>
@@ -46,26 +47,26 @@ export function ImageViewer({ thumbnail, description, load, close, save }: Props
           <View pointerEvents="box-none" style={styles.footer}>
             <View pointerEvents="box-none" style={styles.notices}>
               {!!message && <Text pointerEvents="none" accessibilityLiveRegion="polite"
-                style={styles.status}>{t(message)}</Text>}
-              {image.loading && <PreviewTransferProgress progress={image.progress} dark label={t("正在加载原图…")} />}
+                style={styles.status}>{displayError(message)}</Text>}
+              {image.loading && <PreviewTransferProgress progress={image.progress} dark label={t("client.shared.loadingFullImage")} />}
               {image.error && <View style={styles.error}>
-                <Text style={styles.status}>{t("原图加载失败")}</Text>
+                <Text style={styles.status}>{t("client.shared.couldNotLoadFullImage")}</Text>
               </View>}
             </View>
-            {orientation.suggested && <Pressable accessibilityRole="button" accessibilityLabel={t("转到手机当前方向")}
+            {orientation.suggested && <Pressable accessibilityRole="button" accessibilityLabel={t("client.mobile.matchPhoneOrientation")}
               disabled={orientation.rotating} onPress={orientation.rotate} style={styles.rotate}>
               <MaterialCommunityIcons name="screen-rotation" size={28} color="#fff" />
             </Pressable>}
             <ImageAiToolbar load={image.loadOriginal} close={close}
               originalAction={!image.url && !image.loading ? {
-                label: t(image.error ? "重新加载原图" : "查看原图"), onPress: image.request,
+                label: t(image.error ? "client.mobile.reloadOriginalImage" : "client.chat.viewOriginal"), onPress: image.request,
               } : undefined} />
           </View>
         </SafeAreaView>
         </KeyboardAvoidingView>
         <SafeAreaView pointerEvents="box-none" edges={['top', 'left', 'right']} style={styles.header}>
           <View pointerEvents="box-none" style={styles.headerActions}>
-            <Pressable accessibilityRole="button" accessibilityLabel={t("下载图片到相册")}
+            <Pressable accessibilityRole="button" accessibilityLabel={t("client.mobile.saveImageToPhotos")}
               accessibilityState={{ disabled: image.loading || saving.saving, busy: saving.saving }}
               disabled={image.loading || saving.saving} onPress={saving.save}
               style={[styles.save, (image.loading || saving.saving) && styles.disabled]}>

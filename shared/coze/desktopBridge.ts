@@ -1,4 +1,4 @@
-import type { Language } from "../i18n/language";
+import type { Language } from "../localization/language";
 
 export const COZE_DESKTOP_READY = "remoteai:coze:ready";
 export const COZE_DESKTOP_STOP_READY = "remoteai:coze:stop-ready";

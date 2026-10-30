@@ -22,6 +22,8 @@ mod macos;
 #[cfg(any(target_os = "macos", test))]
 mod macos_keymap;
 pub(crate) mod security;
+#[cfg(windows)]
+mod session_access;
 mod sessions;
 #[cfg(target_os = "macos")]
 use macos::{input as platform_input, monitors};
@@ -51,6 +53,9 @@ mod windows_input;
 
 #[derive(Debug, thiserror::Error)]
 pub(super) enum DesktopError {
+    #[cfg(windows)]
+    #[error("locked desktop requires unattended access")]
+    LockedWithoutUnattended,
     #[cfg(windows)]
     #[error(transparent)]
     Unlock(#[from] auto_unlock::Error),
@@ -196,13 +201,15 @@ fn safe_error(error: DesktopError) -> String {
     }
     match error {
         #[cfg(windows)]
+        DesktopError::LockedWithoutUnattended => "client.remoteDesktop.lockedRequiresUnattended",
+        #[cfg(windows)]
         DesktopError::Unlock(_) => "自动解锁未完成，请重试。",
         #[cfg(any(windows, target_os = "macos"))]
-        DesktopError::Privacy => "隐私屏未能切换，请重新连接后重试。",
+        DesktopError::Privacy => "client.remoteDesktop.privacyFailed",
         #[cfg(any(windows, target_os = "macos"))]
         DesktopError::Resolution => "分辨率未能切换，请选择其他分辨率后重试。",
         #[cfg(windows)]
-        DesktopError::PrivacyService => "请先在电脑的远程设置中开启无人值守，再使用隐私屏。",
+        DesktopError::PrivacyService => "client.remoteDesktop.privacyRequiresUnattended",
         #[cfg(windows)]
         DesktopError::PrivacySetup => "请在电脑上确认安装，完成后再点一次隐私屏。",
         #[cfg(windows)]
@@ -251,8 +258,7 @@ fn with_session<T>(id: &str, operation: impl FnOnce(&mut Session) -> Result<T>) 
 fn open(
     display_id: Option<String>,
     permissions: permissions::Permissions,
-    expires_at: Option<u64>,
-    capture_group: Option<String>,
+    options: sessions::Options,
 ) -> Result<displays::Opened> {
     #[cfg(windows)]
     let _desktop = input_desktop::InputDesktop::enter()?;
@@ -265,18 +271,19 @@ fn open(
     {
         return Err(DesktopError::Invalid);
     }
-    if capture_group
+    if options
+        .capture_group
         .as_ref()
         .is_some_and(|group| uuid::Uuid::parse_str(group).is_err())
     {
         return Err(DesktopError::Invalid);
     }
-    lease::deadline(expires_at)?;
+    lease::deadline(options.expires_at)?;
     #[cfg(target_os = "macos")]
     macos::authorize_open(permissions.control)?;
     #[cfg(not(any(windows, target_os = "macos")))]
     {
-        let _ = (display_id, expires_at, capture_group);
+        let _ = (display_id, options);
         Err(DesktopError::Unsupported)
     }
     #[cfg(any(windows, target_os = "macos"))]
@@ -292,9 +299,14 @@ fn open(
         };
         #[cfg(not(windows))]
         let resolutions = vec![];
-        let id = begin_session(display, permissions, expires_at, capture_group)?;
+        let id = begin_session(display, permissions, options)?;
         #[cfg(windows)]
-        with_lease(&id, |session| session.security.connect(permissions.control))?;
+        if let Err(error) = with_lease(&id, |session| session.security.connect(permissions)) {
+            if let Err(cleanup) = close(&id) {
+                eprintln!("desktop security open cleanup: {cleanup}");
+            }
+            return Err(error);
+        }
         #[cfg(windows)]
         let security = Some(with_lease(&id, |session| session.security.snapshot())?);
         #[cfg(not(windows))]
@@ -357,7 +369,9 @@ pub(crate) async fn remote_desktop_renew(
         .await;
     }
     tauri::async_runtime::spawn_blocking(move || {
-        with_session(&id, |session| {
+        // Renewal only updates authorization. Capture/input report desktop access failures over
+        // the live control channel before it closes, so lease polling must not close it first.
+        with_lease(&id, |session| {
             session.deadline = lease::deadline(Some(expires_at))?;
             Ok(())
         })

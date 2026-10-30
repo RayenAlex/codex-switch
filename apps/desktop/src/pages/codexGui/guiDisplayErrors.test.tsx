@@ -1,10 +1,12 @@
+import { formatRemoteError } from '../../../../../shared/localization/errors';
+
 // @vitest-environment jsdom
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { setGuiLanguage } from "../../i18n/guiText";
-import { translateText } from "../../../../../shared/i18n/translate";
-import type { Language } from "../../../../../shared/i18n/language";
+import { setGuiLanguage } from "../../i18n/uiText";
+import { translateMessage } from "../../../../../shared/localization/messages";
+import type { Language } from "../../../../../shared/localization/language";
 import { GuiDevicePicker } from "./GuiDevicePicker";
 import { QueuedMessages } from "./QueuedMessages";
 import type { MessageQueue } from "./messageQueue";
@@ -19,7 +21,7 @@ const HAN = /[一-鿿]/;
 
 /** Russian copy is curated elsewhere; assert that the displayed text is the dictionary value. */
 function russianOf(source: string) {
-  const value = translateText("ru", source);
+  const value = formatRemoteError("ru", source);
   expect(value).not.toBe(source);
   expect(value).not.toMatch(HAN);
   return value;
@@ -84,5 +86,5 @@ it("names this computer in the device picker tooltip in the interface language",
   await renderIn("en", picker);
   expect(title()).toBe("Current device: This computer");
   await renderIn("ru", picker);
-  expect(title()).toBe(translateText("ru", "当前设备：{value1}", { value1: russianOf("本机") }));
+  expect(title()).toBe(translateMessage("ru", "client.workspaceSettings.currentDevice", { value1: russianOf("client.composer.thisComputer") }));
 });

@@ -1,3 +1,4 @@
+import inlineCopy from '@remoteai/i18n/copy/inline/admin/hooks/useOfficialModels';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { App } from "antd";
 import { catalogErrorMessage, parseCatalog } from "../pages/official-models/catalog";
@@ -36,8 +37,8 @@ export function useOfficialModels(api: OfficialModelsProps["api"], zh: boolean) 
     setLoading(true);
     void api<OfficialModelsSnapshot>(ENDPOINT).then((value) => { if (current) accept(value); })
       .catch(() => {
-        if (current) message.error({ content: zh ? "模型列表加载失败，请重试。"
-          : "Unable to load models. Please retry.", style: noticeStyle });
+        if (current) message.error({ content: zh ? inlineCopy["text_1d7ca64d"]
+          : inlineCopy["Unable_to_load_models_Please_b01795f5"], style: noticeStyle });
       }).finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
   }, [api, attempt, message, zh]);
@@ -59,10 +60,10 @@ export function useOfficialModels(api: OfficialModelsProps["api"], zh: boolean) 
         { method: operation === "save" ? "PATCH" : "POST", body });
       if (!active.current) return;
       accept(value);
-      message.success({ content: zh ? "模型列表已更新。" : "Model list updated.", style: noticeStyle });
+      message.success({ content: zh ? inlineCopy["text_a9087a19"] : inlineCopy["Model_list_updated_16afd2f1"], style: noticeStyle });
     } catch (error) {
       if (active.current) message.error({ content: error instanceof Error ? error.message
-        : (zh ? "更新失败，请重试。" : "Unable to update. Please retry."), style: noticeStyle });
+        : (zh ? inlineCopy["text_71d7ddd0"] : inlineCopy["Unable_to_update_Please_retry_1cf5eb92"]), style: noticeStyle });
     } finally {
       pending.current = false;
       if (active.current) setAction(null);

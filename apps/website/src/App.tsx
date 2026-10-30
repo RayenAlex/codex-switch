@@ -1,6 +1,10 @@
 import { ConfigProvider } from 'antd';
-import { findFeature } from './content/features';
-import type { Language } from './content/types';
+import { useMemo } from 'react';
+import { applications, createI18n } from '@remoteai/i18n';
+import { I18nProvider } from '@remoteai/i18n/react';
+import { resources } from '@remoteai/i18n/website';
+import { findFeature } from '@remoteai/i18n/website-content/features';
+import type { Language } from '@remoteai/i18n/website-content/types';
 import { Layout } from './components/Layout';
 import { Home } from './pages/Home';
 import { Features } from './pages/Features';
@@ -9,7 +13,7 @@ import { Download } from './pages/Download';
 import { Guide } from './pages/Guide';
 import { Resources } from './pages/Resources';
 import { href } from './lib/site';
-import { ui } from './lib/ui-text';
+import { ui } from '@remoteai/i18n/website-content/ui-text';
 
 export interface Route {
   language: Language;
@@ -36,25 +40,30 @@ function Page({ language, path }: Route) {
 }
 
 export function App({ language, path }: Route) {
+  const instance = useMemo(() => createI18n({
+    locale: language, enabledLanguages: applications.website, resources,
+  }), [language]);
   return (
-    <ConfigProvider
-      theme={{
-        token: {
-          colorPrimary: '#e92f73',
-          colorText: '#19191e',
-          colorBgContainer: '#fff',
-          borderRadius: 8,
-          fontFamily: 'Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
-          controlHeight: 40,
-          controlHeightLG: 50,
-          fontSize: 14,
-        },
-        components: { Button: { primaryShadow: 'none', fontWeight: 600 } },
-      }}
-    >
-      <Layout language={language} path={path}>
-        <Page language={language} path={path} />
-      </Layout>
-    </ConfigProvider>
+    <I18nProvider instance={instance}>
+      <ConfigProvider
+        theme={{
+          token: {
+            colorPrimary: '#e92f73',
+            colorText: '#19191e',
+            colorBgContainer: '#fff',
+            borderRadius: 8,
+            fontFamily: 'Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
+            controlHeight: 40,
+            controlHeightLG: 50,
+            fontSize: 14,
+          },
+          components: { Button: { primaryShadow: 'none', fontWeight: 600 } },
+        }}
+      >
+        <Layout language={language} path={path}>
+          <Page language={language} path={path} />
+        </Layout>
+      </ConfigProvider>
+    </I18nProvider>
   );
 }

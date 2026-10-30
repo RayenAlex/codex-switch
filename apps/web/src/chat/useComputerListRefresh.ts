@@ -25,7 +25,7 @@ export function useComputerListRefresh(): ComputerListRefresh {
       const { devices } = await apiJson<{ devices: RemoteDevice[] }>('/devices');
       if (mounted.current) dispatch(deviceSocketMessage({ type: 'devices-snapshot', devices }));
     } catch {
-      if (mounted.current) setError(t('暂时无法读取电脑列表，请重试。'));
+      if (mounted.current) setError(t("client.workspaceActions.couldNotLoadTheComputerListPleaseTryAgain"));
     } finally {
       pending.current = false;
       if (mounted.current) setLoading(false);

@@ -2,14 +2,14 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { useDictation } from './useDictation';
+import { useDictation } from '../../../../../../shared/chat/dictation/useDictation';
 import { dictationClient } from './client';
-import { startRecording, type Recording } from './recording';
+import { startRecording, type Recording } from '../../../../../../shared/chat/dictation/recording';
 import { subscribeGuiEvent } from '../webEvents';
 
-vi.mock('./client', () => ({ dictationClient: { prepare: vi.fn(), cancel: vi.fn(), transcribe: vi.fn() },
-  recordingError: (error: unknown) => String(error) }));
-vi.mock('./recording', () => ({ startRecording: vi.fn() }));
+vi.mock('./client', () => ({ dictationClient: { prepare: vi.fn(), cancel: vi.fn(), transcribe: vi.fn(),
+  subscribeAccountChange: (changed: () => void) => subscribeGuiEvent('codex-gui-account-changed', changed) } }));
+vi.mock('../../../../../../shared/chat/dictation/recording', () => ({ startRecording: vi.fn() }));
 vi.mock('../webEvents', () => ({ subscribeGuiEvent: vi.fn() }));
 
 function deferred<T>() {
@@ -25,7 +25,7 @@ let audio: ReturnType<typeof deferred<Blob>>;
 const onText = vi.fn();
 const onBusyChange = vi.fn();
 function Fixture({ active = true }: { active?: boolean }) {
-  state = useDictation({ active, onText, onBusyChange });
+  state = useDictation({ client: dictationClient, active, onText, onBusyChange });
   return null;
 }
 beforeEach(async () => {

@@ -7,7 +7,8 @@ import { initialChatState, type Thread } from './types';
 import type { ChatController } from './controller';
 
 vi.mock('react-native', () => ({ Pressable: 'Pressable', SectionList: 'SectionList', Text: 'Text',
-  View: 'View', TextInput: 'TextInput', ActivityIndicator: 'Spinner', StyleSheet: { create: <T,>(value: T) => value } }));
+  View: 'View', TextInput: 'TextInput', ActivityIndicator: 'Spinner', Platform: { OS: 'android' },
+  StyleSheet: { create: <T,>(value: T) => value } }));
 vi.mock('@expo/vector-icons/Feather', () => ({ default: 'Icon' }));
 vi.mock('../components/BottomSheet', () => ({ BottomSheet: 'BottomSheet' }));
 vi.mock('./useThreadListScroll', () => ({ useThreadListScroll: () => ({}) }));
@@ -31,7 +32,7 @@ function nodes(tree: ReactNode): ReactElement<NodeProps>[] {
 it('opens native long-press actions without selecting a conversation and exposes the accessibility action', () => {
   const select = vi.fn(); const openActions = vi.fn();
   const list = ChatThreadList({ state: { ...initialChatState(), ready: true }, controller: {} as ChatController,
-    newChat: vi.fn(), select, openActions, bottomInset: 0 });
+    newChat: vi.fn(), select, openActions, openProjectActions: vi.fn(), bottomInset: 0 });
   const row = list.props.renderItem({ item: thread });
   row.props.onLongPress();
   expect(openActions).toHaveBeenCalledWith(thread);

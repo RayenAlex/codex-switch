@@ -7,12 +7,13 @@ import {
   MIN_TOKEN_USAGE_REFRESH_SECONDS,
   MIN_TOKEN_USAGE_WEEKS,
 } from "../../hooks/useTokenUsagePreferences";
-import { httpStatusOptions } from "../../utils/httpStatusOptions";
+import { httpStatusOptions } from "@remoteai/i18n/copy/desktop/httpStatusOptions";
 import { SseIdleTimeoutCard } from "./SseIdleTimeoutCard";
 import { ProxyTransportCard } from "./ProxyTransportCard";
 import { ResponseHeaderTimeoutCard } from "./ResponseHeaderTimeoutCard";
 import { DurationTimePicker } from "./DurationTimePicker";
 import type { SettingsPageProps } from "./types";
+import { PetDockSettingsCard } from "./PetDockSettingsCard";
 
 function TokenUsageCard({ settings }: { settings: SettingsPageProps }) {
   const {
@@ -218,6 +219,7 @@ function AutoDisableStatusCodesCard({ settings }: { settings: SettingsPageProps 
 export function UsageSettingsCards({ settings }: { settings: SettingsPageProps }) {
   return (
     <>
+      <PetDockSettingsCard t={settings.t} />
       <CodexUsageSummaryCard settings={settings} />
       <TokenUsageCard settings={settings} />
       <Upstream429RetryCard settings={settings} />

@@ -5,17 +5,23 @@ import { afterEach, test } from 'node:test';
 import { JSDOM } from 'jsdom';
 import { localizeDocument, t } from '../apps/desktop/src-tauri/resources/chrome-extension/i18n.js';
 import { validate } from '../apps/desktop/src-tauri/resources/chrome-extension/validation.js';
+import defaults from '../apps/desktop/src-tauri/resources/chrome-extension/messages.generated.js';
 
 const source = path.resolve('apps/desktop/src-tauri/resources/chrome-extension');
 const LOCALES = ['zh_CN', 'en', 'ru'];
 const HAN = /\p{Script=Han}/u;
 const PAGES = ['popup.html', 'sidepanel.html', 'approval.html'];
-const CALL = /\bt\('([^']+)', '([^']*)'\)/g;
+const CALL = /\bt\('([^']+)'\)/g;
 const read = (name) => fs.readFile(path.join(source, name), 'utf8');
 const messages = Object.fromEntries(await Promise.all(LOCALES.map(async (locale) =>
   [locale, JSON.parse(await read(`_locales/${locale}/messages.json`))])));
 const manifest = JSON.parse(await read('manifest.json'));
-const scripts = (await fs.readdir(source)).filter((name) => name.endsWith('.js'));
+const scripts = (await fs.readdir(source)).filter((name) => name.endsWith('.js') && !name.endsWith('.generated.js'));
+
+test('the desktop bundle includes the generated fallback module', async () => {
+  const bundle = await fs.readFile('apps/desktop/src-tauri/src/chrome_plugin/extension.rs', 'utf8');
+  assert.ok(bundle.includes('"messages.generated.js"'));
+});
 
 function useLocale(locale) {
   globalThis.chrome = { i18n: { getMessage: (name) => messages[locale]?.[name]?.message ?? '' } };
@@ -55,11 +61,12 @@ test('every locale defines the same valid messages without untranslated text', (
   }
 });
 
-test('script fallbacks match the Chinese messages and no Chinese text bypasses chrome.i18n', async () => {
+test('generated fallbacks match the catalog and scripts contain only message keys', async () => {
+  assert.deepEqual(defaults, Object.fromEntries(Object.entries(messages.zh_CN).map(([key, value]) => [key, value.message])));
   for (const name of scripts) {
     const code = await read(name);
-    for (const [, key, fallback] of code.matchAll(CALL)) {
-      assert.equal(messages.zh_CN[key]?.message, fallback, `${name}: ${key}`);
+    for (const [, key] of code.matchAll(CALL)) {
+      assert.ok(messages.zh_CN[key]?.message, `${name}: ${key}`);
     }
     const rest = code.replace(CALL, '').replace(/\/\/.*$/gm, '');
     assert.ok(!HAN.test(rest), `${name} has Chinese text outside t()`);
@@ -118,6 +125,7 @@ test('without chrome.i18n or a matching message the Chinese source is kept', asy
   assert.equal(document.documentElement.lang, 'zh-CN');
   assert.equal(document.querySelector('h1').textContent, '允许访问这个网站？');
   globalThis.chrome = { i18n: { getMessage: () => '' } };
+  assert.equal(t('browserActionCancelled'), messages.zh_CN.browserActionCancelled.message);
   assert.equal(t('missing', '浏览器操作已取消。'), '浏览器操作已取消。');
 });
 

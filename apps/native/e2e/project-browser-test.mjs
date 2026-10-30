@@ -53,12 +53,39 @@ async function openCode() {
   await find('文件内容', 'EditText');
 }
 
+async function checkFullscreen(scale) {
+  await adb('shell', 'settings', 'put', 'system', 'font_scale', String(scale));
+  await adb('shell', 'am', 'force-stop', applicationId);
+  await adb('shell', 'am', 'start', '-W', '-n', `${applicationId}/com.codexswitch.mobile.MainActivity`);
+  await openCode();
+  const before = bounds(await find('文件内容', 'EditText'));
+  await screenshot(`fullscreen-${scale}-before`);
+  await tap('全屏浏览', 'Button');
+  await find('退出全屏', 'Button');
+  assert.ok(!(await nodes()).some(node => node['content-desc'] === '关闭文件浏览器'), 'Header is hidden');
+  const expanded = bounds(await find('文件内容', 'EditText'));
+  assert.ok(expanded[1] < before[1], 'Fullscreen gives the editor more vertical room');
+  await screenshot(`fullscreen-${scale}`);
+  await adb('shell', 'input', 'keyevent', 'KEYCODE_BACK');
+  await find('全屏浏览', 'Button');
+  await find('关闭文件浏览器');
+  await find('文件内容', 'EditText');
+  await tap('全屏浏览', 'Button');
+  await tap('退出全屏', 'Button');
+  await screenshot(`fullscreen-${scale}-restored`);
+}
+
 await mkdir(output, { recursive: true });
+const originalFontScale = (await adb('shell', 'settings', 'get', 'system', 'font_scale')).trim();
 const focus = (await adb('shell', 'dumpsys', 'window')).match(/mCurrentFocus=.* u0 ([\w.$]+\/[\w.$]+)/)?.[1];
 await adb('install', '-r', path.join(root,
   'apps/native/android/app/build/outputs/apk/release/project-browser-fixture.apk'));
 await adb('shell', 'am', 'start', '-W', '-n', `${applicationId}/com.codexswitch.mobile.MainActivity`);
 try {
+  for (const scale of [1, 1.3]) await checkFullscreen(scale);
+  await adb('shell', 'settings', 'put', 'system', 'font_scale', originalFontScale);
+  await adb('shell', 'am', 'force-stop', applicationId);
+  await adb('shell', 'am', 'start', '-W', '-n', `${applicationId}/com.codexswitch.mobile.MainActivity`);
   await find('src');
   await screenshot('tree');
   await openCode();
@@ -69,12 +96,17 @@ try {
   await adb('shell', 'input', 'text', 'message');
   await screenshot('search-keyboard');
   await adb('shell', 'input', 'keyevent', 'KEYCODE_BACK');
-  await tap('关闭', 'Button');
+  await tap('查找', 'Button');
   await tap('文件内容', 'EditText');
   await adb('shell', 'input', 'keyevent', 'KEYCODE_MOVE_END');
   await adb('shell', 'input', 'text', 'native_edit');
   await screenshot('editing-keyboard');
   await adb('shell', 'input', 'keyevent', 'KEYCODE_BACK');
+  await adb('shell', 'input', 'keyevent', 'KEYCODE_HOME');
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  await adb('shell', 'am', 'start', '-W', '-n', `${applicationId}/com.codexswitch.mobile.MainActivity`);
+  assert.ok((await find('文件内容', 'EditText')).text.includes('native_edit'), 'Draft survives background/resume');
+  await screenshot('resumed-editor');
   await tap('关闭文件浏览器');
   await find('打开文件浏览');
   await tap('打开文件浏览');
@@ -109,6 +141,7 @@ try {
   await screenshot('failed');
   throw error;
 } finally {
+  await adb('shell', 'settings', 'put', 'system', 'font_scale', originalFontScale);
   await adb('shell', 'am', 'force-stop', applicationId);
   await adb('uninstall', applicationId);
   if (focus && !focus.startsWith(applicationId)) await adb('shell', 'am', 'start', '-W', '-n', focus);

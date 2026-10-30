@@ -1,6 +1,7 @@
+import { displayError } from '../../i18n/uiText';
 import { useEffect, useState } from "react";
 import { guiApi } from "./api";
-import { guiText } from "../../i18n/guiText";
+
 
 export interface CozeReference { id: string; name: string; kind: string; description: string }
 
@@ -18,5 +19,5 @@ export function useComposerCoze(active: boolean) {
     });
     return () => { current = false; };
   }, [active]);
-  return { ...result, error: result.error ? guiText(result.error) : "" };
+  return { ...result, error: result.error ? displayError(result.error) : "" };
 }

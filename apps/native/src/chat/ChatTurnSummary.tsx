@@ -14,22 +14,24 @@ import { palette, useStyles } from './styles';
 import { useTaskReviewAvailable } from '../../../../shared/remote-chat/TaskReviewContext';
 import { ReviewButton } from './review/ReviewButton';
 import { ChatRetryButton } from './ChatRetryButton';
+import { ChatCapacityErrorNotice } from './ChatCapacityErrorNotice';
+import { isModelCapacityError } from '../../../desktop/src/pages/codexGui/requestError';
 
 export type TurnPanel = 'plan' | 'changes' | 'error' | 'result';
 interface Props { turn: Turn; onOpen: (turnId: string, panel: TurnPanel) => void }
 const PREVIEW_FILES = 3;
 
 export function turnErrorNotice(turn: Turn) {
-  if (turn.status === 'failed' || turn.error) return t("本次回复遇到问题，已中断。");
-  if (turn.status === 'completed') return t("本次回复曾出现连接中断，现已恢复。");
-  if (turn.status === 'interrupted') return t("本次回复曾出现连接中断。");
-  return t("连接暂时中断，Codex 正在重试…");
+  if (turn.status === 'failed' || turn.error) return t("client.chat.thisReplyStoppedBecauseOfAProblem");
+  if (turn.status === 'completed') return t("client.chat.theConnectionWasInterruptedAndHasRecovered");
+  if (turn.status === 'interrupted') return t("client.chat.theConnectionWasInterruptedDuringThisReply");
+  return t("client.chat.connectionInterruptedCodexIsRetrying");
 }
 
 function FileCounts({ added, removed }: { added: number; removed: number }) {
   const summaryStyles = useSummaryStyles();
   useLanguage();
-  return <View style={summaryStyles.counts} accessibilityLabel={t("新增 {value1} 行，删除 {value2} 行", { value1: added, value2: removed })}>
+  return <View style={summaryStyles.counts} accessibilityLabel={t("client.mobile.linesAddedLinesRemoved", { value1: added, value2: removed })}>
     <Text style={summaryStyles.added}>+{added}</Text><Text style={summaryStyles.removed}>−{removed}</Text>
   </View>;
 }
@@ -42,16 +44,16 @@ function FileHeader({ count, added, removed, onOpen, onResult }: {
   const styles = useStyles();
   useLanguage();
   return <View style={summaryStyles.fileHeader}>
-    <Pressable accessibilityRole="button" accessibilityLabel={t("查看本轮修改：{value1} 个文件", { value1: count })}
+    <Pressable accessibilityRole="button" accessibilityLabel={t("client.chat.viewChangesFiles", { value1: count })}
       style={summaryStyles.fileOverview} onPress={onOpen}>
       <Ionicons name="document-text-outline" size={21} color={color(palette.muted, 'muted')} />
-      <View style={styles.fill}><Text style={styles.title}>{t("已编辑")}{' '}{count}{' '}{t("个文件")}</Text>
+      <View style={styles.fill}><Text style={styles.title}>{t("client.chat.edited")}{' '}{count}{' '}{t("client.chat.files.2d4a2a")}</Text>
         <FileCounts added={added} removed={removed} /></View>
     </Pressable>
     <View style={summaryStyles.fileActions}>
-      {onResult && <ReviewButton label={t('验收结果')} onPress={onResult} />}
-      <Pressable accessibilityRole="button" accessibilityLabel={t('审核')}
-        style={summaryStyles.review} onPress={onOpen}><Text style={styles.messageText}>{t('审核')}</Text></Pressable>
+      {onResult && <ReviewButton label={t("client.taskReview.reviewResult")} onPress={onResult} />}
+      <Pressable accessibilityRole="button" accessibilityLabel={t("client.chat.review")}
+        style={summaryStyles.review} onPress={onOpen}><Text style={styles.messageText}>{t("client.chat.review")}</Text></Pressable>
     </View>
   </View>;
 }
@@ -73,9 +75,9 @@ function FileSummary({ files, onOpen, onResult, running }: {
   const added = paths.reduce((total, file) => total + file.added, 0);
   const removed = paths.reduce((total, file) => total + file.removed, 0);
   if (running) return <Pressable accessibilityRole="button"
-    accessibilityLabel={t("查看本轮修改：{value1} 个文件", { value1: paths.length })} style={summaryStyles.pill} onPress={onOpen}>
+    accessibilityLabel={t("client.chat.viewChangesFiles", { value1: paths.length })} style={summaryStyles.pill} onPress={onOpen}>
     <Ionicons name="document-text-outline" size={15} color={color(palette.muted, 'muted')} />
-    <Text style={summaryStyles.pillLabel}>{t("已编辑")}{' '}{paths.length}{' '}{t("个文件")}</Text>
+    <Text style={summaryStyles.pillLabel}>{t("client.chat.edited")}{' '}{paths.length}{' '}{t("client.chat.files.2d4a2a")}</Text>
     <FileCounts added={added} removed={removed} />
     <Ionicons name="chevron-forward" size={14} color={color(palette.muted, 'muted')} />
   </Pressable>;
@@ -87,7 +89,7 @@ function FileSummary({ files, onOpen, onResult, running }: {
       <FileCounts added={file.added} removed={file.removed} />
     </Pressable>)}</View>
     {paths.length > PREVIEW_FILES && <Pressable accessibilityRole="button" style={summaryStyles.fileRow}
-      onPress={onOpen}><Text style={styles.subtitle}>{t("再显示")}{' '}{paths.length - PREVIEW_FILES}{' '}{t("个文件")}</Text>
+      onPress={onOpen}><Text style={styles.subtitle}>{t("client.chat.showMore.50d607")}{' '}{paths.length - PREVIEW_FILES}{' '}{t("client.chat.files.2d4a2a")}</Text>
       <Ionicons name="chevron-forward" size={15} color={color(palette.muted, 'muted')} /></Pressable>}
   </View>;
 }
@@ -96,7 +98,7 @@ export function ChatTurnDuration({ turn }: { turn: Turn }) {
   const summaryStyles = useSummaryStyles();
   useLanguage();
   const elapsed = turnElapsedMs(turn, 0);
-  return elapsed == null ? null : <Text style={summaryStyles.duration}>{t("用时")}{' '}{formatTurnDuration(elapsed)}</Text>;
+  return elapsed == null ? null : <Text style={summaryStyles.duration}>{t("client.chat.duration.8d6d31")}{' '}{formatTurnDuration(elapsed)}</Text>;
 }
 
 export function ChatTurnSummary({ turn, onOpen }: Props) {
@@ -107,26 +109,28 @@ export function ChatTurnSummary({ turn, onOpen }: Props) {
   const reviewAvailable = useTaskReviewAvailable(turn.status);
   const files = useMemo(() => completedTurnFiles(turn), [turn.diff, turn.items]);
   const completed = turn.plan?.filter((step) => step.status === 'completed').length ?? 0;
+  const capacityError = isModelCapacityError(turn.error ?? turn.retryError);
   const generated = [...new Set(turn.items.filter((item) => item.type === 'imageGeneration'
     && item.status === 'completed' && !item.failure).map(generatedImageSource).filter((src) => !!src))];
   return <View style={summaryStyles.summary}>
-    {generated.map((source) => <ChatImage key={source} source={source} description={t("生成的图片")} />)}
-    {!!turn.plan?.length && <Pressable accessibilityRole="button" accessibilityLabel={t("查看任务计划")}
+    {generated.map((source) => <ChatImage key={source} source={source} description={t("client.chat.generatedImage")} />)}
+    {!!turn.plan?.length && <Pressable accessibilityRole="button" accessibilityLabel={t("client.chat.viewTaskPlan")}
       style={summaryStyles.plan} onPress={() => onOpen(turn.id, 'plan')}>
-      <Text style={[styles.messageText, styles.fill]}>{t("任务计划")}</Text>
+      <Text style={[styles.messageText, styles.fill]}>{t("client.chat.taskPlan")}</Text>
       <Text style={styles.subtitle}>{completed}/{turn.plan.length}</Text>
       <Ionicons name="chevron-forward" size={15} color={color(palette.muted, 'muted')} />
     </Pressable>}
     {!!files.length && <FileSummary files={files} running={turn.status === 'inProgress'}
       onOpen={() => onOpen(turn.id, 'changes')}
       onResult={reviewAvailable ? () => onOpen(turn.id, 'result') : undefined} />}
-    {turn.status === 'interrupted' && <Text style={styles.subtitle}>{t("已停止生成")}</Text>}
-    {(turn.error || turn.retryError || turn.status === 'failed') && <View style={summaryStyles.error}>
+    {turn.status === 'interrupted' && <Text style={styles.subtitle}>{t("client.chat.generationStopped")}</Text>}
+    {capacityError && <ChatCapacityErrorNotice turnId={turn.id} />}
+    {!capacityError && (turn.error || turn.retryError || turn.status === 'failed') && <View style={summaryStyles.error}>
       <Text style={summaryStyles.notice}>{turnErrorNotice(turn)}{' '}</Text>
       <View style={summaryStyles.errorActions}>
-        <Pressable accessibilityRole="button" accessibilityLabel={t("查看报错详情")}
+        <Pressable accessibilityRole="button" accessibilityLabel={t("client.chat.viewErrorDetails")}
           onPress={() => onOpen(turn.id, 'error')}>
-          <Text style={[summaryStyles.notice, summaryStyles.noticeLink]}>{t("查看报错详情")}</Text>
+          <Text style={[summaryStyles.notice, summaryStyles.noticeLink]}>{t("client.chat.viewErrorDetails")}</Text>
         </Pressable><ChatRetryButton turnId={turn.id} />
       </View>
     </View>}

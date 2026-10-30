@@ -1,9 +1,12 @@
+import { testBrowserLaunchOptions } from '../../scripts/test-browser.mjs';
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e', testMatch: '**/desktop-update.pw.ts', workers: 1,
   outputDir: '../../.codex-tmp/desktop-update-results', reporter: 'list',
-  use: { baseURL: 'http://127.0.0.1:1427/web/', channel: 'chrome', locale: 'zh-CN', headless: true,
+  use: {
+    launchOptions: testBrowserLaunchOptions(),
+    baseURL: 'http://127.0.0.1:1427/web/', locale: 'zh-CN', headless: true,
     screenshot: 'only-on-failure', trace: 'retain-on-failure' },
   projects: [
     { name: 'mobile', use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },

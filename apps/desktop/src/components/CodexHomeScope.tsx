@@ -1,10 +1,11 @@
+import { displayError } from '../i18n/uiText';
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { Alert, Button, Empty, Select, Spin } from "antd";
 import { loadAppSettings } from "../api/backend";
 import { DEFAULT_CODEX_HOME_ID, GUI_CODEX_HOME_ID, type CodexHomeEntry } from "../types";
-import { guiText } from "../i18n/guiText";
+import { uiText } from "../i18n/uiText";
 import { useGuiLanguage } from "../i18n/useGuiLanguage";
-import type { Language } from "../../../../shared/i18n/language";
+import type { Language } from "../../../../shared/localization/language";
 import styles from "./CodexHomeScope.module.less";
 
 interface HomeScope {
@@ -58,10 +59,10 @@ export function CodexHomeScope({ active = true, excludedHomeIds = [], children }
   const selectableHomes = homes.filter((entry) => !excludedHomeIds.includes(entry.id));
   const home = selectableHomes.find((entry) => entry.id === selected)
     ?? selectableHomes.find((entry) => entry.enabled) ?? selectableHomes[0];
-  if (error) return <Alert className={styles.notice} type="error" message={guiText(error, {}, language)}
-    action={<Button size="small" onClick={() => retry((value) => value + 1)}>{guiText("重试", {}, language)}</Button>} />;
+  if (error) return <Alert className={styles.notice} type="error" message={displayError(error, language)}
+    action={<Button size="small" onClick={() => retry((value) => value + 1)}>{uiText("client.terminal.retry", {}, language)}</Button>} />;
   if (!loaded) return <Spin className={styles.loading} />;
-  if (!home) return <Empty description={guiText("请先在设置中添加 Codex Home。", {}, language)} />;
+  if (!home) return <Empty description={uiText("client.desktopMisc.addACodexHomeInSettingsFirst", {}, language)} />;
   return <HomeContext.Provider key={`${home.id}:${home.path}`}
     value={{ homeId: home.id, homes, selectableHomes, select }}>
     {children}
@@ -76,7 +77,7 @@ export function CodexHomeSelect({ disabled = false, showLabel = true }: {
   const language = useGuiLanguage();
   return <label className={styles.selector}>
     {showLabel && <span>Codex Home</span>}
-    <Select aria-label={guiText("选择管理的 Codex Home", {}, language)} value={homeId} onChange={select}
+    <Select aria-label={uiText("client.desktopMisc.chooseTheCodexHomeToManage", {}, language)} value={homeId} onChange={select}
       disabled={disabled} popupClassName={styles.popup} popupMatchSelectWidth={false}
       options={selectableHomes.map((home) => ({ value: home.id, label: homeLabel(home, language) }))} />
   </label>;
@@ -84,7 +85,7 @@ export function CodexHomeSelect({ disabled = false, showLabel = true }: {
 
 /** Display name only; the path stays verbatim because it is user data. */
 export function homeLabel(home: CodexHomeEntry, language?: Language) {
-  if (home.id === GUI_CODEX_HOME_ID) return guiText("内置 Codex GUI", {}, language);
-  if (home.id === DEFAULT_CODEX_HOME_ID) return guiText("默认目录 · {value1}", { value1: home.path }, language);
+  if (home.id === GUI_CODEX_HOME_ID) return uiText("client.desktopMisc.builtInCodexGui", {}, language);
+  if (home.id === DEFAULT_CODEX_HOME_ID) return uiText("client.desktopMisc.defaultFolder", { value1: home.path }, language);
   return home.path;
 }

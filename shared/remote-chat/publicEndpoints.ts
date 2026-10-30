@@ -57,7 +57,7 @@ export function formatPublicEndpoint(value: PublicEndpoint): string {
 
 export function publicEndpointRows(value?: ConnectionPublicEndpoints) {
   return [
-    { id: 'local', label: '本机公网 IP 和端口', addresses: value?.local.map(formatPublicEndpoint) ?? [] },
-    { id: 'remote', label: '电脑公网 IP 和端口', addresses: value?.remote.map(formatPublicEndpoint) ?? [] },
+    { id: 'local', label: "client.chatReliability.thisDeviceSPublicIpAndPort", addresses: value?.local.map(formatPublicEndpoint) ?? [] },
+    { id: 'remote', label: "client.chatReliability.computerSPublicIpAndPort", addresses: value?.remote.map(formatPublicEndpoint) ?? [] },
   ];
 }

@@ -77,9 +77,23 @@ async function chooseNewProjectFolder(page: Page) {
   await picker.getByRole('button', { name: 'F:', exact: true }).click();
   await picker.getByRole('button', { name: 'projects', exact: true }).click();
   await picker.getByRole('button', { name: LONG_PROJECT_NAME, exact: true }).click();
+  if ((page.viewportSize()?.width ?? 0) <= 860) await preservePickerInBackground(page);
   await picker.getByRole('button', { name: '返回上一级' }).click();
   await picker.getByRole('button', { name: LONG_PROJECT_NAME, exact: true }).click();
   await picker.getByRole('button', { name: '选择此文件夹' }).click();
+}
+
+async function preservePickerInBackground(page: Page) {
+  const picker = page.locator('.chat-project-picker');
+  for (const visibility of ['hidden', 'visible']) {
+    await page.evaluate(value => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, visibility);
+    await expect(picker).toBeVisible();
+    await expect(picker).toContainText(LONG_PROJECT_NAME);
+    await expect(picker.getByRole('button', { name: '选择此文件夹' })).toBeEnabled();
+  }
 }
 
 async function switchExistingConversation(page: Page, request: APIRequestContext) {

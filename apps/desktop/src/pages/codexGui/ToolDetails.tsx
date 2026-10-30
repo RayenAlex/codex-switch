@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import type { Item } from "./types";
 import { RichText } from "./RichText";
 import { MessageImage } from "./MessageImage";
@@ -22,14 +22,14 @@ function OutputPart({ value }: { value: unknown }) {
   const part = record(value);
   if (typeof part?.text === "string") return <ToolText text={part.text} markdown />;
   if (part?.type === "image" && typeof part.data === "string" && typeof part.mimeType === "string") {
-    return <MessageImage src={`data:${part.mimeType};base64,${part.data}`} alt={guiText("工具返回的图片")} />;
+    return <MessageImage src={`data:${part.mimeType};base64,${part.data}`} alt={uiText("client.chat.imageReturnedByTool")} />;
   }
   if (part?.type === "inputImage" && typeof part.imageUrl === "string") {
-    return <MessageImage src={part.imageUrl} alt={guiText("工具返回的图片")} />;
+    return <MessageImage src={part.imageUrl} alt={uiText("client.chat.imageReturnedByTool")} />;
   }
   if (part?.type === "inputAudio" && typeof part.audioUrl === "string"
     && /^(https?:\/\/|data:audio\/(?:mp3|mpeg|wav|ogg);base64,)/i.test(part.audioUrl)) {
-    return <audio controls preload="none" src={part.audioUrl} aria-label={guiText("工具返回的音频")} />;
+    return <audio controls preload="none" src={part.audioUrl} aria-label={uiText("client.chat.audioReturnedByTool")} />;
   }
   if ((part?.type === "resource_link" || part?.type === "resource") && typeof part.uri === "string") {
     return <MessageLink href={part.uri}>{typeof part.name === "string" ? part.name : part.uri}</MessageLink>;
@@ -42,21 +42,21 @@ function ToolResult({ item }: { item: Item }) {
   const content = item.contentItems ?? (Array.isArray(result?.content) ? result.content : undefined);
   const structured = result?.structuredContent;
   return <>
-    {item.arguments != null && <DeferredDetails className={styles.payload} summary={<summary>{guiText("输入")}</summary>}>
+    {item.arguments != null && <DeferredDetails className={styles.payload} summary={<summary>{uiText("client.chat.input")}</summary>}>
       {() => <><ToolText text={serialized(item.arguments) ?? ""} />
-        <CopyButton text={serialized(item.arguments) ?? ""} label={guiText("复制工具输入")} /></>}
+        <CopyButton text={serialized(item.arguments) ?? ""} label={uiText("client.workspaceActions.copyToolInput")} /></>}
     </DeferredDetails>}
     {item.progress?.map((text, index) => <p key={index}>{text}</p>)}
     {content?.map((part, index) => <OutputPart key={index} value={part} />)}
-    {structured != null && <DeferredDetails className={styles.payload} summary={<summary>{guiText("结构化结果")}</summary>}>
+    {structured != null && <DeferredDetails className={styles.payload} summary={<summary>{uiText("client.mobile.structuredResult")}</summary>}>
       {() => <ToolText text={serialized(structured) ?? ""} />}</DeferredDetails>}
     {!content && item.result != null && <OutputPart value={item.result} />}
     {item.output != null && <OutputPart value={item.output} />}
     {item.error != null && <div className={styles.failure} role="status">
-      {typeof record(item.error)?.message === "string" ? String(record(item.error)?.message) : guiText("工具执行失败，请重试。")}
+      {typeof record(item.error)?.message === "string" ? String(record(item.error)?.message) : uiText("client.chat.theToolFailedPleaseTryAgain")}
     </div>}
     {item.result == null && item.output == null && !content && !item.error && <p className={styles.emptyBody}>
-      {item.status === "inProgress" ? guiText("正在等待工具返回…") : guiText("工具没有返回文本内容。")}</p>}
+      {item.status === "inProgress" ? uiText("client.chat.waitingForToolOutput") : uiText("client.chat.theToolReturnedNoText")}</p>}
   </>;
 }
 
@@ -64,29 +64,29 @@ export function ToolDetails({ item, text }: { item: Item; text: string }) {
   if (["reasoning", "plan", "enteredReviewMode", "exitedReviewMode"].includes(item.type)) {
     return <ToolText text={text} markdown />;
   }
-  if (item.type === "sleep") return <p>{guiText("等待时长：")}{formatTurnDuration(item.durationMs ?? 0)}</p>;
-  if (item.type === "contextCompaction") return <p>{guiText("较早的对话已整理为摘要，可以继续处理当前任务。")}</p>;
+  if (item.type === "sleep") return <p>{uiText("client.chat.waitDuration")}{formatTurnDuration(item.durationMs ?? 0)}</p>;
+  if (item.type === "contextCompaction") return <p>{uiText("client.chat.earlierMessagesHaveBeenSummarizedYouCanContinueYourCurrent")}</p>;
   if (item.type === "commandExecution") return <>
     <div className={styles.commandToolbar}><span>{item.cwd}</span>
       {item.durationMs != null && <span>{formatTurnDuration(item.durationMs)}</span>}</div>
-    <CommandOutput command={item.command ?? ""} label={guiText("工具内容")}
-      output={item.aggregatedOutput || (item.status === "inProgress" ? guiText("等待输出…") : guiText("没有文本输出"))}
-      copyCommand={<CopyButton text={item.command ?? ""} label={guiText("复制命令")} />}
-      copyOutput={<CopyButton text={item.aggregatedOutput ?? ""} label={guiText("复制输出")} />} />
-    {item.exitCode != null && <div className={styles.commandToolbar}>{guiText("退出码：")}{item.exitCode}</div>}
+    <CommandOutput command={item.command ?? ""} label={uiText("client.workspaceActions.toolContent")}
+      output={item.aggregatedOutput || (item.status === "inProgress" ? uiText("client.chat.waitingForOutput") : uiText("client.chat.noTextOutput"))}
+      copyCommand={<CopyButton text={item.command ?? ""} label={uiText("client.chat.copyCommand")} />}
+      copyOutput={<CopyButton text={item.aggregatedOutput ?? ""} label={uiText("client.chat.copyOutput")} />} />
+    {item.exitCode != null && <div className={styles.commandToolbar}>{uiText("client.chat.exitCode")}{item.exitCode}</div>}
   </>;
   if (["mcpToolCall", "dynamicToolCall", "functionCallOutput"].includes(item.type)) return <ToolResult item={item} />;
   if (item.type === "webSearch") return <>
     {(item.action?.queries ?? [item.action?.query || item.query]).filter(Boolean).map((query, index) =>
       <p key={index}>{query}</p>)}
     {item.action?.url && <MessageLink href={item.action.url}>{item.action.url}</MessageLink>}
-    {item.action?.pattern && <p>{guiText("查找：")}{item.action.pattern}</p>}
+    {item.action?.pattern && <p>{uiText("client.chat.find")}{item.action.pattern}</p>}
     {item.results?.map((result, index) => <div key={index} className={styles.searchResult}>
       <MessageLink href={result.url}>{result.title || result.url}</MessageLink>
       {result.snippet && <p>{result.snippet}</p>}</div>)}
   </>;
   if (item.type === "imageView" || item.type === "imageGeneration") return <>
-    {item.type === "imageView" && <MessageImage src={generatedImageSource(item)} alt={guiText("查看的图片")} compact />}
+    {item.type === "imageView" && <MessageImage src={generatedImageSource(item)} alt={uiText("client.chat.viewedImage")} compact />}
     {(item.path || item.savedPath) && <MessageLink href={item.path || item.savedPath}>
       {item.path || item.savedPath}</MessageLink>}
     {item.failure?.message && <p className={styles.failure}>{item.failure.message}</p>}

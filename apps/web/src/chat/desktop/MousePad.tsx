@@ -39,7 +39,7 @@ export function DesktopMouse({ visible, ...props }: Props & { visible: boolean }
 
 function MouseIcon({ pointer, viewport, panel }: Props) {
   const drag = useTrackpad({ pointer, viewport, panel, id: 'icon', onTap: panel.expand });
-  return <button className="rd-mouse-icon" aria-label={t('展开鼠标面板')} {...drag}
+  return <button className="rd-mouse-icon" aria-label={t("client.remoteDesktop.expandMouseControls")} {...drag}
     onClick={event => { if (event.detail === 0) panel.expand(); }}><Mouse /></button>;
 }
 
@@ -52,13 +52,13 @@ function MousePad({ pointer, viewport, panel, scroll }: MousePadProps) {
     [buttons.dragging, panel.hold]);
   return <div className="rd-mouse" style={MOUSE_SIZE}>
     <div className="rd-mouse-top">{(['left', 'right'] as const).map(button =>
-      <button key={button} aria-label={t(button === 'left' ? '鼠标左键' : '鼠标右键')}
+      <button key={button} aria-label={t(button === 'left' ? "client.remoteDesktop.leftMouseButton" : "client.remoteDesktop.rightMouseButton")}
         aria-pressed={button === 'left' && buttons.dragging}
         {...buttons.handlers(button)}>
-        {t(button === 'left' ? (buttons.dragging ? '拖拽中' : '左键') : '右键')}</button>)}</div>
-    <div className="rd-pad" {...pad}>{t('滑动移动')}</div>
-    <button className="rd-wheel" aria-label={t('按住并拖动以滚动')} {...wheel}>
+        {t(button === 'left' ? (buttons.dragging ? "client.remoteDesktop.dragging" : "client.remoteDesktop.left") : "client.remoteDesktop.right")}</button>)}</div>
+    <div className="rd-pad" {...pad}>{t("client.remoteDesktop.swipeToMove")}</div>
+    <button className="rd-wheel" aria-label={t("client.remoteDesktop.holdAndDragToScroll")} {...wheel}>
       <ChevronUp size={18} /><ChevronDown size={18} /></button>
-    <button className="rd-grip" aria-label={t('拖动鼠标面板')} {...grip}><GripHorizontal size={22} /></button>
+    <button className="rd-grip" aria-label={t("client.remoteDesktop.moveMousePanel")} {...grip}><GripHorizontal size={22} /></button>
   </div>;
 }

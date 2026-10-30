@@ -1,10 +1,15 @@
+import { ProviderActions } from './ProviderActions';
 import { useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { Button, Checkbox, Dropdown, Popconfirm, Space, Table, Tag, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { Activity, CircleOff, Columns3, ExternalLink, Pencil, RotateCcw, Server, Shuffle, Trash2 } from "lucide-react";
+import { Activity, CircleOff, Columns3, ExternalLink, Pencil, Shuffle, Trash2 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { backendText } from "../../../../../../shared/i18n/backend/translateBackendMessage";
+import { hasMarketPage } from '../../../../../../shared/provider-market/pageLink';
+import { marketText } from '../../../../../../shared/provider-market/i18n';
+import { ProviderWebsiteIcon } from '../../../../../../shared/provider-market/ProviderWebsiteIcon';
+import { providerWebsiteOrigin } from '../../../../../../shared/provider-market/providerWebsite';
+import { remoteErrorText } from "../../../../../../shared/localization/errors";
 import { ImageModelRouteSelect } from "../../../components/ImageModelRouteSelect";
 import { TokenCostColumnTitle, useTokenCostDisplaySettings } from "../../../components/TokenCostUnitSettings";
 import type { Language, Translate } from "../../../i18n";
@@ -58,6 +63,7 @@ interface ProviderViewProps {
   onAutoSwitchChange: (id: string, enabled: boolean) => void;
   onDelete: (id: string) => void;
   onEdit: (provider: Provider) => void;
+  onOpenPage?: (provider: Provider) => void;
   imageInputTarget: ImageModelTarget | null;
   imageOutputTarget: ImageModelTarget | null;
   imageModelBusy: boolean;
@@ -139,81 +145,23 @@ function ProviderImageModelControls(options: ProviderViewProps) {
   </div>;
 }
 
-function ProviderActions({ provider, options }: {
-  provider: Provider;
-  options: Pick<ProviderViewProps,
-    "busyProviderId" | "proxyRunning" | "onAutoSwitchChange" | "onSwitch" | "onDeactivate"
-    | "onEdit" | "onDelete" | "t">;
-}) {
-  const {
-    busyProviderId,
-    proxyRunning,
-    onAutoSwitchChange,
-    onSwitch,
-    onDeactivate,
-    onEdit,
-    onDelete,
-    t,
-  } = options;
-  const waiting = busyProviderId === provider.id;
-  return (
-    <Space size={4} className="table-actions">
-      <Tooltip title={provider.active
-        ? t("providers.action.cancelUse")
-        : provider.supportsDirectSwitch
-          ? t("providers.tooltip.switch")
-          : t("providers.tooltip.requiresBridge")}>
-        <Button size="small" type={provider.active ? "default" : "primary"}
-          disabled={!provider.active && !provider.supportsDirectSwitch}
-          loading={waiting} icon={provider.active ? <CircleOff size={14} /> : <RotateCcw size={14} />}
-          onClick={() => provider.active ? onDeactivate(provider.id) : onSwitch(provider.id)}>
-          {provider.active
-            ? t("providers.action.cancelUse")
-            : t("providers.action.switch")}
-        </Button>
-      </Tooltip>
-      {proxyRunning && provider.kind === "custom" && (
-        <Tooltip title={t(provider.autoSwitchEnabled
-          ? "providers.tooltip.autoSwitchEnabled"
-          : "providers.tooltip.autoSwitch")}>
-          <Button size="small" type={provider.autoSwitchEnabled ? "primary" : "default"}
-            loading={waiting} icon={<Shuffle size={14} />}
-            onClick={() => onAutoSwitchChange(provider.id, !provider.autoSwitchEnabled)}>
-            {t("providers.action.autoSwitch")}
-          </Button>
-        </Tooltip>
-      )}
-      <Tooltip title={t("providers.tooltip.edit")}>
-        <Button size="small" className="table-icon-button" icon={<Pencil size={14} />}
-          onClick={() => onEdit(provider)} />
-      </Tooltip>
-      <Popconfirm title={t("providers.delete.title")} description={t("providers.delete.description")}
-        okText={t("providers.delete.ok")} cancelText={t("providers.delete.cancel")}
-        okButtonProps={{ danger: true }} onConfirm={() => onDelete(provider.id)}>
-        <Tooltip title={t("providers.tooltip.delete")}>
-          <Button danger size="small" className="table-icon-button" loading={waiting}
-            icon={<Trash2 size={14} />} />
-        </Tooltip>
-      </Popconfirm>
-    </Space>
-  );
-}
-
-function ProviderIdentityCell({ provider, error, successLatencyMs, conversationCount, t }: {
+function ProviderIdentityCell({ provider, error, successLatencyMs, conversationCount, onOpenPage, visitLabel, t }: {
   provider: Provider;
   error?: string;
   successLatencyMs?: number;
   conversationCount: number;
+  onOpenPage?: (provider: Provider) => void;
+  visitLabel: string;
   t: Translate;
 }) {
   const providerBaseUrl = providerHomepageUrl(provider.baseUrl);
   return <div className="provider-cell">
-    <ProviderAvatar conversationCount={conversationCount} iconSize={15} t={t} />
-    <button type="button" className="provider-link" title={t("providers.openBaseUrl")}
-      onClick={() => void openUrl(providerBaseUrl)}>
+    <ProviderAvatar provider={provider} conversationCount={conversationCount} iconSize={20} t={t} />
+    <button type="button" className="provider-link" title={hasMarketPage(provider) ? visitLabel : t("providers.openBaseUrl")}
+      onClick={() => hasMarketPage(provider) ? onOpenPage?.(provider) : void openUrl(providerBaseUrl)}>
       <span className="provider-link-name">
         <strong>{provider.name}</strong>
-        {error && <Tooltip title={backendText(error)} styles={{ root: { maxWidth: 400 } }}>
+        {error && <Tooltip title={remoteErrorText(error)} styles={{ root: { maxWidth: 400 } }}>
           <span className="provider-connectivity-error">{t("providers.connectivity.error")}</span>
         </Tooltip>}
         {successLatencyMs !== undefined && (
@@ -236,14 +184,15 @@ function providerHomepageUrl(baseUrl: string) {
   }
 }
 
-function ProviderAvatar({ conversationCount, iconSize, t }: {
+function ProviderAvatar({ provider, conversationCount, iconSize, t }: {
+  provider: Provider;
   conversationCount: number;
   iconSize: number;
   t: Translate;
 }) {
   const countLabel = t("table.conversationCount", { count: conversationCount });
   return <div className="table-avatar-wrap">
-    <div className="provider-avatar"><Server size={iconSize} /></div>
+    <div className="provider-avatar"><ProviderWebsiteIcon url={providerWebsiteOrigin(provider)} size={iconSize} /></div>
     {conversationCount > 0 && <span className="account-conversation-count"
       title={countLabel} aria-label={countLabel}>
       {conversationCount > 99 ? "99+" : conversationCount}
@@ -262,6 +211,8 @@ function buildColumns(
     {
       title: t("providers.table.provider"), key: "provider", dataIndex: "name", width: 240,
       render: (_, provider) => <ProviderIdentityCell provider={provider}
+        onOpenPage={options.onOpenPage}
+        visitLabel={marketText(language)('market.visitPage')}
         error={connectivityErrors[provider.id]}
         successLatencyMs={connectivitySuccesses[provider.id]}
         conversationCount={options.aggregateConversationCounts[provider.id] ?? 0} t={t} />,
@@ -304,7 +255,8 @@ function buildColumns(
         settings={tokenCostDisplay} burning={options.fastModeEnabled} t={t} />,
     },
     {
-      title: t("providers.table.actions"), key: "actions", width: 285, align: "right", fixed: "right",
+      title: t("providers.table.actions"), key: "actions",
+      width: options.providers.some(hasMarketPage) ? 395 : 285, align: "right", fixed: "right",
       render: (_, provider) => <ProviderActions provider={provider} options={options} />,
     },
   ];
@@ -439,14 +391,19 @@ function ProviderCard({ provider, options, tokenCostDisplay }: {
   }}>
     <div className="card-topline" />
     <header className="provider-card-head">
-      <ProviderAvatar conversationCount={aggregateConversationCount} iconSize={18} t={t} />
-      <div><strong>{provider.name}</strong><span title={provider.baseUrl}>{provider.baseUrl}</span></div>
+      <ProviderAvatar provider={provider} conversationCount={aggregateConversationCount} iconSize={22} t={t} />
+      <div>{hasMarketPage(provider) ? <button className="provider-link" type="button"
+        onClick={() => options.onOpenPage?.(provider)}><strong>{provider.name}</strong></button>
+        : <strong>{provider.name}</strong>}<span title={provider.baseUrl}>{provider.baseUrl}</span></div>
       {provider.active
         ? <Tag className="current-tag">{t("providers.status.current")}</Tag>
         : provider.supportsDirectSwitch
           ? <Tag>{t("providers.status.ready")}</Tag>
           : <Tag color="gold">{t("providers.status.bridgeRequired")}</Tag>}
       <div className="provider-card-top-actions">
+        {hasMarketPage(provider) && <Tooltip title={marketText(language)('market.visitPage')}>
+          <Button size="small" aria-label={marketText(language)('market.visitPage')} icon={<ExternalLink size={14} />}
+            onClick={() => options.onOpenPage?.(provider)} /></Tooltip>}
         {provider.active && (
           <Tooltip title={t("providers.action.cancelUse")}>
             <Button size="small" className="table-icon-button" loading={waiting}

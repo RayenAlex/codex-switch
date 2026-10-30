@@ -15,6 +15,7 @@ export interface MarkdownContext {
   muted?: boolean; compact?: boolean; header?: boolean; textAlign?: TextStyle['textAlign'];
   tone?: 'default' | 'process';
   listItemStart?: boolean;
+  flushTop?: boolean; flushBottom?: boolean;
   copy?: CopyAction;
 }
 
@@ -87,20 +88,26 @@ export function MarkdownParagraph({ nodes, heading, context = {} }: {
     const first = part[0];
     const copy = index === parts.length - 1 ? context.copy : undefined;
     if (first.token.type === 'image') return <View key={index}><ChatImage
-      source={String(first.token.attrGet('src') ?? '')} description={first.token.content || t("图片")} />
+      source={String(first.token.attrGet('src') ?? '')} description={first.token.content || t("client.chat.image")} />
       {copy && <SelectableChatText copy={copy} />}</View>;
     if (hasMarkdownImage(first)) return <MarkdownParagraph key={index}
       nodes={first.children} heading={heading} context={{ ...context, copy }} />;
     if (part.some(hasMarkdownMath)) return <ChatMath key={index} markup={renderMathParagraph(part)}
       muted={context.muted || context.tone === 'process'}
       fontSize={heading ? headingStyles[heading]?.fontSize : undefined} copy={copy} compact={context.compact}
-      flushTop={context.listItemStart && index === 0} />;
-    return <SelectableChatText key={index} copy={copy} accessibilityRole={heading ? 'header' : undefined}
+      flushTop={(context.listItemStart || context.flushTop) && index === 0}
+      flushBottom={context.flushBottom && index === parts.length - 1} />;
+    // Parsed nodes stay immutable until the message changes; the Inline element is new on every render.
+    return <SelectableChatText key={index} copy={copy} layoutKey={first}
+      accessibilityRole={heading ? 'header' : undefined}
       style={[styles.messageText, markdownStyles.paragraph, context.compact && markdownStyles.compact,
         context.tone === 'process' && markdownStyles.process,
         context.muted && markdownStyles.muted, (heading || context.header) && markdownStyles.bold,
         heading ? headingStyles[heading] : undefined,
-        context.listItemStart && index === 0 && markdownStyles.listLead, { textAlign: context.textAlign }]}>
+        context.listItemStart && index === 0 && markdownStyles.listLead,
+        context.flushTop && index === 0 && markdownStyles.flushTop,
+        context.flushBottom && index === parts.length - 1 && markdownStyles.flushBottom,
+        { textAlign: context.textAlign }]}>
       <Inline nodes={part} muted={context.muted || context.tone === 'process'} />
     </SelectableChatText>;
   })}</View>;

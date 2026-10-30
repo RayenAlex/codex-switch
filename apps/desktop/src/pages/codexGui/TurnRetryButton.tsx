@@ -1,6 +1,6 @@
 import { RotateCcw } from 'lucide-react';
 import { useTurnRetry } from '../../../../../shared/chat/TurnRetryContext';
-import { guiText } from '../../i18n/guiText';
+import { uiText } from "../../i18n/uiText";
 import styles from './RequestErrorNotice.module.less';
 
 export function TurnRetryButton({ turnId }: { turnId: string }) {
@@ -13,6 +13,6 @@ export function TurnRetryButton({ turnId }: { turnId: string }) {
       event.stopPropagation();
       void action.retry();
     }}>
-    <RotateCcw size={14} aria-hidden="true" />{action.pending ? guiText('正在重试…') : guiText('重试')}
+    <RotateCcw size={14} aria-hidden="true" />{action.pending ? uiText("client.chat.retrying") : uiText("client.terminal.retry")}
   </button>;
 }

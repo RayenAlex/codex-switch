@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 
 const root = new URL("../../apps/desktop/src-tauri/src/dream_skin_native/", import.meta.url);
-const source = (await Promise.all(["context_settings_runtime.js", "context_settings_change.js", "context_settings_adapter.js"]
+const source = (await Promise.all(["native_registry_reader.js", "context_settings_runtime.js", "context_settings_change.js", "context_settings_adapter.js"]
   .map(file => readFile(new URL(file, root), "utf8")))).join("\n");
 const settings = (await readFile(new URL("../../shared/context-usage/settings.js", import.meta.url), "utf8"))
   .replaceAll("export ", "");

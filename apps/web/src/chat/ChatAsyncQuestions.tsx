@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import { t, useLanguage } from '../i18n';
 import { useRef, useState } from 'react';
 import { MessageCircle, Trash2 } from 'lucide-react';
@@ -26,8 +27,8 @@ function QuestionCard({ item, disabled, error, answer, onDelete }: Omit<Props, '
     submitting.current = true; setBusy(true); setFailure('');
     try {
       if (await answer(item, answers)) setOpen(false);
-      else setFailure(t("回答尚未确认，请查看发送进度或稍后重试。"));
-    } catch { setFailure(t("回答发送失败，请重试。")); }
+      else setFailure(t("client.chat.yourAnswerHasNotBeenConfirmedCheckItsProgressOr"));
+    } catch { setFailure(t("client.chat.couldNotSendYourAnswerPleaseTryAgain")); }
     finally { submitting.current = false; setBusy(false); }
   };
   const update = (index: number, value: string) => setAnswers(previous =>
@@ -35,28 +36,28 @@ function QuestionCard({ item, disabled, error, answer, onDelete }: Omit<Props, '
   return <>
     <div className="chat-question-entry">
       <button type="button" className="chat-question-open" onClick={() => setOpen(true)}
-        aria-label={t("回答补充问题：{value1}", { value1: questions[0]?.title ?? '' })}><MessageCircle size={19} />
-        <span className="chat-grow"><strong>{t("需要你的补充")}</strong><small className="chat-ellipsis">
-          {questions[0]?.title}</small></span><span>{t("回答 ›")}</span></button>
-      <button type="button" className="chat-question-delete" aria-label={t("删除补充问题：{value1}", { value1: questions[0]?.title ?? '' })}
+        aria-label={t("client.chat.answerFollowUpQuestion", { value1: questions[0]?.title ?? '' })}><MessageCircle size={19} />
+        <span className="chat-grow"><strong>{t("client.chat.moreInformationNeeded")}</strong><small className="chat-ellipsis">
+          {questions[0]?.title}</small></span><span>{t("client.chat.answer")}</span></button>
+      <button type="button" className="chat-question-delete" aria-label={t("client.chat.dismissFollowUpQuestion", { value1: questions[0]?.title ?? '' })}
         disabled={busy} onClick={onDelete}><Trash2 size={16} /></button>
     </div>
-    {open && <AdaptiveSheet open title={t("需要你的补充")} width={520} onClose={() => { if (!busy) setOpen(false); }}>
+    {open && <AdaptiveSheet open title={t("client.chat.moreInformationNeeded")} width={520} onClose={() => { if (!busy) setOpen(false); }}>
       <form className="chat-detail-stack" onSubmit={event => { event.preventDefault(); void submit(); }}>
         {questions.map((question, index) => <fieldset key={index} className="chat-question" disabled={disabled || busy}>
           <legend>{question.title}</legend>{question.options?.map((option, position) =>
             <label className="chat-choice" key={position}><input type="radio" name={`${item.id}:${index}`}
               checked={answers[index] === option} onChange={() => update(index, option)} /><span>{option}</span></label>)}
-          <textarea className="chat-answer" aria-label={question.title} placeholder={t("输入你的回答")} rows={2}
+          <textarea className="chat-answer" aria-label={question.title} placeholder={t("client.chat.enterYourAnswer")} rows={2}
             value={answers[index] ?? ''} onChange={event => update(index, event.target.value)} />
         </fieldset>)}
         {(error || failure) && <p role="alert" className="chat-error">{error || failure}</p>}
         <div className="chat-question-actions">
           <button type="button" className="chat-button" disabled={busy}
-            onClick={() => { if (!submitting.current) { setOpen(false); onDelete(); } }}>{t('取消回答')}</button>
+            onClick={() => { if (!submitting.current) { setOpen(false); onDelete(); } }}>{t("client.downloads.cancelAnswer")}</button>
           <button type="submit" className="chat-button chat-primary"
             disabled={busy || disabled || answers.some(value => !value.trim())}>
-            {busy ? t("正在提交…") : t("提交回答")}</button>
+            {busy ? t("client.imageAi.submitting") : t("client.chat.submitAnswer")}</button>
         </div>
       </form>
     </AdaptiveSheet>}
@@ -71,6 +72,6 @@ export function ChatAsyncQuestions({ thread, scope, ...props }: Props) {
   return <div className="chat-async-questions chat-scroll">
     {questions.map(item => <QuestionCard key={questionKey(item)} item={item} {...props}
       onDelete={() => dismiss(questionKey(item))} />)}
-    {error && <p role="alert" className="chat-error">{t(error)}</p>}
+    {error && <p role="alert" className="chat-error">{displayError(error)}</p>}
   </div>;
 }

@@ -6,7 +6,7 @@ import './scrollPad.css';
 
 export function DesktopScrollPad({ layout, position, horizontal, cancel }: ScrollPadProps) {
   return <div className="rd-scroll-layer" onPointerDown={event => { event.preventDefault(); cancel(); }}>
-    <div className="rd-scroll-pad" role="group" aria-label={t('十字滚动滑块')}
+    <div className="rd-scroll-pad" role="group" aria-label={t("client.remoteDesktop.scrollControl")}
       style={{ left: layout.x, top: layout.y, width: layout.size, height: layout.size }}>
       <div className="rd-scroll-cross rd-scroll-vertical" /><div className="rd-scroll-cross rd-scroll-horizontal" />
       <div className="rd-scroll-center" />
@@ -17,6 +17,6 @@ export function DesktopScrollPad({ layout, position, horizontal, cancel }: Scrol
       <div className="rd-scroll-knob" style={{ left: `${50 + position.x / SCROLL_PAD_SIZE * 100}%`,
         top: `${50 + position.y / SCROLL_PAD_SIZE * 100}%` }} />
     </div>
-    {!horizontal && <div className="rd-scroll-hint">{t('更新远程电脑上的应用后，即可左右滚动。')}</div>}
+    {!horizontal && <div className="rd-scroll-hint">{t("client.remoteDesktop.updateTheRemoteComputerAppToScrollHorizontally")}</div>}
   </div>;
 }

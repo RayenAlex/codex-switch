@@ -19,14 +19,14 @@ export function TimeBars({ points, labels, unit }: Props) {
   const [selected, setSelected] = useState<number | null>(null);
   const [series, setSeries] = useState(0);
   const maximum = Math.max(1, ...points.map((point) => point.values[series] ?? 0));
-  const format = (value: number | null) => value === null ? t("暂无记录")
-    : unit ? `${value.toFixed(2)}${unit === 'points' ? t('百分点') : unit}` : formatTokens(value, language);
+  const format = (value: number | null) => value === null ? t("client.mobile.noRecords")
+    : unit ? `${value.toFixed(2)}${unit === 'points' ? t("client.chat.pp") : unit}` : formatTokens(value, language);
   const current = selected === null ? undefined : points[selected];
   return <View style={{ gap: 10 }}>
     <View style={s.wrap}>{labels.map((label, index) => <Pressable key={label} accessibilityRole="button"
       accessibilityState={{ selected: series === index }} onPress={() => setSeries(index)}
       style={[s.chip, series === index && s.selected]}><Text style={s.action}>{label}</Text></Pressable>)}</View>
-    <Text style={s.hint}>{t("刻度上限")}{' '}{format(maximum)}{' '}{t("· 左右滑动，点按查看详情")}</Text>
+    <Text style={s.hint}>{t("client.mobile.scaleMaximum")}{' '}{format(maximum)}{' '}{t("client.mobile.swipeToBrowseTapForDetails")}</Text>
     <FlatList horizontal data={points} style={bars.chart} initialNumToRender={12} windowSize={3}
       initialScrollIndex={Math.max(0, points.length - VISIBLE_COLUMNS)}
       getItemLayout={(_, index) => ({ length: COLUMN_WIDTH, offset: COLUMN_WIDTH * index, index })}

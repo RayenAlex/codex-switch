@@ -1,20 +1,21 @@
+import { displayText, displayError } from '../../i18n/uiText';
 import { Alert, Button, Popconfirm, Space, Typography } from 'antd';
 import { useDesktopSystemPermissions } from './useDesktopSystemPermissions';
 import type { ComputerUsePermission } from '../../api/computerUse';
-import { guiText } from '../../i18n/guiText';
+import { uiText } from "../../i18n/uiText";
 import { useGuiLanguage } from '../../i18n/useGuiLanguage';
 
-/** Chinese sources only; each field is translated at render time with guiText. */
+/** Presentation keys are resolved at render time so mounted views follow language changes. */
 const PERMISSIONS: {
   key: ComputerUsePermission; title: string; description: string;
   enableLabel: string; repairTitle: string; repairLabel: string; repairDescription: string;
 }[] = [
-  { key: 'screenRecording', title: '屏幕录制', description: '让其他设备看到这台 Mac 的画面。',
-    enableLabel: '开启屏幕录制', repairTitle: '修复屏幕录制权限？', repairLabel: '修复屏幕录制权限',
-    repairDescription: '将清除 Remote AI 的屏幕录制授权，相关远程操作可能中断。请重新授权后重启应用。' },
-  { key: 'accessibility', title: '辅助功能', description: '允许远程操作鼠标和键盘。',
-    enableLabel: '开启辅助功能', repairTitle: '修复辅助功能权限？', repairLabel: '修复辅助功能权限',
-    repairDescription: '将清除 Remote AI 的辅助功能授权，相关远程操作可能中断。请重新授权后重启应用。' },
+  { key: 'screenRecording', title: "client.desktopMacPermissions.screenRecording", description: "client.desktopMacPermissions.letsOtherDevicesSeeThisMacSScreen",
+    enableLabel: "client.desktopMacPermissions.allowScreenRecording", repairTitle: "client.remoteDesktop.repairScreenRecordingPermission", repairLabel: "client.remoteDesktop.repairScreenRecordingPermission.4b032f",
+    repairDescription: "client.remoteDesktop.thisClearsRemoteAiSScreenRecordingPermissionAndMay" },
+  { key: 'accessibility', title: "client.desktopMacPermissions.accessibility", description: "client.desktopMacPermissions.allowsRemoteControlOfTheMouseAndKeyboard",
+    enableLabel: "client.desktopMacPermissions.allowAccessibility", repairTitle: "client.remoteDesktop.repairAccessibilityPermission", repairLabel: "client.remoteDesktop.repairAccessibilityPermission.2506de",
+    repairDescription: "client.remoteDesktop.thisClearsRemoteAiSAccessibilityPermissionAndMayInterrupt" },
 ];
 
 export function DesktopSystemPermissions({ active }: { active: boolean }) {
@@ -23,37 +24,37 @@ export function DesktopSystemPermissions({ active }: { active: boolean }) {
   if (!permissions) return null;
   const needsRestart = !!permissions.restartRequired?.length;
   return <Space direction="vertical" style={{ width: '100%', maxWidth: 400 }}>
-    <Typography.Text strong>{guiText('Mac 访问权限')}</Typography.Text>
+    <Typography.Text strong>{uiText("client.desktopMacPermissions.macPermissions")}</Typography.Text>
     {PERMISSIONS.map(({ key, title, description, enableLabel, repairTitle, repairLabel, repairDescription }) => {
       const repaired = permissions.restartRequired?.includes(key);
       return <div key={key}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <div>{guiText(title)}<div><Typography.Text type="secondary">{guiText(description)}</Typography.Text></div></div>
-          {permissions[key] ? <span style={{ flexShrink: 0 }}>{guiText('已开启')}</span>
+          <div>{displayText(title)}<div><Typography.Text type="secondary">{displayText(description)}</Typography.Text></div></div>
+          {permissions[key] ? <span style={{ flexShrink: 0 }}>{uiText("client.settings.on")}</span>
             : <Button disabled={busy || !active} onClick={() => void request(key)}
-              aria-label={guiText(enableLabel)}>{guiText('去开启')}</Button>}
+              aria-label={displayText(enableLabel)}>{uiText("client.desktopMacPermissions.allow")}</Button>}
         </div>
-        {repaired ? <Typography.Text type="secondary">{guiText('重新授权后请重启应用')}</Typography.Text>
-          : <Popconfirm title={guiText(repairTitle)} open={active ? undefined : false}
-            description={guiText(repairDescription)}
-            okText={guiText('重置并去授权')} cancelText={guiText('取消')} disabled={busy || !active}
+        {repaired ? <Typography.Text type="secondary">{uiText("client.remoteDesktop.allowAccessAgainThenRestartTheApp")}</Typography.Text>
+          : <Popconfirm title={displayText(repairTitle)} open={active ? undefined : false}
+            description={displayText(repairDescription)}
+            okText={uiText("client.remoteDesktop.resetAndAllowAccess")} cancelText={uiText("client.accounts.cancel")} disabled={busy || !active}
             styles={{ root: { maxWidth: 400 } }}
             onConfirm={() => repair(key)}>
             <Button type="link" size="small" disabled={busy || !active}
-              aria-label={guiText(repairLabel)} style={{ paddingInline: 0 }}>{guiText('已开启仍无法使用？修复权限')}</Button>
+              aria-label={displayText(repairLabel)} style={{ paddingInline: 0 }}>{uiText("client.remoteDesktop.enabledButNotWorkingRepairPermissions")}</Button>
           </Popconfirm>}
       </div>;
     })}
-    {needsRestart && <Alert type="info" showIcon message={guiText('权限已重置，请重新授权')}
+    {needsRestart && <Alert type="info" showIcon message={uiText("client.remoteDesktop.permissionResetAllowAccessAgain")}
       description={<Space direction="vertical" size={8}>
-        <span>{guiText('请在系统设置中为 Remote AI 重新开启对应权限。完成后保存工作并重启应用，再连接远程桌面。')}</span>
-        <Button disabled={busy || !active} onClick={() => void restart()}>{guiText('完成授权后重启')}</Button>
+        <span>{uiText("client.remoteDesktop.allowTheSelectedPermissionForRemoteAiInSystemSettings")}</span>
+        <Button disabled={busy || !active} onClick={() => void restart()}>{uiText("client.remoteDesktop.restartAfterAllowingAccess")}</Button>
       </Space>} />}
-    <Typography.Text type="secondary">{guiText('请为 Remote AI 开启权限后重新连接；若系统提示退出，请重启应用。')}</Typography.Text>
+    <Typography.Text type="secondary">{uiText("client.desktopMacPermissions.allowThesePermissionsForRemoteAiThenReconnectIfThe")}</Typography.Text>
     <Typography.Text type="secondary">
-      {guiText('更新或改名后无法连接，可尝试修复权限；若系统仍显示旧名称，请移除旧条目并重新添加当前应用。')}
+      {uiText("client.remoteDesktop.ifAnUpdateOrRenamePreventsConnectionTryRepairingPermissions")}
     </Typography.Text>
-    <Typography.Text type="secondary">{guiText('Mac 暂不支持传输电脑声音，连接时请保持登录并打开应用。')}</Typography.Text>
-    {!!error && <Alert type="error" message={guiText(error)} />}
+    <Typography.Text type="secondary">{uiText("client.desktopMacPermissions.computerAudioIsnTSupportedOnMacYetStaySigned")}</Typography.Text>
+    {!!error && <Alert type="error" message={displayError(error)} />}
   </Space>;
 }

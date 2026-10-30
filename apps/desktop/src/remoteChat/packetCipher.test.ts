@@ -1,28 +1,20 @@
-import { createCipheriv, createDecipheriv } from 'node:crypto';
+import { platformCipher, binaryPlatformCipher } from './packetCipherTestCodec';
 import { describe, expect, it, vi } from 'vitest';
 import { keyPair, SessionCipher } from '../../../../shared/remote-chat/cipher';
 import type { PacketCipherFactory } from '../../../../shared/remote-chat/packetCipher';
 
-// Independent crypto implementation exercises the platform seam against Noble in both directions.
-const platformCipher: PacketCipherFactory = ({ key, context }) => {
-  const copy = Buffer.from(key);
-  return {
-    encrypt(text, nonceHex) {
-      const cipher = createCipheriv('chacha20-poly1305', copy, Buffer.from(nonceHex, 'hex'));
-      cipher.setAAD(context, { plaintextLength: Buffer.byteLength(text) });
-      return nonceHex + Buffer.concat([cipher.update(text), cipher.final(), cipher.getAuthTag()]).toString('hex');
-    },
-    decrypt(payload) {
-      if (!/^[a-f0-9]+$/.test(payload)) throw new Error('Invalid packet');
-      const bytes = Buffer.from(payload, 'hex');
-      const cipher = createDecipheriv('chacha20-poly1305', copy, bytes.subarray(0, 12));
-      cipher.setAuthTag(bytes.subarray(-16));
-      cipher.setAAD(context, { plaintextLength: bytes.length - 28 });
-      return Buffer.concat([cipher.update(bytes.subarray(12, -16)), cipher.final()]).toString('utf8');
-    },
-    destroy() { copy.fill(0); },
-  };
-};
+it('preserves arbitrary compressed bytes through native crypto and retains old native capability fallback', () => {
+  const old = pair(platformCipher);
+  expect(old.receiver.supportsBinaryPlaintext).toBe(false);
+  expect(() => old.receiver.encryptCompressed(Uint8Array.of(0, 255))).toThrow();
+  old.sender.destroy(); old.receiver.destroy(); old.other.destroy();
+  const { sender, receiver, other } = pair(binaryPlatformCipher);
+  const bytes = Uint8Array.from({ length: 1024 }, (_, index) => index % 256);
+  expect(receiver.supportsBinaryPlaintext).toBe(true);
+  expect(receiver.decryptCompressed(sender.encryptCompressed(bytes))).toEqual(Buffer.from(bytes));
+  expect(sender.decryptCompressed(receiver.encryptCompressed(bytes))).toEqual(bytes);
+  sender.destroy(); receiver.destroy(); other.destroy();
+});
 
 function pair(factory?: PacketCipherFactory) {
   const a = keyPair((size) => crypto.getRandomValues(new Uint8Array(size)));

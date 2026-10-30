@@ -58,16 +58,19 @@ mod oauth;
 mod official_models;
 mod official_plugins;
 mod open_code;
+mod pet_dock;
 mod platform;
 mod port_mapping;
 mod preset_provider;
 mod prompt_plugins;
 mod provider_api_cache;
+mod provider_browser;
 mod provider_connectivity;
 mod provider_discovery;
 mod provider_models;
 mod provider_platform;
 mod providers;
+mod quota_display;
 mod remote_chat;
 mod remote_command;
 mod remote_control;
@@ -154,11 +157,13 @@ pub fn run() {
         .manage(coze::CozeState::default())
         .manage(codex_gui::GuiState::default())
         .manage(codex_gui::dropped_files::DroppedFilesState::default())
+        .manage(gui_terminal::ssh_drop::SshDropState::default())
         .manage(codex_gui::file_preview::PreviewSessions::default())
         .manage(codex_gui::notification_navigation::NavigationState::default())
         .manage(codex_gui::releases::CliUpdateState::default())
         .manage(codex_gui::scheduled_tasks::ScheduledTasksState::default())
         .manage(std::sync::Arc::new(gui_terminal::TerminalState::default()))
+        .manage(std::sync::Arc::new(csw_ssh_client::Client::default()))
         .manage(std::sync::Arc::new(
             gui_terminal::links::LinkState::default(),
         ))
@@ -228,6 +233,7 @@ pub fn run() {
                     codex_gui::notification_navigation::handle_url(&import_app, &url);
                 }
             });
+            pet_dock::setup(app.handle().clone());
             if !launch_options.headless {
                 dream_skin::start_background_updates();
                 if let Err(error) = codex_runtime::setup(app.handle()) {
@@ -269,7 +275,10 @@ pub fn run() {
             }
             Ok(())
         })
-        .on_page_load(codex_gui::file_preview::handle_page_load)
+        .on_page_load(|webview, payload| {
+            codex_gui::file_preview::handle_page_load(webview, payload);
+            provider_browser::handle_page_load(webview, payload);
+        })
         .on_window_event(|window, event| {
             codex_gui::file_preview::handle_window_event(window, event);
             if window.label() == "main" {
@@ -382,12 +391,19 @@ pub fn run() {
             local_proxy::gui_system_prompts::codex_gui_system_prompt_settings,
             local_proxy::gui_system_prompts::codex_gui_set_system_prompt_settings,
             gui_terminal::codex_gui_terminal_open,
+            gui_terminal::ssh::codex_gui_ssh_probe,
+            gui_terminal::ssh::codex_gui_ssh_ensure_x11,
+            gui_terminal::ssh::codex_gui_ssh_open,
+            gui_terminal::ssh::codex_gui_ssh_command,
+            gui_terminal::ssh::codex_gui_ssh_files,
+            gui_terminal::ssh_drop::codex_gui_ssh_drop_files,
             gui_terminal::codex_gui_terminal_command,
             gui_terminal::links::codex_gui_terminal_link,
             gui_terminal::links::resources::codex_gui_resource_open,
             gui_terminal::links::resources::codex_gui_resource_link,
             remote_chat::remote_chat_attach,
             remote_chat::remote_chat_send,
+            remote_chat::packet_codec::remote_chat_packet_codec,
             remote_chat::bulk::remote_chat_bulk_send,
             remote_chat::identity::remote_chat_identity,
             remote_chat::host_health::remote_chat_host_alive,
@@ -421,6 +437,10 @@ pub fn run() {
             remote_chat::gui_remote_close,
             cloud::codex_gui_devices,
             cloud::sync_port_mappings,
+            cloud::cloud_ssh_profiles,
+            cloud::cloud_provider_market,
+            cloud::cloud_install_market_provider,
+            cloud::cloud_lounge_ticket,
             cloud::remote_assistance,
             codex_gui::releases::codex_gui_cli_status,
             codex_gui::releases::codex_gui_cli_release,
@@ -440,6 +460,9 @@ pub fn run() {
             codex_gui::file_preview::codex_gui_close_file_preview,
             codex_gui::file_preview::codex_gui_file_preview_host,
             codex_gui::file_preview::website::codex_gui_sync_website_preview,
+            provider_browser::provider_browser_sync,
+            provider_browser::provider_browser_action,
+            provider_browser::provider_browser_close,
             codex_gui::file_preview::website::codex_gui_close_website_preview,
             codex_gui::undo::codex_gui_undo,
             codex_gui::deletion::codex_gui_delete_thread,
@@ -621,6 +644,11 @@ pub fn run() {
             main_window::set_close_to_tray,
             client_integration::set_non_proxy_enhancements,
             floating_bubble::set_floating_bubble,
+            quota_display::get_quota_display_status,
+            quota_display::set_quota_display_all_accounts,
+            pet_dock::get_pet_dock_status,
+            pet_dock::set_pet_dock_enabled,
+            pet_dock::set_pet_dock_labels_visible,
             floating_bubble::set_privacy_mode,
             floating_bubble::set_hide_account_notes,
             floating_bubble::set_show_usage_network_errors,

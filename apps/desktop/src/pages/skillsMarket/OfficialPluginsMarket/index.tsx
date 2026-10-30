@@ -1,3 +1,4 @@
+import { displayError } from '../../../i18n/uiText';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CodexHomeScope, CodexHomeSelect, useSelectedCodexHome } from "../../../components/CodexHomeScope";
 import { useCliInstaller } from "../../codexGui/useCliInstaller";
@@ -10,7 +11,7 @@ import {
   removeOfficialPlugin,
   setOfficialPluginEnabled,
 } from "../../../api/backend";
-import { guiText } from "../../../i18n/guiText";
+import { uiText } from "../../../i18n/uiText";
 import type { OfficialPluginItem } from "../../../types";
 import { OfficialPluginGrid } from "../OfficialPluginGrid";
 import { SkillsMarketToolbar } from "../SkillsMarketToolbar";
@@ -132,7 +133,7 @@ function OfficialPluginsContent({
       </div>
     );
   } else if (!installer.version) {
-    content = <div className="skills-market-state"><Puzzle size={26} />{guiText("安装 Codex 后，即可浏览官方插件。")}</div>;
+    content = <div className="skills-market-state"><Puzzle size={26} />{uiText("client.desktopBuiltinPlugins.installCodexToBrowseOfficialPlugins")}</div>;
   } else if (filtered.length === 0) {
     content = <div className="skills-market-state"><Puzzle size={26} />{t("skills.official.empty")}</div>;
   }
@@ -152,7 +153,7 @@ function OfficialPluginsContent({
         beforeSearch={hasLocalBackend && <CliInstallButton installer={installer} />}
         homeSelector={showHomeSelector && <CodexHomeSelect disabled={busyAction !== null || installer.installing} />}
       />
-      {error && <div className="skills-market-error" role="alert">{guiText(error)}</div>}
+      {error && <div className="skills-market-error" role="alert">{displayError(error)}</div>}
       {content}
     </div>
   );

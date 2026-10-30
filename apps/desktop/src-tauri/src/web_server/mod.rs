@@ -19,9 +19,11 @@ const WEB_SERVER_ALL_INTERFACES_HOST: &str = "0.0.0.0";
 const WEB_SERVER_THREAD_NAME: &str = "codex-switch-web-server";
 const WEB_REQUEST_THREAD_NAME: &str = "codex-switch-web-request";
 const WEB_CONTENT_SECURITY_POLICY: &str = concat!(
-    "default-src 'self'; img-src 'self' data: http: https:; ",
+    "default-src 'self'; img-src 'self' data: blob: http: https:; ",
+    "script-src 'self' 'wasm-unsafe-eval'; ",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; ",
     "font-src 'self' https://fonts.gstatic.com; ",
+    "media-src 'self' blob:; worker-src 'self' blob:; ",
     "connect-src 'self' http: https: ws: wss:"
 );
 const WEB_INVOKE_PATH: &str = "/__codex_switch__/api/invoke";

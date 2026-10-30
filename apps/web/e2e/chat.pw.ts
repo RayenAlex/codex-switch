@@ -4,7 +4,7 @@ import { openChatList, connect, navigate, send, settled, screenshot, state, fixt
 import { chatJourney } from './chat-journey';
 import { reliabilityJourney } from './chat-reliability';
 import { historyJourney } from './chat-history';
-import { attachmentJourney } from './chat-attachments';
+import { attachmentJourney, fileCancelJourney } from './chat-attachments';
 import { imageEditorJourney } from './chat-image-editor';
 import { composerLayout, desktopComposer } from './chat-composer';
 import { projectPickerJourney } from './chat-project-picker';
@@ -13,6 +13,7 @@ import { backgroundJourney } from './chat-background';
 import { sessionRecoveryJourney } from './chat-session-recovery';
 import { modelPickerJourney } from './chat-model-picker';
 import { chooseSetting, closeChatSettings, isDesktop } from './chat-settings';
+import { checkModelAvailability } from '../../desktop/e2e/model-availability-checks';
 
 test.beforeEach(async ({ page, request }, info) => {
   // Login can open chat immediately; install the network fault before any peer is created.
@@ -37,6 +38,8 @@ test.beforeEach(async ({ page, request }, info) => {
 
 
 test('keeps composer icons below single and multiline drafts', async ({ page }) => composerLayout(page));
+test('preserves draft and attachments when file selection is canceled and retried',
+  async ({ page }) => fileCancelJourney(page));
 test('shows only task issues and connection health over relay', async ({ page, request }, info) => {
   await reliabilityJourney(page, request, info);
 });
@@ -63,6 +66,24 @@ test('uses the PC model picker and keeps the mobile settings unchanged', async (
   test.skip(info.project.name !== 'desktop', 'Desktop model picker interaction');
   await modelPickerJourney(page, request, info);
 });
+
+test('web desktop preserves an unavailable model and restores sending after account recovery over relay',
+  async ({ page, request }, info) => {
+    test.skip(info.project.name !== 'desktop', 'Desktop model availability');
+    await connect(page);
+    await expect(page.locator('.chat-connection-status')).toContainText('Relay', { timeout: 20_000 });
+    const original = (await state(request)).composer;
+    await checkModelAvailability(page, {
+      restrict: async () => {
+        await request.post(`${fixtureUrl}/test/composer`, { data: { models: original.models.slice(1) } });
+      },
+      restore: async () => {
+        await request.post(`${fixtureUrl}/test/composer`, { data: { models: original.models } });
+      }, screenshot: '../../.codex-tmp/model-unavailable-web.png',
+    });
+    expect((await state(request)).composer.settings).toEqual(original.settings);
+    expect(await operationCount(request, 'send')).toBe(0);
+  });
 
 test('refreshes an empty model catalog explicitly on mobile and desktop over relay',
   async ({ page, request }, info) => {
@@ -188,14 +209,15 @@ test('keeps speed controls in settings and syncs speed while responding', async 
       await expect(speed).toHaveAttribute('data-speed', mode);
       await expect(speed.locator('.is-lit')).toHaveCount({ normal: 0, fast: 1, ultrafast: 2 }[mode]);
     } else {
-      await expect(page.getByRole('button', { name: '设置速度模式' })).toContainText(label);
+      await expect(page.getByRole('radiogroup', { name: '速度模式' })
+        .getByRole('radio', { name: label, exact: true })).toBeChecked();
       await expect(speed).toHaveCount(0);
     }
     await screenshot(page, info, 'speed-' + mode);
   }
   await request.post(fixtureUrl + '/test/composer', { data: { speed: 'ultrafast' } });
   if (desktop) await expect(speed).toHaveAttribute('data-speed', 'ultrafast');
-  else await expect(page.getByRole('button', { name: '设置速度模式' })).toContainText('Ultrafast 模式');
+  else await expect(page.getByRole('radio', { name: 'Ultrafast 模式', exact: true })).toBeChecked();
   if (desktop) await page.getByRole('button', { name: /^模型与推理强度：/ }).click();
   else await closeChatSettings(page);
   await expect(speed).toHaveCount(0);
@@ -243,7 +265,6 @@ for (const [access, label] of [['danger-full-access', '完全访问'], ['read-on
         await page.getByRole('button', { name: /^访问权限：/ }).click();
         await expect(page.getByRole('menuitemradio', { name: new RegExp(label) })).toBeChecked();
       } else {
-        await page.getByRole('button', { name: '设置访问权限', exact: true }).click();
         await expect(page.getByRole('radio', { name: label, exact: true })).toBeChecked();
       }
       await screenshot(page, info, `inherited-access-${access}`);

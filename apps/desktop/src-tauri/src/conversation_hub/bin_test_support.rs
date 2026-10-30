@@ -30,7 +30,8 @@ impl Fixture {
         let root = std::env::temp_dir().join(format!("codex-switch-bin-test-{}", Uuid::new_v4()));
         let fixture = Self {
             home: root.join("codex"),
-            bin: root.join("dev.codex.switch/codex-thread-bin"),
+            // Keep the Windows test path short enough for nested UUID batch entries.
+            bin: root.join("bin"),
             root,
         };
         fs::create_dir_all(fixture.home.join("sqlite")).unwrap();

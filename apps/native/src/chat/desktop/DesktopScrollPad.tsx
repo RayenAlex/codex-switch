@@ -17,7 +17,7 @@ export function DesktopScrollPad({ layout, position, horizontal, cancel }: Scrol
   ] as const;
   return <View style={s.layer} pointerEvents="box-only" onTouchStart={cancel}>
     <View style={[s.pad, { left: layout.x, top: layout.y, width: layout.size, height: layout.size }]}
-      accessibilityLabel={t("十字滚动滑块")}>
+      accessibilityLabel={t("client.remoteDesktop.scrollControl")}>
       <View pointerEvents="none" style={[s.cross, s.vertical]} />
       <View pointerEvents="none" style={[s.cross, s.horizontal]} />
       <View pointerEvents="none" style={s.center} />
@@ -31,6 +31,6 @@ export function DesktopScrollPad({ layout, position, horizontal, cancel }: Scrol
       }]} />
     </View>
     {!horizontal && <View pointerEvents="none" style={s.hint}>
-      <Text style={s.hintText}>{t("更新远程电脑上的应用后，即可左右滚动。")}</Text></View>}
+      <Text style={s.hintText}>{t("client.remoteDesktop.updateTheRemoteComputerAppToScrollHorizontally")}</Text></View>}
   </View>;
 }

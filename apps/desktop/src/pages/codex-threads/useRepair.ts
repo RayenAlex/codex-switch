@@ -2,7 +2,7 @@ import { useSelectedCodexHome } from "../../components/CodexHomeScope";
 import { useState } from "react";
 import { repairCodexThreadVisibility } from "../../api/backend";
 import type { CodexThreadVisibilityReport } from "../../types";
-import type { ThreadCopy } from "./copy";
+import type { ThreadCopy } from "@remoteai/i18n/copy/desktop/threads";
 
 interface RepairOptions {
   selected: Set<string>;

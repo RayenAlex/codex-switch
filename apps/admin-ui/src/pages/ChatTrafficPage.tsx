@@ -1,3 +1,5 @@
+import inlineCopy from '@remoteai/i18n/copy/inline/admin/pages/ChatTrafficPage';
+import { interpolate as interpolateCopy } from '@remoteai/i18n';
 import { useState } from "react";
 import { Alert, Button, Card, DatePicker, Input, Space, Table, Tag, Typography } from "antd";
 import type { TableProps } from "antd";
@@ -47,39 +49,39 @@ export function ChatTrafficPage({ api, canManage, dark }: { api: TrafficApi; can
     setPage(1);
   };
   return <Space direction="vertical" size="large" className="chat-traffic-page" style={{ width: "100%" }}>
-    <Typography.Title level={2}>{zh ? "聊天流量" : "Chat traffic"}</Typography.Title>
+    <Typography.Title level={2}>{zh ? inlineCopy["text_b4355c29"] : inlineCopy["Chat_traffic_735b6e7f"]}</Typography.Title>
     <ChatTrafficSummary summary={data?.summary} month={month} loading={loading && !data} />
     <Card>
       <Space wrap style={{ marginBottom: 20 }}>
         <DatePicker picker="month" allowClear={false} value={dayjs(month)}
-          aria-label={zh ? "统计月份" : "Reporting month"}
+          aria-label={zh ? inlineCopy["text_76217303"] : inlineCopy["Reporting_month_04bf8d83"]}
           onChange={(value) => { if (value) { setMonth(value.format("YYYY-MM")); setPage(1); } }} />
-        <Input.Search placeholder={zh ? "搜索用户邮箱" : "Search user email"} allowClear style={{ width: 260 }}
+        <Input.Search placeholder={zh ? inlineCopy["text_80ff0d53"] : inlineCopy["Search_user_email_873093a8"]} allowClear style={{ width: 260 }}
           onSearch={(value) => { setSearch(value.trim()); setPage(1); }} />
-        <Button onClick={() => void refresh()} loading={loading}>{zh ? "刷新" : "Refresh"}</Button>
+        <Button onClick={() => void refresh()} loading={loading}>{zh ? inlineCopy["text_aee88743"] : inlineCopy["Refresh_0e916101"]}</Button>
       </Space>
       {error && <Alert type="error" showIcon style={{ marginBottom: 16 }}
-        message={zh ? "流量加载失败，请重试。" : "Unable to load traffic. Please retry."} />}
+        message={zh ? inlineCopy["text_e43acadd"] : inlineCopy["Unable_to_load_traffic_Please_88ffc29f"]} />}
       <Table<UserChatTraffic> rowKey="id" dataSource={data?.items ?? []} loading={loading && !data}
         onChange={onTableChange} sortDirections={["descend", "ascend", "descend"]}
         scroll={{ x: 950 }} pagination={{ current: page, pageSize, total: data?.total ?? 0, showSizeChanger: true,
           onChange: (next, size) => { setPage(size !== pageSize ? 1 : next); setPageSize(size); } }} columns={[
-          { title: zh ? "用户" : "User", dataIndex: "email", width: 240, ellipsis: true },
-          { title: zh ? `${month} 转发量` : `${month} relay`, dataIndex: "monthBytes", key: "monthBytes",
+          { title: zh ? inlineCopy["text_0d0e1a86"] : inlineCopy["User_b512d97e"], dataIndex: "email", width: 240, ellipsis: true },
+          { title: zh ? interpolateCopy(inlineCopy["value1_e13bcecd"], { value1: String(month) }) : interpolateCopy(inlineCopy["value1_relay_2dd5ac60"], { value1: String(month) }), dataIndex: "monthBytes", key: "monthBytes",
             sorter: true, sortOrder: sortBy === "monthBytes" ? sortOrder : null, render: bytes },
-          { title: zh ? "累计转发量" : "Total relay", dataIndex: "totalBytes", key: "totalBytes",
+          { title: zh ? inlineCopy["text_24299f67"] : inlineCopy["Total_relay_4fac8003"], dataIndex: "totalBytes", key: "totalBytes",
             sorter: true, sortOrder: sortBy === "totalBytes" ? sortOrder : null, render: bytes },
-          { title: zh ? "本月已用 / 额度" : "Current month / allowance", key: "monthUsedBytes",
+          { title: zh ? inlineCopy["text_723902bc"] : inlineCopy["Current_month_allowance_f4e61b8c"], key: "monthUsedBytes",
             sorter: true, sortOrder: sortBy === "monthUsedBytes" ? sortOrder : null,
             render: (_, user) => <Space direction="vertical" size={2}>
             <span>{bytes(user.monthUsedBytes)} / {user.monthlyLimitBytes === -1
-              ? (zh ? "不限量" : "Unlimited") : bytes(user.monthlyLimitBytes)}</span>
+              ? (zh ? inlineCopy["text_6cf3bcae"] : inlineCopy["Unlimited_11dde17d"]) : bytes(user.monthlyLimitBytes)}</span>
             {user.monthlyLimitBytes !== -1 && user.monthUsedBytes >= user.monthlyLimitBytes &&
-              <Tag color="orange">{zh ? "额度已用完" : "Allowance exhausted"}</Tag>}
+              <Tag color="orange">{zh ? inlineCopy["text_38712a56"] : inlineCopy["Allowance_exhausted_b222980b"]}</Tag>}
           </Space> },
-          { title: zh ? "操作" : "Actions", render: (_, user) => <Space>
-            <Button type="link" onClick={() => setSelected(user)}>{zh ? "查看详情" : "Details"}</Button>
-            {canManage && <Button type="link" onClick={() => setEditing(user)}>{zh ? "设置额度" : "Set allowance"}</Button>}
+          { title: zh ? inlineCopy["text_ed31fbb4"] : inlineCopy["Actions_ff8059dc"], render: (_, user) => <Space>
+            <Button type="link" onClick={() => setSelected(user)}>{zh ? inlineCopy["text_a748cc07"] : inlineCopy["Details_45989de4"]}</Button>
+            {canManage && <Button type="link" onClick={() => setEditing(user)}>{zh ? inlineCopy["text_18262eec"] : inlineCopy["Set_allowance_8edf0d4f"]}</Button>}
           </Space> },
         ]} />
     </Card>

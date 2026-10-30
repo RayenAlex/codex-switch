@@ -1,12 +1,14 @@
+import { defaultText, type MessageTranslator } from '../localization/messages';
 export interface UsageSummary {
   totalTokens: number;
   estimatedCostUsd: number;
   primaryRemainingPercent: number | null;
   primaryRemainingAggregated: boolean;
   providerEstimatedCost: { amountUsd: number; aggregated: boolean } | null;
+  estimatedQuota?: { remainingUsd: number; capacityUsd: number | null };
 }
 
-export type ReadUsage = () => Promise<UsageSummary>;
+export type ReadUsage = () => Promise<unknown>;
 export const USAGE_REFRESH_INTERVAL_MS = 5_000;
 const MILLION = 1_000_000;
 const THOUSAND = 1_000;
@@ -42,20 +44,31 @@ export function formatCost(value: number) {
   return `${value.toLocaleString('en-US', { maximumFractionDigits: value > 0 && value < 0.01 ? 4 : 2 })}USD`;
 }
 
-export function usageTrailing(usage: UsageSummary | null, translate = (text: string) => text, cost = formatCost) {
+export function usageTrailing(usage: UsageSummary | null, translate: MessageTranslator = defaultText, cost = formatCost,
+  options: { compactQuota?: boolean } = {}) {
   const remaining = usage?.primaryRemainingPercent;
   if (typeof remaining === 'number' && Number.isFinite(remaining)) {
-    const label = usage?.primaryRemainingAggregated ? '并发账户剩余额度合计' : '当前账户剩余额度';
+    const label = usage?.primaryRemainingAggregated ? "client.shared.combinedAccountQuotaRemaining" : "client.shared.currentAccountQuotaRemaining";
     return {
       text: `${Math.round(remaining)}%`,
-      label: translate(usage?.primaryRemainingAggregated ? '合计剩余' : '剩余'),
+      label: translate(usage?.primaryRemainingAggregated ? "client.shared.totalRemaining" : "client.accounts.remaining"),
       description: `${translate(label)}：${remaining.toLocaleString('en-US', { maximumFractionDigits: 2 })}%`,
       tone: remaining <= LOW_QUOTA_PERCENT ? 'low' : remaining <= WARNING_QUOTA_PERCENT ? 'cost' : 'quota',
+      quota: {
+        remaining: translate(options.compactQuota
+          ? 'client.chatQuota.remainingCompact' : 'client.chatQuota.estimatedRemaining', {
+          amount: usage?.estimatedQuota ? cost(usage.estimatedQuota.remainingUsd) : '—',
+        }),
+        total: translate('client.chatQuota.estimatedTotal', {
+          amount: usage?.estimatedQuota?.capacityUsd == null ? '—' : cost(usage.estimatedQuota.capacityUsd),
+        }),
+        description: translate('client.chatQuota.estimateDescription'),
+      },
     } as const;
   }
   const estimate = usage?.providerEstimatedCost;
   if (!estimate) return null;
-  const label = estimate.aggregated ? '聚合 API 今日预估费用' : '当前 API 今日预估费用';
+  const label = estimate.aggregated ? "client.shared.estimatedCombinedApiCostToday" : "client.shared.estimatedApiCostToday";
   return { text: `API ${cost(estimate.amountUsd)}`, label: '',
-    description: `${translate(label)}：${cost(estimate.amountUsd)}`, tone: 'cost' } as const;
+    description: `${translate(label)}：${cost(estimate.amountUsd)}`, tone: 'cost', quota: null } as const;
 }

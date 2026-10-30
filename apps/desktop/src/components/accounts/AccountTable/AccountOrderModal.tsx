@@ -5,7 +5,7 @@ import type { Language } from "../../../i18n";
 import type { Account } from "../../../types";
 import { maskAccountEmail } from "../../../utils/accountPrivacy";
 import { applyAccountOrder, moveAccount } from "./accountOrder";
-import { accountOrderLabels } from "./accountOrderLabels";
+import { accountOrderLabels } from "@remoteai/i18n/copy/desktop/accountOrderLabels";
 import { useAccountOrderDrag } from "./useAccountOrderDrag";
 import styles from "./AccountOrderModal.module.less";
 

@@ -1,3 +1,4 @@
+import updateCopy from '@remoteai/i18n/copy/client/guiUpdate';
 import { useState } from 'react';
 import type { GuiToolsClient } from './guiTools';
 import { useRemoteCliInstaller } from './useRemoteCliInstaller';
@@ -25,19 +26,19 @@ export function useGuiUpdate({ client, active, connected, running }: GuiUpdateOp
     setPending(null);
     void installer.install();
   };
-  let message = '点击“检查更新”查看是否有新版本。';
-  if (available) message = '有新版本可安装。';
-  if (upToDate) message = 'Codex GUI 已是最新版本。';
-  if (!installer.checked) message = '正在读取版本…';
-  if (installer.checking) message = '正在检查更新…';
-  if (running && available && !installer.checking) message = '电脑上还有聊天任务在运行，请等任务完成后再安装。';
+  let message = updateCopy.idle;
+  if (available) message = updateCopy.available;
+  if (upToDate) message = updateCopy.latest;
+  if (!installer.checked) message = updateCopy.reading;
+  if (installer.checking) message = updateCopy.checking;
+  if (running && available && !installer.checking) message = updateCopy.busy;
   if (installer.installing) message = installer.progress?.phase === 'installing'
-    ? '正在安装，即将完成…' : '电脑正在下载更新…';
-  if (!connected) message = '连接电脑后即可检查和安装更新。';
+    ? updateCopy.installing : updateCopy.downloading;
+  if (!connected) message = updateCopy.offline;
   const progress = installer.installing && installer.progress && installer.progress.total > 0
     ? Math.max(0, Math.min(100, Math.floor(installer.progress.downloaded / installer.progress.total * 100))) : null;
-  let checkLabel = upToDate ? '已是最新' : '检查更新';
-  if (installer.checking) checkLabel = '正在检查更新…';
+  let checkLabel = upToDate ? updateCopy.upToDate : updateCopy.check;
+  if (installer.checking) checkLabel = updateCopy.checking;
   return { ...installer, available, checkLabel, message, progress, confirmation,
     canCheck, canInstall, canConfirm, confirm,
     requestInstall: () => {

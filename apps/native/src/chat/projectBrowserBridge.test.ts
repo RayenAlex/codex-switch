@@ -48,6 +48,27 @@ it('rejects disconnected, malformed and unsupported requests without touching fi
   expect(options.client.save).not.toHaveBeenCalled();
 });
 
+it('routes blame through the host project and requires supported, valid requests', async () => {
+  const result = { status: 'ready', revision: 'v1', commits: [], ranges: [] };
+  const blame = vi.fn().mockResolvedValue(result);
+  const options = { ...fixture(), client: { ...fixture().client, blame } };
+  const body = { cwd: '/ignored', path: '/project/readme.txt', revision: 'v1' };
+  const send = (target: object) => handleBrowserRequest(JSON.stringify({
+    type: 'request', id: 9, action: 'blame', body: target,
+  }), options);
+  expect(await send(body)).toEqual({ type: 'reply', id: 9, data: result });
+  expect(blame).toHaveBeenCalledExactlyOnceWith({ cwd: '/project', path: '/project/readme.txt', revision: 'v1' });
+  for (const change of [{ path: '/other/file' }, { path: '/project/../private' },
+    { revision: 4 }, { revision: '' }, { revision: 'x'.repeat(257) }]) {
+    expect(await send({ ...body, ...change })).toMatchObject({ error: expect.any(String) });
+  }
+  options.connected = false;
+  expect(await send(body)).toMatchObject({ error: expect.any(String) });
+  expect(blame).toHaveBeenCalledOnce();
+  expect(await handleBrowserRequest(JSON.stringify({ type: 'request', id: 10, action: 'blame', body }), fixture()))
+    .toMatchObject({ error: expect.any(String) });
+});
+
 it('returns save conflicts with the request ID so the editor can keep the draft', async () => {
   const options = fixture();
   vi.mocked(options.client.save).mockRejectedValue('文件已在其他地方修改。');

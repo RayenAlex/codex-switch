@@ -2,6 +2,7 @@
 mod apps;
 #[cfg(windows)]
 mod icons_windows;
+mod metadata;
 mod paths;
 mod save;
 #[cfg(test)]
@@ -56,6 +57,7 @@ enum FileAction {
     CopyPath {},
     CopyContents {},
     SaveAs {},
+    Metadata {},
 }
 
 #[derive(Deserialize)]
@@ -71,6 +73,8 @@ pub(crate) struct FileResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     text: Option<String>,
     saved: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    metadata: Option<metadata::FileMetadata>,
 }
 
 #[tauri::command]
@@ -144,6 +148,7 @@ fn perform(
         path: super::platform::execution_path(&path),
         text: None,
         saved: false,
+        metadata: None,
     };
     match request.action {
         FileAction::Open { application } => apps::open(application, &path, &request.target)?,
@@ -154,6 +159,7 @@ fn perform(
         FileAction::CopyPath {} => {}
         FileAction::CopyContents {} => response.text = Some(read_text(&path)?),
         FileAction::SaveAs {} => response.saved = save_as(app, &path)?,
+        FileAction::Metadata {} => response.metadata = Some(metadata::read(&path)?),
     }
     Ok(response)
 }

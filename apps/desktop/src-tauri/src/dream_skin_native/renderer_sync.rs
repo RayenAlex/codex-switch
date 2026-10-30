@@ -62,7 +62,7 @@ fn record_renderer_binding_poll(generation: u64) {
 fn composer_restore_expression() -> Result<String, String> {
     let tier = serde_json::to_string(crate::local_proxy::proxy_service_tier_name())
         .map_err(|error| error.to_string())?;
-    let overlay = CODEX_SPEED_SELECTOR_OVERLAY.replace("__CODEX_SWITCH_SERVICE_TIER__", &tier);
+    let overlay = speed_selector_overlay_expression(&tier);
     let query_client = include_str!("composer_query_client.js");
     let status = include_str!("composer_status.js");
     let proxy_running = crate::local_proxy::is_running();

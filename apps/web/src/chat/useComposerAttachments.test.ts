@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest';
-import { translateText } from '../../../../shared/i18n/translate';
+import { translateMessage } from "../../../../shared/localization/messages";
 import { setLanguage } from '../i18n';
 import { AttachmentRejection, attachmentErrorMessage } from './useComposerAttachments';
 
@@ -13,8 +13,8 @@ it('shows validator copy that was already localized when thrown', () => {
 
 it('translates Chinese validator copy at render time', () => {
   setLanguage('ru');
-  const source = '文件无法读取，请重新选择。';
-  expect(attachmentErrorMessage(new AttachmentRejection(source))).toBe(translateText('ru', source));
+  const source = "client.chat.couldNotReadTheFilePleaseChooseItAgain";
+  expect(attachmentErrorMessage(new AttachmentRejection(source))).toBe(translateMessage('ru', source));
   expect(attachmentErrorMessage(new AttachmentRejection(source))).not.toBe(source);
 });
 
@@ -26,7 +26,7 @@ it('keeps Chinese output unchanged', () => {
 
 it('hides unexpected failures behind the generic message regardless of wording', () => {
   setLanguage('en');
-  const fallback = translateText('en', '文件添加失败，请重新选择。');
+  const fallback = translateMessage('en', "client.chat.couldNotAddTheFilePleaseChooseItAgain");
   expect(attachmentErrorMessage(new Error('文件 internal failure'))).toBe(fallback);
   expect(attachmentErrorMessage('附件')).toBe(fallback);
 });

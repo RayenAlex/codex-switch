@@ -7,7 +7,7 @@ const standby = process.env.CSW_NATIVE_TEST_STANDBY === '1';
 if (!endpoint?.startsWith('http://127.0.0.1:') || !token) throw new Error('Local native harness required');
 const bundle = await build({ entryPoints: [fileURLToPath(new URL('../../../shared/remote-desktop/receiver.ts',
   import.meta.url))], bundle: true, write: false, format: 'iife', globalName: 'DesktopReceiverModule' });
-const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage();
   const errors = []; page.on('pageerror', error => errors.push(error.message));

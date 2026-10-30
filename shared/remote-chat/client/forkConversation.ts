@@ -23,6 +23,9 @@ export async function forkConversation(host: Host, source: Thread): Promise<bool
   try {
     const { thread } = await host.request();
     if (!host.isCurrent()) return false;
+    if (!host.snapshot().archived && !host.snapshot().search) {
+      host.update({ threads: [thread, ...host.snapshot().threads.filter(entry => entry.id !== thread.id)] });
+    }
     if (host.canOpen()) {
       host.update({ archived: false, search: '' });
       await host.select(thread);

@@ -1,11 +1,14 @@
+import { resources as clientResources } from '@remoteai/i18n/client';
+const english: Readonly<Record<string, string>> = clientResources.en;
+const russianCopy: Readonly<Record<string, string>> = clientResources.ru;
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { english } from '../../../../../shared/i18n/en';
-import { russian as russianCopy } from '../../../../../shared/i18n/ru';
-import { setGuiLanguage } from '../../i18n/guiText';
+
+
+import { setGuiLanguage } from "../../i18n/uiText";
 import { DesktopSystemPermissions } from './DesktopSystemPermissions';
 
 const api = vi.hoisted(() => ({ invoke: vi.fn(), restartApplication: vi.fn() }));
@@ -58,9 +61,9 @@ it('shows host errors in the interface language', async () => {
     .toBe('Не удалось открыть настройки разрешений. Разрешите доступ в Системных настройках, в разделе «Конфиденциальность и безопасность».');
 });
 
-it('has English and Russian copy for every Chinese source in the block and its hook', () => {
+it('has English and Russian copy for every semantic key in the block and its hook', () => {
   const sources = ['./DesktopSystemPermissions.tsx', './useDesktopSystemPermissions.ts']
-    .flatMap(file => [...readFileSync(new URL(file, import.meta.url), 'utf8').matchAll(/'([^'\n]*[一-鿿][^'\n]*)'/g)])
+    .flatMap(file => [...readFileSync(new URL(file, import.meta.url), 'utf8').matchAll(/["'](client\.[^"'\n]+)["']/g)])
     .map(match => match[1]);
   expect(sources.length).toBeGreaterThan(20);
   for (const source of sources) {

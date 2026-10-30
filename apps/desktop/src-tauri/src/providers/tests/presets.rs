@@ -195,6 +195,7 @@
     #[test]
     fn normalize_provider_profile_keeps_legacy_model_as_model_list() {
         let profile = normalize_provider_profile(ProviderProfile {
+            account_alias: None,
             request_options: Default::default(),
             id: "p".to_string(),
             kind: ProviderKind::Custom,
@@ -214,6 +215,8 @@
             fast_mode_enabled: false,
             websocket_enabled: false,
             api_format: ProviderApiFormat::OpenaiResponses,
+            balance_script: None,
+            market_source: None,
             balance_platform: None,
             balance_query_url: None,
             balance_query_token: None,

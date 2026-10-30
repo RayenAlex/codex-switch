@@ -1,4 +1,4 @@
-import { guiLocale, guiText } from "../../i18n/guiText";
+import { guiLocale, uiText } from "../../i18n/uiText";
 import { useState } from "react";
 import { Button } from "antd";
 import { Pencil } from "lucide-react";
@@ -10,7 +10,9 @@ import { MessageImage } from "./MessageImage";
 import { MessageQuotes } from "./MessageQuotes";
 import { quotedMessage } from "../../../../../shared/chat/quotedMessage";
 import { FileMenu } from "./FileMenu";
-import { isFileReference } from "./fileReference";
+import { messageAttachments } from "../../../../../shared/chat/messageAttachments";
+import { MessageAttachments } from "../../../../../shared/chat/SentMessageAttachments";
+import { AttachmentMetadataProvider } from './AttachmentMetadataProvider';
 import { CONVERSATION_PREFIX } from "./conversationReferences";
 import { isMessageImage, type SubmitMessageEdit } from "./messageEditContent";
 import userStyles from "./UserMessage.module.less";
@@ -19,9 +21,9 @@ import styles from "./styles.module.less";
 const MILLISECONDS_PER_SECOND = 1000;
 function referenceLabel(path?: string) {
   if (path?.startsWith("coze://")) return "Coze";
-  if (path?.startsWith(CONVERSATION_PREFIX)) return guiText("引用对话");
-  if (path?.startsWith("plugin://")) return guiText("插件");
-  return guiText("附件");
+  if (path?.startsWith(CONVERSATION_PREFIX)) return uiText("client.workspaceActions.referenceAConversation");
+  if (path?.startsWith("plugin://")) return uiText("client.chat.plugins");
+  return uiText("client.mobile.attachments");
 }
 const sentAtOptions: Intl.DateTimeFormatOptions = {
   year: "numeric", month: "2-digit", day: "2-digit",
@@ -33,11 +35,12 @@ export function UserMessage({ item, startedAt, onEdit, onDelete, editDisabled = 
   onDelete?: () => Promise<boolean>;
 }) {
   const [editing, setEditing] = useState(false);
-  const parts = visibleUserContent(item.content);
+  const parts = visibleUserContent(item.content ?? (item.text ? [item.text] : []));
   const images = parts.filter(isMessageImage);
   const mentions = parts.filter((part) => part.type === "mention");
   const text = parts.filter((part) => part.type === "text").map((part) => part.text).join("\n");
   const message = quotedMessage(text);
+  const files = messageAttachments(message.text, mentions);
   const date = startedAt == null ? null : new Date(startedAt * MILLISECONDS_PER_SECOND);
   const sentAt = date && Number.isFinite(date.getTime()) ? date : null;
   const showBubble = editing || Boolean(message.text || message.quotes.length || mentions.length);
@@ -45,13 +48,11 @@ export function UserMessage({ item, startedAt, onEdit, onDelete, editDisabled = 
   return <article className={`${styles.userMessage} ${editing ? userStyles.editingMessage : ""}`}>
     {!editing && images.length > 0 && <div className={userStyles.attachments}>
       {images.map((part, index) =>
-        <MessageImage key={index} src={part.url || part.path} alt={guiText("图片附件 {value1}", { value1: index + 1 })} />)}
+        <MessageImage key={index} src={part.url || part.path} alt={uiText("client.conversation.imageAttachment", { value1: index + 1 })} />)}
     </div>}
     {showBubble && <div className={`${styles.userBubble} ${userStyles.bubble}`}>
-      {mentions.map((part, index) =>
-        part.path && isFileReference(part.path)
-          ? <FileMenu path={part.path} key={`reference-${index}`} preview>{part.name || part.path}</FileMenu>
-          : <span className={styles.imageLabel} key={`reference-${index}`}>
+      {files.references.map((part, index) =>
+        <span className={styles.imageLabel} key={`reference-${index}`}>
           {referenceLabel(part.path)}：{part.name || part.path}
         </span>)}
       {editing && onEdit ? <UserMessageEditor text={text} images={images}
@@ -60,7 +61,9 @@ export function UserMessage({ item, startedAt, onEdit, onDelete, editDisabled = 
         disabled={editDisabled} onSubmit={onEdit} onDelete={onDelete}
         onCancel={() => setEditing(false)} /> : <>
         <MessageQuotes key={text} quotes={message.quotes} />
-        {message.text && <div>{message.text}</div>}
+        <AttachmentMetadataProvider><MessageAttachments key={`files-${text}`} attachments={files.attachments} t={uiText}
+          renderFile={file => <FileMenu path={file.path} preview>{file.name}</FileMenu>} /></AttachmentMetadataProvider>
+        {files.text && <div>{files.text}</div>}
       </>}
     </div>}
     {!editing && <div className={styles.userMessageActions}>
@@ -68,7 +71,7 @@ export function UserMessage({ item, startedAt, onEdit, onDelete, editDisabled = 
         {new Intl.DateTimeFormat(guiLocale(), sentAtOptions).format(sentAt)}
       </time>}
       <CopyButton text={text} />
-      {onEdit && !editing && <Button type="text" size="small" aria-label={guiText("编辑消息")} disabled={editDisabled}
+      {onEdit && !editing && <Button type="text" size="small" aria-label={uiText("client.workspaceActions.editMessage")} disabled={editDisabled}
         icon={<Pencil size={14} />} onClick={() => setEditing(true)} />}
     </div>}
   </article>;

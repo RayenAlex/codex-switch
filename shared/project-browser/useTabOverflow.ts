@@ -1,34 +1,33 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import type { DocumentTab } from './documents';
+import { revealTabOffset, tabOverflow } from '../tabs/overflow';
 
-const EDGE_TOLERANCE = 1;
 interface OverflowState { overflowing: boolean; hiddenPaths: string[]; clippedLeft: boolean }
 
 function revealTab(viewport: HTMLDivElement, path?: string) {
-  const active = [...viewport.querySelectorAll<HTMLElement>('.pf-tab')]
+  const active = [...viewport.querySelectorAll<HTMLElement>('[data-overflow-tab]')]
     .find(tab => path ? tab.dataset.path === path : tab.dataset.active === 'true');
   if (!active || !viewport.clientWidth) return;
   const bounds = viewport.getBoundingClientRect();
   const tab = active.getBoundingClientRect();
-  if (tab.left < bounds.left) viewport.scrollLeft += tab.left - bounds.left;
-  else if (tab.right > bounds.right) viewport.scrollLeft += tab.right - bounds.right;
+  viewport.scrollLeft = revealTabOffset({ id: path ?? '', width: tab.width,
+    left: tab.left - bounds.left + viewport.scrollLeft }, viewport.clientWidth, viewport.scrollLeft);
 }
 
 function measureOverflow(bar: HTMLDivElement, viewport: HTMLDivElement): OverflowState {
-  const tabs = [...viewport.querySelectorAll<HTMLElement>('.pf-tab')];
+  const tabs = [...viewport.querySelectorAll<HTMLElement>('[data-overflow-tab]')];
   const bounds = viewport.getBoundingClientRect();
-  const totalWidth = tabs.reduce((width, tab) => width + tab.getBoundingClientRect().width, 0);
+  const gap = Number.parseFloat(getComputedStyle(viewport).columnGap) || 0;
+  const totalWidth = tabs.reduce((width, tab) => width + tab.getBoundingClientRect().width, 0)
+    + gap * Math.max(0, tabs.length - 1);
   // Include the menu button's space so it disappears as soon as the tabs can fit without it.
-  const overflowing = totalWidth > bar.clientWidth + EDGE_TOLERANCE;
-  const hiddenPaths = overflowing ? tabs.flatMap(tab => {
-    const rect = tab.getBoundingClientRect();
-    const clipped = rect.left < bounds.left - EDGE_TOLERANCE || rect.right > bounds.right + EDGE_TOLERANCE;
-    return clipped && tab.dataset.path ? [tab.dataset.path] : [];
-  }) : [];
-  return { overflowing, hiddenPaths, clippedLeft: overflowing && viewport.scrollLeft > EDGE_TOLERANCE };
+  const result = tabOverflow({ tabs: tabs.map(tab => ({ id: tab.dataset.path ?? '',
+    left: tab.getBoundingClientRect().left - bounds.left + viewport.scrollLeft,
+    width: tab.getBoundingClientRect().width })), contentWidth: totalWidth,
+    barWidth: bar.clientWidth, viewportWidth: viewport.clientWidth, scrollLeft: viewport.scrollLeft });
+  return { ...result, hiddenPaths: result.hiddenIds };
 }
 
-export function useTabOverflow(tabs: DocumentTab[], activePath?: string) {
+export function useTabOverflow(tabs: { path: string }[], activePath?: string) {
   const bar = useRef<HTMLDivElement>(null);
   const viewport = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<OverflowState>({ overflowing: false, hiddenPaths: [], clippedLeft: false });

@@ -12,7 +12,8 @@ if (!template.includes('<!--site-head-->') || !template.includes('<!--site-body-
   throw new Error('The build template is missing prerender placeholders.');
 }
 
-const languageTags = { zh: 'zh-CN', en: 'en', ru: 'ru' };
+const registry = JSON.parse(await readFile(new URL('../../../packages/i18n/languages.json', import.meta.url), 'utf8'));
+const languageTags = Object.fromEntries(registry.languages.map(({ id, tag }) => [id, tag]));
 
 function html(route) {
   const result = render(route);

@@ -1,6 +1,7 @@
 import { t, useLanguage } from '../i18n';
 import { memo, useMemo, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, Text, View, type TextStyle } from 'react-native';
+import { Pressable, Text, View, type TextStyle } from 'react-native';
+import { SwipeSafeScrollView } from '../navigation/SwipeGestureBoundary';
 import { parseDiff } from '../../../../shared/chat/diff';
 import { ChatCodeBlock } from './ChatCodeBlock';
 import { ChatDiff } from './ChatDiff';
@@ -32,7 +33,7 @@ function MarkdownPage<Node>({ nodes, render }: {
   return <>{nodes.slice(0, limit).map(render)}
     {nodes.length > limit && <Pressable accessibilityRole="button" style={styles.button}
       onPress={() => setLimit((value) => value + PAGE_BLOCKS)}>
-      <Text style={styles.buttonText}>{t("显示更多内容")}</Text>
+      <Text style={styles.buttonText}>{t("client.chat.showMore")}</Text>
     </Pressable>}
   </>;
 }
@@ -61,7 +62,7 @@ function List({ node, context }: { node: MarkdownNode; context: MarkdownContext 
         ? <ListMarker label={ordered ? `${start + index}.` : '•'} context={context}
           reserve={ordered ? `${'0'.repeat(markerDigits)}.` : undefined} />
         : <View accessibilityRole="checkbox" accessibilityState={{ checked: child.task, disabled: true }}
-          accessibilityLabel={child.task ? t("已完成") : t("未完成")}
+          accessibilityLabel={child.task ? t("client.chat.completed") : t("client.downloads.incomplete")}
           style={[markdownStyles.checkbox, child.task && markdownStyles.checked]}>
           {child.task && <Text style={markdownStyles.checkmark}>✓</Text>}
         </View>}
@@ -78,7 +79,7 @@ function Code({ node, copy }: { node: MarkdownNode; copy?: CopyAction }) {
   const files = useMemo(() => ['diff', 'patch'].includes(language) ? parseDiff(node.token.content) : [],
     [language, node.token.content]);
   if (files.length) return <ChatDiff files={files} copy={copy} />;
-  return <ChatCodeBlock text={node.token.content} label={language || t("代码")} language={language} replyCopy={copy} />;
+  return <ChatCodeBlock text={node.token.content} label={language || t("client.chat.code")} language={language} replyCopy={copy} />;
 }
 
 function TableRow({ node, context }: { node: MarkdownNode; context: MarkdownContext }) {
@@ -106,12 +107,12 @@ function Block({ node, context = {} }: { node: MarkdownNode; context?: MarkdownC
       context={{ ...context, compact: context.compact || token.hidden }} />;
   }
   if (LIST_TYPES.has(token.type)) return <List node={node} context={context} />;
-  if (token.type === 'table_open') return <ScrollView horizontal nestedScrollEnabled style={markdownStyles.table}>
+  if (token.type === 'table_open') return <SwipeSafeScrollView horizontal nestedScrollEnabled style={markdownStyles.table}>
     <View><MarkdownPage nodes={children}
       render={(child, index) => <Block key={index} node={child}
         context={childContext(context, index, children.length)} />} />
     </View>
-  </ScrollView>;
+  </SwipeSafeScrollView>;
   if (token.type === 'tr_open') return <TableRow node={node} context={context} />;
   if (token.type === 'hr') return <><View style={markdownStyles.rule} />
     {context.copy && <SelectableChatText copy={context.copy} />}</>;
@@ -123,13 +124,25 @@ function Block({ node, context = {} }: { node: MarkdownNode; context?: MarkdownC
   </View>;
 }
 
-export const ChatMarkdown = memo(function ChatMarkdown({ text, tone = 'default', copy, user = false }: {
-  text: string; tone?: 'default' | 'process'; copy?: CopyAction; user?: boolean;
+export const ChatMarkdown = memo(function ChatMarkdown({
+  text, tone = 'default', copy, user = false, compact = false,
+}: {
+  text: string; tone?: 'default' | 'process'; copy?: CopyAction; user?: boolean; compact?: boolean;
 }) {
+  const markdownStyles = useMarkdownStyles();
   useLanguage();
   const content = useMemo(() => markdownContent(text, user), [text, user]);
-  return <View><MarkdownPage nodes={content} render={(entry, index) => entry.type === 'review'
-    ? <ChatCodeReview key={index} comment={entry.comment} copy={index === content.length - 1 ? copy : undefined} />
-    : <Block key={index} node={entry.node}
-      context={childContext({ tone, copy }, index, content.length)} />} /></View>;
+  return <View style={compact && markdownStyles.compactContent}>
+    <MarkdownPage nodes={content} render={(entry, index) => {
+      if (entry.type === 'review') return <ChatCodeReview key={index} comment={entry.comment}
+        copy={index === content.length - 1 ? copy : undefined} />;
+      // Bubbles and process lists supply the spacing around their outer paragraphs.
+      const flushParagraph = (user || tone === 'process') && entry.node.token.type === 'paragraph_open';
+      const previous = content[index - 1];
+      const followsParagraph = entry.node.token.type === 'paragraph_open'
+        && previous?.type === 'block' && previous.node.token.type === 'paragraph_open';
+      return <Block key={index} node={entry.node} context={childContext({ tone, copy, compact,
+        flushTop: followsParagraph || (flushParagraph && index === 0),
+        flushBottom: flushParagraph && index === content.length - 1 }, index, content.length)} />;
+    }} /></View>;
 });

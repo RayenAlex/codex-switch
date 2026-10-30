@@ -8,7 +8,8 @@ export function historyNotification(event: GuiEvent): GuiEvent {
     return { method: HISTORY_CHANGED, params: { threadId, reason: event.method } };
   }
   if (event.id == null && threadId && event.method.startsWith('thread/') && event.params.thread) {
-    return { method: HISTORY_CHANGED, params: { threadId, reason: event.method } };
+    const { turns: _turns, ...thread } = event.params.thread;
+    return { method: HISTORY_CHANGED, params: { threadId, reason: event.method, thread } };
   }
   if (event.id == null && event.method === 'turn/completed' && event.params.turn) {
     return { ...event, params: { ...event.params, turn: { ...event.params.turn, items: [] } } };

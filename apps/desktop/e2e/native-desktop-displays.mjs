@@ -4,7 +4,7 @@ import { chromium } from '@playwright/test';
 const endpoints = JSON.parse(process.env.CSW_NATIVE_DISPLAY_ENDPOINTS || '[]');
 assert.equal(endpoints.length, 2);
 assert.ok(endpoints.every(item => item.endpoint.startsWith('http://127.0.0.1:') && item.token));
-const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage();
   await page.exposeFunction('nativeRequest', async (index, path, body = {}) => {

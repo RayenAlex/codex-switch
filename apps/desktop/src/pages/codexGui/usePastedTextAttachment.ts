@@ -1,5 +1,6 @@
+import { displayError } from '../../i18n/uiText';
 import { useState } from 'react';
-import { guiText } from '../../i18n/guiText';
+
 import { readFileBase64 } from '../../../../../shared/chat/fileData';
 import { checkFileUploadSize } from '../../../../../shared/remote-chat/policy';
 import type { AttachmentReference } from './attachmentTypes';
@@ -22,7 +23,7 @@ export function usePastedTextAttachment({ key, addAttachments, report }: Options
       // This callback belongs to the original draft, even after switching conversations.
       addAttachments([{ kind: 'file', name: file.name, path: '', data }]);
     } catch (cause) {
-      report(guiText(cause instanceof Error ? cause.message : '文件粘贴失败，请重新复制后再试。'));
+      report(displayError(cause instanceof Error ? cause.message : "client.workspaceActions.couldNotPasteFilesCopyThemAgainAndRetry"));
     } finally { changePending(-1); }
   };
   return { add, reading: Boolean(pending[key]) };

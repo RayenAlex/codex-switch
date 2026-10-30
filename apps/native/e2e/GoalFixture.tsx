@@ -3,7 +3,7 @@ import { registerRootComponent } from 'expo';
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { setInterfaceLanguage } from '../../../shared/i18n/interfaceLanguage';
+import { setInterfaceLanguage } from "../../../shared/localization/interfaceLanguage";
 import type { ThreadGoal } from '../../desktop/src/pages/codexGui/goalTypes';
 import { ComposerGoal } from '../src/chat/ComposerGoal';
 import { useStyles } from '../src/chat/styles';

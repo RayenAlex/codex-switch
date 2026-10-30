@@ -1,6 +1,7 @@
 import type { AccountDisplayMode } from "../../hooks/useAccountDisplayMode";
 import type { NavigationStyle } from "../../hooks/useNavigationStyle";
 import type { Language, Translate } from "../../i18n";
+import type { ThemeMode } from "../../utils/themeMode";
 import type {
   AppInfo,
   BubbleResetDisplay,
@@ -37,6 +38,8 @@ export interface SettingsPageProps {
   themeColor: string;
   themeColorLoading: boolean;
   onThemeColorChange: (color: string) => void;
+  themeMode: ThemeMode;
+  onThemeModeChange: (mode: ThemeMode) => void;
   navigationStyle: NavigationStyle;
   onNavigationStyleChange: (style: NavigationStyle) => void;
   cloudBaseUrl: string;

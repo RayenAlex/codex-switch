@@ -3,15 +3,17 @@ import type { FileClient } from '../../../../shared/remote-chat/fileDownload';
 import type { ConnectionMode } from '../../../../shared/remote-chat/protocol';
 
 export interface DownloadSource extends DownloadLocation {
+  attachment?: import('../../../../shared/lounge/attachments').LoungeAttachment;
   owner: string; deviceId: string; deviceName: string; path: string;
   preview?: import('../../../../shared/remote-chat/downloads').PreviewKind;
   gitCommit?: string;
+  sshSessionId?: string;
 }
 export interface DownloadTask {
   id: string; source: DownloadSource; name: string;
   status: 'queued' | 'preparing' | 'downloading' | 'verifying' | 'ready' | 'saving'
     | 'paused' | 'completed' | 'failed';
-  received: number; size: number; createdAt: number; message: string;
+  received: number; size: number; createdAt: number; completedAt?: number; message: string;
   revision?: string; mimeType?: string; bytesPerSecond?: number;
   protocol?: 'bulk' | 'legacy';
   manifest?: import('../../../../shared/remote-chat/downloadManifest').DownloadManifest;
@@ -25,4 +27,5 @@ export interface DownloadConnection {
   threadId?: string; cwd?: string; client: DownloadClient; files: FileClient;
   git?: import('../../../../shared/remote-chat/gitTypes').GitClient;
   projectBrowser?: import('../../../../shared/project-browser/protocol').ProjectBrowserClient;
+  ssh?: import('../../../../shared/terminal/ssh').SshApi;
 }

@@ -56,4 +56,4 @@ export function readPastedContent(data: DataTransfer): PastedContent {
   return { files, text, hasImages, missingImages: rich.sources.length > imageCount };
 }
 
-export const MISSING_CLIPBOARD_IMAGES = '部分图片未能粘贴，请单独复制图片，或保存后添加。';
+export const MISSING_CLIPBOARD_IMAGES = "client.errors.someImagesCouldNotBePastedCopyThemSeparatelyOr";

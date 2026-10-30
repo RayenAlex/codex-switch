@@ -1,12 +1,17 @@
 import { useSyncExternalStore } from 'react';
-import { darkColors, isThemeMode, type ThemeMode } from '../../../../shared/theme/mode';
+import { darkColors, isThemePreference, resolveThemeMode,
+  type ThemeMode, type ThemePreference } from '../../../../shared/theme/mode';
 
 export const THEME_KEY = 'codex-switch.web.theme.v1';
 const listeners = new Set<() => void>();
 const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
 let mode: ThemeMode = 'light';
+let preference: ThemePreference = 'system';
+const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
 export const getThemeMode = () => mode;
 export const useThemeMode = () => useSyncExternalStore(subscribe, getThemeMode, getThemeMode);
+export const getThemePreference = () => preference;
+export const useThemePreference = () => useSyncExternalStore(subscribe, getThemePreference, getThemePreference);
 
 function applyTheme(next: ThemeMode) {
   mode = next;
@@ -23,19 +28,31 @@ function applyTheme(next: ThemeMode) {
   listeners.forEach(listener => listener());
 }
 
+function applyPreference(next: ThemePreference) {
+  preference = next;
+  applyTheme(resolveThemeMode(next, systemTheme.matches ? 'dark' : 'light'));
+}
+
 export function initializeTheme() {
   let saved: string | null = null;
   try { saved = localStorage.getItem(THEME_KEY); }
   catch { /* Storage can be unavailable in a private browser session. */ }
-  applyTheme(isThemeMode(saved) ? saved : 'light');
+  applyPreference(isThemePreference(saved) ? saved : 'system');
 }
 
-export function setThemeMode(next: ThemeMode): boolean {
-  applyTheme(next);
+export function setThemeMode(next: ThemePreference): boolean {
+  if (!isThemePreference(next)) return false;
+  applyPreference(next);
   try { localStorage.setItem(THEME_KEY, next); return true; }
   catch { return false; }
 }
 
 window.addEventListener('storage', event => {
-  if (event.key === THEME_KEY) applyTheme(isThemeMode(event.newValue) ? event.newValue : 'light');
+  if (event.key === THEME_KEY || event.key === null) {
+    applyPreference(isThemePreference(event.newValue) ? event.newValue : 'system');
+  }
+});
+
+systemTheme.addEventListener('change', () => {
+  if (preference === 'system') applyPreference('system');
 });

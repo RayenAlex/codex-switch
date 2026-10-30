@@ -17,7 +17,7 @@ fn language_changes_do_not_overwrite_business_settings_or_lose_to_stale_snapshot
     };
     write_app_settings(app.handle(), &settings).unwrap();
     let original = fs::read(&path).unwrap();
-    for language in ["en", "ru", "zh"] {
+    for language in ["en", "ru", "ja", "zh"] {
         save_app_language(app.handle(), language).unwrap();
         assert_eq!(fs::read(&path).unwrap(), original);
         assert_eq!(
@@ -25,11 +25,11 @@ fn language_changes_do_not_overwrite_business_settings_or_lose_to_stale_snapshot
             Some(language)
         );
     }
-    save_app_language(app.handle(), "ru").unwrap();
+    save_app_language(app.handle(), "ja").unwrap();
     settings.cloud_last_sync_at = Some("2026-10-02T00:00:00Z".into());
     write_app_settings(app.handle(), &settings).unwrap();
     let reloaded = read_app_settings(app.handle()).unwrap();
-    assert_eq!(reloaded.language.as_deref(), Some("ru"));
+    assert_eq!(reloaded.language.as_deref(), Some("ja"));
     assert_eq!(reloaded.cloud_last_sync_at, settings.cloud_last_sync_at);
     fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }

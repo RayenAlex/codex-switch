@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { guiApi } from "./api";
 import { SkillInput } from "./SkillInput";
-import { setGuiLanguage } from "../../i18n/guiText";
+import { setGuiLanguage } from "../../i18n/uiText";
 import type { ComposerText } from "./types";
 
 vi.mock("./api", () => ({ guiApi: { request: vi.fn() } }));

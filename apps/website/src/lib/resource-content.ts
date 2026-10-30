@@ -1,7 +1,7 @@
-import type { Language } from '../content/types';
-import { resourceGroups } from '../content/resources';
-import { resourcesCopy } from '../content/resources-copy';
-import { resourceDescription, resourceGroupText } from '../content/resource-text';
+import type { Language } from '@remoteai/i18n/website-content/types';
+import { resourceGroups } from '@remoteai/i18n/website-content/resources';
+import { resourcesCopy } from '@remoteai/i18n/website-content/resources-copy';
+import { resourceDescription, resourceGroupText } from '@remoteai/i18n/website-content/resource-text';
 import { pagePath, SITE_URL } from './site';
 
 export function resourceListSchema(language: Language) {

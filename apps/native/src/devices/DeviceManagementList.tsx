@@ -19,6 +19,7 @@ interface DeviceManagementListProps {
   onRefresh: () => Promise<void>;
   onDelete: (device: RemoteDevice) => void;
   onRevokeService: (device: RemoteDevice) => void;
+  onScreenControl: (device: RemoteDevice, enabled: boolean) => void;
   onSwitchModel: (deviceId: string) => void;
   onSelectAuthAccount: (deviceId: string) => void;
 }
@@ -31,17 +32,17 @@ function DeviceOverview({ devices }: { devices: RemoteDevice[] }) {
   return <View style={styles.summary}>
     <View style={styles.stat}>
       <View style={styles.statIcon}>
-        <Ionicons name="phone-portrait-outline" size={25} color={color(deviceColors.green, 'accent')} />
+        <Ionicons name="phone-portrait-outline" size={20} color={color(deviceColors.green, 'accent')} />
       </View>
-      <View style={styles.identity}>
-        <Text style={styles.statValue}>{online}</Text>
-        <View style={styles.statLabelRow}><View style={styles.dot} /><Text style={styles.statLabel}>{t("当前在线")}</Text></View>
-      </View>
+      <Text style={styles.statLabel}>{t("client.app.onlineNow")}</Text>
+      <Text style={styles.statValue}>{online}</Text>
     </View>
     <View style={styles.stat}>
-      <View style={styles.statIcon}><Ionicons name="layers-outline" size={27} color={color(deviceColors.green, 'accent')} /></View>
-      <View style={styles.identity}><Text style={styles.statValue}>{devices.length}</Text>
-        <Text style={[styles.statLabel, { marginTop: 3 }]}>{t("全部设备")}</Text></View>
+      <View style={styles.statIcon}>
+        <Ionicons name="layers-outline" size={20} color={color(deviceColors.green, 'accent')} />
+      </View>
+      <Text style={styles.statLabel}>{t("client.app.allDevices")}</Text>
+      <Text style={styles.statValue}>{devices.length}</Text>
     </View>
   </View>;
 }
@@ -58,19 +59,16 @@ export function DeviceManagementList(props: DeviceManagementListProps) {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()}
         tintColor={color(deviceColors.green, 'accent')} colors={[deviceColors.green]} />}>
       <View style={styles.header}>
-        <Text style={styles.heading}>{t("设备管理")}</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel={t("刷新设备列表")} disabled={refreshing}
+        <Text style={styles.heading}>{t("client.app.devices.7e708d")}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={t("client.app.refreshDeviceList")} disabled={refreshing}
           accessibilityState={{ disabled: refreshing, busy: refreshing }} onPress={() => void onRefresh()}
           style={({ pressed }) => [styles.refresh, pressed && styles.pressed]}>
           {refreshing ? <ActivityIndicator color={color(deviceColors.green, 'accent')} />
             : <Ionicons name="sync-outline" size={23} color={color(deviceColors.green, 'accent')} />}
         </Pressable>
       </View>
-      <Text style={styles.subtitle}>{t("查看设备状态，点击卡片切换模型")}</Text>
+      <Text style={styles.subtitle}>{t("client.app.viewDeviceStatusAndSelectACardToSwitchModels")}</Text>
       <DeviceOverview devices={devices} />
-      <Text style={styles.listTitle}>
-        {t("已登录设备")}{' '}<Text style={styles.listCount}>({devices.length})</Text>
-      </Text>
       {devices.map((device) => <DeviceCard key={device.deviceId} device={device}
         accounts={props.accounts} providers={props.providers}
         busy={props.switchingModelDeviceId === device.deviceId || props.deletingDeviceId === device.deviceId}
@@ -78,14 +76,15 @@ export function DeviceManagementList(props: DeviceManagementListProps) {
         onOpenMenu={() => setMenuDeviceId(device.deviceId)} />)}
       {devices.length ? <View style={styles.hint}>
         <Ionicons name="information-circle-outline" size={23} color={color(deviceColors.green, 'accent')} />
-        <Text style={styles.hintText}>{t("在线设备暂不支持删除。")}{'\n'}{t("如需移除，请先在该设备上退出登录。")}</Text>
+        <Text style={styles.hintText}>{t("client.app.onlineDevicesCannotBeRemoved")}{'\n'}{t("client.app.signOutOnTheDeviceBeforeRemovingIt")}</Text>
       </View> : <View style={styles.empty}>
         <Ionicons name="desktop-outline" size={40} color={color(deviceColors.green, 'accent')} />
-        <Text style={styles.emptyTitle}>{t("暂无设备")}</Text>
-        <Text style={styles.emptyText}>{t("在电脑上登录同一账号，设备就会自动出现在这里。")}</Text>
+        <Text style={styles.emptyTitle}>{t("client.app.noDevicesYet")}</Text>
+        <Text style={styles.emptyText}>{t("client.app.signInWithTheSameAccountOnYourComputerTo")}</Text>
       </View>}
     </ScrollView>
     <DeviceOptionsMenu device={menuDevice} deletingDeviceId={props.deletingDeviceId}
+      onScreenControl={props.onScreenControl}
       switchingAuthDeviceId={props.switchingAuthDeviceId} onClose={() => setMenuDeviceId(null)}
       onDelete={props.onDelete} onRevokeService={props.onRevokeService} onSelectAuthAccount={props.onSelectAuthAccount} />
   </>;

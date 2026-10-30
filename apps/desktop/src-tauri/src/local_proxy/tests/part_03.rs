@@ -175,6 +175,7 @@ fn official_models_endpoint_preserves_client_version_query() {
 #[test]
 fn proxy_diagnostic_entry_redacts_response_body_content() {
     let provider = ProviderProfile {
+        account_alias: None,
         request_options: Default::default(),
         id: "responses".to_string(),
         kind: ProviderKind::Custom,
@@ -194,6 +195,8 @@ fn proxy_diagnostic_entry_redacts_response_body_content() {
         fast_mode_enabled: false,
         websocket_enabled: false,
         api_format: ProviderApiFormat::OpenaiResponses,
+        balance_script: None,
+        market_source: None,
         balance_platform: None,
         balance_query_url: None,
         balance_query_token: None,
@@ -232,6 +235,7 @@ fn proxy_diagnostic_entry_redacts_response_body_content() {
 #[test]
 fn proxy_diagnostic_entry_redacts_non_responses_body_content() {
     let provider = ProviderProfile {
+        account_alias: None,
         request_options: Default::default(),
         id: "chat".to_string(),
         kind: ProviderKind::Custom,
@@ -251,6 +255,8 @@ fn proxy_diagnostic_entry_redacts_non_responses_body_content() {
         fast_mode_enabled: false,
         websocket_enabled: false,
         api_format: ProviderApiFormat::OpenaiChat,
+        balance_script: None,
+        market_source: None,
         balance_platform: None,
         balance_query_url: None,
         balance_query_token: None,

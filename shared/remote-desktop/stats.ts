@@ -1,3 +1,4 @@
+import { defaultText } from '../localization/messages';
 import type { DesktopStats } from './protocol';
 import { isNativeMediaPair, type NativeMediaEndpoint } from './nativeMedia';
 
@@ -66,21 +67,21 @@ export class DesktopStatsSampler {
   }
 }
 
-export function desktopStatsLines(stats: DesktopStats, translate: (text: string) => string = text => text): string[] {
+export function desktopStatsLines(stats: DesktopStats, translate: (text: string) => string = defaultText): string[] {
   const elapsed = Math.max(0, Math.floor(number(stats.elapsedSeconds) ?? 0));
   const duration = [Math.floor(elapsed / 3600), Math.floor(elapsed / 60) % 60, elapsed % 60]
     .map(value => String(value).padStart(2, '0')).join(':');
   const value = (input: unknown, digits = 0) => number(input)?.toFixed(digits) ?? '—';
   const bitrate = number(stats.receivedBitrate);
   const width = number(stats.width); const height = number(stats.height);
-  const connection = stats.connection ? translate(stats.connection === 'relay' ? '中继' : '直连') : '—';
+  const connection = stats.connection ? translate(stats.connection === 'relay' ? "client.runtimeErrors.relay" : "client.runtimeErrors.direct") : '—';
   const pipeline = stats.videoCodec || stats.captureMethod ? [
     [stats.captureMethod, stats.videoCodec?.toUpperCase()].filter(Boolean).join(' · '),
   ] : [];
   return [duration, `${stats.transport ?? '—'} ${connection}`, `${value(stats.receivedFps)} fps`,
     `${value(bitrate === undefined ? undefined : bitrate / 1_000_000, 1)} Mbps`,
-    `${value(stats.rttMs)} ms ${translate('延迟')}`, `${value(stats.decodeMs)} ms ${translate('解码')}`,
-    `${value(stats.lossPercent, 1)}% ${translate('丢包')}`,
+    `${value(stats.rttMs)} ms ${translate("client.remoteDesktop.latency")}`, `${value(stats.decodeMs)} ms ${translate("client.remoteDesktop.decode")}`,
+    `${value(stats.lossPercent, 1)}% ${translate("client.remoteDesktop.loss")}`,
     width && height ? `${width} × ${height}` : '—',
-    stats.network ? translate(stats.network) : `— ${translate('网络')}`, ...pipeline];
+    stats.network ? translate(stats.network) : `— ${translate("client.remoteDesktop.network")}`, ...pipeline];
 }

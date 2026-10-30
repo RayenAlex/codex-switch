@@ -369,6 +369,7 @@
     #[test]
     fn chat_bridge_honors_codex_selected_provider_model() {
         let provider = ProviderProfile {
+            account_alias: None,
             request_options: Default::default(),
             id: "deepseek".to_string(),
             kind: ProviderKind::Custom,
@@ -388,6 +389,8 @@
             fast_mode_enabled: false,
             websocket_enabled: false,
             api_format: ProviderApiFormat::OpenaiChat,
+            balance_script: None,
+            market_source: None,
             balance_platform: None,
             balance_query_url: None,
             balance_query_token: None,

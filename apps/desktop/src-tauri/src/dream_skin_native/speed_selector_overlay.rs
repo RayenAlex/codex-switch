@@ -1,7 +1,7 @@
 const CODEX_SPEED_SELECTOR_OVERLAY: &str = r#"
   window.__CODEX_SWITCH_REFRESH_SPEED_SELECTOR__ = () => {
     const stateKey = "__CODEX_SWITCH_SPEED_SELECTOR__";
-    const overlayVersion = 22;
+    const overlayVersion = 24;
     const usageRefreshMs = 5000;
     const usageRequestTimeoutMs = 15000;
     const usageStaleMs = 30000;
@@ -9,12 +9,14 @@ const CODEX_SPEED_SELECTOR_OVERLAY: &str = r#"
     const fastModeAllowed = window.__CODEX_SWITCH_FAST_MODE_ALLOWED__ === true;
     const existing = window[stateKey];
     const removeSelectors = (installed = existing) => {
+      window.__CODEX_SWITCH_USAGE_STATUSLINE__?.dispose();
       if (installed) installed.installed = false;
       installed?.observer?.disconnect();
       if (installed?.timer) clearInterval(installed.timer);
       if (installed?.usageTimer) clearInterval(installed.usageTimer);
       if (installed?.initialUsageTimer) clearTimeout(installed.initialUsageTimer);
       if (installed?.onUsageVisible) document.removeEventListener("visibilitychange", installed.onUsageVisible);
+      installed?.usageNode?.remove();
       const injectedNodes = "[data-codex-switch-speed-selector], [data-codex-switch-speed-submenu]";
       for (const selector of document.querySelectorAll(injectedNodes)) selector.remove();
       delete window[stateKey];
@@ -39,7 +41,7 @@ const CODEX_SPEED_SELECTOR_OVERLAY: &str = r#"
       onUsageVisible: null,
       pendingTier: null, previousTier: null, selectionError: false, syncAll: null,
       completeSelection: null, completeUsageRequest: null, updateUsage: null, requestUsage: null,
-      updateLanguage: null,
+      updateLanguage: null, usageNode: null,
       usage: {
         enabled: false, totalTokens: 0, estimatedCostUsd: 0,
         primaryRemainingPercent: null, primaryRemainingAggregated: false,
@@ -47,6 +49,7 @@ const CODEX_SPEED_SELECTOR_OVERLAY: &str = r#"
       },
     };
     window[stateKey] = state;
+    // i18n:speed-selector:start
     const copy = {
       zh: {
         today: "今日", normal: "普通模式", fast: "快速模式", ultrafast: "Ultrafast 模式",
@@ -75,7 +78,17 @@ const CODEX_SPEED_SELECTOR_OVERLAY: &str = r#"
         quota: "Остаток лимита аккаунта", totalQuota: "Общий остаток лимитов параллельных аккаунтов",
         apiCost: "Стоимость текущего API за сегодня", totalApiCost: "Общая стоимость API за сегодня",
       },
+      ja: {
+        today: "今日", normal: "通常モード", fast: "高速モード", ultrafast: "Ultrafast モード",
+        group: "今日の使用量と速度モード", switchTo: "クリックして切り替え：",
+        speedError: "速度を変更できませんでした。もう一度お試しください。",
+        pending: "更新待ち",
+        tokens: "今日のトークン使用量", cost: "今日の推定コスト",
+        quota: "現在のアカウントの残り利用枠", totalQuota: "同時利用アカウントの残り利用枠の合計",
+        apiCost: "現在の API の今日の推定コスト", totalApiCost: "集約 API の今日の推定コスト合計",
+      },
     };
+    // i18n:speed-selector:end
     const text = key => copy[state.language][key];
     const speedModes = {
       default: { name: "normal", next: "priority", bolts: 0 },
@@ -141,6 +154,8 @@ const CODEX_SPEED_SELECTOR_OVERLAY: &str = r#"
       usage.querySelector("[data-trailing-balance]").style.setProperty("color", balanceColor, "important");
     };
     const syncSpeedButton = selector => {
+      selector.hidden = !state.fastModeAllowed;
+      selector.style.setProperty("display", state.fastModeAllowed ? "inline-flex" : "none", "important");
       const controls = selector.querySelector("[data-speed-controls]");
       if (controls) {
         controls.hidden = !state.fastModeAllowed;
@@ -164,8 +179,7 @@ const CODEX_SPEED_SELECTOR_OVERLAY: &str = r#"
         bolt.setAttribute("stroke", lit ? color : "currentColor");
       }
     };
-    const syncUsage = selector => {
-      const usage = selector.querySelector("[data-today-usage]");
+    const syncUsage = usage => {
       if (!usage) return;
       usage.hidden = !state.usage.enabled;
       usage.style.display = usage.hidden ? "none" : "inline-flex";
@@ -193,26 +207,24 @@ const CODEX_SPEED_SELECTOR_OVERLAY: &str = r#"
       );
     };
     const syncAll = () => {
+      state.usageNode.querySelector("[data-today-label]").textContent = text("today");
+      window.__CODEX_SWITCH_REFRESH_USAGE_STATUSLINE__?.();
+      syncUsage(state.usageNode);
       for (const selector of document.querySelectorAll("[data-codex-switch-speed-selector]")) {
         selector.setAttribute("aria-label", text("group"));
-        selector.querySelector("[data-today-label]").textContent = text("today");
-        syncUsage(selector);
         syncSpeedButton(selector);
-        const visible = state.fastModeAllowed || state.usage.enabled;
-        selector.hidden = !visible;
-        selector.style.setProperty("display", visible ? "inline-flex" : "none", "important");
       }
     };
     state.syncAll = syncAll;
     state.updateLanguage = language => {
-      if (!["zh", "en", "ru"].includes(language) || state.language === language) return;
+      if (!Object.hasOwn(copy, language) || state.language === language) return;
       state.language = language;
       syncAll();
     };
     state.completeUsageRequest = () => { state.usagePending = false; state.usageRequestedAt = 0; };
     state.updateUsage = summary => {
       state.completeUsageRequest();
-      if (["zh", "en", "ru"].includes(summary?.language)) state.language = summary.language;
+      if (Object.hasOwn(copy, summary?.language)) state.language = summary.language;
       const totalTokens = summary?.totalTokens;
       const estimatedCostUsd = summary?.estimatedCostUsd;
       const primaryRemainingPercent = summary?.primaryRemainingPercent;
@@ -384,14 +396,13 @@ const CODEX_SPEED_SELECTOR_OVERLAY: &str = r#"
         + "color:var(--text-tertiary);";
       container.style.setProperty("display", "inline-flex", "important");
       content.style.cssText = "display:flex;align-items:center;gap:6px;";
-      content.append(createUsage(), createSpeedControls());
+      content.append(createSpeedControls());
       container.append(content);
       for (const eventName of ["pointerdown", "mousedown", "click"]) {
         container.addEventListener(eventName, event => {
           event.stopPropagation();
         }, eventName !== "click");
       }
-      syncUsage(container);
       syncSpeedButton(container);
       return container;
     };
@@ -416,6 +427,9 @@ const CODEX_SPEED_SELECTOR_OVERLAY: &str = r#"
         modelWrapper.before(container);
       }
     };
+    // The status line owns placement; daily usage never competes with composer buttons for space.
+    state.usageNode = createUsage();
+    syncUsage(state.usageNode);
     state.observer = new MutationObserver(render);
     state.observer.observe(document.documentElement, { childList: true, subtree: true });
     state.timer = setInterval(render, 1000);

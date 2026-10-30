@@ -10,8 +10,13 @@ use windows_sys::Win32::{
     System::{RemoteDesktop::*, StationsAndDesktops::*, Threading::GetCurrentProcessId},
 };
 
-pub(super) fn account_sid(username: &str) -> Result<String, Error> {
-    let username: Vec<u16> = username.encode_utf16().chain(Some(0)).collect();
+pub(super) struct Account {
+    pub sid: String,
+    pub username: String,
+}
+
+pub(super) fn resolve_account(username: &str) -> Result<Account, Error> {
+    let name: Vec<u16> = username.encode_utf16().chain(Some(0)).collect();
     let mut sid = [0u32; 68];
     let mut domain = [0u16; 256];
     let mut sid_length = std::mem::size_of_val(&sid) as u32;
@@ -21,7 +26,7 @@ pub(super) fn account_sid(username: &str) -> Result<String, Error> {
     if unsafe {
         LookupAccountNameW(
             ptr::null(),
-            username.as_ptr(),
+            name.as_ptr(),
             sid.as_mut_ptr().cast(),
             &mut sid_length,
             domain.as_mut_ptr(),
@@ -33,7 +38,26 @@ pub(super) fn account_sid(username: &str) -> Result<String, Error> {
     {
         return Err(Error::Account);
     }
-    sid_text(sid.as_mut_ptr().cast())
+    Ok(Account {
+        sid: sid_text(sid.as_mut_ptr().cast())?,
+        username: login_name(username, &text(&domain)?)?,
+    })
+}
+
+fn login_name(username: &str, domain: &str) -> Result<String, Error> {
+    // Resolve bare names on the controlled computer, including its domain accounts.
+    // Explicit provider names and UPNs must retain their authentication semantics.
+    let name = if username.contains(['\\', '@']) {
+        username.to_owned()
+    } else if domain.is_empty() {
+        return Err(Error::Account);
+    } else {
+        format!("{domain}\\{username}")
+    };
+    if !super::valid_text(&name) {
+        return Err(Error::Invalid);
+    }
+    Ok(name)
 }
 fn sid_text(sid: *mut std::ffi::c_void) -> Result<String, Error> {
     let mut text = ptr::null_mut();
@@ -177,5 +201,38 @@ pub(super) fn login_desktop() -> bool {
             eprintln!("automatic unlock desktop cleanup failed");
         }
         success && text(&name).is_ok_and(|name| name.eq_ignore_ascii_case("Winlogon"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bare_usernames_use_the_domain_resolved_by_the_controlled_computer() {
+        assert_eq!(
+            login_name("alice", "REMOTE-PC").unwrap(),
+            "REMOTE-PC\\alice"
+        );
+        assert_eq!(login_name("alice", "CORP").unwrap(), "CORP\\alice");
+        assert!(matches!(login_name("alice", ""), Err(Error::Account)));
+        assert!(matches!(
+            login_name(&"a".repeat(256), "PC"),
+            Err(Error::Invalid)
+        ));
+    }
+
+    #[test]
+    fn qualified_and_online_account_names_are_preserved() {
+        for username in [
+            "PC\\alice",
+            ".\\alice",
+            "CORP\\alice",
+            "MicrosoftAccount\\alice@example.test",
+            "AzureAD\\alice@example.test",
+            "alice@example.test",
+        ] {
+            assert_eq!(login_name(username, "REMOTE-PC").unwrap(), username);
+        }
     }
 }

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Check, Copy, ExternalLink, FolderOpen } from "lucide-react";
 import type { ChromePluginAction } from "../../../api/chromePlugin";
-import { guiText } from "../../../i18n/guiText";
+import { uiText } from "../../../i18n/uiText";
 import styles from "./index.module.less";
 
 interface Props {
@@ -26,14 +26,14 @@ function ExtensionDirectory({ path }: { path: string }) {
     }
   };
   return <>
-    <button type="button" className={styles.path} aria-label={guiText("复制扩展目录路径")} onClick={() => void copy()}>
+    <button type="button" className={styles.path} aria-label={uiText("client.desktopChromePlugin.copyExtensionFolderPath")} onClick={() => void copy()}>
       <span className={styles.pathText}>{path}</span>
       <span className={styles.copyLabel} role="status">
         {copied ? <Check size={15} /> : <Copy size={15} />}
-        {guiText(copied ? "已复制" : "点击复制")}
+        {uiText(copied ? "client.chat.copied" : "client.desktopChromePlugin.clickToCopy")}
       </span>
     </button>
-    {copyFailed && <p className={styles.error} role="alert">{guiText("复制失败，请手动选择并复制路径。")}</p>}
+    {copyFailed && <p className={styles.error} role="alert">{uiText("client.desktopChromePlugin.couldNotCopyThePathSelectAndCopyItManually")}</p>}
   </>;
 }
 
@@ -43,25 +43,25 @@ export function ManualInstall({ extensionDirectory, busy, onAction }: Props) {
     setAddressCopied(false);
     setAddressCopied(await onAction("openExtensions"));
   };
-  const [typeBefore, typeAfter] = guiText("也可在 Chrome 地址栏输入 {value1} 并回车。").split("{value1}");
+  const [typeBefore, typeAfter] = uiText("client.desktopChromePlugin.youCanAlsoTypeInTheChromeAddressBarAnd").split("{value1}");
   return <details className={styles.manualInstall}>
-    <summary>{guiText("手动安装（可选）")}</summary>
-    <p className={styles.hint}>{guiText("无法使用商店时，可加载本机扩展。已从商店安装的用户无需重复安装。")}</p>
+    <summary>{uiText("client.desktopChromePlugin.manualInstallationOptional")}</summary>
+    <p className={styles.hint}>{uiText("client.desktopChromePlugin.ifYouCanTUseTheStoreLoadTheExtension")}</p>
     <ol>
-      <li>{guiText("打开 Chrome 扩展管理页，开启右上角的“开发者模式”。")}</li>
-      <li>{guiText("选择“加载已解压的扩展程序”，粘贴下方路径并选择该目录。")}</li>
+      <li>{uiText("client.desktopChromePlugin.openTheChromeExtensionsPageAndTurnOnDeveloperMode")}</li>
+      <li>{uiText("client.desktopChromePlugin.clickLoadUnpackedPasteThePathBelowAndSelectThat")}</li>
     </ol>
     <ExtensionDirectory path={extensionDirectory} />
     <div className={styles.setupActions}>
       <button className="refresh-all" disabled={busy} onClick={() => void openChrome()}>
-        <ExternalLink size={15} />{guiText("打开 Chrome 并复制地址")}
+        <ExternalLink size={15} />{uiText("client.desktopChromePlugin.openChromeAndCopyTheAddress")}
       </button>
       <button className="refresh-all" disabled={busy} onClick={() => void onAction("openFolder")}>
-        <FolderOpen size={15} />{guiText("打开扩展目录")}
+        <FolderOpen size={15} />{uiText("client.desktopChromePlugin.openExtensionFolder")}
       </button>
     </div>
     {addressCopied && <p className={`${styles.hint} ${styles.feedback}`} role="status">
-      {guiText("已复制地址，请在 Chrome 地址栏粘贴并回车。")}
+      {uiText("client.desktopChromePlugin.addressCopiedPasteItIntoTheChromeAddressBarAnd")}
     </p>}
     <p className={styles.hint}>{typeBefore}<code>{EXTENSIONS_ADDRESS}</code>{typeAfter}</p>
   </details>;

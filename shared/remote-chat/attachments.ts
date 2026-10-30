@@ -13,7 +13,7 @@ export function chatImageCharLimit(mode?: ConnectionMode) {
 
 export function validateChatImages(images: readonly string[], mode?: ConnectionMode) {
   if (images.length > MAX_CHAT_IMAGES) {
-    throw new ChatImageError(translateText(getInterfaceLanguage(), '一次最多添加 {value1} 张图片。',
+    throw new ChatImageError(translateMessage(getInterfaceLanguage(), "client.chat.youCanAddUpToImagesAtATime",
       { value1: MAX_CHAT_IMAGES }));
   }
   if (images.reduce((total, image) => total + image.length, 0) > chatImageCharLimit(mode)) {
@@ -30,5 +30,5 @@ export function draftImage(url: string): DraftImage {
 }
 import { isDirectChat } from './policy';
 import type { ConnectionMode } from './protocol';
-import { getInterfaceLanguage } from '../i18n/interfaceLanguage';
-import { translateText } from '../i18n/translate';
+import { getInterfaceLanguage } from "../localization/interfaceLanguage";
+import { translateMessage } from "../localization/messages";

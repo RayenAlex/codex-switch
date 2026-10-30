@@ -4,7 +4,7 @@ import type { Language, Translate } from "../../i18n";
 import { formatCompactTokenCount } from "../../utils/tokenContext";
 import { formatEstimatedCost, type TokenCostDisplaySettings } from "../../utils/tokenCost";
 import { DailyTokenUsageTooltip } from "../DailyTokenUsageTooltip";
-import { accountCardLabels } from "./accountCardLabels";
+import { accountCardLabels } from "@remoteai/i18n/copy/desktop/accountCardLabels";
 import type { AccountCardTokenUsage } from "./accountCardUsage";
 
 export function AccountCardFooter({ usage, display, language, t }: {

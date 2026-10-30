@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { CopyButton } from "./CopyButton";
 import { RichText } from "./RichText";
 import styles from "./ActivityRow.module.less";
@@ -15,11 +15,11 @@ export function ToolText({ text, markdown = false, className }: {
   const formatMarkdown = markdown && text.length <= MAX_FORMATTED_TOOL_CHARACTERS;
   return <>
     <div className={styles.textViewport}
-      tabIndex={0} role="region" aria-label={guiText("工具内容")}>
+      tabIndex={0} role="region" aria-label={uiText("client.workspaceActions.toolContent")}>
       {formatMarkdown ? <RichText text={text} /> : <pre className={className}><CompletePlainText text={text} /></pre>}
     </div>
     {text.length > COPY_ACTION_THRESHOLD && <div className={styles.outputActions}>
-      <CopyButton text={text} label={guiText("复制完整内容")} />
+      <CopyButton text={text} label={uiText("client.mobile.copyFullContent")} />
     </div>}
   </>;
 }

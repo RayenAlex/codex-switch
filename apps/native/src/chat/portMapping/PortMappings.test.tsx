@@ -7,6 +7,7 @@ import { PortMappings } from './PortMappings';
 const runtime = vi.hoisted(() => ({ cursor: 0, component: '', states: new Map<string, unknown[]>(),
   service: undefined as PortForwardingService | undefined, syncStatus: '' }));
 vi.mock('react', async original => ({ ...await original<typeof React>(), useEffect: vi.fn(),
+  useSyncExternalStore: (_subscribe: unknown, snapshot: () => unknown) => snapshot(),
   useState: (initial: unknown) => {
     const state = runtime.states.get(runtime.component) ?? [];
     runtime.states.set(runtime.component, state);
@@ -21,7 +22,7 @@ vi.mock('@expo/vector-icons', () => ({ Ionicons: 'Ionicons' }));
 vi.mock('./mappingStyles', () => ({ useMappingStyles: () => ({}) }));
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }));
 vi.mock('../styles', () => ({ useStyles: () => ({}) }));
-vi.mock('../../i18n', () => ({ t: (value: string) => value }));
+vi.mock('../../i18n', async () => ({ ...await vi.importActual<typeof import('../../i18n')>('../../i18n'),  }));
 vi.mock('../../components/BottomSheet', () => ({ BottomSheet: 'BottomSheet' }));
 vi.mock('../../components/SheetScrollView', () => ({ SheetScrollView: 'SheetScrollView' }));
 vi.mock('./MappingPreview', () => ({ MappingPreview: 'MappingPreview' }));

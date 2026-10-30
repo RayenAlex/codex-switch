@@ -1,8 +1,8 @@
 import { ArrowDown, ArrowUpRight, Code2, Monitor, Sparkles } from 'lucide-react';
-import { copy } from '../content/copy';
-import type { Language } from '../content/types';
+import { copy } from '@remoteai/i18n/website-content/copy';
+import type { Language } from '@remoteai/i18n/website-content/types';
 import { href } from '../lib/site';
-import { ui } from '../lib/ui-text';
+import { ui } from '@remoteai/i18n/website-content/ui-text';
 import { Actions } from './Shared';
 
 export function HomeHero({ language }: { language: Language }) {

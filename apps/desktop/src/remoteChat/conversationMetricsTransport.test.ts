@@ -3,9 +3,13 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { ChatController } from '../../../../shared/remote-chat/client/controller';
 import { ChatOperations } from './operations';
 import { invoke } from '../api/backend';
+import { guiApi } from '../pages/codexGui/api';
+import type { Thread } from '../pages/codexGui/types';
+import type { PagedHistoryDelta } from '../../../../shared/remote-chat/historyPage';
 import { CONVERSATION_METRICS_OPERATION } from '../../../../shared/remote-chat/conversationMetrics';
 
-vi.mock('../api/backend', () => ({ invoke: vi.fn() }));
+vi.mock('../api/backend', () => ({ invoke: vi.fn(), hasLocalBackend: false }));
+vi.mock('../pages/codexGui/api', () => ({ guiApi: { request: vi.fn() } }));
 beforeEach(() => vi.clearAllMocks());
 
 it.each(['direct', 'relay'] as const)('reads TPS and TTFT from the exact host and thread over %s', async mode => {
@@ -23,11 +27,25 @@ it.each(['direct', 'relay'] as const)('reads TPS and TTFT from the exact host an
     request: async <T,>(method: 'request' | 'connect' | 'respond', body?: unknown) => await request(method, body) as T,
     start: vi.fn(), stop: vi.fn(),
   }));
-  expect(await controller.readConversationMetrics('remote-thread')).toEqual(expected);
+  const thread: Thread = { id: 'remote-thread', preview: '', cwd: '', updatedAt: 0,
+    turns: [{ id: 'turn', status: 'completed', items: Array.from({ length: 30 }, (_, index) => ({
+      id: `command-${index}`, type: 'commandExecution', status: 'completed', exitCode: index < 20 ? 0 : 1,
+    })) }] };
+  vi.mocked(guiApi.request).mockResolvedValue({ thread });
+  const history = await request('request', { operation: 'syncHistory', threadId: thread.id }) as PagedHistoryDelta;
+  expect(history.page?.hasMore).toBe(true);
+  expect(history.turns[0].items).toHaveLength(10);
+  const commands = { successfulCommandCount: 20, completedCommandCount: 30 };
+  expect(await controller.readConversationMetrics('remote-thread')).toEqual({ ...expected, ...commands });
   expect(request).toHaveBeenLastCalledWith('request', {
     operation: CONVERSATION_METRICS_OPERATION, threadId: 'remote-thread',
   });
   expect(invoke).toHaveBeenLastCalledWith('get_proxy_session_metrics', { threadId: 'remote-thread' });
+  host.prepareEvent({ method: 'item/completed', params: { threadId: thread.id, turnId: 'turn',
+    item: { id: 'live-command', type: 'commandExecution', status: 'completed', exitCode: 0 } } });
+  expect(await controller.readConversationMetrics(thread.id)).toEqual({ ...expected,
+    successfulCommandCount: 21, completedCommandCount: 31 });
+  expect(guiApi.request).toHaveBeenCalledTimes(1);
   await controller.readConversationMetrics('different-thread');
   expect(invoke).toHaveBeenLastCalledWith('get_proxy_session_metrics', { threadId: 'different-thread' });
 });

@@ -26,6 +26,10 @@
 :root[data-theme] { --adm-color-primary: #0b9b7c; }
 html, body, #root { width: 100%; min-height: 100%; margin: 0; }
 body { min-width: 320px; background: var(--canvas); -webkit-font-smoothing: antialiased; }
+@media (max-width: 860px) {
+  /* Horizontal swipes belong to app navigation rather than browser history. */
+  html:has(.app-shell) { overscroll-behavior-x: none; }
+}
 button, input { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
 h1, h2, h3, p { margin: 0; }
@@ -136,15 +140,11 @@ h1, h2, h3, .brand-lockup { font-family: "Manrope", "PingFang SC", "Microsoft Ya
 .main-menu-toggle { display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 38px;
   padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--ink); cursor: pointer; }
 .main-menu-toggle:hover { background: var(--app-canvas, #edf4f0); }
-.desktop-sidebar nav { display: flex; flex-direction: column; gap: 5px; margin-top: 45px; }
+.desktop-sidebar nav { display: flex; flex-direction: column; gap: 5px; margin: 45px 0 auto; }
 .desktop-sidebar nav button { width: 100%; height: 47px; display: flex; align-items: center; gap: 12px; padding: 0 13px; border: 0; border-radius: 12px; color: var(--app-muted, #64756d); background: transparent; cursor: pointer; text-align: left; font-weight: 600; transition: 150ms ease; }
 .desktop-sidebar nav button:hover { color: var(--app-ink, #203a30); background: var(--app-canvas, #edf4f0); }
 .desktop-sidebar nav button.active { color: var(--app-accent, #0b6f5c); background: var(--app-canvas, #e1f3ec); box-shadow: inset 3px 0 var(--green); }
 .desktop-sidebar nav button b { min-width: 21px; margin-left: auto; padding: 2px 5px; border-radius: 20px; color: #fff; background: var(--green); font-size: 10px; text-align: center; }
-.sidebar-live { margin-top: auto; padding: 14px; border: 1px solid var(--app-border, #d8e7e0); border-radius: 13px; background: var(--app-surface, #fff); }
-.sidebar-live span { display: flex; align-items: center; gap: 7px; color: var(--app-ink, #385047); font-size: 12px; font-weight: 700; }
-.sidebar-live i, .live-pill i { width: 7px; height: 7px; border-radius: 50%; background: #2fc58f; box-shadow: 0 0 0 4px rgba(47, 197, 143, .12); }
-.sidebar-live p { margin-top: 5px; color: var(--app-muted, #8a9891); font-size: 10px; }
 .sidebar-profile { width: 100%; display: grid; grid-template-columns: 36px 1fr 18px; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 8px; border: 0; border-radius: 12px; color: var(--ink); background: transparent; cursor: pointer; text-align: left; }
 .sidebar-profile:hover { background: var(--app-canvas, #edf4f0); }
 .sidebar-profile > span { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 11px; color: var(--app-accent, #0e674f); background: var(--app-canvas, #dff3eb); font-size: 11px; font-weight: 800; }
@@ -162,13 +162,13 @@ h1, h2, h3, .brand-lockup { font-family: "Manrope", "PingFang SC", "Microsoft Ya
   .main-menu-collapsed .desktop-sidebar .brand-lockup b,
   .main-menu-collapsed .desktop-sidebar nav button span,
   .main-menu-collapsed .desktop-sidebar nav button b,
-  .main-menu-collapsed .sidebar-live,
   .main-menu-collapsed .sidebar-profile div,
   .main-menu-collapsed .sidebar-profile > svg { display: none; }
   .main-menu-collapsed .desktop-sidebar nav { flex: 1; min-height: 272px; gap: 8px; margin-top: 24px; }
   .main-menu-collapsed .desktop-sidebar nav button { justify-content: center; flex-shrink: 0; height: 48px;
     padding: 0; border-radius: 10px; }
-  .main-menu-collapsed .desktop-sidebar nav button > svg { width: 23px; height: 23px; }
+  .main-menu-collapsed .desktop-sidebar nav button > svg,
+  .main-menu-collapsed .desktop-sidebar nav button > .download-count-icon > svg { width: 23px; height: 23px; }
   .main-menu-collapsed .desktop-sidebar nav .sidebar-nav-settings { margin-top: auto; }
   .main-menu-collapsed .sidebar-profile { display: flex; justify-content: center; flex-shrink: 0; padding: 6px 0; }
   .main-menu-collapsed .content-shell { margin-left: 72px; }
@@ -193,8 +193,14 @@ h1, h2, h3, .brand-lockup { font-family: "Manrope", "PingFang SC", "Microsoft Ya
 
 /* Sheets and details */
 .mobile-popup { display: flex; flex-direction: column; max-height: 88dvh; overflow: hidden;
-  padding: 0 18px 5px; border-radius: 24px 24px 0 0; background: var(--app-surface, #fff); }
-.sheet-handle { width: 38px; height: 4px; margin: 9px auto 10px; border-radius: 4px; background: var(--app-elevated, #dfe6e2); }
+  padding: 0 18px 5px; border-radius: 24px 24px 0 0; background: var(--app-surface, #fff);
+  translate: 0 var(--sheet-drag-offset, 0px); }
+.sheet-drag-handle { min-height: 32px; flex-shrink: 0; touch-action: none; user-select: none;
+  cursor: grab; display: flex; justify-content: center; padding-top: 9px; }
+.sheet-drag-handle:active { cursor: grabbing; }
+.sheet-drag-surface { display: flex; flex-direction: column; min-height: 0; }
+.sheet-handle { width: 38px; height: 4px; pointer-events: none;
+  border-radius: 4px; background: var(--app-elevated, #dfe6e2); }
 .sheet-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 6px 0 17px; border-bottom: 1px solid var(--app-border, #edf1ef); }
 .sheet-header h2 { color: var(--ink); font-size: 20px; letter-spacing: -.6px; }.sheet-header p { overflow: hidden; max-width: 260px; margin-top: 4px; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .modal-heading { display: flex; flex-direction: column; gap: 4px; }.modal-heading strong { color: var(--ink); font-size: 18px; }.modal-heading span { color: var(--muted); font-size: 11px; font-weight: 400; }
@@ -287,7 +293,12 @@ h1, h2, h3, .brand-lockup { font-family: "Manrope", "PingFang SC", "Microsoft Ya
   .page-body { padding: max(20px, env(safe-area-inset-top)) 16px 34px; }
   .mobile-only { display: flex; }
   .mobile-tabbar { position: fixed; z-index: 30; right: 0; bottom: 0; left: 0; display: block; border-top: 1px solid var(--app-border, #dfe7e3); background: color-mix(in srgb, var(--app-surface, #ffffff) 96%, transparent); box-shadow: 0 -10px 30px rgba(37,66,54,.06); backdrop-filter: blur(16px); }
-  .mobile-tabbar .adm-tab-bar { min-height: 61px; }.mobile-tabbar .adm-tab-bar-item { color: var(--app-muted, #85918b); }.mobile-tabbar .adm-tab-bar-item-active { color: var(--green); }.mobile-tabbar .adm-tab-bar-item-title { font-size: 10px; }
+  .mobile-tabbar .adm-tab-bar-wrap { min-height: 61px; }
+  /* Reserve space for floating badges even when larger text grows the tab contents. */
+  .mobile-tabbar .adm-tab-bar-item { padding: 12px 8px 8px; color: var(--app-muted, #85918b); }
+  .mobile-tabbar .adm-tab-bar-item-icon { display: flex; align-items: center; justify-content: center; }
+  .mobile-tabbar .adm-tab-bar-item-active { color: var(--green); }
+  .mobile-tabbar .adm-tab-bar-item-title { font-size: 10px; }
   .page-heading { margin-bottom: 20px; }.page-heading h1 { font-size: 25px; }.devices-page .page-heading, .settings-page .page-heading { display: flex; }
 }
 

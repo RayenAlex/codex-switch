@@ -1,64 +1,52 @@
-import { useState } from 'react';
+import { displayError } from '../../i18n/index';
+import type { ReactNode } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import type { ForwardingEntry, PortForwardingService } from '../../../../../shared/port-mapping/service';
 import { t } from '../../i18n';
 import { useMappingStyles } from './mappingStyles';
-import { MAPPING_PROTOCOLS, type MappingProtocol } from '../../../../../shared/port-mapping/settings';
+import { MAPPING_PROTOCOLS } from '../../../../../shared/port-mapping/settings';
+import { DEFAULT_MAPPING_HOST } from '../../../../../shared/port-mapping/target';
+import { useMappingFormState } from './useMappingFormState';
 
-export function MappingForm({ service, disabled, connected = true, entry, done }: {
+export function MappingForm({ service, disabled, connected = true, entry, done, devicePicker }: {
   service: PortForwardingService; disabled?: boolean; connected?: boolean; entry?: ForwardingEntry; done?: () => void;
+  devicePicker?: ReactNode;
 }) {
   const styles = useMappingStyles();
-  const [remoteHost, setRemoteHost] = useState(entry?.remoteHost ?? '');
-  const [protocol, setProtocol] = useState<MappingProtocol>(entry?.protocol ?? 'tcp');
-  const [remote, setRemote] = useState(entry ? String(entry.remotePort) : '');
-  const [local, setLocal] = useState(entry ? String(entry.localPort) : '');
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-  const reset = () => { setRemoteHost(''); setRemote(''); setLocal(''); setProtocol('tcp'); setError(''); done?.(); };
-  const submit = async () => {
-    if (disabled || saving) return;
-    setSaving(true);
-    try {
-      const target = { remoteHost, remotePort: Number(remote), localPort: Number(local || remote), protocol };
-      if (entry) await service.edit(entry.id, target);
-      else service.add(target.remotePort, target.localPort, target.remoteHost, protocol);
-      reset();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : '映射未能保存，请重试。'); }
-    finally { setSaving(false); }
-  };
-  const locked = disabled || saving;
+  const { remoteHost, setRemoteHost, protocol, setProtocol, remote, setRemote, local, setLocal,
+    error, saving, locked, reset, submit } = useMappingFormState({ service, disabled, entry, done });
   return <View style={styles.form}>
-    <Text style={styles.title}>{t(entry ? '编辑映射' : '添加映射')}</Text>
-    <View style={styles.fields} accessibilityRole="radiogroup" accessibilityLabel={t('协议')}>
+    <Text style={styles.title}>{t(entry ? "client.portMappingEditing.editMapping" : "client.portMappingEditing.addMapping")}</Text>
+    {devicePicker}
+    <View style={styles.fields} accessibilityRole="radiogroup" accessibilityLabel={t("client.portForwarding.protocol")}>
       {MAPPING_PROTOCOLS.map(value => <Pressable key={value} accessibilityRole="radio"
-        accessibilityLabel={value === 'both' ? t('全部（TCP + UDP）') : value.toUpperCase()}
+        accessibilityLabel={value === 'both' ? t("client.portForwarding.bothTcpUdp") : value.toUpperCase()}
         accessibilityState={{ checked: protocol === value, disabled: !!locked }} disabled={locked}
         onPress={() => setProtocol(value)} style={[styles.button, protocol === value && styles.primary]}>
         <Text style={protocol === value ? styles.primaryText : styles.buttonText}>
-          {value === 'both' ? t('全部（TCP + UDP）') : value.toUpperCase()}</Text></Pressable>)}
+          {value === 'both' ? t("client.portForwarding.bothTcpUdp") : value.toUpperCase()}</Text></Pressable>)}
     </View>
     <View style={styles.fields}>
-      <View style={styles.hostField}><Text style={styles.muted}>{t('目标 IP')}</Text>
-        <TextInput accessibilityLabel={t('目标 IP')} value={remoteHost} onChangeText={setRemoteHost}
-          autoCapitalize="none" autoCorrect={false} placeholder="192.168.1.100" placeholderTextColor="#8a9bad"
+      <View style={styles.hostField}><Text style={styles.muted}>{t("client.portForwarding.targetIp")}</Text>
+        <TextInput accessibilityLabel={t("client.portForwarding.targetIp")} value={remoteHost} onChangeText={setRemoteHost}
+          autoCapitalize="none" autoCorrect={false} placeholder={DEFAULT_MAPPING_HOST} placeholderTextColor="#8a9bad"
           style={styles.input} editable={!locked} /></View>
-      <View style={styles.portField}><Text style={styles.muted}>{t('远程端口')}</Text>
-        <TextInput accessibilityLabel={t('远程端口')} value={remote} onChangeText={setRemote}
+      <View style={styles.portField}><Text style={styles.muted}>{t("client.portForwarding.remotePort")}</Text>
+        <TextInput accessibilityLabel={t("client.portForwarding.remotePort")} value={remote} onChangeText={setRemote}
           keyboardType="number-pad" maxLength={5} placeholder="8080" placeholderTextColor="#8a9bad"
           style={styles.input} editable={!locked} /></View>
-      <View style={styles.portField}><Text style={styles.muted}>{t('本地端口')}</Text>
-        <TextInput accessibilityLabel={t('本地端口')} value={local} onChangeText={setLocal}
-          keyboardType="number-pad" maxLength={5} placeholder={remote || t('默认同远程端口')}
+      <View style={styles.portField}><Text style={styles.muted}>{t("client.portForwarding.localPort")}</Text>
+        <TextInput accessibilityLabel={t("client.portForwarding.localPort")} value={local} onChangeText={setLocal}
+          keyboardType="number-pad" maxLength={5} placeholder={remote || t("client.portForwarding.sameAsRemote")}
           placeholderTextColor="#8a9bad" style={styles.input} editable={!locked} /></View>
     </View>
-    {!!error && <Text accessibilityRole="alert" style={styles.error}>{t(error)}</Text>}
+    {!!error && <Text accessibilityRole="alert" style={styles.error}>{displayError(error)}</Text>}
     <View style={styles.actions}>
       <Pressable accessibilityRole="button" onPress={reset} disabled={saving} style={styles.button}>
-        <Text style={styles.buttonText}>{t('取消')}</Text></Pressable>
+        <Text style={styles.buttonText}>{t("client.accounts.cancel")}</Text></Pressable>
       <Pressable accessibilityRole="button" disabled={locked} onPress={() => { void submit(); }}
         style={[styles.button, styles.primary, locked && styles.disabled]}>
-        <Text style={styles.primaryText}>{t(entry ? '保存修改' : connected ? '添加并启动' : '添加映射')}</Text>
+        <Text style={styles.primaryText}>{t(entry ? "client.portMappingEditing.saveChanges" : connected ? "client.portForwarding.addAndStart" : "client.portMappingEditing.addMapping")}</Text>
       </Pressable>
     </View>
   </View>;

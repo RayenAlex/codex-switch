@@ -20,6 +20,8 @@ pub(super) enum TerminalError {
     Closed,
     #[error("终端暂时无法响应，请关闭后重试。")]
     Io,
+    #[error("client.npmScripts.invalid")]
+    Script,
 }
 
 pub(super) type Result<T> = std::result::Result<T, TerminalError>;
@@ -47,10 +49,11 @@ impl TerminalSize {
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct OpenTerminal {
     pub cwd: Option<String>,
     pub size: TerminalSize,
+    pub npm_script: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -62,10 +65,13 @@ pub(crate) enum TerminalRequest {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct TerminalInfo {
     pub id: String,
     pub cwd: String,
     pub shell: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub npm_script: Option<String>,
 }
 
 #[derive(Clone, Serialize)]

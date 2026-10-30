@@ -1,9 +1,10 @@
+import { displayText } from '../i18n/index';
 import { useThemeColor } from '../theme/store';
 import { t, useLanguage } from '../i18n';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { SelectableChatText } from './SelectableChatText';
 import { UserMessageText } from './UserMessageText';
-import { ChatMessageReferences } from './ChatMessageReferences';
+import { messageReferences } from '../../../../shared/chat/messageReferences';
 import { messageContent, messageSections } from '../../../../shared/chat/messageDetails';
 import { changedFiles } from '../../../../shared/chat/diff';
 import {
@@ -40,7 +41,7 @@ function SearchDetails({ item }: { item: Item }) {
     {(item.action?.queries ?? [item.action?.query || item.query]).filter(Boolean).map((query, index) =>
       <SelectableChatText key={index} style={styles.messageText}>{query}</SelectableChatText>)}
     {item.action?.url && <WebLink url={item.action.url} />}
-    {item.action?.pattern && <Text style={styles.messageText}>{t("查找：")}{item.action.pattern}</Text>}
+    {item.action?.pattern && <Text style={styles.messageText}>{t("client.chat.find")}{item.action.pattern}</Text>}
     {item.results?.map((result, index) => <View key={index}
       style={{ borderTopWidth: 1, borderColor: color(palette.border, 'border'), paddingTop: 8, gap: 4 }}>
       <WebLink url={result.url} title={result.title} />
@@ -57,7 +58,7 @@ function CollaborationDetails({ item }: { item: Item }) {
     {item.prompt && <ChatMarkdown text={item.prompt} />}
     {item.text && item.text !== item.prompt && <ChatMarkdown text={item.text} />}
     {collaborationStates(item).map((state, index) => <View key={index}>
-      <Text style={styles.subtitle}>{t("协作任务")}{' '}{index + 1} · {collaborationStatus(state.status)}</Text>
+      <Text style={styles.subtitle}>{t("client.chat.collaboration")}{' '}{index + 1} · {collaborationStatus(state.status)}</Text>
       {state.message && <ChatMarkdown text={state.message} />}
     </View>)}
   </View>;
@@ -67,8 +68,7 @@ function UserMessageDetails({ item }: { item: Item }) {
   useLanguage();
   const text = messageContent(item);
   return <View style={{ gap: 12 }}>
-    <ChatMessageReferences item={item} />
-    {!!text && <UserMessageText text={text} copy />}
+    <UserMessageText text={text} references={messageReferences(item)} copy />
     {itemImageSources(item).map((source, index) => <ChatImage key={index} source={source} />)}
   </View>;
 }
@@ -88,7 +88,7 @@ export function ChatToolContent({ item }: { item: Item }) {
   }
   if (item.type === 'webSearch') return <SearchDetails item={item} />;
   if (item.type === 'imageView' || item.type === 'imageGeneration') return <View style={{ gap: 12 }}>
-    {item.type === 'imageView' && <ChatImage source={generatedImageSource(item)} description={t("查看的图片")} />}
+    {item.type === 'imageView' && <ChatImage source={generatedImageSource(item)} description={t("client.chat.viewedImage")} />}
     {(item.path || item.savedPath) && <SelectableChatText style={styles.subtitle}>
       {item.path || item.savedPath}</SelectableChatText>}
     {item.failure?.message && <Text style={styles.error}>{item.failure.message}</Text>}
@@ -96,9 +96,9 @@ export function ChatToolContent({ item }: { item: Item }) {
   </View>;
   if (isCollaborationActivity(item)) return <CollaborationDetails item={item} />;
   if (item.type === 'contextCompaction') return <Text style={styles.messageText}>
-    {t("较早的对话已整理为摘要，可以继续处理当前任务。")}</Text>;
+    {t("client.chat.earlierMessagesHaveBeenSummarizedYouCanContinueYourCurrent")}</Text>;
   if (item.type === 'sleep') return <Text style={styles.messageText}>
-    {t("等待时长：")}{formatTurnDuration(item.durationMs ?? 0)}</Text>;
+    {t("client.chat.waitDuration")}{formatTurnDuration(item.durationMs ?? 0)}</Text>;
   return <>{messageSections(item).map((section, index) =>
-    <ChatCodeBlock key={index} text={section.text} label={t(section.title)} copyLabel={t("复制{value1}", { value1: t(section.title) })} />)}</>;
+    <ChatCodeBlock key={index} text={section.text} label={displayText(section.title)} copyLabel={t("client.accounts.copy", { value1: displayText(section.title) })} />)}</>;
 }

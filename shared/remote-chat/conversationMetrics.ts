@@ -1,7 +1,11 @@
+import type { CommandMetrics } from './commandMetrics';
+import { formatCost } from './usage';
+
 export const CONVERSATION_METRICS_OPERATION = 'conversationMetrics';
 export const CONVERSATION_METRICS_REFRESH_MS = 2_000;
 
-export interface ConversationMetrics {
+export interface ConversationMetrics extends Partial<CommandMetrics> {
+  estimatedCostUsd?: number | null;
   /** Older remote hosts may not report first-token timing yet. */
   totalFirstTokenTimeMs?: number;
   firstTokenRequestCount?: number;
@@ -11,6 +15,11 @@ export interface ConversationMetrics {
 }
 
 export type ReadConversationMetrics = (threadId: string) => Promise<ConversationMetrics>;
+
+export function formatConversationCost(metrics?: ConversationMetrics | null): string {
+  const cost = metrics?.estimatedCostUsd;
+  return typeof cost === 'number' && Number.isFinite(cost) && cost >= 0 ? formatCost(cost) : '—USD';
+}
 
 /** Match the account-page average: output tokens divided by time after the first response. */
 export function formatConversationTps(metrics?: ConversationMetrics | null): string {
@@ -22,7 +31,7 @@ export function formatConversationTps(metrics?: ConversationMetrics | null): str
 }
 
 export const CONVERSATION_TPS_DESCRIPTION =
-  '当前对话的平均输出速度：已完成请求的输出 token 数 ÷ 输出耗时，不含首次响应前的等待和中断请求。';
+  "client.mobile.averageOutputSpeedForThisConversationOutputTokensDividedBy";
 
 /** Average wait for the first observed output token, in seconds without a unit suffix. */
 export function formatConversationTtft(metrics?: ConversationMetrics | null): string {
@@ -34,4 +43,4 @@ export function formatConversationTtft(metrics?: ConversationMetrics | null): st
 }
 
 export const CONVERSATION_TTFT_DESCRIPTION =
-  '当前对话的平均首 token 等待时间：从请求发出到收到首段文字、思考或工具参数。仅统计已收到输出的流式请求。';
+  "client.mobile.averageTimeFromSendingARequestToReceivingTheFirst";

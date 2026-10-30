@@ -1,6 +1,7 @@
+import { displayError } from '../../i18n/uiText';
 import type { RefObject } from 'react';
 import { isDesktopApp } from '../../api/backend';
-import { guiText } from '../../i18n/guiText';
+import { uiText } from "../../i18n/uiText";
 import { fileDropError, useFileDrop } from '../../../../../shared/chat/useFileDrop';
 import { guiApi } from './api';
 import type { AttachmentReference } from './attachmentTypes';
@@ -22,7 +23,7 @@ interface Options {
 async function selectProject(options: Options, folders: AttachmentReference[], current: () => boolean) {
   if (!folders.length) return true;
   if (folders.length !== 1) {
-    options.report(guiText('请一次拖入一个文件夹。'));
+    options.report(uiText("client.composer.pleaseDropOneFolderAtATime"));
     return false;
   }
   let directory: string;
@@ -31,12 +32,12 @@ async function selectProject(options: Options, folders: AttachmentReference[], c
       operation: 'projectDirectories', directory: folders[0].path,
     }));
   } catch {
-    if (current()) options.report(guiText('无法使用此文件夹，请选择可访问的文件夹。'));
+    if (current()) options.report(uiText("client.composer.thisFolderIsUnavailablePleaseChooseAnAccessibleFolder"));
     return false;
   }
   if (!current()) return false;
   try { saveProject({ path: directory, name: projectName(directory) }); }
-  catch { options.report(guiText('项目未能保存，请重试。')); return false; }
+  catch { options.report(uiText("client.conversation.couldNotSaveTheProjectPleaseTryAgain")); return false; }
   options.setProject(directory);
   return true;
 }
@@ -59,8 +60,8 @@ export function useComposerDrop(options: Options) {
     addFiles: files => {
       const images = files.filter(file => file.type.startsWith('image/'));
       if (images.length) options.addImages(images);
-      if (images.length !== files.length) options.report(guiText('请通过“添加文件”选择这些文件。'));
+      if (images.length !== files.length) options.report(uiText("client.workspaceActions.useAddFileToSelectTheseFiles"));
     },
-    report: error => options.report(guiText(fileDropError(error))),
+    report: error => options.report(displayError(fileDropError(error))),
   });
 }

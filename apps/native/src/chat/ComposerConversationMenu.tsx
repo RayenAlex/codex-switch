@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import { createThemedStyles } from '../theme/styles';
 import { useThemeColor } from '../theme/store';
 import { t, useLanguage } from '../i18n';
@@ -24,29 +25,29 @@ export function ComposerConversationMenu({ query, threadId, ready, load, choose,
   const result = useConversationCandidates({ active: true, connected: ready, query, load });
   const threads = conversationCandidates({ remote: result.threads, known: [], conversations: {},
     currentId: threadId, query });
-  return <View accessibilityLabel={t("对话列表")} style={menuStyles.root}>
+  return <View accessibilityLabel={t("client.mobile.conversations")} style={menuStyles.root}>
     <View style={menuStyles.heading}>
-      <Text style={menuStyles.headingText}>{t("对话")}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={t("关闭对话列表")} onPress={close} hitSlop={8}>
+      <Text style={menuStyles.headingText}>{t("client.chat.conversations")}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={t("client.chat.closeConversations")} onPress={close} hitSlop={8}>
         <Feather name="x" size={18} color={color("#777", 'muted')} />
       </Pressable>
     </View>
     <FlatList data={threads} keyExtractor={thread => thread.id} style={menuStyles.list}
       keyboardShouldPersistTaps="always" nestedScrollEnabled
       renderItem={({ item }) => <Pressable accessibilityRole="menuitem" disabled={!ready}
-        accessibilityLabel={t("引用对话 {value1}", { value1: conversationReference(item).name })}
+        accessibilityLabel={t("client.mobile.referenceConversation", { value1: conversationReference(item).name })}
         onPress={() => choose(conversationReference(item))}
         style={({ pressed }) => [menuStyles.option, pressed && menuStyles.pressed]}>
         <Text numberOfLines={1} style={menuStyles.title}>{conversationReference(item).name}</Text>
         <Text numberOfLines={1} style={menuStyles.detail}>
-          {item.status?.type === 'active' ? t("运行中") : t("空闲")} · {item.cwd || t("未选择项目")}</Text>
+          {item.status?.type === 'active' ? t("client.taskReview.running") : t("client.chat.idle")} · {item.cwd || t("client.chat.noProjectSelected")}</Text>
       </Pressable>}
       ListFooterComponent={<>
-        {!ready && <Text style={menuStyles.message}>{t("连接后即可引用对话")}</Text>}
-        {ready && result.loading && !threads.length && <Text style={menuStyles.message}>{t("正在加载对话…")}</Text>}
-        {ready && !!result.error && <Text accessibilityRole="alert" style={menuStyles.message}>{t(result.error)}</Text>}
+        {!ready && <Text style={menuStyles.message}>{t("client.chat.connectToReferenceConversations")}</Text>}
+        {ready && result.loading && !threads.length && <Text style={menuStyles.message}>{t("client.chat.loadingConversations")}</Text>}
+        {ready && !!result.error && <Text accessibilityRole="alert" style={menuStyles.message}>{displayError(result.error)}</Text>}
         {ready && !result.loading && !result.error && !threads.length
-          && <Text style={menuStyles.message}>{t("没有找到可引用的对话")}</Text>}
+          && <Text style={menuStyles.message}>{t("client.chat.noConversationsFoundToReference")}</Text>}
       </>} />
   </View>;
 }

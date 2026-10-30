@@ -2,7 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { guiText, setGuiLanguage } from '../../i18n/guiText';
+import { uiText, setGuiLanguage } from "../../i18n/uiText";
 import { RemoteDesktopSettingsCard } from './RemoteDesktopSettingsCard';
 
 const api = vi.hoisted(() => ({ invoke: vi.fn(), isDesktopApp: true }));
@@ -27,7 +27,7 @@ function button(text: string) {
 
 async function renderOpen() {
   await act(async () => root.render(<RemoteDesktopSettingsCard />));
-  await act(async () => button(guiText('远程设置')).click());
+  await act(async () => button(uiText("client.desktopRemoteSettings.remoteSettings")).click());
 }
 
 beforeEach(() => {

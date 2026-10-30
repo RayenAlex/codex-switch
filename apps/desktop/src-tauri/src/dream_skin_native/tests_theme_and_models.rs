@@ -122,14 +122,15 @@
         ])));
         assert!(!is_codex_model_query_key(&json!(["models", "details"])));
         assert!(!is_codex_model_query_key(&json!(["threads", "list"])));
-        let expression = codex_model_refresh_expression(
-            &["deepseek-chat".to_string(), "deepseek-reasoner".to_string()],
-            &[],
-            &["deepseek-reasoner".to_string()],
-            &Default::default(),
-            "deepseek-chat",
-            crate::providers::ReasoningEffortProfile::DeepSeek,
-        )
+        let expression = codex_model_refresh_expression(&crate::codex_runtime::ModelRefreshRequest {
+            display_names: Default::default(),
+            models: vec!["deepseek-chat".to_string(), "deepseek-reasoner".to_string()],
+            fast_mode_models: vec![],
+            image_input_models: vec!["deepseek-reasoner".to_string()],
+            model_reasoning_efforts: Default::default(),
+            selected_model: "deepseek-chat".to_string(),
+            reasoning_profile: crate::providers::ReasoningEffortProfile::DeepSeek,
+        })
         .unwrap();
         assert!(expression.contains("query.queryKey[0] === \"models\""));
         assert!(expression.contains("query.queryKey[1] === \"list\""));
@@ -148,14 +149,15 @@
 
     #[test]
     fn codex_model_refresh_uses_model_specific_reasoning_efforts() {
-        let expression = codex_model_refresh_expression(
-            &["gpt-5.6-sol".to_string(), "claude-sonnet".to_string()],
-            &[],
-            &[],
-            &Default::default(),
-            "gpt-5.6-sol",
-            crate::providers::ReasoningEffortProfile::Standard,
-        )
+        let expression = codex_model_refresh_expression(&crate::codex_runtime::ModelRefreshRequest {
+            display_names: Default::default(),
+            models: vec!["gpt-5.6-sol".to_string(), "claude-sonnet".to_string()],
+            fast_mode_models: vec![],
+            image_input_models: vec![],
+            model_reasoning_efforts: Default::default(),
+            selected_model: "gpt-5.6-sol".to_string(),
+            reasoning_profile: crate::providers::ReasoningEffortProfile::Standard,
+        })
         .unwrap();
 
         assert!(expression.contains("supportedReasoningEffortsByModel[model]"));
@@ -175,14 +177,15 @@
             ],
         )]
         .into();
-        let expression = codex_model_refresh_expression(
-            &["gpt-5.6-sol".to_string()],
-            &[],
-            &[],
-            &configured,
-            "gpt-5.6-sol",
-            crate::providers::ReasoningEffortProfile::Standard,
-        )
+        let expression = codex_model_refresh_expression(&crate::codex_runtime::ModelRefreshRequest {
+            display_names: Default::default(),
+            models: vec!["gpt-5.6-sol".to_string()],
+            fast_mode_models: vec![],
+            image_input_models: vec![],
+            model_reasoning_efforts: configured,
+            selected_model: "gpt-5.6-sol".to_string(),
+            reasoning_profile: crate::providers::ReasoningEffortProfile::Standard,
+        })
         .unwrap();
 
         assert!(expression.contains("\"reasoningEffort\":\"low\""));
@@ -193,14 +196,15 @@
     #[test]
     fn codex_model_refresh_defaults_to_a_supported_reasoning_effort() {
         let configured = [("custom".to_string(), vec![crate::models::ReasoningEffort::Low])].into();
-        let expression = codex_model_refresh_expression(
-            &["qwen3.8-max".to_string(), "custom".to_string()],
-            &[],
-            &[],
-            &configured,
-            "qwen3.8-max",
-            crate::providers::ReasoningEffortProfile::Standard,
-        )
+        let expression = codex_model_refresh_expression(&crate::codex_runtime::ModelRefreshRequest {
+            display_names: Default::default(),
+            models: vec!["qwen3.8-max".to_string(), "custom".to_string()],
+            fast_mode_models: vec![],
+            image_input_models: vec![],
+            model_reasoning_efforts: configured,
+            selected_model: "qwen3.8-max".to_string(),
+            reasoning_profile: crate::providers::ReasoningEffortProfile::Standard,
+        })
         .unwrap();
         assert!(expression.contains(
             "const defaultReasoningEffortsByModel = {\"custom\":\"low\",\"qwen3.8-max\":\"xhigh\"}"
@@ -215,14 +219,15 @@
             json!(["models", "list", "local", "no-auth", 100])
         );
 
-        let expression = codex_model_refresh_expression(
-            &["deepseek-chat".to_string()],
-            &[],
-            &[],
-            &Default::default(),
-            "deepseek-chat",
-            crate::providers::ReasoningEffortProfile::DeepSeek,
-        )
+        let expression = codex_model_refresh_expression(&crate::codex_runtime::ModelRefreshRequest {
+            display_names: Default::default(),
+            models: vec!["deepseek-chat".to_string()],
+            fast_mode_models: vec![],
+            image_input_models: vec![],
+            model_reasoning_efforts: Default::default(),
+            selected_model: "deepseek-chat".to_string(),
+            reasoning_profile: crate::providers::ReasoningEffortProfile::DeepSeek,
+        })
         .unwrap();
 
         assert!(expression.contains(
@@ -233,14 +238,15 @@
 
     #[test]
     fn codex_model_refresh_injects_fast_service_tier() {
-        let expression = codex_model_refresh_expression(
-            &["gpt-5.6-sol".to_string()],
-            &["gpt-5.6-sol".to_string()],
-            &[],
-            &Default::default(),
-            "gpt-5.6-sol",
-            crate::providers::ReasoningEffortProfile::Standard,
-        )
+        let expression = codex_model_refresh_expression(&crate::codex_runtime::ModelRefreshRequest {
+            display_names: Default::default(),
+            models: vec!["gpt-5.6-sol".to_string()],
+            fast_mode_models: vec!["gpt-5.6-sol".to_string()],
+            image_input_models: vec![],
+            model_reasoning_efforts: Default::default(),
+            selected_model: "gpt-5.6-sol".to_string(),
+            reasoning_profile: crate::providers::ReasoningEffortProfile::Standard,
+        })
         .unwrap();
 
         assert!(expression.contains("additionalSpeedTiers"));
@@ -250,14 +256,15 @@
 
     #[test]
     fn codex_model_refresh_bypasses_the_renderer_available_model_filter() {
-        let expression = codex_model_refresh_expression(
-            &["deepseek-chat".to_string()],
-            &[],
-            &[],
-            &Default::default(),
-            "deepseek-chat",
-            crate::providers::ReasoningEffortProfile::DeepSeek,
-        )
+        let expression = codex_model_refresh_expression(&crate::codex_runtime::ModelRefreshRequest {
+            display_names: Default::default(),
+            models: vec!["deepseek-chat".to_string()],
+            fast_mode_models: vec![],
+            image_input_models: vec![],
+            model_reasoning_efforts: Default::default(),
+            selected_model: "deepseek-chat".to_string(),
+            reasoning_profile: crate::providers::ReasoningEffortProfile::DeepSeek,
+        })
         .unwrap();
 
         assert!(expression.contains("__CODEX_SWITCH_MODEL_QUERY_PATCH__"));
@@ -278,14 +285,15 @@
 
     #[test]
     fn codex_model_refresh_preserves_metadata_while_removing_unexpected_models() {
-        let expression = codex_model_refresh_expression(
-            &["gpt-visible".to_string()],
-            &[],
-            &[],
-            &Default::default(),
-            "gpt-visible",
-            crate::providers::ReasoningEffortProfile::Standard,
-        )
+        let expression = codex_model_refresh_expression(&crate::codex_runtime::ModelRefreshRequest {
+            display_names: Default::default(),
+            models: vec!["gpt-visible".to_string()],
+            fast_mode_models: vec![],
+            image_input_models: vec![],
+            model_reasoning_efforts: Default::default(),
+            selected_model: "gpt-visible".to_string(),
+            reasoning_profile: crate::providers::ReasoningEffortProfile::Standard,
+        })
         .unwrap();
 
         assert!(expression.contains("const visibleCurrentModels = currentModels.filter"));
@@ -297,14 +305,15 @@
 
     #[test]
     fn codex_model_refresh_adds_dom_speed_selector_without_capability_overrides() {
-        let expression = codex_model_refresh_expression(
-            &["gpt-5.6-sol".to_string()],
-            &["gpt-5.6-sol".to_string()],
-            &[],
-            &Default::default(),
-            "gpt-5.6-sol",
-            crate::providers::ReasoningEffortProfile::Standard,
-        )
+        let expression = codex_model_refresh_expression(&crate::codex_runtime::ModelRefreshRequest {
+            display_names: Default::default(),
+            models: vec!["gpt-5.6-sol".to_string()],
+            fast_mode_models: vec!["gpt-5.6-sol".to_string()],
+            image_input_models: vec![],
+            model_reasoning_efforts: Default::default(),
+            selected_model: "gpt-5.6-sol".to_string(),
+            reasoning_profile: crate::providers::ReasoningEffortProfile::Standard,
+        })
         .unwrap();
 
         assert!(expression.contains("data-codex-switch-speed-selector"));
@@ -351,7 +360,8 @@
             "const fastModeAllowed = allowed && fastModeModels.size > 0 && hasActiveProxyModelQuery(true)"
         ));
         assert!(expression.contains("if (changed) window.__CODEX_SWITCH_REFRESH_SPEED_SELECTOR__?.()"));
-        assert!(expression.contains("state.fastModeAllowed || state.usage.enabled"));
+        assert!(expression.contains("selector.hidden = !state.fastModeAllowed"));
+        assert!(expression.contains("@container cs-usage-footer (min-width: 720px)"));
         assert!(expression.contains("controls.hidden = !state.fastModeAllowed"));
         assert!(expression.contains("key[3] === \"no-auth\""));
         assert!(!expression.contains("authMethod = \"chatgpt\""));
@@ -373,14 +383,15 @@
 
     #[test]
     fn official_model_refresh_clears_injected_candidates_before_refetching() {
-        let expression = codex_model_refresh_expression(
-            &[],
-            &[],
-            &[],
-            &Default::default(),
-            "gpt-5.6-sol",
-            crate::providers::ReasoningEffortProfile::Standard,
-        )
+        let expression = codex_model_refresh_expression(&crate::codex_runtime::ModelRefreshRequest {
+            display_names: Default::default(),
+            models: vec![],
+            fast_mode_models: vec![],
+            image_input_models: vec![],
+            model_reasoning_efforts: Default::default(),
+            selected_model: "gpt-5.6-sol".to_string(),
+            reasoning_profile: crate::providers::ReasoningEffortProfile::Standard,
+        })
         .unwrap();
 
         assert!(expression.contains("clearModelQueryPatch();"));
@@ -391,14 +402,15 @@
 
     #[test]
     fn codex_model_refresh_normalizes_switch_control_display() {
-        let expression = codex_model_refresh_expression(
-            &[crate::providers::CODEX_SWITCH_CONTROL_MODEL.to_string()],
-            &[crate::providers::CODEX_SWITCH_CONTROL_MODEL.to_string()],
-            &[crate::providers::CODEX_SWITCH_CONTROL_MODEL.to_string()],
-            &Default::default(),
-            crate::providers::CODEX_SWITCH_CONTROL_MODEL,
-            crate::providers::ReasoningEffortProfile::Standard,
-        )
+        let expression = codex_model_refresh_expression(&crate::codex_runtime::ModelRefreshRequest {
+            display_names: Default::default(),
+            models: vec![crate::providers::CODEX_SWITCH_CONTROL_MODEL.to_string()],
+            fast_mode_models: vec![crate::providers::CODEX_SWITCH_CONTROL_MODEL.to_string()],
+            image_input_models: vec![crate::providers::CODEX_SWITCH_CONTROL_MODEL.to_string()],
+            model_reasoning_efforts: Default::default(),
+            selected_model: crate::providers::CODEX_SWITCH_CONTROL_MODEL.to_string(),
+            reasoning_profile: crate::providers::ReasoningEffortProfile::Standard,
+        })
         .unwrap();
 
         assert!(expression.contains("Remote AI Control"));

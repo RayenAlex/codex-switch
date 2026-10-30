@@ -209,6 +209,7 @@ pub(super) fn apply_remote_account<R: Runtime>(
             )?;
         }
         local_field_modified_at.private_details = remote_field_modified_at.private_details.clone();
+        crate::providers::refresh_group_account_labels(app, &account.id)?;
     }
     if apply_usage {
         save_usage(&usage_path(&paths, &account.id), &account.usage)?;

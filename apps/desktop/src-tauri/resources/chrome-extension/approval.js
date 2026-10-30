@@ -6,7 +6,7 @@ const error = document.querySelector('#error');
 const buttons = [...document.querySelectorAll('button')];
 const response = await chrome.runtime.sendMessage({ operation: 'request', id });
 if (!response?.result) {
-  document.querySelector('#origin').textContent = t('approvalRequestEnded', '这次请求已结束，可以关闭此窗口。');
+  document.querySelector('#origin').textContent = t('approvalRequestEnded');
   buttons.forEach((button) => { button.disabled = true; });
 } else {
   document.querySelector('#origin').textContent = response.result.origin;

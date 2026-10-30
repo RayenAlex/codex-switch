@@ -1,6 +1,16 @@
 import type { Skill, SkillsResponse } from './client/types';
-import { getInterfaceLanguage } from '../i18n/interfaceLanguage';
-import { builtInSkillDescription } from '../i18n/skillDescriptions';
+import { getInterfaceLanguage } from "../localization/interfaceLanguage";
+import { translateMessage } from '../localization/messages';
+import type { MessageKey } from '@remoteai/i18n';
+const descriptions: Readonly<Record<string, MessageKey>> = {
+  "codex-switch-chrome": "client.skills.codex-switch-chrome",
+  "codex-switch-computer-use": "client.skills.codex-switch-computer-use",
+  "codex-switch-remote-command": "client.skills.codex-switch-remote-command"
+};
+function builtInSkillDescription(name: string, language: Parameters<typeof translateMessage>[0]) {
+  const key = Object.hasOwn(descriptions, name) ? descriptions[name] : undefined;
+  return key ? translateMessage(language, key) : undefined;
+}
 
 export const skillLabel = (skill: Skill) => skill.interface?.displayName || skill.name;
 export const skillDescription = (skill: Skill, language = getInterfaceLanguage()) =>

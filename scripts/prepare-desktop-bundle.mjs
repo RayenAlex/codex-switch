@@ -3,12 +3,14 @@ import { buildInstallerHelper } from "./build-installer-helper.mjs";
 import { packagedExecutable } from "./verify-tauri-assets.mjs";
 import { verifyWindowsRuntime } from "./verify-windows-runtime.mjs";
 import { prepareLinuxAppImage } from "./prepare-linux-appimage.mjs";
+import { prepareXServer } from './prepare-x-server.mjs';
 
 if (process.platform === "linux") {
   await prepareLinuxAppImage();
 }
 
 if (process.platform === "win32") {
+  await prepareXServer();
   verifyWindowsRuntime(packagedExecutable);
   // MSI still needs its embedded shutdown guard. NSIS calls Windows APIs directly
   // and never embeds or executes this binary.

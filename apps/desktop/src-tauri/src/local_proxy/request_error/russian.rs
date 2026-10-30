@@ -1,3 +1,4 @@
+// Generated from packages/i18n/platform/desktop/src-tauri/src/local_proxy/request_error/russian.rs. Do not edit.
 //! Russian rendering of structured proxy request errors. The Chinese `Display` in the parent
 //! module stays canonical; this module renders the same safe enums for the Russian interface
 //! and never consults the saved language itself.

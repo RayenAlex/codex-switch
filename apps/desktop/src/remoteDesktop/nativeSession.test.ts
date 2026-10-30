@@ -5,6 +5,16 @@ import { DEFAULT_SETTINGS } from '../../../../shared/remote-desktop/protocol';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
 const call = vi.mocked(invoke);
+it('reports privacy applied by the host before its first video offer without a viewer-side toggle', async () => {
+  const original = call.getMockImplementation()!;
+  call.mockImplementation(async (command, args) => command === 'remote_desktop_stream_open'
+    ? { sdp: 'private-offer', displayState: { privacyScreen: true, displayId: 'private', displays: [] } }
+    : original(command, args));
+  const session = new NativeDesktopSession(DEFAULT_SETTINGS, []);
+  await expect(session.open()).resolves.toMatchObject({ sdp: 'private-offer', privacyScreen: true, displayId: 'private' });
+  expect(call.mock.calls.some(([command]) => command === 'remote_desktop_privacy')).toBe(false);
+  await session.close();
+});
 it('routes security changes to the active native lease and rejects writes after close', async () => {
   const original = call.getMockImplementation()!;
   const state = { lockOnDisconnect: true, muteHost: false };
@@ -73,6 +83,7 @@ it('polls a pending privacy transition without a long-running IPC call', async (
 });
 
 it.each([
+  'client.remoteDesktop.privacyRequiresUnattended',
   '请先在电脑的远程设置中开启无人值守，再使用隐私屏。',
   '请在电脑上确认安装，完成后再点一次隐私屏。',
   '请先解锁电脑，再点隐私屏确认安装。',
@@ -90,7 +101,7 @@ it.each([
   await expect(session.privacy(true)).rejects.toThrow(message);
   expect(session.closed).toBe(false);
   accepted = true;
-  const changing = expect(session.privacy(true)).rejects.toThrow('隐私屏未能切换');
+  const changing = expect(session.privacy(true)).rejects.toThrow('client.remoteDesktop.privacyFailed');
   await vi.advanceTimersByTimeAsync(250); await changing;
   expect(session.closed).toBe(true);
   expect(call).toHaveBeenCalledWith('remote_desktop_stream_close', { id: 'native-lease' });

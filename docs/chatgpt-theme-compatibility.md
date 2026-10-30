@@ -1,5 +1,26 @@
 # ChatGPT 桌面主题兼容性
 
+## Windows 包版本 26.1021.3705.0（2026-10-24 验证）
+
+会话滚动区域新增了独立的 sticky 渐隐层，位于 `[data-app-action-timeline-scroll]` 内，
+但不属于 `[data-thread-scroll-footer]`。其类名由 CSS Modules 生成（`_fade_…`），
+旧版 `.bg-gradient-to-t` 和 footer 直接子节点规则均无法覆盖，导致输入框上方出现白色渐变横条。
+
+Windows、macOS 样式同步适配该装饰层：仅匹配滚动区域内同时带有 `aria-hidden="true"`、
+`.pointer-events-none` 和 `_fade_` 类名的节点，清除背景，不更改定位、尺寸、滚动留白或功能卡片。
+
+回归测试先确认两平台旧样式均能复现问题，再验证修复后的新旧结构、浅色→深色→浅色切换、
+关闭皮肤恢复原样、草稿保留及功能卡片渐变不受影响。相关渲染、启动和资源流程共 26 项测试通过，
+`npm run check:i18n` 通过。
+
+Windows 实机“海底潜航”会话截图确认白条已消失；修复前后输入框、权限提示、渐隐层的尺寸与位置、
+滚动位置和草稿均一致。macOS 通过浏览器回归验证，未做实机验收。
+桌面远程聊天和 Web PC 不加载 ChatGPT 客户端注入样式，代码检查确认没有对应装饰层，无需同步修改。
+
+本机 Remote AI 安装目录已同步两个平台 CSS，原文件保存在
+`.codex-tmp/theme-footer-20261024/installed-assets-backup`，当前窗口已自动生效，无需重启。
+正式分发需包含本次内置 CSS 修复。
+
 ## Windows 包版本 26.928.3736.0（2026-10-02 验证）
 
 会话底部的装饰层从 `.bg-gradient-to-t` 改为 `.bg-surface`，仍位于

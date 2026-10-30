@@ -1,0 +1,35 @@
+name: Internationalization
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'packages/i18n/**'
+      - 'shared/**'
+      - 'apps/**'
+      - 'scripts/**'
+      - 'package*.json'
+      - '.github/workflows/i18n.yml'
+  pull_request:
+    paths:
+      - 'packages/i18n/**'
+      - 'shared/**'
+      - 'apps/**'
+      - 'scripts/**'
+      - 'package*.json'
+      - '.github/workflows/i18n.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --workspace @remoteai/i18n --include-workspace-root=false --ignore-scripts
+      - run: npm run check:i18n

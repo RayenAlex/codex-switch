@@ -1,4 +1,4 @@
-import { guiText } from "../../../i18n/guiText";
+import { uiText } from "../../../i18n/uiText";
 import { ExternalLink, RotateCw } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { message } from "antd";
@@ -13,24 +13,24 @@ export function WebsitePreview(props: {
   const preview = useWebsitePreview(props);
   const openBrowser = () => {
     if (!preview.desktop) { window.open(props.url, "_blank", "noopener,noreferrer"); return; }
-    void openUrl(props.url).catch(() => { void message.error({ content: guiText("链接暂时无法打开，请稍后重试。"),
+    void openUrl(props.url).catch(() => { void message.error({ content: uiText("client.conversation.couldNotOpenTheLinkPleaseTryAgainShortly"),
       style: { maxWidth: 400, marginInline: "auto" } }); });
   };
-  return <section className={styles.window} aria-label={guiText("网页预览")}>
+  return <section className={styles.window} aria-label={uiText("client.workspaceActions.webPreview")}>
     <header className={styles.toolbar}>
       <PreviewNavigation navigation={props.navigation} />
-      <div className={styles.heading}><strong>{guiText("网页预览")}</strong><span>{props.url}</span></div>
-      <CopyButton text={props.url} label={guiText("复制链接")} />
-      <button type="button" className={styles.menu} aria-label={guiText("重新加载网页")} onClick={preview.retry}>
+      <div className={styles.heading}><strong>{uiText("client.workspaceActions.webPreview")}</strong><span>{props.url}</span></div>
+      <CopyButton text={props.url} label={uiText("client.mobile.copyLink")} />
+      <button type="button" className={styles.menu} aria-label={uiText("client.workspaceActions.reloadWebPage")} onClick={preview.retry}>
         <RotateCw size={16} /></button>
-      <button type="button" className={styles.menu} aria-label={guiText("在浏览器中打开")} onClick={openBrowser}>
+      <button type="button" className={styles.menu} aria-label={uiText("client.workspaceActions.openInBrowser")} onClick={openBrowser}>
         <ExternalLink size={16} /></button>
     </header>
     <div className={styles.website} ref={preview.host}>
       {preview.failed && <div className={styles.feedback} role="status">
-        {guiText("网页暂时无法显示，请重试或在浏览器中打开。")}<button type="button" onClick={preview.retry}>{guiText("重试")}</button>
+        {uiText("client.workspaceActions.thisPageCannotBeDisplayedRightNowRetryOrOpen")}<button type="button" onClick={preview.retry}>{uiText("client.terminal.retry")}</button>
       </div>}
-      {!preview.desktop && !preview.failed && <iframe key={preview.attempt} title={guiText("网页预览")} src={props.url}
+      {!preview.desktop && !preview.failed && <iframe key={preview.attempt} title={uiText("client.workspaceActions.webPreview")} src={props.url}
         sandbox="allow-scripts allow-forms" referrerPolicy="no-referrer" onError={preview.fail} />}
     </div>
   </section>;

@@ -5,6 +5,7 @@ import type { TransferProgress } from './uploadProgress';
 import { taskRequest, type TaskDelivery } from './taskDelivery';
 import { BULK_LIMITS } from './bulkLimits';
 import { recordDownloadRpcLatency } from './downloadMetrics';
+import { DICTATION_OPERATION, DICTATION_TIMEOUT_MS } from './dictation';
 
 const TRANSFER_CHARS_PER_SECOND = 128 * 1024;
 const SMALL_REQUEST_CHARS = 1024 * 1024;
@@ -15,9 +16,11 @@ const GIT_MESSAGE_TIMEOUT_MS = 120_000;
 const MODEL_CATALOG_TIMEOUT_MS = 150_000;
 function requestTimeout(body: unknown) {
   const operation = (body as { operation?: unknown } | null)?.operation;
+  if (operation === DICTATION_OPERATION) return DICTATION_TIMEOUT_MS;
   if (operation === 'guiGitGenerateMessage') return GIT_MESSAGE_TIMEOUT_MS;
   if (operation === 'guiGitAction' || operation === 'guiGitWorkspace'
-    || operation === 'guiGitRevision') return GIT_ACTION_TIMEOUT_MS;
+    || operation === 'guiGitRevision' || operation === 'guiGitContinueIntegration'
+    || operation === 'guiGitResolveConflict') return GIT_ACTION_TIMEOUT_MS;
   if (operation === 'models' || operation === 'modelsRefresh'
     || operation === 'composerSet' || operation === 'guiAccountSelect') {
     return MODEL_CATALOG_TIMEOUT_MS;

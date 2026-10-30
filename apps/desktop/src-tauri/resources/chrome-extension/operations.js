@@ -49,9 +49,9 @@ async function open(context, args) {
   } catch {
     // A failed open must not leave an ungrouped task tab mixed in with the user's pages.
     try { await chrome.tabs.remove(tab.id); }
-    catch { throw new Error(t('groupTabsFailed', '未能完成标签分组，请检查新打开的标签页后重试。')); }
+    catch { throw new Error(t('groupTabsFailed')); }
     assertRunning(context.signal);
-    throw new Error(t('openGroupedTabFailed', '未能打开分组标签页，请重试。'));
+    throw new Error(t('openGroupedTabFailed'));
   }
 }
 
@@ -94,7 +94,7 @@ async function pageAction(driver, operation, args) {
   if (operation === 'screenshot') {
     const result = await driver.send('Page.captureScreenshot', { format: 'jpeg', quality: 80,
       captureBeyondViewport: false, fromSurface: true });
-    if (result.data.length > MAX_SCREENSHOT_CHARACTERS) throw new Error(t('screenshotTooLarge', '截图过大，请缩小浏览器窗口后重试。'));
+    if (result.data.length > MAX_SCREENSHOT_CHARACTERS) throw new Error(t('screenshotTooLarge'));
     return { tabId: driver.tab.id, image: { mimeType: 'image/jpeg', data: result.data } };
   }
   if (operation === 'wait') return waitForText(driver, args);
@@ -104,7 +104,7 @@ async function pageAction(driver, operation, args) {
 async function history(driver, operation) {
   const { entries, currentIndex } = await driver.send('Page.getNavigationHistory');
   const entry = entries[currentIndex + (operation === 'back' ? -1 : 1)];
-  if (!entry) throw new Error(t('noHistoryEntry', '没有可切换的历史页面。'));
+  if (!entry) throw new Error(t('noHistoryEntry'));
   await authorize(entry.url, driver.context.clientId, driver.context.signal);
   invalidate(driver.tab.id);
   await driver.send('Page.navigateToHistoryEntry', { entryId: entry.id });
@@ -119,5 +119,5 @@ async function waitForText(driver, args) {
     if (result.text.includes(args.text)) return result;
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
-  throw new Error(t('waitTimedOut', '等待时间已到，页面中还没有出现指定内容。'));
+  throw new Error(t('waitTimedOut'));
 }

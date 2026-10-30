@@ -21,7 +21,7 @@ export async function consoleLogs(driver, args) {
     await runtime.flush();
     const current = await documentFrame(driver, frame.id);
     if (current.loaderId !== frame.loaderId || runtime.contextChanged()) {
-      throw new Error(t('pageChangedReadLogs', '页面已变化，请重新读取日志。'));
+      throw new Error(t('pageChangedReadLogs'));
     }
     const result = buffer.result();
     return { tabId: driver.tab.id, frameId: frame.id, ...result, ...extra,

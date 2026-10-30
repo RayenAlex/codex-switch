@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Button } from 'antd';
-import { copy } from '../content/copy';
-import { features } from '../content/features';
-import type { Feature, Language } from '../content/types';
+import { copy } from '@remoteai/i18n/website-content/copy';
+import { features } from '@remoteai/i18n/website-content/features';
+import type { Feature, Language } from '@remoteai/i18n/website-content/types';
 import { FeatureCard } from '../components/FeatureCard';
 import { ClosingCta } from '../components/Shared';
 

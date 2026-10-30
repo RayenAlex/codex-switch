@@ -1,3 +1,4 @@
+import { displayError } from '../../i18n/index';
 import { Spin } from 'antd';
 import { useContext, useState } from 'react';
 import { WorkspaceDrawerContext } from '../../../../../shared/chat/workspaceDrawer';
@@ -42,14 +43,12 @@ function GitContent(props: Props & { panel: RemoteGit; shared: boolean }) {
       <GitToolbar panel={panel} connected={props.connected} />
       {props.active && panel.fileAction && <GitFileActionDialog panel={panel} connected={props.connected} />}
       {props.active && panel.revisionAction && <GitRevisionDialog panel={panel} connected={props.connected} />}
-      {!props.cwd && <p className="git-notice">{t('请先选择一个项目。')}</p>}
-      {!props.connected && <p className="git-notice">{t('电脑连接后即可使用 Git。')}</p>}
-      {panel.error && <p role="alert" className="git-error">{t(panel.error)}</p>}
-      {panel.changes?.files.some(file => file.conflict) && <p className="git-error">
-        {t('请先在电脑上解决冲突或完成正在进行的合并。')}</p>}
+      {!props.cwd && <p className="git-notice">{t("client.git.chooseAProjectFirst")}</p>}
+      {!props.connected && <p className="git-notice">{t("client.git.connectToYourComputerToUseGit")}</p>}
+      {panel.error && <p role="alert" className="git-error">{displayError(panel.error)}</p>}
       {panel.notice && <p role="status" className="git-notice">{panel.notice.startsWith('已提交 ')
-        ? t('已提交 {hash}', { hash: panel.notice.slice(4) }) : t(panel.notice)}</p>}
-      {panel.busy && !panel.loading && <div className="git-loading"><Spin size="small" />{t('正在处理…')}</div>}
+        ? t("client.git.committed", { hash: panel.notice.slice(4) }) : displayError(panel.notice)}</p>}
+      {panel.busy && !panel.loading && <div className="git-loading"><Spin size="small" />{t("client.threadActions.working")}</div>}
       {panel.detail?.kind === 'diff' && <GitDiff
         key={JSON.stringify([props.cwd, panel.detail.path, panel.detail.commit?.hash])}
         client={props.client} cwd={props.cwd} detail={panel.detail} enabled={props.active && props.connected}
@@ -61,16 +60,16 @@ function GitContent(props: Props & { panel: RemoteGit; shared: boolean }) {
         onSelect={file => panel.setDetail({ kind: 'diff', path: file.path, commit: detail.commit,
           title: `${file.path} · ${detail.commit.hash.slice(0, 8)}` })} />}
       {!detail && <>
-        <div className="git-tabs" role="tablist" aria-label={t('Git 视图')}>
+        <div className="git-tabs" role="tablist" aria-label={t("client.git.gitView")}>
           <button type="button" role="tab" aria-selected={panel.tab === 'changes'}
             onClick={() => { panel.setDetail(null); panel.setTab('changes'); }}>
-            {t('改动')}{panel.changes ? ` ${panel.changes.files.length}` : ''}</button>
+            {t("client.git.changes")}{panel.changes ? ` ${panel.changes.files.length}` : ''}</button>
           <button type="button" role="tab" aria-selected={panel.tab === 'history'}
             onClick={() => { panel.setDetail(null); panel.setTab('history'); }}>
-            {t('提交记录')}</button></div>
+            {t("client.git.history")}</button></div>
         {panel.loading && <div className="git-initial-loading" role="status" aria-live="polite">
           <Spin />
-          <span>{t(panel.tab === 'changes' ? '正在加载改动…' : '正在加载提交记录…')}</span>
+          <span>{t(panel.tab === 'changes' ? "client.git.loadingChanges" : "client.git.loadingCommitHistory")}</span>
         </div>}
         {!panel.loading && panel.tab === 'changes' && <GitChanges panel={panel} connected={props.connected} />}
         {!panel.loading && panel.tab === 'history' && <GitHistory panel={panel} connected={props.connected}

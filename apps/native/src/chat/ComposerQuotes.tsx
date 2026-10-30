@@ -1,6 +1,6 @@
 import { createThemedStyles } from '../theme/styles';
 import { t, useLanguage } from '../i18n';
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {  View } from 'react-native';
 import { quoteKey } from './replyQuotes';
 import { useChatQuotes } from './ChatQuotes';
@@ -15,9 +15,9 @@ export function ComposerQuotes({ disabled, active }: { disabled: boolean; active
   useEffect(() => { if (!quote || !active) setSelected(null); }, [quote, active]);
   if (!draft?.quotes.length) return null;
   return <>
-    <View style={quoteStyles.chips} accessibilityLabel={t("引用的内容")}>
-      {draft.quotes.map((entry, index) => <QuoteChip key={quoteKey(entry)} label={t("查看第 {value1} 条引用", { value1: index + 1 })}
-        onOpen={() => setSelected(quoteKey(entry))} remove={{ label: t("移除第 {value1} 条引用", { value1: index + 1 }), disabled,
+    <View style={quoteStyles.chips} accessibilityLabel={t("client.mobile.quotedContent")}>
+      {draft.quotes.map((entry, index) => <QuoteChip key={quoteKey(entry)} label={t("client.mobile.viewQuote", { value1: index + 1 })}
+        onOpen={() => setSelected(quoteKey(entry))} remove={{ label: t("client.mobile.removeQuote", { value1: index + 1 }), disabled,
           onPress: () => draft.remove(quoteKey(entry)) }} />)}
     </View>
     {quote && active && <QuoteDetails text={quote.text} onClose={() => setSelected(null)} />}

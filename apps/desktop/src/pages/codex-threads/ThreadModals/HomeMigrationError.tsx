@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Alert, Button } from "antd";
-import { translateBackendMessage } from "../../../../../../shared/i18n/backend/translateBackendMessage";
+import { formatRemoteError } from "../../../../../../shared/localization/errors";
 import { useGuiLanguage } from "../../../i18n/useGuiLanguage";
 import { copyText } from "../../../utils/clipboard";
-import type { ThreadCopy } from "../copy";
+import type { ThreadCopy } from "@remoteai/i18n/copy/desktop/threads";
 
 export function HomeMigrationError({ error, text }: { error: string; text: ThreadCopy }) {
   const language = useGuiLanguage();
@@ -19,7 +19,7 @@ export function HomeMigrationError({ error, text }: { error: string; text: Threa
   };
   return <Alert type="error" style={{ marginTop: 12, maxWidth: 400 }}
     message={<div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-      {translateBackendMessage(language, error)}
+      {formatRemoteError(language, error)}
     </div>}
     description={<>
       <Button size="small" onClick={() => void copy()}>

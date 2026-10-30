@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 
 // Outlast the 130-second model/list RPC, including official and Admin discovery.
 export const MODEL_CATALOG_TIMEOUT_MS = 140_000;
@@ -11,10 +11,10 @@ export async function withModelCatalogTimeout<T>(
   let abort: (() => void) | undefined;
   try {
     return await Promise.race([pending, new Promise<never>((_, reject) => {
-      abort = () => reject(new Error(guiText("模型正在同步，请稍后重试。")));
+      abort = () => reject(new Error(uiText("client.conversation.modelsAreSyncingPleaseTryAgainShortly")));
       if (signal.aborted) { abort(); return; }
       signal.addEventListener("abort", abort, { once: true });
-      timer = setTimeout(() => reject(new Error(guiText("模型加载超时，请重试。"))), timeoutMs);
+      timer = setTimeout(() => reject(new Error(uiText("client.chat.loadingModelsTimedOutPleaseTryAgain"))), timeoutMs);
     })]);
   } finally {
     clearTimeout(timer);

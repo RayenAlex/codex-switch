@@ -1,12 +1,13 @@
 import { useThemeColor } from '../../theme/store';
 import { t, getLocale, useLanguage } from '../../i18n';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { gitGraph, GRAPH_ROW_HEIGHT, type GraphLine, type GraphRow } from '../../../../../shared/remote-chat/gitGraph';
 import type { RemoteGit } from '../../../../../shared/remote-chat/useRemoteGit';
 import { GIT_HISTORY_CONTENT_WIDTH, GIT_HISTORY_DATE_FORMAT } from '../../../../../shared/remote-chat/gitHistoryLayout';
 import { useGitStyles as useStyles } from './styles';
 import { useGitHistoryScroll } from './useGitHistoryScroll';
+import { SheetGestureScrollView as ScrollView } from '../../components/SheetScrollGesture';
 import { GIT_LONG_PRESS_MS } from '../../../../../shared/remote-chat/gitMenu';
 import type { GitCommit } from '../../../../../shared/remote-chat/gitTypes';
 
@@ -42,7 +43,7 @@ export function GitHistory({ panel, connected, onMenu }: {
     setWidth(event.nativeEvent.layout.width); onLayout(event);
   }}>
     {panel.changes && !panel.busy && !panel.commits.length &&
-      <Text style={styles.notice}>{t("还没有提交记录。")}</Text>}
+      <Text style={styles.notice}>{t("client.git.noCommitsYet")}</Text>}
     <ScrollView horizontal>
       <View>{graph.rows.map(row => <Pressable key={row.commit.hash} accessibilityRole="button"
         accessibilityLabel={`${row.commit.hash.slice(0, 8)} ${row.commit.subject}`}
@@ -66,9 +67,9 @@ export function GitHistory({ panel, connected, onMenu }: {
       </Pressable>)}</View>
     </ScrollView>
     {panel.hasMore && <View style={styles.button}>
-      {loadingMore && <Text accessibilityLiveRegion="polite" style={styles.meta}>{t("正在加载…")}</Text>}
+      {loadingMore && <Text accessibilityLiveRegion="polite" style={styles.meta}>{t("client.projectBrowser.loading")}</Text>}
       {failed && <Pressable accessibilityRole="button" disabled={panel.busy || !connected} onPress={retry}>
-        <Text style={styles.buttonText}>{t("重试")}</Text></Pressable>}
+        <Text style={styles.buttonText}>{t("client.terminal.retry")}</Text></Pressable>}
     </View>}
   </ScrollView>;
 }

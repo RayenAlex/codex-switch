@@ -98,17 +98,24 @@ async function inspectComposer(page) {
   });
 }
 
-function threadFooterMarkup({ legacy }) {
+function threadFooterMarkup({ legacy, detachedFade = false }) {
   const layerClass = legacy ? "bg-gradient-to-t" : "bg-surface";
   const layerMarker = legacy ? "" : 'aria-hidden="true"';
+  const fade = detachedFade ? `<div aria-hidden="true" class="pointer-events-none sticky bottom-0">
+    <div aria-hidden="true" class="_background_fixture_2 _fade_fixture_2 pointer-events-none from-surface"></div>
+  </div>` : "";
   return shellMarkup({ placement: "thread", legacy }).replace('<section role="main">', `
     <section role="main"><style>
       .thread-scroll-container { position: relative; min-height: 500px; }
       [data-thread-scroll-footer] { position: absolute; bottom: 0; width: 100%; padding-bottom: 16px; }
       .footer-backdrop { position: absolute; inset: 0; pointer-events: none; }
       .bg-gradient-to-t { background: linear-gradient(to top, white 80%, transparent); }
+      ._fade_fixture_2, .functional-gradient { background: linear-gradient(to top, white, transparent); }
+      ._fade_fixture_2 { position: absolute; bottom: 100%; width: 100%; height: 32px; }
+      .sticky { position: sticky; bottom: 0; }
       [data-codex-composer-root] { position: relative; margin-inline: 100px; }
     </style><div class="thread-scroll-container" data-app-action-timeline-scroll>
+      <div class="transcript-content"><div class="functional-gradient">Transcript card</div>${fade}</div>
       <div data-thread-scroll-footer="true">
         <div ${layerMarker} class="footer-backdrop pointer-events-none ${layerClass}"></div>
         <div data-pip-obstacle="thread-footer">`).replace('</section>', `
@@ -120,27 +127,40 @@ async function inspectFooter(page) {
   return page.evaluate(() => {
     const backdrop = document.querySelector('.footer-backdrop');
     const style = getComputedStyle(backdrop);
+    const fade = document.querySelector('._fade_fixture_2');
     return { background: style.backgroundColor, image: style.backgroundImage,
       height: backdrop.getBoundingClientRect().height,
+      fade: fade ? { background: getComputedStyle(fade).backgroundColor,
+        image: getComputedStyle(fade).backgroundImage, height: fade.getBoundingClientRect().height } : null,
+      functionalGradient: getComputedStyle(document.querySelector('.functional-gradient')).backgroundImage,
       footerHeight: document.querySelector('[data-thread-scroll-footer]').getBoundingClientRect().height,
       notice: getComputedStyle(document.querySelector('.footer-notice')).backgroundColor };
   });
 }
 
 for (const platform of ["windows", "macos"]) {
-  for (const legacy of [false, true]) {
-    test(`${platform}: ${legacy ? "legacy" : "26.928"} thread footer stays clear when switching skins`, async () => {
+  for (const version of ["legacy", "26.928", "26.1021"]) {
+    test(`${platform}: ${version} thread footer stays clear when switching skins`, async () => {
       const page = await browser.newPage();
       try {
-        await page.setContent(threadFooterMarkup({ legacy }));
+        await page.setContent(threadFooterMarkup({
+          legacy: version === "legacy", detachedFade: version === "26.1021",
+        }));
         const nativeFooter = await inspectFooter(page);
         assert.ok(nativeFooter.height > 0);
         assert.ok(nativeFooter.image !== "none" || nativeFooter.background !== "rgba(0, 0, 0, 0)");
+        if (nativeFooter.fade) assert.notEqual(nativeFooter.fade.image, "none");
         for (const appearance of ["light", "dark", "light"]) {
           await page.evaluate(await rendererPayload(page, { platform, appearance }));
           const footer = await inspectFooter(page);
           assert.equal(footer.background, "rgba(0, 0, 0, 0)", "the full-width footer must not hide the artwork");
           assert.equal(footer.image, "none");
+          if (footer.fade) {
+            assert.equal(footer.fade.image, "none", "the separate sticky fade must not leave a white band");
+            assert.equal(footer.fade.background, "rgba(0, 0, 0, 0)");
+            assert.equal(footer.fade.height, nativeFooter.fade.height, "preserve the sticky scroll geometry");
+          }
+          assert.equal(footer.functionalGradient, nativeFooter.functionalGradient);
           assert.ok(footer.height > 0, "the decorative layer remains in the layout");
           assert.equal(footer.height, footer.footerHeight, "the layer still covers the footer");
           assert.notEqual(footer.notice, "rgba(0, 0, 0, 0)", "functional surfaces keep their backgrounds");

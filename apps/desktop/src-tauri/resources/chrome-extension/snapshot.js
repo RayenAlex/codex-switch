@@ -18,7 +18,7 @@ export async function frames(driver) {
 export async function documentFrame(driver, frameId) {
   const documents = await driver.documents();
   const frame = frameId ? documents.find((frame) => frame.id === frameId) : documents[0];
-  if (!frame) throw new Error(t('frameChanged', '页面框架已变化，请重新读取页面。'));
+  if (!frame) throw new Error(t('frameChanged'));
   await authorize(frame.url, driver.context.clientId, driver.context.signal);
   return frame;
 }
@@ -73,9 +73,9 @@ export async function reference(driver, value) {
   const entry = snapshots.get(value?.slice(0, separator));
   const nodeId = Number(value?.slice(separator + 1));
   if (!entry || entry.tabId !== driver.tab.id || !entry.references.has(nodeId)) {
-    throw new Error(t('referenceExpired', '这个页面引用已失效，请重新读取页面。'));
+    throw new Error(t('referenceExpired'));
   }
   const frame = await documentFrame(driver, entry.frameId);
-  if (frame.loaderId !== entry.loaderId) throw new Error(t('pageNavigated', '页面已跳转，请重新读取页面。'));
+  if (frame.loaderId !== entry.loaderId) throw new Error(t('pageNavigated'));
   return { nodeId, frameId: entry.frameId };
 }

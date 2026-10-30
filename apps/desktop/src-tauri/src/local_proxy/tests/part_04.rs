@@ -69,6 +69,7 @@ fn streaming_token_usage_does_not_require_response_content_type() {
 #[test]
 fn provider_models_response_matches_codex_model_info_shape() {
     let provider = ProviderProfile {
+        account_alias: None,
         request_options: Default::default(),
         id: "deepseek".to_string(),
         kind: ProviderKind::Custom,
@@ -88,6 +89,8 @@ fn provider_models_response_matches_codex_model_info_shape() {
         fast_mode_enabled: true,
         websocket_enabled: false,
         api_format: ProviderApiFormat::OpenaiResponses,
+        balance_script: None,
+        market_source: None,
         balance_platform: None,
         balance_query_url: None,
         balance_query_token: None,
@@ -131,6 +134,7 @@ fn provider_models_response_matches_codex_model_info_shape() {
 #[test]
 fn switch_control_catalog_exposes_only_fixed_model_name() {
     let provider = ProviderProfile {
+        account_alias: None,
         request_options: Default::default(),
         id: "deepseek".to_string(),
         kind: ProviderKind::Custom,
@@ -150,6 +154,8 @@ fn switch_control_catalog_exposes_only_fixed_model_name() {
         fast_mode_enabled: false,
         websocket_enabled: false,
         api_format: ProviderApiFormat::OpenaiResponses,
+        balance_script: None,
+        market_source: None,
         balance_platform: None,
         balance_query_url: None,
         balance_query_token: None,
@@ -179,6 +185,7 @@ fn switch_control_catalog_exposes_only_fixed_model_name() {
 #[test]
 fn provider_models_payload_etag_changes_with_the_model_list() {
     let mut provider = ProviderProfile {
+        account_alias: None,
         request_options: Default::default(),
         id: "deepseek".to_string(),
         kind: ProviderKind::Custom,
@@ -198,6 +205,8 @@ fn provider_models_payload_etag_changes_with_the_model_list() {
         fast_mode_enabled: false,
         websocket_enabled: false,
         api_format: ProviderApiFormat::OpenaiChat,
+        balance_script: None,
+        market_source: None,
         balance_platform: Some(ProviderBalancePlatform::DeepSeek),
         balance_query_url: Some("https://api.deepseek.com/user/balance".to_string()),
         balance_query_token: None,

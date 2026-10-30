@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import * as backend from '../api/backend';
 import type { Provider, ProviderBalance } from '../types';
-import { setGuiLanguage } from '../i18n/guiText';
+import { setGuiLanguage } from "../i18n/uiText";
 import { GuiAccountBalances } from './guiAccountBalances';
 import { readGuiAccounts } from './guiAccounts';
 import { connectionDetails } from './connectionDetails';

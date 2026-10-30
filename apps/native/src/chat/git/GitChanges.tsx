@@ -1,7 +1,8 @@
+import { SheetGestureScrollView as ScrollView } from '../../components/SheetScrollGesture';
 import { gitAreaColors } from './theme';
 import { useThemeColor } from '../../theme/store';
 import { t, useLanguage } from '../../i18n';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { selectionState } from '../../../../../shared/remote-chat/gitFiles';
 import type { GitFileRow } from '../../../../../shared/remote-chat/useGitFileList';
@@ -23,19 +24,19 @@ export function GitChanges({ panel, connected, onMenu }: {
   const all = selectionState(files, panel.selected);
   return <>
     <View style={styles.selection}>
-      <Pressable accessibilityRole="checkbox" accessibilityLabel={t("全选")} accessibilityState={{ checked: all }}
+      <Pressable accessibilityRole="checkbox" accessibilityLabel={t("client.projectBrowser.selectAll")} accessibilityState={{ checked: all }}
         disabled={panel.busy || !files.some(file => !file.conflict)}
         onPress={panel.selectAll} style={styles.checkButton}>
-        <GitSelectionMark checked={all} /><Text style={styles.meta}>{t("全选")}</Text></Pressable>
-      <Text style={styles.meta}>{t("已选")}{' '}{count}{' '}{t("个文件")}</Text>
+        <GitSelectionMark checked={all} /><Text style={styles.meta}>{t("client.projectBrowser.selectAll")}</Text></Pressable>
+      <Text style={styles.meta}>{t("client.mobile.selected")}{' '}{count}{' '}{t("client.chat.files.2d4a2a")}</Text>
       <View style={styles.viewToggle}>{(['tree', 'flat'] as const).map(mode =>
         <Pressable key={mode} accessibilityRole="button" accessibilityState={{ selected: mode === list.mode }}
           onPress={() => list.setMode(mode)} style={[styles.modeButton, mode === list.mode && styles.activeViewMode]}>
           <Text style={[styles.meta, mode === list.mode && styles.selectedTabText]}>
-            {mode === 'tree' ? t("文件夹") : t("平铺")}</Text></Pressable>)}</View>
+            {mode === 'tree' ? t("client.git.folders") : t("client.git.flat")}</Text></Pressable>)}</View>
     </View>
     <ScrollView style={styles.fill} keyboardShouldPersistTaps="handled">
-      {panel.changes && !files.length && <Text style={styles.notice}>{t("工作区没有未提交的改动。")}</Text>}
+      {panel.changes && !files.length && <Text style={styles.notice}>{t("client.git.thereAreNoUncommittedChanges")}</Text>}
       {list.rows.map(row => <GitRow key={row.id} row={row} panel={panel} connected={connected}
         flat={list.mode === 'flat'} onToggle={() => list.toggleFolder(row.id)} onMenu={onMenu} />)}
     </ScrollView>
@@ -58,16 +59,17 @@ export function GitRow({ row, panel, connected, flat, onToggle, onMenu }: {
   const disabled = panel.busy || !row.files.some(file => !file.conflict);
   return <View style={[styles.file, area && styles.areaRow,
     !area && checked === true && { backgroundColor: tone.background }]}>
-    <Pressable accessibilityRole="checkbox" accessibilityLabel={t("选择 {value1}", { value1: row.path })}
+    <Pressable accessibilityRole="checkbox"
+      accessibilityLabel={t("client.mobile.select", { value1: area ? t(row.area.label) : row.path })}
       accessibilityState={{ checked, disabled }} disabled={disabled}
       onPress={() => panel.selectFiles(row.files)} style={styles.checkButton}>
       <GitSelectionMark checked={checked} disabled={disabled} /></Pressable>
     {area ? <View style={styles.areaHeading}>
       <View style={[styles.areaDot, { backgroundColor: tone.color }]} />
-      <Text style={[styles.areaTitle, color]}>{row.name}</Text>
+      <Text style={[styles.areaTitle, color]}>{t(row.area.label)}</Text>
       <Text style={[styles.areaCount, color, { backgroundColor: tone.background }]}>{row.files.length}</Text>
     </View>
-      : <Pressable accessibilityRole="button" accessibilityLabel={`${folder ? t("展开或收起") : t("查看")} ${row.path}`}
+      : <Pressable accessibilityRole="button" accessibilityLabel={`${folder ? t("client.mobile.expandOrCollapse") : t("client.mobile.view.db8db0")} ${row.path}`}
         accessibilityState={{ expanded: folder ? !row.collapsed : undefined }}
         disabled={panel.busy || (!folder && !connected)}
         style={[styles.fileButton, { marginLeft: Math.min(row.depth, 4) * 14 }]}

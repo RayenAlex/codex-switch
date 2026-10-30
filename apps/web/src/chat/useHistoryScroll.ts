@@ -1,10 +1,11 @@
 import { useCallback, useLayoutEffect, useRef, useState, type TouchEvent, type WheelEvent } from 'react';
 import type { ChatMessagesProps } from '../../../../shared/remote-chat/client/messageProps';
-import { isNearHistoryStart, shouldShowScrollToBottom } from '../../../../shared/chat/scrollPosition';
+import { isNearHistoryStart, shouldFollowScroll, shouldShowScrollToBottom }
+  from '../../../../shared/chat/scrollPosition';
+import { useScrollMovement } from '../../../../shared/chat/useScrollMovement';
 import { useHistoryPull } from '../../../../shared/chat/useHistoryPull';
 import { useHistoryContinuation } from '../../../../shared/chat/useHistoryContinuation';
 
-const EDGE_DISTANCE = 100;
 const TOP_TOLERANCE = 1;
 
 function canScrollUp(target: EventTarget, container: HTMLElement) {
@@ -23,7 +24,7 @@ export function useHistoryScroll({ thread, loading, loadingMore, hasMore, loadOl
   const following = useRef(true);
   const [showBottom, setShowBottom] = useState(false);
   const fetching = useRef(false);
-  const position = useRef(0);
+  const movement = useScrollMovement();
   const anchor = useRef<{ element: Element; top: number }>();
   const scope = useRef(thread?.id);
   useLayoutEffect(() => {
@@ -31,8 +32,8 @@ export function useHistoryScroll({ thread, loading, loadingMore, hasMore, loadOl
     following.current = true;
     fetching.current = false;
     anchor.current = undefined;
-    position.current = 0;
-  }, [thread?.id]);
+    movement.remember(list.current);
+  }, [thread?.id, movement]);
   const updateScrollButton = useCallback(() => {
     const node = list.current;
     if (node) setShowBottom(shouldShowScrollToBottom({
@@ -71,16 +72,16 @@ export function useHistoryScroll({ thread, loading, loadingMore, hasMore, loadOl
     if (anchor.current?.element.isConnected) {
       node.scrollTop += anchor.current.element.getBoundingClientRect().top - anchor.current.top;
     } else if (following.current) node.scrollTop = node.scrollHeight;
-    position.current = node.scrollTop;
+    movement.remember(node);
     updateScrollButton();
     if (!loadingMore) anchor.current = undefined;
-  }, [thread, loadingMore, updateScrollButton]);
+  }, [thread, loadingMore, updateScrollButton, movement]);
   useLayoutEffect(() => {
     const follow = () => {
       if (following.current && list.current) {
         list.current.scrollTop = list.current.scrollHeight;
-        position.current = list.current.scrollTop;
       }
+      movement.remember(list.current);
       updateScrollButton();
     };
     const observer = new ResizeObserver(follow);
@@ -88,15 +89,17 @@ export function useHistoryScroll({ thread, loading, loadingMore, hasMore, loadOl
     if (list.current) observer.observe(list.current);
     follow();
     return () => observer.disconnect();
-  }, [updateScrollButton]);
+  }, [updateScrollButton, movement]);
   const onScroll = () => {
     const node = list.current;
     if (!node) return;
-    const upward = node.scrollTop < position.current;
-    position.current = node.scrollTop;
-    following.current = node.scrollHeight - node.clientHeight - node.scrollTop < EDGE_DISTANCE;
+    const offsetChange = movement.read(node);
+    // Layout and resize effects already remember their restored position before the scroll event arrives.
+    if (offsetChange === 0) return;
+    following.current = shouldFollowScroll({ contentHeight: node.scrollHeight, viewportHeight: node.clientHeight,
+      offset: node.scrollTop, movement: offsetChange });
     updateScrollButton();
-    if (upward && isNearHistoryStart({ offset: node.scrollTop, viewportHeight: node.clientHeight })) more();
+    if (offsetChange < 0 && isNearHistoryStart({ offset: node.scrollTop, viewportHeight: node.clientHeight })) more();
   };
   const onWheel = (event: WheelEvent<HTMLDivElement>) => {
     if (event.deltaY >= 0 || event.ctrlKey || event.defaultPrevented) return;

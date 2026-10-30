@@ -16,11 +16,11 @@ export function ImageFileDownload({ path }: { path: string }) {
     try {
       const url = await context.load(context.threadId, path, true);
       await (context.save ?? downloadChatImage)(url);
-      setMessage(t('已开始保存，请在浏览器下载列表中确认。'));
-    } catch { setMessage(t('图片暂时无法下载，请重试。')); }
+      setMessage(t("client.downloads.savingHasStartedCheckYourBrowserDownloadsForCompletion"));
+    } catch { setMessage(t("client.chat.couldNotDownloadTheImagePleaseTryAgain")); }
     finally { pending.current = false; setSaving(false); }
   };
   return <div><button type="button" className="chat-button" disabled={saving || !context?.ready}
-    onClick={() => { void save(); }}><Download size={15} />{t(saving ? '正在保存…' : '下载')}</button>
+    onClick={() => { void save(); }}><Download size={15} />{t(saving ? "client.projectBrowser.saving" : "client.projectBrowser.download")}</button>
     {message && <p role="status" className="chat-muted" style={{ maxWidth: 400 }}>{message}</p>}</div>;
 }

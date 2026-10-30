@@ -32,7 +32,7 @@ const render = () => act(async () => root.render(
   <ComposerFileImage item={item} disabled={false} active onRemove={vi.fn()} />,
 ));
 
-it("loads a small thumbnail first and reads the original only after the user requests it", async () => {
+it("loads a small thumbnail first and reads the original when the preview opens", async () => {
   vi.mocked(invoke).mockResolvedValueOnce({ url: thumbnail }).mockResolvedValueOnce({ url: original });
   await render();
   expect(host.querySelector("img")?.src).toBe(thumbnail);
@@ -40,8 +40,8 @@ it("loads a small thumbnail first and reads the original only after the user req
     request: { path: item.path, variant: "thumbnail" },
   });
   await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="放大查看：large.jpg"]')!.click());
-  expect(invoke).toHaveBeenCalledTimes(1);
-  await act(async () => host.querySelector<HTMLButtonElement>(".cs-image-original")!.click());
+  expect(invoke).toHaveBeenCalledTimes(2);
+  expect(host.querySelector('.cs-image-original')).toBeNull();
   expect(invoke).toHaveBeenLastCalledWith("codex_gui_attachment_preview", {
     request: { path: item.path, variant: "original" },
   });

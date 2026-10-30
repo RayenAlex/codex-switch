@@ -5,6 +5,8 @@ import { guiApi } from '../pages/codexGui/api';
 import { remoteQueue } from './queue';
 import { guiComposer } from '../pages/codexGui/composerBridge';
 vi.mock('../pages/codexGui/api', () => ({ guiApi: { connect: vi.fn(), request: vi.fn(), respond: vi.fn() } }));
+vi.mock('./sendMessage', () => ({ sendRemoteMessage: (request: import('../pages/codexGui/types').Request) =>
+  guiApi.request(request) }));
 vi.mock('../pages/codexGui/composerBridge', () => ({ guiComposer: {
   validateSend: vi.fn(), read: vi.fn(), refreshModels: vi.fn(),
 } }));
@@ -122,6 +124,20 @@ it.each(['projectFileRead', 'projectFileWrite'])('preserves literal image data i
   const reply = await new ChatOperations().execute({ kind: 'request', id: 'document', method: 'request',
     body: { operation, cwd: 'C:/project', path: data.path, text: data.text, revision: 'original' } });
   expect(reply.data).toEqual(data);
+});
+
+it('forwards read-only blame and preserves author and commit text literally', async () => {
+  const body = { operation: 'projectFileBlame', cwd: 'C:/project', path: 'C:/project/note', revision: 'v1' };
+  const data = { status: 'ready', revision: 'v1', commits: [{ hash: 'abc', author: '保存', time: 1,
+    timezone: '+0800', summary: 'data:image/png;base64,aW1hZ2U=' }], ranges: [{ start: 1, count: 1, commit: 0 }] };
+  vi.mocked(guiApi.request).mockResolvedValue(data);
+  const operations = new ChatOperations();
+  const request = { kind: 'request' as const, id: 'blame', method: 'request' as const, body };
+  expect(await operations.execute(request)).toMatchObject({ data });
+  expect(guiApi.request).toHaveBeenCalledExactlyOnceWith(body);
+  // Completed reads are repeatable and must not retain every large file's annotations in the retry cache.
+  expect(await operations.execute(request)).toMatchObject({ data });
+  expect(guiApi.request).toHaveBeenCalledTimes(2);
 });
 
 it.each(['createFolder', 'copy', 'move', 'rename', 'delete'])

@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   installDreamSkinCommunityTheme, installDreamSkinMarketTheme, loadDreamSkinResourcesStatus,
@@ -50,7 +50,7 @@ export function useGuiSkinLibrary(catalog: Pick<CatalogState, "refreshMarket" | 
     try {
       const status = await loadDreamSkinStatus();
       if (mounted.current) setSavedThemes(status.savedThemes.filter((theme) => !BUILT_IN_DREAM_SKIN_IDS.has(theme.id)));
-    } catch { if (mounted.current) setError(guiText("已保存的皮肤暂时无法读取，请重试。")); }
+    } catch { if (mounted.current) setError(uiText("client.workspaceActions.couldNotLoadTheSavedThemePleaseTryAgain")); }
   }, []);
   useEffect(() => {
     mounted.current = true;
@@ -59,7 +59,7 @@ export function useGuiSkinLibrary(catalog: Pick<CatalogState, "refreshMarket" | 
   }, [refreshSaved]);
 
   const update = (patch: Partial<GuiSkin>) => {
-    setError(saveGuiSkin(patch) ? null : guiText("皮肤设置未保存，请重试。"));
+    setError(saveGuiSkin(patch) ? null : uiText("client.workspaceActions.couldNotSaveThemeSettingsPleaseTryAgain"));
   };
   const apply = async (themeId: string, key: string, install?: () => Promise<unknown>) => {
     if (pending.current) return;
@@ -70,11 +70,11 @@ export function useGuiSkinLibrary(catalog: Pick<CatalogState, "refreshMarket" | 
       if (install) await install();
       const image = await loadDreamSkinThemePreview(themeId);
       if (!mounted.current) return;
-      if (!image) { setError(guiText("这款皮肤的图片暂时无法读取，请重新选择或稍后重试。")); return; }
+      if (!image) { setError(uiText("client.workspaceActions.couldNotLoadThisThemeSImageChooseItAgain")); return; }
       // Updated community packages keep their theme id, so their image must be reloaded too.
       update({ mode: "custom", themeId, imageRevision: Date.now() });
       if (install) void refreshSaved();
-    } catch { if (mounted.current) setError(guiText("皮肤加载失败，请稍后重试。")); }
+    } catch { if (mounted.current) setError(uiText("client.workspaceActions.couldNotLoadTheThemePleaseTryAgainLater")); }
     finally {
       pending.current = false;
       if (mounted.current) setBusy(null);

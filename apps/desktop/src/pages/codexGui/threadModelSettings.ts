@@ -1,5 +1,5 @@
 import { resolveModelSelection, type ModelSelection } from "./modelSelection";
-import type { GuiState, Model } from "./types";
+import type { GuiState } from "./types";
 import { appendModelChange, type PendingModelChange } from "./liveModelNotice";
 
 export interface ModelSettingsSnapshot {
@@ -29,6 +29,7 @@ export class ThreadModelSettings {
   private subscription?: Promise<void>;
   private stopSubscription?: () => void;
   private entries = new Map<string | null, ModelSettingsSnapshot>();
+  private defaults = new Map<string | null, ModelSelection>();
   private edits = new Map<string | null, number>();
   private reading = new Map<string | null, Promise<void>>();
   private writing = new Map<string | null, Promise<void>>();
@@ -63,9 +64,11 @@ export class ThreadModelSettings {
   }
 
   selection(threadId: string | null): ModelSelection {
-    const selection = this.entries.get(threadId)?.selection ?? EMPTY_SELECTION;
+    const selection = this.entries.get(threadId)?.selection ?? this.defaults.get(threadId) ?? EMPTY_SELECTION;
     const models = this.host.getSnapshot().models;
-    return models.length ? resolveModelSelection(models, selection) : selection;
+    const resolved = resolveModelSelection(models, selection);
+    if (!selection.model && resolved.model) this.defaults.set(threadId, resolved);
+    return resolved;
   }
 
   private show(threadId = this.host.getSnapshot().selected, updateQueue = false) {
@@ -77,29 +80,8 @@ export class ThreadModelSettings {
     for (const listener of this.listeners) listener();
   }
 
-  catalogChanged() { this.show(undefined, true); }
-
-  /** Persist catalog fallbacks and update running/queued conversations even when no page is viewing them. */
-  async reconcileCatalog(previousModels: Model[]) {
-    const state = this.host.getSnapshot();
-    const models = state.models;
-    if (!models.length) return;
-    const running = Object.keys(state.conversations).filter(id => state.conversations[id].activeTurn);
-    const scopes = new Set([null, state.selected, ...this.entries.keys(), ...Object.keys(state.queued), ...running]);
-    for (const threadId of scopes) {
-      await this.ready(threadId);
-      if (this.host.getSnapshot().models !== models) return;
-      const saved = this.entries.get(threadId)?.selection ?? EMPTY_SELECTION;
-      const previous = resolveModelSelection(previousModels.length ? previousModels : models, saved);
-      const selection = resolveModelSelection(models, saved);
-      if ((saved.model && (saved.model !== selection.model || saved.effort !== selection.effort))
-        || previous.model !== selection.model || previous.effort !== selection.effort) {
-        this.saveSelection({ threadId, previous, selection });
-        await this.ready(threadId);
-      }
-      this.show(threadId, true);
-    }
-  }
+  // A catalog update only changes availability; only an explicit edit may save a new selection.
+  catalogChanged() { this.show(); }
 
   change(patch: Partial<ModelSelection>, threadId = this.host.getSnapshot().selected) {
     const previous = this.selection(threadId);

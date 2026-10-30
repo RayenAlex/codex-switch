@@ -1,5 +1,53 @@
 use super::*;
 
+#[test]
+fn idle_cleanup_and_unmatched_releases_never_inject_wake_events() {
+    let mut state = InputState::default();
+    for button in [Button::Left, Button::Right, Button::Middle] {
+        state
+            .apply_button(button, false, |_| panic!("unmatched release wakes display"))
+            .unwrap();
+    }
+    state
+        .release_with(|_| panic!("idle cleanup wakes display"))
+        .unwrap();
+    let key = KeyboardKey::try_from("KeyA".to_owned()).unwrap();
+    state
+        .apply_keyboard(key, false, |_| panic!("unmatched key-up wakes display"))
+        .unwrap();
+}
+
+#[test]
+fn cleanup_releases_owned_buttons_once_and_retains_them_after_failed_injection() {
+    let mut state = InputState::default();
+    state.apply_button(Button::Right, true, |_| Ok(())).unwrap();
+    assert!(state.release_with(|_| Err(DesktopError::Platform)).is_err());
+    assert_eq!(state.held_buttons.len(), 1);
+    state
+        .release_with(|inputs| {
+            assert_eq!(inputs.len(), 1);
+            // SAFETY: release_with constructs this entry with the INPUT_MOUSE union variant.
+            assert_eq!(
+                unsafe { inputs[0].Anonymous.mi.dwFlags },
+                MOUSEEVENTF_RIGHTUP
+            );
+            Ok(())
+        })
+        .unwrap();
+    state.release_with(|_| panic!("already released")).unwrap();
+}
+
+#[test]
+fn rejected_mouse_presses_do_not_create_cleanup_input() {
+    let mut state = InputState::default();
+    assert!(state
+        .apply_button(Button::Left, true, |_| Err(DesktopError::Platform))
+        .is_err());
+    state
+        .release_with(|_| panic!("failed press was never owned"))
+        .unwrap();
+}
+
 #[derive(Debug, PartialEq)]
 enum Recorded {
     Key(u16, bool),

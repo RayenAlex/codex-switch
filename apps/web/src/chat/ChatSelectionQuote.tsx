@@ -14,11 +14,11 @@ export function ChatSelectionQuote({ root, selected, enabled }: {
   const { selection, dismiss } = useQuoteSelection({ root, selected, enabled: enabled && Boolean(quotes) });
   if (!selection) return null;
   return createPortal(<button type="button" className="chat-selection-quote"
-    style={{ left: selection.left, top: selection.top }} aria-label={t("引用选中文字并回复")}
+    style={{ left: selection.left, top: selection.top }} aria-label={t("client.chat.quoteSelectedTextAndReply")}
     onMouseDown={event => event.preventDefault()} onClick={() => {
       const current = root.current ? selectedQuote(root.current) : null;
       if (!current || !quotes) return;
       quotes.add({ ...current.quote, role: 'assistant' });
       dismiss();
-    }}><MessageSquareQuote size={15} />{t("引用回复")}</button>, document.body);
+    }}><MessageSquareQuote size={15} />{t("client.chat.quoteReply")}</button>, document.body);
 }

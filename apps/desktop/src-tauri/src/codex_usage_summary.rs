@@ -31,6 +31,7 @@ pub(crate) struct CodexUsageSummary {
     primary_remaining_percent: Option<f64>,
     primary_remaining_aggregated: bool,
     provider_estimated_cost: Option<ProviderEstimatedCost>,
+    estimated_quota: Option<crate::cloud::EstimatedOfficialQuota>,
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
@@ -49,6 +50,7 @@ pub(crate) fn load(
             primary_remaining_percent: None,
             primary_remaining_aggregated: false,
             provider_estimated_cost: None,
+            estimated_quota: None,
         });
     }
     let paths = crate::storage::resolve_paths(app)?;
@@ -84,12 +86,16 @@ fn load_for_selection(
         profiles: &profiles,
     };
     let provider_estimated_cost = provider_cost::load(paths, state, &entries, &costs)?;
-    Ok(summarize(
-        &entries,
-        primary_remaining,
-        provider_estimated_cost,
-        &costs,
-    ))
+    let mut summary = summarize(&entries, primary_remaining, provider_estimated_cost, &costs);
+    if primary_remaining.is_some() {
+        let ids = if state.concurrent_account_routing_enabled {
+            crate::local_proxy::enabled_concurrent_account_ids(paths, state)?
+        } else {
+            state.active_account_id.iter().cloned().collect()
+        };
+        summary.estimated_quota = crate::cloud::cached_official_quota(app, &ids);
+    }
+    Ok(summary)
 }
 
 fn displayed_primary_remaining(paths: &Paths, state: &ManagerStateFile) -> Option<(f64, bool)> {
@@ -158,6 +164,7 @@ fn summarize(
         primary_remaining_percent: primary_remaining.map(|(remaining, _)| remaining),
         primary_remaining_aggregated: primary_remaining.is_some_and(|(_, aggregated)| aggregated),
         provider_estimated_cost,
+        estimated_quota: None,
     }
 }
 

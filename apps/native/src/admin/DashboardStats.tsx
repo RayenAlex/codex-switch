@@ -29,7 +29,7 @@ export function DashboardGrowth({ data }: { data: AdminDashboardOverview | null 
   const trend = data?.trend.slice(-MAX_TREND_DAYS) ?? [];
   const maximum = Math.max(1, ...trend.map((item) => item.installations));
   return <View style={styles.growth}>
-    <Text style={styles.subtitle}>{t("最近")}{' '}{trend.length || MAX_TREND_DAYS}{' '}{t("天 · 总设备")}{' '}{data?.summary.totalInstallations ?? 0}</Text>
+    <Text style={styles.subtitle}>{t("client.chat.recent")}{' '}{trend.length || MAX_TREND_DAYS}{' '}{t("client.mobile.daysTotalDevices")}{' '}{data?.summary.totalInstallations ?? 0}</Text>
     <View style={styles.platforms}>
       {PLATFORMS.map((platform) => <View key={platform.name} style={styles.legend}>
         <View style={[styles.dot, { backgroundColor: platform.color }]} />
@@ -39,9 +39,9 @@ export function DashboardGrowth({ data }: { data: AdminDashboardOverview | null 
     {trend.length ? trend.map((item) => <View key={item.date} style={styles.day}>
       <View style={styles.heading}>
         <Text style={styles.date}>{item.date.slice(5)}</Text>
-        <Text style={styles.total}>{t("总设备")}{' '}{item.totalInstallations ?? '—'}</Text>
+        <Text style={styles.total}>{t("client.mobile.totalDevices")}{' '}{item.totalInstallations ?? '—'}</Text>
       </View>
-      <Text style={styles.subtitle}>{t("新增用户")}{' '}{item.users}{' '}{t("· 新增设备")}{' '}{item.installations}</Text>
+      <Text style={styles.subtitle}>{t("client.mobile.addUser")}{' '}{item.users}{' '}{t("client.mobile.newDevices")}{' '}{item.installations}</Text>
       <View style={styles.track}>
         {PLATFORMS.map((platform) => <View key={platform.name} style={{
           height: '100%', backgroundColor: platform.color,
@@ -49,7 +49,7 @@ export function DashboardGrowth({ data }: { data: AdminDashboardOverview | null 
         }} />)}
       </View>
       <DailyActivePlatforms counts={item.platforms} />
-    </View>) : <Text style={styles.subtitle}>{t("暂无趋势数据")}</Text>}
+    </View>) : <Text style={styles.subtitle}>{t("client.mobile.noTrendData")}</Text>}
   </View>;
 }
 

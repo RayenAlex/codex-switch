@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useContext, useState } from "react";
 import { FileEnvironmentContext } from './fileEnvironment';
 import { ImagePreview } from "./ImagePreview";
@@ -21,21 +21,21 @@ function LocalMessageImage({ src, alt, title, compact }: MessageImageProps) {
   const [failedSource, setFailedSource] = useState<string>();
   const [preview, setPreview] = useState(false);
   const image = useImageSource(src);
-  const description = alt?.trim() || guiText("图片");
+  const description = alt?.trim() || uiText("client.chat.image");
   const file = src && (isTauri() || isHostedWebApp) ? parseFileReference(src) : undefined;
-  if (image.loading) return <span className={styles.unavailable} role="status">{guiText("正在加载")}{description}…</span>;
+  if (image.loading) return <span className={styles.unavailable} role="status">{uiText("client.mobile.loading.f020e4")}{description}…</span>;
   if (file && (!image.url || image.failed || failedSource === image.url)) {
     return <FileMenu {...file} preview>{description}</FileMenu>;
   }
   if (image.failed || (image.url && failedSource === image.url)) return <span className={styles.unavailable} role="status">
-    <span>{description}{guiText("：图片加载失败")}</span>
-    <button type="button" onClick={() => { setFailedSource(undefined); image.retry(); }}>{guiText("重试")}</button>
+    <span>{description}{uiText("client.chat.couldNotLoadImage")}</span>
+    <button type="button" onClick={() => { setFailedSource(undefined); image.retry(); }}>{uiText("client.terminal.retry")}</button>
   </span>;
-  if (!image.url) return <span className={styles.unavailable}>{description}{guiText("（暂不支持预览）")}</span>;
+  if (!image.url) return <span className={styles.unavailable}>{description}{uiText("client.conversation.previewUnavailable")}</span>;
 
   return <>
     <button type="button" className={`${styles.thumbnail}${compact ? ` ${thumbnailStyles.thumbnail}` : ""}`}
-      aria-label={guiText("放大查看：{value1}", { value1: description })}
+      aria-label={uiText("client.chat.enlarge", { value1: description })}
       title={title} onClick={() => setPreview(true)}>
       <img src={image.url} alt={description} loading="lazy" decoding="async" referrerPolicy="no-referrer"
         onError={() => setFailedSource(image.url)} />

@@ -10,7 +10,7 @@ export function useChatBackground(enabled: boolean) {
     const start = () => {
       if (AppState.currentState !== 'active') return;
       void keepChatConnected(true).then(() => setError(''))
-        .catch(() => setError(t("后台聊天暂未开启，请重新打开应用后重试。")));
+        .catch(() => setError(t("client.mobile.backgroundChatIsUnavailableReopenTheAppAndTryAgain")));
     };
     start();
     const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') start(); });

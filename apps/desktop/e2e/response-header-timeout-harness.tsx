@@ -8,7 +8,7 @@ import settingsStyles from "../src/pages/SettingsPage/index.module.less";
 import { translate, type Translate } from "../src/i18n";
 import "../src/styles.css";
 
-const translateText: Translate = (key, values) => translate("zh", key, values);
+const translateMessage: Translate = (key, values) => translate("zh", key, values);
 
 function Harness() {
   const [notice, setNotice] = useState("");
@@ -17,11 +17,11 @@ function Harness() {
   return <ConfigProvider theme={{ token: { motion: false } }}>
     <main style={{ padding: 24, maxWidth: 1100, margin: "auto" }}>
       <div className={settingsStyles.styleScope}>
-        <ResponseHeaderTimeoutCard settings={{ responseHeaderTimeout: timeout, t: translateText }} />
+        <ResponseHeaderTimeoutCard settings={{ responseHeaderTimeout: timeout, t: translateMessage }} />
       </div>
       <p role="status">{notice}</p>
       <button onClick={() => setClicks((value) => value + 1)}>Click {clicks}</button>
-      <div style={{ height: 350, marginTop: 24 }}><ProxySessionManager t={translateText} /></div>
+      <div style={{ height: 350, marginTop: 24 }}><ProxySessionManager t={translateMessage} /></div>
     </main>
   </ConfigProvider>;
 }

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Remote AI Native SSH Test",
+  "version": "0.1.0",
+  "identifier": "dev.remoteai.native-ssh-test",
+  "build": { "frontendDist": "../../../../../.codex-tmp/ssh-native-live/frontend" },
+  "app": {
+    "windows": [{ "label": "main", "title": "Remote AI Native SSH Test", "width": 1320, "height": 860,
+      "minWidth": 900, "minHeight": 650, "dragDropEnabled": true, "backgroundThrottling": "disabled",
+      "additionalBrowserArgs": "--disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows" }],
+    "security": { "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost" }
+  },
+  "bundle": { "active": false,
+    "icon": ["../../../src-tauri/icons/32x32.png", "../../../src-tauri/icons/icon.ico"] }
+}

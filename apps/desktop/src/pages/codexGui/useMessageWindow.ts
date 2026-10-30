@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState, type RefObject, type WheelEvent } from "react";
+import type { ScrollMovement } from "../../../../../shared/chat/useScrollMovement";
 import { messageWindow, type MessageCursor } from "./messageWindow";
 import type { Turn } from "./types";
 
@@ -9,6 +10,7 @@ interface Options {
   selected: string | null;
   active: boolean;
   viewport: RefObject<HTMLDivElement>;
+  movement: ScrollMovement;
   pauseFollowing: () => void;
   away: boolean;
 }
@@ -23,12 +25,12 @@ function hasNestedScroller(target: EventTarget, viewport: Element): boolean {
   return false;
 }
 
-export function useMessageWindow({ turns = EMPTY_TURNS, selected, active, viewport, pauseFollowing, away }: Options) {
+export function useMessageWindow({ turns = EMPTY_TURNS, selected, active, viewport, movement,
+  pauseFollowing, away }: Options) {
   const [window, setWindow] = useState<{ selected: string | null; active: boolean; start?: MessageCursor }>(
     { selected, active });
   const [loading, setLoading] = useState(false);
   const frame = useRef<number>();
-  const position = useRef(0);
   const anchor = useRef<{ node: Element; top: number }>();
   const current = window.selected === selected && window.active === active;
   const start = current && active && away ? window.start : undefined;
@@ -46,22 +48,23 @@ export function useMessageWindow({ turns = EMPTY_TURNS, selected, active, viewpo
 
   useLayoutEffect(() => {
     anchor.current = undefined;
-    position.current = viewport.current?.scrollTop ?? 0;
+    movement.remember(viewport.current);
     setLoading(false);
     return () => {
       if (frame.current !== undefined) cancelAnimationFrame(frame.current);
       frame.current = undefined;
     };
-  }, [selected, active, viewport]);
+  }, [selected, active, viewport, movement]);
 
   useLayoutEffect(() => {
     const node = viewport.current;
     if (node && anchor.current?.node.isConnected) {
       node.scrollTop += anchor.current.node.getBoundingClientRect().top - anchor.current.top;
-      position.current = node.scrollTop;
     }
+    // Anchor restoration and window eviction emit scroll events without reader input.
+    movement.remember(node);
     if (!loading) anchor.current = undefined;
-  }, [range, loading, viewport]);
+  }, [range, loading, viewport, movement]);
 
   const load = (update: () => void): boolean => {
     const node = viewport.current;
@@ -96,14 +99,13 @@ export function useMessageWindow({ turns = EMPTY_TURNS, selected, active, viewpo
   const loadNewer = () => loadPage('newer');
   const onScroll = () => {
     const node = viewport.current;
-    const top = node?.scrollTop ?? 0;
-    const upward = top < position.current;
-    const downward = top > position.current;
-    position.current = top;
-    if (frame.current !== undefined) return true;
-    if (upward && top < LOAD_DISTANCE) return loadOlder();
-    if (downward && node && node.scrollHeight - top - node.clientHeight < LOAD_DISTANCE) return loadNewer();
-    return false;
+    if (!node) return 0;
+    const offsetChange = movement.read(node);
+    if (frame.current !== undefined || offsetChange === 0) return 0;
+    if (offsetChange < 0 && node.scrollTop < LOAD_DISTANCE && loadOlder()) return 0;
+    const nearBottom = node.scrollHeight - node.scrollTop - node.clientHeight < LOAD_DISTANCE;
+    if (offsetChange > 0 && nearBottom && loadNewer()) return 0;
+    return offsetChange;
   };
   const onWheel = (event: WheelEvent<HTMLDivElement>) => {
     if (event.defaultPrevented || event.ctrlKey || event.deltaY === 0

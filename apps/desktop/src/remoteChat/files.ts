@@ -1,10 +1,11 @@
 import { invoke } from '../api/backend';
 import { object } from '../../../../shared/remote-chat/protocol';
 import type { FilePreviewData } from '../../../../shared/remote-chat/files';
+import { PREVIEW_CHUNK_CHARACTERS } from '../../../../shared/remote-chat/filePreviewText';
 import { RemoteMappingStreams } from './mappingStreams';
 import { STREAM_OPERATION, type MappingStreamLink } from '../../../../shared/port-mapping/streamMux';
 
-interface Resource { kind: 'preview' | 'resource'; id?: string }
+interface Resource { kind: 'preview' | 'resource'; id?: string; text?: string }
 const MAX_RESOURCES = 16;
 const unavailable = () => new Error('连接已断开，请重新打开预览。');
 
@@ -20,7 +21,7 @@ export class RemoteFiles {
     if (body.operation === 'guiFileApplications') return invoke('codex_gui_file_applications');
     if (body.operation === 'guiFileAction') {
       // Saving on the viewer uses its download manager, not an unattended dialog on the host.
-      if (!['open', 'copyFile', 'copyPath', 'copyContents', 'reveal'].includes(String(object(body.action).type))) {
+      if (!['open', 'copyFile', 'copyPath', 'copyContents', 'reveal', 'metadata'].includes(String(object(body.action).type))) {
         throw new Error('请选择有效的文件操作。');
       }
       return invoke('codex_gui_file_action', { request: { target: body.target, action: body.action } });
@@ -32,6 +33,7 @@ export class RemoteFiles {
     if (!resource) { if (closing) return; throw unavailable(); }
     const preview = String(body.operation).startsWith('guiFilePreview');
     if (preview !== (resource.kind === 'preview')) throw unavailable();
+    if (body.operation === 'guiFilePreviewText') return previewText(resource, body);
     if (closing) {
       this.owners.get(owner)?.delete(resource);
       if (resource.id) this.streams.get(owner)?.closeResource(resource.id);
@@ -65,6 +67,11 @@ export class RemoteFiles {
       resource.id = typeof result === 'string' ? result : result?.sessionId;
       if (!resources.has(resource)) { await close(resource); throw unavailable(); }
       if (!result) resources.delete(resource);
+      if (body.chunkedText === true && result && typeof result !== 'string'
+        && result.text && result.text.length > PREVIEW_CHUNK_CHARACTERS) {
+        resource.text = result.text;
+        return { ...result, text: null, textLength: result.text.length };
+      }
       return result;
     } catch (error) { resources.delete(resource); throw error; }
   }
@@ -81,6 +88,14 @@ export class RemoteFiles {
       resources.clear();
     }
   }
+}
+
+function previewText(resource: Resource, body: Record<string, unknown>) {
+  const { offset, length } = body;
+  if (resource.text === undefined || typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset < 0
+    || typeof length !== 'number' || !Number.isSafeInteger(length) || length <= 0
+    || length > PREVIEW_CHUNK_CHARACTERS || offset + length > resource.text.length) throw unavailable();
+  return { offset, text: resource.text.slice(offset, offset + length) };
 }
 
 async function close(resource: Resource) {

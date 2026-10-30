@@ -13,14 +13,25 @@ enum MetricsError {
 
 /// Reads only the requested conversation on a worker, including for remote GUI clients.
 #[tauri::command]
-pub(crate) async fn get_proxy_session_metrics(
+pub(crate) async fn get_proxy_session_metrics<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
     thread_id: String,
 ) -> Result<ProxySessionLatencySummary, String> {
-    validate_thread_id(&thread_id).map_err(|error| error.to_string())?;
-    tauri::async_runtime::spawn_blocking(move || read_session_metrics(&thread_id))
-        .await
-        .map_err(|_| MetricsError::Unavailable.to_string())?
-        .map_err(|error| error.to_string())
+    tauri::async_runtime::spawn_blocking(move || {
+        validate_thread_id(&thread_id).map_err(|error| error.to_string())?;
+        if let Err(error) = super::session_cost::initialize(&app, &thread_id) {
+            log_proxy_error!("failed to initialize conversation cost: {error}");
+        }
+        load_session_metrics(&thread_id)
+    })
+    .await
+    .map_err(|_| MetricsError::Unavailable.to_string())?
+}
+
+/// Shared by the GUI command and the existing renderer worker; never call on the UI thread.
+pub(crate) fn load_session_metrics(thread_id: &str) -> Result<ProxySessionLatencySummary, String> {
+    validate_thread_id(thread_id).map_err(|error| error.to_string())?;
+    read_session_metrics(thread_id).map_err(|error| error.to_string())
 }
 
 fn validate_thread_id(thread_id: &str) -> Result<(), MetricsError> {
@@ -39,9 +50,11 @@ fn read_session_metrics(thread_id: &str) -> Result<ProxySessionLatencySummary, M
     let sessions = super::proxy_sessions()
         .lock()
         .map_err(|_| MetricsError::Unavailable)?;
-    Ok(summarize_recent_sessions(
-        sessions.get(thread_id).into_iter(),
-    ))
+    let session = sessions.get(thread_id);
+    let mut summary = summarize_recent_sessions(session.into_iter());
+    summary.estimated_cost_usd =
+        session.and_then(|session| session.token_totals.estimated_cost_usd);
+    Ok(summary)
 }
 
 /// Summarizes retained requests from the most recently active conversations.

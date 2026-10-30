@@ -24,34 +24,34 @@ export function RefreshIntervalSheet({ minutes, onSave, onClose }: RefreshInterv
     if (saving) return;
     const nextMinutes = Number(input);
     if (!Number.isInteger(nextMinutes) || nextMinutes < MIN_REFRESH_MINUTES || nextMinutes > MAX_REFRESH_MINUTES) {
-      setError(t("请输入 1 到 1440 之间的整数分钟"));
+      setError(t("client.settings.enterAWholeNumberFrom1To1440Minutes"));
       return;
     }
     setSaving(true);
     setError('');
     try {
       await onSave(nextMinutes);
-      Toast.success(t("已设置为每 {value1} 分钟自动刷新用量", { value1: nextMinutes }));
+      Toast.success(t("client.settings.usageWillRefreshEveryMinutes", { value1: nextMinutes }));
       onClose();
     } catch (error) {
-      setError(error instanceof Error ? error.message : t("保存失败，请稍后重试"));
+      setError(error instanceof Error ? error.message : t("client.mobile.couldNotSaveTryAgainLater"));
     } finally {
       setSaving(false);
     }
   };
-  return <BottomSheet visible title={t("自动刷新用量")} onClose={onClose} dismissible={!saving}
+  return <BottomSheet visible title={t("client.settings.autoRefreshUsage")} onClose={onClose} dismissible={!saving}
     actions={[
-      { label: t("取消"), onPress: onClose, disabled: saving },
-      { label: t("保存"), tone: 'primary', onPress: save, loading: saving },
+      { label: t("client.accounts.cancel"), onPress: onClose, disabled: saving },
+      { label: t("client.projectBrowser.save"), tone: 'primary', onPress: save, loading: saving },
     ]}>
     <View style={styles.sheetBody}>
-      <Text style={styles.hint}>{t("定时刷新所有账号的用量，也可以随时手动刷新。")}</Text>
-      <Text style={styles.detailLabel}>{t("刷新间隔（分钟）")}</Text>
-      <TextInput accessibilityLabel={t("刷新间隔（分钟）")} value={input}
+      <Text style={styles.hint}>{t("client.settings.refreshAllAccountUsageAutomaticallyYouCanAlsoRefreshManually")}</Text>
+      <Text style={styles.detailLabel}>{t("client.settings.refreshIntervalMinutes")}</Text>
+      <TextInput accessibilityLabel={t("client.settings.refreshIntervalMinutes")} value={input}
         onChangeText={(value) => setInput(value.replace(/\D/g, '').slice(0, 4))}
         keyboardType="number-pad" placeholder="30" style={styles.input} editable={!saving}
         onSubmitEditing={() => void save()} />
-      <Text style={styles.hint}>{t("可设置为 1–1440 分钟，默认为 30 分钟。")}</Text>
+      <Text style={styles.hint}>{t("client.settings.choose11440MinutesTheDefaultIs30Minutes")}</Text>
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
     </View>
   </BottomSheet>;

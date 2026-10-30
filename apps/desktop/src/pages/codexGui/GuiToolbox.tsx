@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { lazy, Suspense, useContext, useEffect, useState } from 'react';
 import { WorkspaceDrawerContext, workspaceTabId } from '../../../../../shared/chat/workspaceDrawer';
 import { Button, Popover } from 'antd';
@@ -28,15 +28,15 @@ export function GuiToolbox(props: Props) {
   return <>
     {props.trigger === 'git' ? <button type="button" className={workspaceStyles.trigger}
       disabled={!props.active || !props.connected || !props.cwd}
-      aria-label={guiText("打开 Git")} aria-haspopup="dialog" aria-expanded={Boolean(gitVisible)}
+      aria-label={uiText("client.workspaceActions.openGit")} aria-haspopup="dialog" aria-expanded={Boolean(gitVisible)}
       onClick={openGit}><GitBranch size={16} /><span>Git</span></button>
       : <Popover trigger="click" placement="bottomRight" open={menu && props.active} onOpenChange={setMenu}
-      styles={{ root: { maxWidth: 400 } }} content={<div className={styles.menu} aria-label={guiText("工具箱")}>
+      styles={{ root: { maxWidth: 400 } }} content={<div className={styles.menu} aria-label={uiText("client.workspaceSettings.toolbox")}>
         <button type="button" disabled={!props.connected} onClick={() => { setMenu(false); openGit(); }}>
           <GitBranch size={18} /><span>Git</span></button>
       </div>}>
-      <Button type="text" icon={<Wrench size={16} />} title={menu || panel ? undefined : guiText("工具箱")}
-        aria-label={guiText("打开工具箱")} aria-expanded={menu && props.active} />
+      <Button type="text" icon={<Wrench size={16} />} title={menu || panel ? undefined : uiText("client.workspaceSettings.toolbox")}
+        aria-label={uiText("client.workspaceSettings.openToolbox")} aria-expanded={menu && props.active} />
     </Popover>}
     <Suspense fallback={null}>
       {panel === 'git' && <ChatGit key={props.cwd} client={props.git} cwd={props.cwd}

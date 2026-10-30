@@ -12,11 +12,6 @@
 .drawer[hidden] { display: none; }
 .drawer[data-website] { animation: none; }
 .header { .drawer-header(); }
-.tabs { display: flex; align-items: center; flex: 1; min-width: 0; gap: 4px; overflow-x: auto;
-  scrollbar-width: thin; }
-.tab { .drawer-tab(); cursor: pointer;
-  flex-shrink: 0;
-  &[aria-selected='true'] { color: var(--ink); background: var(--green-soft); } }
 .controls { display: flex; gap: 3px; flex-shrink: 0;
   button { .drawer-control(); } }
 .content { overflow: auto; min-height: 0; padding: 8px 18px 24px; flex: 1; overscroll-behavior: contain; }

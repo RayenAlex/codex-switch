@@ -52,7 +52,7 @@ export function useTerminalOrientation(visible: boolean, {
       if (!active.current || current !== generation.current) return;
       await ScreenOrientation.lockAsync(target);
     }).catch(() => {
-      if (active.current && current === generation.current) setError(t("旋转失败，请重试"));
+      if (active.current && current === generation.current) setError(t("client.mobile.couldNotRotateTryAgain"));
     }).finally(() => {
       busy.current -= 1;
       if (active.current) setRotating(busy.current > 0);

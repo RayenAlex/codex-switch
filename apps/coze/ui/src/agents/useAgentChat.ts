@@ -65,7 +65,7 @@ export function useAgentChat({ resourceId, save, published = false }: Options) {
         setLive("");
       } else {
         // Untranslated sources (job.error is the runtime's text); AgentPreview renders them with t().
-        setError(job.status === "cancelled" ? msg("已停止生成。") : job.error ?? msg("回答未完成，请重试。"));
+        setError(job.status === "cancelled" ? msg("coze.agents.generationStopped") : job.error ?? msg("coze.agents.couldnTFinishTheAnswerTryAgain"));
       }
       await refresh();
     } catch (error) { if (!active.current.stopped) setError(errorText(error)); }

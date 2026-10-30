@@ -8,6 +8,7 @@ fn target(root: &Path, path: &str) -> Target {
     Target {
         cwd: execution_path(root),
         path: path.to_owned(),
+        chunk: None,
     }
 }
 
@@ -21,8 +22,9 @@ fn saves_utf8_and_line_endings_without_overwriting_an_external_edit() {
     assert_eq!(before.text.as_deref(), Some(original));
     let updated = "\u{feff}const 你好 = 2;\r\n";
     let saved = save(Save {
+        upload: None,
         target: target(root.path(), "sample.ts"),
-        text: updated.into(),
+        text: Some(updated.into()),
         revision: before.revision.clone(),
     })
     .unwrap();
@@ -31,8 +33,9 @@ fn saves_utf8_and_line_endings_without_overwriting_an_external_edit() {
     fs::write(&path, "external").unwrap();
     assert!(matches!(
         save(Save {
+            upload: None,
             target: target(root.path(), "sample.ts"),
-            text: "stale".into(),
+            text: Some("stale".into()),
             revision: saved.revision,
         }),
         Err(GuiError::ProjectFileConflict)
@@ -54,6 +57,7 @@ fn rejects_paths_outside_the_project_and_non_files() {
     assert!(resolve(&target(root.path(), "..")).is_err());
     assert!(resolve(&target(root.path(), ".")).is_err());
     assert!(resolve(&Target {
+        chunk: None,
         cwd: ".".into(),
         path: "note.txt".into()
     })
@@ -63,29 +67,19 @@ fn rejects_paths_outside_the_project_and_non_files() {
 }
 
 #[test]
-fn binary_large_and_read_only_files_cannot_be_written() {
+fn binary_and_read_only_files_cannot_be_written() {
     let root = project();
     let binary = root.path().join("binary.bin");
     fs::write(&binary, [0, 1, 2, 255]).unwrap();
     let before = snapshot(&binary).unwrap();
     assert_eq!(before.kind, "binary");
     assert!(save(Save {
+        upload: None,
         target: target(root.path(), "binary.bin"),
-        text: "x".into(),
+        text: Some("x".into()),
         revision: before.revision
     })
     .is_err());
-    let large = root.path().join("large.txt");
-    fs::write(&large, vec![b'a'; MAX_BYTES + 1]).unwrap();
-    assert_eq!(snapshot(&large).unwrap().kind, "large");
-    assert!(matches!(
-        save(Save {
-            target: target(root.path(), "large.txt"),
-            text: "b".repeat(MAX_BYTES + 1),
-            revision: String::new()
-        }),
-        Err(GuiError::ProjectFileTooLarge)
-    ));
     let readonly = root.path().join("readonly.txt");
     fs::write(&readonly, "keep").unwrap();
     let original = fs::metadata(&readonly).unwrap().permissions();
@@ -95,8 +89,9 @@ fn binary_large_and_read_only_files_cannot_be_written() {
     let before = snapshot(&readonly).unwrap();
     assert!(before.read_only);
     assert!(save(Save {
+        upload: None,
         target: target(root.path(), "readonly.txt"),
-        text: "x".into(),
+        text: Some("x".into()),
         revision: before.revision
     })
     .is_err());
@@ -139,8 +134,9 @@ fn simultaneous_saves_from_the_same_revision_have_one_winner() {
         .into_iter()
         .map(|text| {
             let request = Save {
+                upload: None,
                 target: target(root.path(), "note.txt"),
-                text: text.into(),
+                text: Some(text.into()),
                 revision: revision.clone(),
             };
             std::thread::spawn(|| save(request))
@@ -158,4 +154,23 @@ fn simultaneous_saves_from_the_same_revision_have_one_winner() {
             .count(),
         1
     );
+}
+
+#[test]
+fn missing_text_is_rejected_but_an_explicit_empty_document_can_be_saved() {
+    let root = project();
+    let path = root.path().join("note.txt");
+    fs::write(&path, "keep").unwrap();
+    let revision = snapshot(&path).unwrap().revision;
+    let mut body = serde_json::json!({
+        "cwd": execution_path(root.path()), "path": "note.txt", "revision": revision,
+    });
+    assert!(matches!(
+        save(serde_json::from_value(body.clone()).unwrap()),
+        Err(GuiError::InvalidRequest)
+    ));
+    assert_eq!(fs::read_to_string(&path).unwrap(), "keep");
+    body["text"] = serde_json::json!("");
+    save(serde_json::from_value(body).unwrap()).unwrap();
+    assert_eq!(fs::read_to_string(&path).unwrap(), "");
 }

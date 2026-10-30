@@ -160,18 +160,41 @@ svg {
   gap: 16px;
 }
 .language-switch {
-  display: flex;
-  gap: 10px;
-  align-items: center;
+  position: relative;
   font-size: 12px;
   font-weight: 600;
 }
-.language-switch > svg {
-  margin-right: -3px;
+.language-switch summary {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+.language-switch summary::-webkit-details-marker { display: none; }
+.language-options {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 10;
+  display: grid;
+  width: 144px;
+  max-width: min(400px, calc(100vw - 24px));
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #0002;
 }
 .language-link {
-  padding-block: 6px;
+  padding: 9px 10px;
+  border-radius: 5px;
+  overflow-wrap: anywhere;
 }
+.language-link:hover, .language-link:focus-visible { background: var(--line); }
 .ant-btn {
   display: inline-flex;
   align-items: center;
@@ -408,10 +431,7 @@ svg {
   .header-actions {
     gap: 8px;
   }
-  .language-switch {
-    gap: 8px;
-  }
-  .language-switch > svg {
+  .language-switch summary > svg:first-child {
     display: none;
   }
   .mobile-menu {

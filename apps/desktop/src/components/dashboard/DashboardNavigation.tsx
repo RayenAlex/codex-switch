@@ -10,10 +10,13 @@ import {
   Settings,
   ShieldCheck,
   UserRound,
+  MessagesSquare,
 } from "lucide-react";
 import type { Translate } from "../../i18n";
 import { LogDiagnosticsIcon } from "./LogDiagnosticsIcon";
 import { DownloadNavigationIcon } from "../../downloads/DownloadNavigationIcon";
+import { LoungeIcon } from "../../../../../shared/lounge/LoungeIcon";
+import { displayText } from "../../../../../shared/localization/messages";
 
 export type DashboardPage =
   | "accounts"
@@ -29,6 +32,7 @@ export type DashboardPage =
   | "codexConfig"
   | "logDiagnostics"
   | "downloads"
+  | "lounge"
   | "totp"
   | "claudeCode";
 
@@ -41,6 +45,8 @@ export function isAccountManagementPage(page: DashboardPage): page is AccountMan
 interface DashboardNavigationProps {
   collapsed?: boolean;
   downloadOwner?: string;
+  loungeUnread?: number;
+  loungeAvailable?: boolean;
   onPageChange: (page: DashboardPage) => void;
   page: DashboardPage;
   t: Translate;
@@ -57,6 +63,8 @@ const LOG_DIAGNOSTICS_ITEM = {
   page: "logDiagnostics", icon: LogDiagnosticsIcon, labelKey: "logDiagnostics.title",
 } as const;
 const DOWNLOADS_ITEM = { page: "downloads", icon: Download, labelKey: "downloads.title" } as const;
+const LOUNGE_ITEM = { page: "lounge", icon: MessagesSquare,
+  get label() { return displayText('client.lounge.title'); } } as const;
 
 const TOTP_ITEM = { page: "totp", icon: ShieldCheck, labelKey: "totp.action" } as const;
 
@@ -68,19 +76,21 @@ const TOOLBOX_NAVIGATION_ITEMS = [
 ] as const;
 
 export function isToolboxPage(page: DashboardPage) {
-  return page === "systemPrompts" || page === "logDiagnostics" || page === "downloads" || page === "totp"
+  return page === "systemPrompts" || page === "logDiagnostics" || page === "downloads" || page === "lounge" || page === "totp"
     || TOOLBOX_NAVIGATION_ITEMS.some((item) => item.page === page);
 }
 
 export function DashboardNavigation({
   collapsed = false,
   downloadOwner,
+  loungeUnread,
+  loungeAvailable = false,
   onPageChange,
   page,
   t,
   variant = "top",
 }: DashboardNavigationProps) {
-  const navigationButton = (item: typeof NAVIGATION_ITEMS[number] | typeof TOOLBOX_NAVIGATION_ITEMS[number] | {
+  const navigationButton = (item: typeof NAVIGATION_ITEMS[number] | typeof TOOLBOX_NAVIGATION_ITEMS[number] | typeof LOUNGE_ITEM | {
     page: "settings" | "codexConfig" | "logDiagnostics" | "downloads" | "totp";
     icon: typeof Settings;
     labelKey: "nav.settings" | "nav.codexConfig" | "logDiagnostics.title" | "downloads.title" | "totp.action";
@@ -91,9 +101,12 @@ export function DashboardNavigation({
     return (
       <button key={item.page} type="button" className={selected ? "selected" : ""}
         aria-current={selected ? "page" : undefined}
-        aria-label={collapsed || item.page === "downloads" ? label : undefined} title={collapsed ? label : undefined}
+        aria-label={collapsed || item.page === "downloads" || item.page === "lounge" ? label : undefined}
+        title={collapsed ? label : undefined}
         onClick={() => onPageChange(selected ? page : item.page)}>
-        {item.page === "downloads" ? <DownloadNavigationIcon owner={downloadOwner} /> : <Icon size={19} />}
+        {item.page === "downloads" && <DownloadNavigationIcon owner={downloadOwner} />}
+        {item.page === "lounge" && <LoungeIcon unread={loungeUnread} />}
+        {item.page !== "downloads" && item.page !== "lounge" && <Icon size={19} />}
         <span>{label}</span>
       </button>
     );
@@ -104,11 +117,13 @@ export function DashboardNavigation({
       data-tauri-drag-region={variant === "sidebar" ? true : undefined}>
       {variant !== "toolbox" && NAVIGATION_ITEMS.map(navigationButton)}
       {variant !== "top" && TOOLBOX_NAVIGATION_ITEMS.map(navigationButton)}
+      {variant === "toolbox" && loungeAvailable && navigationButton(LOUNGE_ITEM)}
       {variant === "toolbox" && navigationButton(DOWNLOADS_ITEM)}
       {variant === "toolbox" && navigationButton(LOG_DIAGNOSTICS_ITEM)}
       {variant === "toolbox" && navigationButton(TOTP_ITEM)}
       {variant === "sidebar" && (
         <div className="sidebar-nav-tools" data-tauri-drag-region>
+          {loungeAvailable && navigationButton(LOUNGE_ITEM)}
           {navigationButton(DOWNLOADS_ITEM)}
           {navigationButton(LOG_DIAGNOSTICS_ITEM)}
           {navigationButton(TOTP_ITEM)}

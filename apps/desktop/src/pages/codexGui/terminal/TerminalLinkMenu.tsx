@@ -43,15 +43,15 @@ export function TerminalLinkMenu({ target, id, api, close, translate: t }: {
     } finally { if (alive.current) setBusy(false); }
   };
   return createPortal(<div ref={host} className={styles.linkMenu} role="dialog" aria-modal="true"
-    aria-label={t('打开终端链接')}
+    aria-label={t("client.terminal.openTerminalLink")}
     style={{ left: Math.max(8, Math.min(target.x, window.innerWidth - 296)),
       top: Math.max(8, Math.min(target.y, window.innerHeight - 170)) }}>
     <div className={styles.linkUrl}>{target.url}</div>
     <div className={styles.linkActions}>
-      {panel && <button disabled={busy} onClick={() => { void open(true); }}>{t('内部预览')}</button>}
-      <button disabled={busy} onClick={() => { void open(false); }}>{t('在浏览器中打开')}</button>
+      {panel && <button disabled={busy} onClick={() => { void open(true); }}>{t("client.terminal.previewInApp")}</button>}
+      <button disabled={busy} onClick={() => { void open(false); }}>{t("client.workspaceActions.openInBrowser")}</button>
     </div>
-    {busy && <div role="status">{t('正在打开链接…')}</div>}
+    {busy && <div role="status">{t("client.terminal.openingLink")}</div>}
     {error && <div role="alert">{t(error)}</div>}
   </div>, document.body);
 }

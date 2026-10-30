@@ -1,3 +1,4 @@
+import { testText } from '../../../../../scripts/i18n-fixture.mjs';
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -15,7 +16,7 @@ function loadSource(filename, dependencies = {}) {
   return exports;
 }
 const labels = loadSource("./labels.ts", {
-  "../../i18n/guiText": { guiText: (source) => source },
+  "../../i18n/uiText": { uiText: testText },
 });
 const schema = loadSource("./schema.ts", {
   "./schema.generated.json": { default: sourceSchema }, "./labels": labels,

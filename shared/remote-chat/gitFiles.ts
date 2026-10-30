@@ -1,11 +1,11 @@
 import type { GitChange } from './gitTypes';
 
 export const GIT_AREAS = [
-  { id: 'conflict', label: '冲突', color: '#bf3945', background: '#fff0f1' },
-  { id: 'unstaged', label: '未暂存', color: '#2868b2', background: '#edf4ff' },
-  { id: 'staged', label: '已暂存', color: '#14785b', background: '#eaf7f0' },
-  { id: 'mixed', label: '部分暂存', color: '#8256b5', background: '#f5efff' },
-  { id: 'untracked', label: '新文件', color: '#9a6312', background: '#fff7e7' },
+  { id: 'conflict', label: "client.git.conflict", color: '#bf3945', background: '#fff0f1' },
+  { id: 'unstaged', label: "client.git.unstaged", color: '#2868b2', background: '#edf4ff' },
+  { id: 'staged', label: "client.git.staged", color: '#14785b', background: '#eaf7f0' },
+  { id: 'mixed', label: "client.git.partiallyStaged", color: '#8256b5', background: '#f5efff' },
+  { id: 'untracked', label: "client.git.untracked", color: '#9a6312', background: '#fff7e7' },
 ] as const;
 export type GitArea = typeof GIT_AREAS[number];
 export function fileArea(file: GitChange): GitArea['id'] {

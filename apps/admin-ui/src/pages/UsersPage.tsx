@@ -1,13 +1,17 @@
 import { useState } from "react";
 import { Avatar, Badge, Button, Input, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
 import type { TableColumnsType, TablePaginationConfig } from "antd";
-import { Database, Edit3, KeyRound, Link2, Plus, RefreshCw, Search, ShieldCheck, Trash2 } from "lucide-react";
+import { Database, Edit3, KeyRound, Link2, MessagesSquare, Plus, RefreshCw, Search, ShieldCheck, Trash2 } from "lucide-react";
+import { LoungeUserModal, type LoungeAdminApi } from './LoungeUserModal';
+import { LoungePresence } from './LoungePresence';
+import { translateMessage } from '../../../../shared/localization/messages';
 import { labelForRole } from "../i18n";
 import { useI18n } from "../i18n-context";
 import { formatDate } from "../utils/format";
 import type { PageResult, Profile, RbacRole, Role, UserFilters, UserRow } from "../types";
 
 interface UsersPageProps {
+  api: LoungeAdminApi;
   users: PageResult<UserRow>;
   loading: boolean;
   filters: UserFilters;
@@ -29,6 +33,7 @@ interface UsersPageProps {
 }
 
 export function UsersPage({
+  api,
   filters,
   loading,
   pendingApprovalCount,
@@ -50,6 +55,7 @@ export function UsersPage({
 }: UsersPageProps) {
   const { language, t } = useI18n();
   const [selectedUserIds, setSelectedUserIds] = useState<React.Key[]>([]);
+  const [loungeUser, setLoungeUser] = useState<UserRow>();
   const activeVisibleUsers = users.items.filter((item) => !item.disabled).length;
   const adminVisibleUsers = users.items.filter((item) => item.role === "admin").length;
   const roleName = (code: string) => roles.find((role) => role.code === code)?.name ?? labelForRole(code, t);
@@ -91,6 +97,12 @@ export function UsersPage({
       width: 350,
       render: (_, row) => (
         <div className="table-actions">
+          {canManage && <Tooltip styles={{ root: { maxWidth: 400 } }}
+            title={translateMessage(language, 'client.lounge.adminSettings')}>
+            <Button className="icon-button" icon={<MessagesSquare size={15} />}
+              aria-label={translateMessage(language, 'client.lounge.adminSettings')}
+              onClick={() => setLoungeUser(row)} />
+          </Tooltip>}
           {canOpenSyncedData && (
             <Tooltip title={t("users.syncAccounts")}>
               <Button className="icon-button" icon={<Database size={15} />} onClick={() => onOpenAccounts(row)} />
@@ -134,7 +146,10 @@ export function UsersPage({
 
   return (
     <>
+      {loungeUser && <LoungeUserModal key={loungeUser.id} user={loungeUser} api={api}
+        self={loungeUser.id === profile?.id} close={() => setLoungeUser(undefined)} />}
       <h1 className="page-title">{t("users.title")}</h1>
+      <LoungePresence api={api} />
       <div className="summary-grid">
         <div className="metric"><span>{t("users.total")}</span><strong>{users.total}</strong></div>
         <div className="metric"><span>{t("users.activeCurrentPage")}</span><strong>{activeVisibleUsers}</strong></div>

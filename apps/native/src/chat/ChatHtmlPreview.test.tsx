@@ -13,6 +13,7 @@ vi.mock('react', async importOriginal => ({
   useSyncExternalStore: (_subscribe: unknown, snapshot: () => unknown) => snapshot(),
 }));
 vi.mock('react-native', () => ({ Pressable: 'Button', Text: 'Text', View: 'View',
+  Platform: { OS: 'android' },
   StyleSheet: { create: <T,>(styles: T) => styles }, useWindowDimensions: () => ({ height: 800 }),
 }));
 vi.mock('react-native-webview', () => ({ WebView: 'WebView' }));

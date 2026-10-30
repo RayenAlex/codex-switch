@@ -1,5 +1,6 @@
+import inlineCopy from '@remoteai/i18n/copy/inline/desktop/components/TokenUsageHeatmap';
 import { getLocale } from "../i18n";
-import { guiText } from "../i18n/guiText";
+import { uiText } from "../i18n/uiText";
 import { useEffect, useMemo, useState } from "react";
 import { Tooltip } from "antd";
 import {
@@ -217,9 +218,9 @@ export function TokenUsageHeatmap({
       </div>
       <div className="token-heatmap-chart">
         <div className="token-heatmap-weekdays" aria-hidden="true">
-          <span>{(language === "ru" ? guiText("一", {}, language) : language === "zh" ? "一" : "M")}</span>
-          <span>{(language === "ru" ? guiText("三", {}, language) : language === "zh" ? "三" : "W")}</span>
-          <span>{(language === "ru" ? guiText("五", {}, language) : language === "zh" ? "五" : "F")}</span>
+          <span>{(language !== "zh" && language !== "en" ? uiText("client.mobile.mon", {}, language) : language === "zh" ? inlineCopy["text_51a75f46"] : inlineCopy["M_08f27188"])}</span>
+          <span>{(language !== "zh" && language !== "en" ? uiText("client.mobile.wed", {}, language) : language === "zh" ? inlineCopy["text_a4c3313d"] : inlineCopy["W_fcb5f40d"])}</span>
+          <span>{(language !== "zh" && language !== "en" ? uiText("client.mobile.fri", {}, language) : language === "zh" ? inlineCopy["text_c9b87f51"] : inlineCopy["F_f67ab10a"])}</span>
         </div>
         <div className="token-heatmap-content">
           <div className="token-heatmap-scroll">

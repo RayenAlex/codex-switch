@@ -61,6 +61,11 @@ Codex GUI 是内置的图形化对话工作区。选择项目后，用自然语�
 
 ![Remote AI Token 消耗分析界面](docs/assets/codex-switch-token-usage.png)
 
+### 官方 Codex 会话统计
+
+官方 Codex 输入框下方还可显示当前会话的平均输出速度、累计缓存命中率和上下文占用，沿用原有用量显示开关，
+无需启用皮肤。指标口径和验证方式见 [官方 Codex 会话统计栏](docs/codex-usage-statusline.md)。
+
 ### 一键换肤
 
 内置 300+ 套主题预设，并兼容 [Fei-Away/Codex-Dream-Skin](https://github.com/Fei-Away/Codex-Dream-Skin)。
@@ -98,6 +103,7 @@ Codex GUI 是内置的图形化对话工作区。选择项目后，用自然语�
 - 可从控制台和托盘执行尽力而为的“重启 ChatGPT”操作。
 - 提供顶部功能菜单、入口搜索和系统托盘快捷操作。
 - 支持可选的置顶悬浮用量球，可切换紧凑圆形或玻璃信息面板样式，并显示用量、重置倒计时和额度状态。
+- 可在“设置 → 用量”启用[官方宠物额度底座](docs/codex-pet-dock.md)，按宠物大小显示双额度，并保留下方的对话卡片。
 - 支持 OpenAI Responses、兼容 Chat Completions 的第三方 Provider、多模型、模型控制策略和常见中转站余额查询。
 - 三方 Provider 统一通过监听 `127.0.0.1:15722` 的本地代理使用，并支持在官方账号与 Provider 间热切换。
 - 记录经本地代理转发请求的 Token 用量；支持查看代理会话、消息与上下文占用、响应延迟，并可导出结构化诊断信息。

@@ -61,8 +61,9 @@ npm run test:management:e2e -w @codex-switch/web
 ## 浏览器与 Android 聊天验证
 
 浏览器回归在手机尺寸和桌面尺寸下操作实际 H5 页面，连接本机 PC/admin 测试端，
-覆盖直连、加密中转、聊天操作及重连；不请求真实模型。需要本机 Edge，
-其他环境可设置 `CHAT_TEST_BROWSER=chromium` 并安装 Playwright Chromium。
+覆盖直连、加密中转、聊天操作及重连；不请求真实模型。默认使用 Playwright 自带的 Chromium，
+首次运行前执行 `npx playwright install chromium`。Windows 上禁止通过环境变量切换到系统 Edge 或 Chrome，
+避免反复创建浏览器配置时触发账户锁定；详见[浏览器测试说明](../../docs/browser-tests.md)。
 报告与截图保存在 `.codex-tmp/h5-chat-report` 和 `.codex-tmp/h5-chat-playwright`。
 
 Android Chrome 实测使用可丢弃的 Android 15 模拟器。首次在该模拟器的 Chrome 中完成欢迎页，

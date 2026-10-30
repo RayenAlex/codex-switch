@@ -13,6 +13,7 @@ import { checkThreadSidebarResize } from './thread-sidebar-resize';
 import { checkRemoteTiming } from './remote-timing-checks';
 import { checkRemoteHistory } from './remote-history-checks';
 import { checkRemoteWindowLayout } from './remote-window-layout';
+import { checkModelAvailability } from './model-availability-checks';
 
 declare global { interface Window { desktopTest: typeof desktopTest } }
 
@@ -58,6 +59,120 @@ async function chooseHost(page: Page, name: string) {
   await page.getByRole('menu', { name: '主机列表' }).getByRole('menuitemradio', { name: new RegExp(name) }).click();
   await expect(page.getByRole('menu', { name: '主机列表' })).toBeHidden();
 }
+
+test('remote desktop preserves an unavailable model and restores sending after account recovery',
+  async ({ context, page }) => {
+    const host = await context.newPage();
+    await host.goto('/e2e/chat-harness.html?role=desktop&demo&device=computer-one&blocked=true'
+      + `&socket=${encodeURIComponent(endpoint)}`);
+    await expect(host.locator('#status')).toHaveText('registered');
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(`/e2e/remote-gui-harness.html?socket=${encodeURIComponent(endpoint)}`);
+    await chooseHost(page, 'Office PC');
+    await expect(page.locator('.gui-remote-workspace:visible .chat-connection-status'))
+      .toContainText('Relay', { timeout: 20_000 });
+    const catalog = await host.evaluate(() => window.chatTest.demoState().composer.models);
+    await checkModelAvailability(page, {
+      restrict: () => host.evaluate(models => window.chatTest.setComposer({ models }), catalog.slice(1)),
+      restore: () => host.evaluate(models => window.chatTest.setComposer({ models }), catalog),
+      screenshot: '../../.codex-tmp/model-unavailable-remote.png',
+    });
+    expect(await host.evaluate(() => window.chatTest.demoState().operations
+      .filter(operation => operation.operation === 'send').length)).toBe(0);
+  });
+
+for (const blocked of [false, true]) {
+  test(`keeps a new remote message after immediately pausing over ${blocked ? 'Relay' : 'P2P'}`,
+    async ({ context, page }) => {
+      const host = await context.newPage();
+      await host.goto(`/e2e/chat-harness.html?role=desktop&demo&device=computer-one&blocked=${blocked}`
+        + `&socket=${encodeURIComponent(endpoint)}`);
+      await expect(host.locator('#status')).toHaveText('registered');
+      await page.bringToFront();
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.goto(`/e2e/remote-gui-harness.html?socket=${encodeURIComponent(endpoint)}`);
+      await chooseHost(page, 'Office PC');
+      await expect(page.locator('.gui-remote-workspace:visible .chat-connection-status'))
+        .toContainText(blocked ? 'Relay' : 'P2P', { timeout: 20_000 });
+      await page.getByRole('button', { name: '新对话', exact: true }).click();
+      const text = 'slow first message: keep after pause';
+      await page.getByRole('textbox', { name: '聊天消息', exact: true }).fill(text);
+      await page.getByRole('button', { name: '发送消息', exact: true }).click();
+      await page.getByRole('button', { name: '暂停生成', exact: true }).click();
+      await expect(page.getByText(text, { exact: true }).first()).toBeVisible();
+      await expect(page.getByRole('button', { name: '继续生成', exact: true })).toBeVisible();
+      await page.screenshot({ path: `../../.codex-tmp/interrupted-send-remote-${blocked ? 'relay' : 'direct'}.png` });
+    });
+}
+
+test('remote GUI can disable and restore message queuing while a turn is running', async ({ context, page }, info) => {
+  test.setTimeout(90_000);
+  const host = await context.newPage();
+  await host.goto(`/e2e/chat-harness.html?role=desktop&demo&device=computer-one&blocked=false&title=Queue%20settings`
+    + `&socket=${encodeURIComponent(endpoint)}`);
+  await expect(host.locator('#status')).toHaveText('registered');
+  await page.bringToFront();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`/e2e/remote-gui-harness.html?socket=${encodeURIComponent(endpoint)}`);
+  await chooseHost(page, 'Office PC');
+  await page.getByRole('button', { name: 'Queue settings', exact: true }).click();
+  const input = page.getByRole('textbox', { name: '聊天消息', exact: true });
+  await input.fill('slow queue settings');
+  await page.getByRole('button', { name: '发送消息', exact: true }).click();
+  await expect(input).toHaveValue('');
+  await page.getByRole('button', { name: 'Codex GUI 设置', exact: true }).click();
+  const toggle = page.getByRole('switch', { name: '待发送', exact: true });
+  await expect(toggle).toBeChecked();
+  await toggle.uncheck();
+  await expect(page.getByRole('dialog')).toHaveCSS('opacity', '1');
+  await expect(page.getByRole('dialog')).toHaveCSS('transform', 'none');
+  await page.screenshot({ path: info.outputPath('remote-message-settings.png') });
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await input.fill('立即追加远程消息');
+  await page.getByRole('button', { name: '发送消息', exact: true }).click();
+  await expect.poll(() => host.evaluate(() => window.chatTest.demoState().operations
+    .filter(operation => operation.operation === 'steer').map(operation => operation.text)))
+    .toEqual(['立即追加远程消息']);
+  await expect(page.getByRole('region', { name: '待发送消息', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Codex GUI 设置', exact: true }).click();
+  await expect(toggle).not.toBeChecked();
+  await toggle.check();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await input.fill('恢复排队');
+  await input.press('Enter');
+  await expect(page.getByRole('region', { name: '待发送消息', exact: true })).toContainText('恢复排队');
+});
+
+test('remote GUI switches to Japanese without losing its connection or draft', async ({ context, page }, info) => {
+  test.setTimeout(90_000);
+  const host = await context.newPage();
+  await host.goto(`/e2e/chat-harness.html?role=desktop&demo&device=computer-one&blocked=true&title=My%20project`
+    + `&socket=${encodeURIComponent(endpoint)}`);
+  await expect(host.locator('#status')).toHaveText('registered');
+  await page.bringToFront();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/e2e/remote-gui-harness.html?socket=${encodeURIComponent(endpoint)}`);
+  await chooseComputer(page, 'Office PC');
+  await page.getByRole('button', { name: 'My project', exact: true }).click();
+  await expect(page.locator('.chat-connection-status')).toContainText('Relay');
+  await page.getByRole('textbox', { name: '聊天消息', exact: true }).fill('保留草稿 / draft');
+  await page.evaluate(async () => {
+    const module = '/src/i18n/uiText.ts';
+    const { setGuiLanguage }: typeof import('../src/i18n/uiText') = await import(module);
+    setGuiLanguage('ja');
+  });
+  await expect(page.getByRole('textbox', { name: 'チャットメッセージ', exact: true })).toHaveValue('保留草稿 / draft');
+  await expect(page.getByRole('button', { name: 'メッセージを送信', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'ポートマッピング', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'リモートデスクトップを開く', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'My project', exact: true })).toBeVisible();
+  await expect(page.getByText('可以，今天先完成这三件事：', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath('remote-gui-japanese.png') });
+  await page.getByRole('button', { name: 'メッセージを送信', exact: true }).click();
+  await expect.poll(() => host.evaluate(() => window.chatTest.demoState().operations
+    .filter(operation => operation.operation === 'send').map(operation => operation.text))).toEqual(['保留草稿 / draft']);
+});
 
 test('keeps remote search in its header dialog without filtering the sidebar', async ({ context, page }) => {
   const host = await context.newPage();

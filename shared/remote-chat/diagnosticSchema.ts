@@ -14,6 +14,7 @@ export const DIAGNOSTIC_ENUMS = {
     'selected', 'skipped', 'cancelled', 'runtime-check', 'capture-open', 'fallback-open', 'request-open',
     'lease-renew', 'status', 'signal'],
   desktopError: ['screen-permission', 'accessibility-permission', 'desktop-disabled', 'macos-version',
+    'desktop-locked', 'unattended-required',
     'platform-unsupported', 'runtime-unavailable', 'settings-unavailable', 'no-displays', 'display-enumeration',
     'display-unavailable', 'desktop-busy', 'lease-expired', 'invalid-request', 'capture-failed',
     'encoder-start', 'encoder-first-frame', 'encoder-timeout', 'codec-unsupported', 'privacy-unavailable', 'unknown'],

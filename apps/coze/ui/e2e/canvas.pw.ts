@@ -1,5 +1,16 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { defaultGraph, type Graph, type Resource } from "../src/types";
+import type { Graph, Resource } from "../src/types";
+
+// Persisted node names are user data, independent of the application's translation keys.
+const defaultGraph: Graph = {
+  inputs: [{ name: "text", description: "输入内容", kind: "string", required: true }],
+  nodes: [
+    { id: "start", name: "开始", type: "start", x: 30, y: 70 },
+    { id: "answer", name: "文本处理", type: "template", template: "{{input.text}}", x: 300, y: 70 },
+    { id: "end", name: "结束", type: "end", value: "{{answer.output}}", x: 570, y: 70 },
+  ],
+  edges: [{ source: "start", target: "answer" }, { source: "answer", target: "end" }],
+};
 
 async function fixture(page: Page, graph = defaultGraph) {
   let resource: Resource = { id: "canvas-test", name: "画布验收", description: "", kind: "workflow",

@@ -1,6 +1,7 @@
+import { displayText } from '../../i18n/uiText';
 import { useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { cliDownloadLinks, importCliPackage, type CliDownloadLinks, type CliSnapshot } from "./cliManualDownloadApi";
 
 export function useCliManualDownload(version: string | null, onImported: (value: CliSnapshot) => Promise<void>) {
@@ -17,7 +18,7 @@ export function useCliManualDownload(version: string | null, onImported: (value:
   useEffect(() => {
     let cancelled = false;
     void cliDownloadLinks(version).then(value => { if (!cancelled) setLinks(value); })
-      .catch(() => { if (!cancelled) setError(guiText("暂时无法准备下载链接，请关闭后重试。")); });
+      .catch(() => { if (!cancelled) setError(uiText("client.cliImport.unableToPrepareDownloadLinksCloseThisWindowAndTry")); });
     return () => { cancelled = true; };
   }, [version]);
 
@@ -26,13 +27,13 @@ export function useCliManualDownload(version: string | null, onImported: (value:
     locked.current = true; setBusy(true);
     try {
       const selected = await open({ multiple: false, directory: false,
-        title: guiText(kind === "package" ? "选择完整安装包" : "选择版本校验文件"),
+        title: uiText(kind === "package" ? "client.cliImport.selectTheCompletePackage" : "client.cliImport.selectTheReleaseVerificationFile"),
       });
       if (typeof selected === "string" && mounted.current) {
         (kind === "package" ? setPackagePath : setMetadataPath)(selected);
         setError(""); setResult(null);
       }
-    } catch { if (mounted.current) setError(guiText("暂时无法选择文件，请重试。")); }
+    } catch { if (mounted.current) setError(uiText("client.cliImport.unableToSelectAFilePleaseTryAgain")); }
     finally { locked.current = false; if (mounted.current) setBusy(false); }
   };
 
@@ -44,8 +45,8 @@ export function useCliManualDownload(version: string | null, onImported: (value:
       await onImported(imported);
       if (mounted.current) setResult(imported);
     } catch (cause) {
-      if (mounted.current) setError(typeof cause === "string" ? guiText(cause)
-        : guiText("导入未完成，请确认所选文件下载完整后重试。"));
+      if (mounted.current) setError(typeof cause === "string" ? displayText(cause)
+        : uiText("client.cliImport.importFailedCheckThatTheSelectedFilesFinishedDownloadingAnd"));
     } finally {
       locked.current = false;
       if (mounted.current) { setBusy(false); setImporting(false); }

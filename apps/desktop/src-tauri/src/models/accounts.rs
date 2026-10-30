@@ -30,6 +30,8 @@ pub(crate) struct AccountSummary {
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", default)]
 pub(crate) struct AccountPrivateDetails {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) alias: Option<String>,
     pub(crate) password: String,
     pub(crate) phone_number: String,
     pub(crate) totp_secret: String,
@@ -40,6 +42,14 @@ impl AccountPrivateDetails {
         const MAX_PASSWORD_LENGTH: usize = 1_024;
         const MAX_PHONE_LENGTH: usize = 64;
         const MAX_TOTP_LENGTH: usize = 512;
+        const MAX_ALIAS_LENGTH: usize = 16;
+
+        if let Some(alias) = &mut self.alias {
+            *alias = alias.trim().to_string();
+            if alias.chars().count() > MAX_ALIAS_LENGTH || alias.chars().any(char::is_control) {
+                return Err("client.accounts.aliasInvalid".to_string());
+            }
+        }
 
         if self.password.chars().count() > MAX_PASSWORD_LENGTH {
             return Err("Account password is too long".to_string());

@@ -6,6 +6,8 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import WebSocket from 'ws';
+import { chromium } from '@playwright/test';
+import { testBrowserArguments, testBrowserExecutable } from '../test-browser.mjs';
 
 async function connect(profile) {
   let address;
@@ -60,7 +62,8 @@ async function attachWorker(cdp, extensionId) {
 
 export async function launchExtensionTest({ executable, extension, profile, extensionId }) {
   const headed = process.platform === 'win32';
-  const child = spawn(executable, [headed ? '--no-startup-window' : '--headless=new',
+  const browserExecutable = testBrowserExecutable(executable, chromium.executablePath());
+  const child = spawn(browserExecutable, [...testBrowserArguments(), headed ? '--no-startup-window' : '--headless=new',
     '--remote-debugging-port=0', '--no-first-run', '--no-default-browser-check',
     `--user-data-dir=${profile}`, `--disable-extensions-except=${extension}`, `--load-extension=${extension}`,
     ...(headed ? [] : ['about:blank'])], { windowsHide: true, stdio: 'ignore' });

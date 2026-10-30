@@ -49,11 +49,10 @@ it.each(["C:\\images\\copied.jpg", "D:/截图.png"])(
       source: path, variant: "thumbnail" });
     expect(container.querySelector("img")?.getAttribute("src")).toBe(thumbnail);
     expect(container.textContent).toContain("看看这张图片");
+    expect(guiApi.request).toHaveBeenCalledTimes(1);
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="放大查看：图片附件 1"]')?.click());
     expect(container.querySelector("dialog")?.open).toBe(true);
-    expect(container.querySelector("dialog img")?.getAttribute("src")).toBe(thumbnail);
-    expect(guiApi.request).toHaveBeenCalledTimes(1);
-    await act(async () => container.querySelector<HTMLButtonElement>('.cs-image-original')!.click());
+    expect(guiApi.request).toHaveBeenCalledTimes(2);
     expect(guiApi.request).toHaveBeenLastCalledWith({ operation: "imagePreview", threadId: "task",
       source: path, variant: "original" });
     expect(container.querySelector("dialog img")?.getAttribute("src")).toBe(original);
@@ -126,4 +125,19 @@ it("does not show a bubble, timestamp or actions for context-only messages", asy
   await act(async () => root.render(<UserMessage startedAt={1} onEdit={vi.fn()}
     item={{ id: "hidden", type: "userMessage", content: [{ type: "text", text: awareness }] }} />));
   expect(container.innerHTML).toBe("");
+});
+
+it("collapses historical files without changing the copied or editable message", async () => {
+  const text = '检查日志\n文件：C:/uploads/report.jsonl';
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  vi.stubGlobal('navigator', { clipboard: { writeText } });
+  vi.mocked(guiApi.request).mockResolvedValue({ data: [] });
+  await act(async () => root.render(<UserMessage onEdit={vi.fn()} item={{ id: 'file', type: 'userMessage',
+    text }} />));
+  expect(container.textContent).toContain('1 个附件');
+  expect(container.textContent).not.toContain('C:/uploads/report.jsonl');
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="复制消息"]')?.click());
+  expect(writeText).toHaveBeenCalledWith(text);
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="编辑消息"]')?.click());
+  expect(container.querySelector('[role="textbox"]')?.textContent).toContain('文件：C:/uploads/report.jsonl');
 });

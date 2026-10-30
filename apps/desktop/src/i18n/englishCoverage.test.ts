@@ -1,10 +1,12 @@
+import { resources as clientResources } from '@remoteai/i18n/client';
+const english: Readonly<Record<string, string>> = clientResources.en;
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 import { join } from 'node:path';
 import ts from 'typescript';
 import { expect, it } from 'vitest';
-import { english } from '../../../../shared/i18n/en';
-import { translateText } from '../../../../shared/i18n/translate';
+
+import { translateMessage } from "../../../../shared/localization/messages";
 
 const chinese = /[\u4e00-\u9fff]/;
 const placeholders = (text: string) => [...text.matchAll(/\{\w+\}/g)].map(match => match[0]).sort();
@@ -23,11 +25,11 @@ it('translates desktop interface copy in English without changing placeholders',
   for (const file of files) {
     const ast = ts.createSourceFile(file, readFileSync(join(root, file), 'utf8'), ts.ScriptTarget.Latest, true);
     const visit = (node: ts.Node) => {
-      if (ts.isCallExpression(node) && node.expression.getText(ast) === 'guiText') {
-        for (const source of literalCopy(node.arguments[0]).filter(text => chinese.test(text))) {
+      if (ts.isCallExpression(node) && node.expression.getText(ast) === 'uiText') {
+        for (const source of literalCopy(node.arguments[0])) {
           expect(Object.hasOwn(english, source), `${file}: ${source}`).toBe(true);
           expect(english[source], source).not.toMatch(chinese);
-          expect(placeholders(english[source]), source).toEqual(placeholders(source));
+          expect(placeholders(english[source]), source).toEqual(placeholders(clientResources.zh[source as keyof typeof clientResources.zh]));
         }
       }
       ts.forEachChild(node, visit);
@@ -37,9 +39,9 @@ it('translates desktop interface copy in English without changing placeholders',
 });
 
 it('translates onboarding while leaving quoted user content unchanged', () => {
-  expect(translateText('en', '开始使用 Codex GUI')).toBe('Get started with Codex GUI');
-  expect(translateText('en', '下载 Codex 后，就能在这里开始对话、处理代码和管理任务。'))
+  expect(translateMessage('en', "client.conversation.getStartedWithCodexGui")).toBe('Get started with Codex GUI');
+  expect(translateMessage('en', "client.conversation.downloadCodexToStartConversationsWorkOnCodeAndManage"))
     .toBe('Download Codex to start conversations, work on code, and manage tasks here.');
-  expect(translateText('en', '管理项目：{value1}', { value1: '我的项目 {value1}' }))
+  expect(translateMessage('en', "client.conversation.manageProject", { value1: '我的项目 {value1}' }))
     .toBe('Manage project: 我的项目 {value1}');
 });

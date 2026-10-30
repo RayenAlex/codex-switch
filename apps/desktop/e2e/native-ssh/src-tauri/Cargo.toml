@@ -1,0 +1,33 @@
+[package]
+name = "remoteai-native-ssh"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# This is a manual integration runner; production unit tests remain in the application crate.
+[[bin]]
+name = "remoteai-native-ssh"
+path = "src/main.rs"
+test = false
+
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+csw-ssh-client = { path = "../../../../../crates/ssh-client" }
+tauri = { version = "2", features = ["unstable", "custom-protocol"] }
+base64 = "0.22"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
+
+[patch.crates-io]
+# Keep the runner on the production Windows input/deadlock patch.
+tao = { path = "../../../src-tauri/vendor/tao" }
+
+[profile.dev]
+debug = 0

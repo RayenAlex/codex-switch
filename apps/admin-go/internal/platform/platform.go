@@ -2,11 +2,13 @@
 package platform
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/codex-switch/admin-go/internal/bandwidth"
 	"github.com/gin-gonic/gin"
@@ -41,6 +43,9 @@ type Principal struct {
 }
 
 type Dependencies struct {
+	LoungeIdentity    func(string) (string, time.Time, error)
+	LoungeAttachment  func(string, string) (string, string, string, error)
+	LoungeGenerations func(context.Context, string, []string) (map[string]int64, error)
 	DB                *gorm.DB
 	Redis             *redis.Client
 	Config            Config
@@ -165,7 +170,9 @@ func Respond(c *gin.Context, value interface{}, err error) {
 			Fail(c, public.Status, public.Message)
 			return
 		}
-		slog.Error("request failed", "method", c.Request.Method, "path", c.FullPath(), "error", err)
+		if !IsLoungeRequest(c) {
+			slog.Error("request failed", "method", c.Request.Method, "path", c.FullPath(), "error", err)
+		}
 		c.AbortWithStatusJSON(500, gin.H{"statusCode": 500, "message": "Internal server error"})
 		return
 	}

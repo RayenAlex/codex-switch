@@ -3,8 +3,10 @@ fn context_usage_overlay_expression(enabled: bool) -> String {
     let values =
         include_str!("../../../../../shared/context-usage/values.js").replace("export ", "");
     let reader = include_str!("context_usage_reader.js");
-    let settings = include_str!("../../../../../shared/context-usage/settings.js").replace("export ", "");
+    let settings =
+        include_str!("../../../../../shared/context-usage/settings.js").replace("export ", "");
     let change = include_str!("context_settings_change.js");
+    let registry = include_str!("native_registry_reader.js");
     let runtime = include_str!("context_settings_runtime.js");
     let adapter = include_str!("context_settings_adapter.js");
     let copy = include_str!("context_settings_copy.js");
@@ -13,6 +15,6 @@ fn context_usage_overlay_expression(enabled: bool) -> String {
     let overlay = include_str!("context_usage_overlay.js").replace("__CONTEXT_USAGE_CSS__", &css);
     format!(
         "(() => {{ const enabled = {enabled};\n{values}\n{reader}\n{settings}\n\
-         {change}\n{runtime}\n{adapter}\n{copy}\n{dialog}\n{overlay}\n}})();"
+         {change}\n{registry}\n{runtime}\n{adapter}\n{copy}\n{dialog}\n{overlay}\n}})();"
     )
 }

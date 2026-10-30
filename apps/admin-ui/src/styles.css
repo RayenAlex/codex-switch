@@ -121,8 +121,8 @@ body {
   color: #64748b;
 }
 
-.language-control .ant-segmented {
-  min-width: 110px;
+.language-control .ant-select {
+  width: 110px;
 }
 
 .content-wrap {
@@ -723,10 +723,6 @@ body {
   .language-control svg,
   .header-actions .ant-btn-text .ant-typography {
     display: none;
-  }
-
-  .language-control .ant-segmented {
-    min-width: 96px;
   }
 
   .language-control .ant-select {

@@ -10,7 +10,7 @@ import { translate, type Translate } from '../src/i18n';
 import { applyThemeColor, DEFAULT_THEME_COLOR } from '../src/utils/theme';
 import '../src/styles.css';
 
-const translateText: Translate = (key, values) => translate('zh', key, values);
+const translateMessage: Translate = (key, values) => translate('zh', key, values);
 
 function Harness() {
   const [page, setPage] = useState<DashboardPage>('accounts');
@@ -24,7 +24,7 @@ function Harness() {
     <div style={{ display: 'flex', height: '100dvh' }}>
       <aside style={{ width: 208, padding: 20, borderRight: '1px solid var(--line)' }}>
         <h2>Remote AI</h2>
-        <DashboardNavigation variant="sidebar" t={translateText} page={page} onPageChange={setPage} />
+        <DashboardNavigation variant="sidebar" t={translateMessage} page={page} onPageChange={setPage} />
       </aside>
       <main style={{ padding: 24, flex: 1, minWidth: 0 }}>
         <h2>Remote AI</h2><output aria-label="Current page">{page}</output>
@@ -33,7 +33,7 @@ function Harness() {
         {page === 'settings' && <div className={settingsStyles.styleScope}>
           <HelpAssistantSettingsCard language="zh" />
         </div>}
-        <div style={{ height: 250 }}><ProxySessionManager t={translateText} /></div>
+        <div style={{ height: 250 }}><ProxySessionManager t={translateMessage} /></div>
       </main>
     </div>
     <HelpAssistant language="zh" page={page} onOpenCodex={() => setPage('codexGui')} />

@@ -194,6 +194,7 @@ async fn execute_request(state: &GuiState, request: GuiRequest) -> Result<GuiRes
     // Local Git downloads also work when the chat server is disconnected.
     let request = match request {
         GuiRequest::ProjectFileRead(target) => return project_editor::read(target).await,
+        GuiRequest::ProjectFileBlame(request) => return project_editor::blame::read(request).await,
         GuiRequest::ProjectFileWrite(request) => return project_editor::write(request).await,
         GuiRequest::ProjectEntryAction(request) => return project_entries::execute(request).await,
         GuiRequest::DownloadOpen(options) if options.git_commit.is_some() => {
@@ -252,8 +253,12 @@ async fn execute_request(state: &GuiState, request: GuiRequest) -> Result<GuiRes
     if let GuiRequest::ProjectFiles(options) = request {
         return project_files::list(&client, options).await;
     }
-    if let GuiRequest::ProjectDirectories { directory } = request {
-        return project_directories::list(directory).await;
+    if let GuiRequest::ProjectDirectories {
+        directory,
+        include_files,
+    } = request
+    {
+        return project_directories::list(directory, include_files).await;
     }
     if let GuiRequest::EditMessage(edit) = request {
         return message_edit::submit(&client, edit).await;

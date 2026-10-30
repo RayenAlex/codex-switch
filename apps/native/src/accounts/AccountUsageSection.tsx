@@ -22,21 +22,21 @@ function UsageMeter({ title, usage, secondary, onHelp }: {
   return <View style={styles.meter}>
     <View style={styles.meterHeading}>
       <Text style={styles.meterTitle}>{title}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={t("了解{value1}", { value1: title })} onPress={onHelp}
+      <Pressable accessibilityRole="button" accessibilityLabel={t("client.accounts.about", { value1: title })} onPress={onHelp}
         style={styles.iconButton}>
         <Ionicons name="help-circle" size={15} color={themedColor("#98a4af", 'muted')} />
       </Pressable>
       <View style={styles.spacer} />
       <Text style={[styles.remaining, { color }]}>{remaining === null ? '--' : `${remaining}%`}</Text>
-      <Text style={styles.remainingUnit}>{t("剩余")}</Text>
+      <Text style={styles.remainingUnit}>{t("client.accounts.remaining")}</Text>
     </View>
-    <View style={styles.track} accessibilityRole="progressbar" accessibilityLabel={t("{value1}剩余额度", { value1: title })}
-      accessibilityValue={remaining === null ? { text: t("暂不可用") } : { min: 0, max: 100, now: remaining }}>
+    <View style={styles.track} accessibilityRole="progressbar" accessibilityLabel={t("client.accounts.remainingQuota.8e22d4", { value1: title })}
+      accessibilityValue={remaining === null ? { text: t("client.accounts.unavailable") } : { min: 0, max: 100, now: remaining }}>
       {remaining !== null ? <View style={[styles.fill, { width: `${remaining}%`, backgroundColor: color }]} /> : null}
     </View>
     <View style={styles.reset}>
       <Ionicons name="time-outline" size={14} color={themedColor(colors.muted, 'muted')} />
-      <Text style={styles.resetText}>{usage ? resetLabel(usage.resetsAt) : t("用量暂不可用")}</Text>
+      <Text style={styles.resetText}>{usage ? resetLabel(usage.resetsAt) : t("client.accounts.usageUnavailable")}</Text>
     </View>
   </View>;
 }
@@ -50,16 +50,16 @@ export function AccountUsageSection({ usage, refreshing, onRefresh, onHelp }: {
   return <View style={styles.section}>
     <View style={styles.heading}>
       <View style={styles.sectionIcon}><Ionicons name="stats-chart" size={17} color={themedColor(colors.muted, 'muted')} /></View>
-      <Text style={styles.title}>{t("使用情况")}</Text>
-      <Text style={styles.updated}>{t("更新于")}{' '}{displayDate(usage.fetchedAt)}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={t("刷新账号用量")} disabled={refreshing}
+      <Text style={styles.title}>{t("client.accounts.usage")}</Text>
+      <Text style={styles.updated}>{t("client.accounts.updated")}{' '}{displayDate(usage.fetchedAt)}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={t("client.accounts.refreshAccountUsage")} disabled={refreshing}
         onPress={onRefresh} style={[styles.iconButton, refreshing && styles.disabled]}>
         {refreshing ? <ActivityIndicator size="small" color={themedColor(colors.green, 'accent')} />
           : <Ionicons name="sync" size={18} color={themedColor(colors.muted, 'muted')} />}
       </Pressable>
     </View>
-    <UsageMeter title={t("主用量窗口")} usage={usage.primary} secondary={false} onHelp={() => onHelp('primary')} />
-    <UsageMeter title={t("次用量窗口")} usage={usage.secondary} secondary onHelp={() => onHelp('secondary')} />
-    {usage.error ? <Text style={styles.error}>{t("用量更新失败，请稍后重试")}</Text> : null}
+    <UsageMeter title={t("client.accounts.primaryUsageWindow")} usage={usage.primary} secondary={false} onHelp={() => onHelp('primary')} />
+    <UsageMeter title={t("client.accounts.secondaryUsageWindow")} usage={usage.secondary} secondary onHelp={() => onHelp('secondary')} />
+    {usage.error ? <Text style={styles.error}>{t("client.accounts.couldNotUpdateUsagePleaseTryAgainLater")}</Text> : null}
   </View>;
 }

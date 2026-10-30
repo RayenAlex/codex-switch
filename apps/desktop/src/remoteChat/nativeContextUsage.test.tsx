@@ -14,9 +14,9 @@ vi.mock('../../../native/node_modules/react-native/index.js', () => ({
 vi.mock('../../../native/node_modules/@expo/vector-icons/Feather.js', () => ({ default: () => null }));
 vi.mock('../../../native/src/theme/styles', () => ({ createThemedStyles: () => () => ({}) }));
 vi.mock('../../../native/src/theme/store', () => ({ useThemeColor: () => (value: string) => value }));
-vi.mock('../../../native/src/i18n', () => ({ t: (text: string) => text, useLanguage: () => 'zh' }));
+vi.mock('../../../native/src/i18n', async () => ({ ...await vi.importActual<typeof import('../../../native/src/i18n')>('../../../native/src/i18n'), useLanguage: () => 'zh' }));
 vi.mock('../../../native/src/chat/styles', () => ({ palette: {} }));
-vi.mock('../../../native/src/chat/ConversationPerformance', () => ({ ConversationPerformance: () => null }));
+vi.mock('../../../native/src/chat/ConversationPerformance', () => ({ ConversationPerformanceValues: () => null }));
 vi.mock('../../../../shared/remote-chat/client/useChatUsage', () => ({ useChatUsage: () => ({ usage: null, error: '' }) }));
 
 it('renders the same engine estimate and compaction reset on the native phone view', async () => {

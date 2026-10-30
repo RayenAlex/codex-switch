@@ -12,6 +12,8 @@ const state = vi.hoisted(() => ({
   file: null as FileReference | null, provider: true, ready: true,
   original: undefined as string | undefined, imageError: false, load: vi.fn(),
   text: undefined as { path: string; text: string } | undefined,
+  download: { label: '下载', busy: false, completed: false, sharing: false,
+    share: undefined as (() => Promise<void>) | undefined, start: vi.fn(), cancel: vi.fn() },
 }));
 vi.mock('react', async importOriginal => ({
   ...await importOriginal<typeof React>(),
@@ -40,9 +42,7 @@ vi.mock('./ChatMarkdownPreview', () => ({ ChatMarkdownPreview: 'MarkdownPreview'
 vi.mock('./ChatHtmlPreview', () => ({ ChatHtmlPreview: 'Html', isHtmlPath: (path: string) => /\.html?$/i.test(path) }));
 vi.mock('./ChatCodeHighlight', () => ({ fileLanguage: () => 'text' }));
 vi.mock('./fileDownloadTarget', () => ({ nativeDownloadTarget: {} }));
-vi.mock('../downloads/useManagedDownload', () => ({ useManagedDownload: () => ({
-  label: '下载', busy: false, start: vi.fn(), cancel: vi.fn(),
-}) }));
+vi.mock('../downloads/useManagedDownload', () => ({ useManagedDownload: () => state.download }));
 vi.mock('./video/VideoViewer', () => ({ VideoViewer: 'Video' }));
 vi.mock('./useImageGestures', () => ({ useImageGestures: () => ({ gesture: {}, animatedStyle: {} }) }));
 vi.mock('./useImageOrientation', () => ({ useImageOrientation: () => ({ displayed: 'portrait' }) }));
@@ -75,6 +75,7 @@ beforeEach(() => {
   state.file = null; state.provider = true; state.ready = true;
   state.original = undefined; state.imageError = false;
   state.text = undefined;
+  Object.assign(state.download, { label: '下载', busy: false, completed: false, sharing: false, share: undefined });
   state.load.mockResolvedValue(original);
 });
 
@@ -109,6 +110,24 @@ it('preserves video playback and ordinary file previews', () => {
     expect(openFile(path).type).not.toBe(ChatImageFilePreview);
     expect(openFile(path).type).not.toBe(VideoViewer);
   }
+});
+
+it('places file sharing before opening a completed download and blocks opening while sharing', async () => {
+  const share = vi.fn().mockResolvedValue(undefined);
+  Object.assign(state.download, { label: '打开文件', completed: true, share });
+  const preview = openFile('./installer.apk');
+  const component = preview.type as (props: typeof preview.props) => React.ReactElement<{
+    actions: { label: string; onPress: () => Promise<void>; disabled?: boolean; loading?: boolean }[];
+  }>;
+  const actions = component(preview.props).props.actions;
+  expect(actions.map(action => action.label)).toEqual(['分享文件', '打开文件']);
+  await actions[0].onPress();
+  expect(share).toHaveBeenCalledOnce();
+  expect(state.download.start).not.toHaveBeenCalled();
+  state.download.sharing = true;
+  const pending = component(preview.props).props.actions;
+  expect(pending[0].loading).toBe(true);
+  expect(pending[1].disabled).toBe(true);
 });
 
 function descendants(value: unknown): React.ReactElement<Record<string, unknown>>[] {

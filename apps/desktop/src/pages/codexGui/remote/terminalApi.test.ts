@@ -21,7 +21,7 @@ it('keeps remote output reads single-flight and cancels polling when a tab close
   await vi.advanceTimersByTimeAsync(100);
   expect(receive).toHaveBeenCalledWith({ type: 'output', data: [0xe4, 0xb8] });
   expect(client.read).toHaveBeenCalledTimes(2);
-  expect(client.read).toHaveBeenLastCalledWith('remote', 1);
+  expect(client.read).toHaveBeenLastCalledWith('remote', 1, undefined);
   await api.write('remote', 'echo test\r');
   await api.resize('remote', { cols: 120, rows: 40 });
   expect(client.write).toHaveBeenCalledWith('remote', 'echo test\r');

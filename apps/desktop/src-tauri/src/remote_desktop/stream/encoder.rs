@@ -67,6 +67,11 @@ impl Encoder {
             if !backend.supports(profile.codec, super::super::input_desktop::is_worker()) {
                 continue;
             }
+            // WGC starts a display-required capture session. An explicit device power-off
+            // must keep using duplication/GDI, independently of the privacy-screen setting.
+            if crate::platform::screen_power::is_off() && backend.wakes_display() {
+                continue;
+            }
             // Opt-in device tests must prove the new path rather than silently passing via compatibility capture.
             #[cfg(test)]
             if std::env::var_os("CSW_NATIVE_TEST_REQUIRE_DAMAGE").is_some() && !backend.framed() {

@@ -1,5 +1,6 @@
+import { displayText } from '../../../i18n/uiText';
 import type { ComputerUsePermission, ComputerUsePermissions } from "../../../api/computerUse";
-import { guiText } from "../../../i18n/guiText";
+import { uiText } from "../../../i18n/uiText";
 import styles from "./index.module.less";
 
 interface Props {
@@ -9,19 +10,19 @@ interface Props {
 }
 
 const PERMISSIONS: { key: ComputerUsePermission; label: string; enableLabel: string }[] = [
-  { key: "accessibility", label: "辅助功能", enableLabel: "开启辅助功能" },
-  { key: "screenRecording", label: "屏幕录制", enableLabel: "开启屏幕录制" },
+  { key: "accessibility", label: "client.desktopMacPermissions.accessibility", enableLabel: "client.desktopMacPermissions.allowAccessibility" },
+  { key: "screenRecording", label: "client.desktopMacPermissions.screenRecording", enableLabel: "client.desktopMacPermissions.allowScreenRecording" },
 ];
 
 export function Permissions({ permissions, busy, onRequest }: Props) {
   const ready = permissions.accessibility && permissions.screenRecording;
   return <div className={styles.permissions}>
-    <p>{guiText(ready ? "桌面操作权限已开启" : "请在系统设置中为 Remote AI 开启以下权限：")}</p>
+    <p>{uiText(ready ? "client.desktopBuiltinPlugins.desktopControlPermissionsGranted" : "client.desktopBuiltinPlugins.allowThesePermissionsForRemoteAiInSystemSettings")}</p>
     {PERMISSIONS.map(({ key, label, enableLabel }) => <div className={styles.permission} key={key}>
-      <span>{guiText(label)}</span>
-      {permissions[key] ? <span>{guiText("已开启")}</span> : <button disabled={busy}
-        onClick={() => void onRequest(key)} aria-label={guiText(enableLabel)}>{guiText("去开启")}</button>}
+      <span>{displayText(label)}</span>
+      {permissions[key] ? <span>{uiText("client.settings.on")}</span> : <button disabled={busy}
+        onClick={() => void onRequest(key)} aria-label={displayText(enableLabel)}>{uiText("client.desktopMacPermissions.allow")}</button>}
     </div>)}
-    {!ready && <p>{guiText("开启后请重新打开对话；若系统提示退出，请重启 Remote AI。")}</p>}
+    {!ready && <p>{uiText("client.desktopBuiltinPlugins.afterAllowingThemReopenTheChatIfTheSystemAsks")}</p>}
   </div>;
 }

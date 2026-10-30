@@ -22,7 +22,7 @@ export function useResetCredits(account: AccountSummary) {
     }).catch(() => {
       if (generation.current !== currentGeneration) return;
       setSummary(null);
-      setError(t("重置卡暂时无法读取，请稍后重试"));
+      setError(t("client.accounts.couldNotLoadResetCreditsPleaseTryAgainLater"));
     }).finally(() => {
       if (generation.current === currentGeneration) setLoading(false);
       if (inFlight.current === request) inFlight.current = null;

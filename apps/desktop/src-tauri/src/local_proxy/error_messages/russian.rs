@@ -1,3 +1,4 @@
+// Generated from packages/i18n/platform/desktop/src-tauri/src/local_proxy/error_messages/russian.rs. Do not edit.
 //! Russian rendering of client-visible local proxy messages. The Chinese producers stay
 //! canonical, because `known.rs` and the account checks compare them by value. This module
 //! maps their outputs and never consults the saved language itself; callers decide.

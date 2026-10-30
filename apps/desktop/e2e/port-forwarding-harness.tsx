@@ -6,7 +6,7 @@ import type { TerminalLinkReply } from '../../../shared/terminal/links';
 import { PortForwarding } from '../src/pages/codexGui/portForwarding/PortForwarding';
 import { GuiRemoteDesktop } from '../src/pages/codexGui/GuiRemoteDesktop';
 import { desktopClient } from '../../../shared/remote-desktop/protocol';
-import { setGuiLanguage } from '../src/i18n/guiText';
+import { setGuiLanguage } from "../src/i18n/uiText";
 import { DetailsWorkspace } from '../src/pages/codexGui/DetailsWorkspace';
 import { FileEnvironmentContext, type FileEnvironment } from '../src/pages/codexGui/fileEnvironment';
 import { fileApi } from '../src/pages/codexGui/fileApi';

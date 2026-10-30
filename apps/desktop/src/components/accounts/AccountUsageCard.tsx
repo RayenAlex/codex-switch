@@ -3,7 +3,7 @@ import { ChevronRight, Info } from "lucide-react";
 import type { Language } from "../../i18n";
 import type { UsageWindow } from "../../types";
 import { remainingTone, resetCountdownWithDays, resetLabel } from "../../utils/format";
-import { accountCardLabels } from "./accountCardLabels";
+import { accountCardLabels } from "@remoteai/i18n/copy/desktop/accountCardLabels";
 
 interface AccountUsageCardProps {
   usage?: UsageWindow | null;

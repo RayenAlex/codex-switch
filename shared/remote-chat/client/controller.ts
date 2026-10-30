@@ -1,4 +1,5 @@
 import type { ChatConnection, ConnectionEvents } from './connection';
+import { modelSelectionError } from '../../../apps/desktop/src/pages/codexGui/modelSelection';
 import { openPreparedDownload } from '../archiveDownload';
 import { mergeTaskDelivery } from '../taskDelivery';
 import type { RemoteComposerCatalog } from '../composerCatalog';
@@ -15,7 +16,9 @@ import type { HistoryVersionSource } from './historyPreparation';
 import { HistoryCache } from './historyCache';
 import { ImageCache } from './imageCache';
 import { ThreadActions, threadMutationPatch, type ThreadMutation } from './threadActions';
+import { ProjectActions } from './projectActions';
 import { ThreadListRequests } from './threadListRequests';
+import { ThreadListCache } from './threadListCache';
 import { mergeThreadList } from './threadListSnapshot';
 import { forkConversation } from './forkConversation';
 import { RemoteMessageEditor } from './messageEdit';
@@ -35,12 +38,14 @@ import { emptyQueue, QUEUE_EVENT, type QueueAction, type QueueSnapshot } from '.
 import { QueueConnection } from './queueConnection';
 import { AsyncAnswers } from './asyncAnswers';
 import { createGuiAccountsClient } from './guiAccounts';
+import { createRemoteDictationClient } from '../dictation';
+import { GUI_ACCOUNT_SELECTION_EVENT } from '../guiAccounts';
 import { createContextSettingsClient } from './contextSettings';
 import { createGuiToolsClient } from '../guiTools';
+import type { SshProfileStore } from '../../terminal/sshProfiles';
 import type { MappingSocket } from '../../port-mapping/socket';
 import { MAPPING_UPDATE_REQUIRED } from '../../port-mapping/errors';
 import { canSelectProject } from '../projects';
-import type { UsageSummary } from '../usage';
 import { CONVERSATION_METRICS_OPERATION, type ReadConversationMetrics } from '../conversationMetrics';
 import { TOKEN_SUMMARY_OPERATION, type ReadTokenSummary } from '../tokenSummary';
 import { decodeTokenSummary, QUOTA_HISTORY_FORMAT, type TokenSummaryResponse } from '../tokenSummaryCodec';
@@ -50,6 +55,9 @@ import { initialChatState, type ApprovalReply, type ChatProject, type ChatState,
 const SYNCHRONIZATION_RETRY_MS = 3000;
 
 export class ChatController {
+  readonly projectActions = new ProjectActions({ snapshot: () => this.state, update: patch => this.update(patch),
+    generation: () => this.synchronization,
+    request: body => this.connection.request('request', body), complete: sidebar => this.applySidebar(sidebar) });
   readonly messageEditor = new RemoteMessageEditor({ snapshot: () => this.state,
     update: patch => this.update(patch), request: body => this.request(body),
     image: (threadId, source) => this.imagePreview(threadId, source, true), invalidate: threadId => {
@@ -80,6 +88,12 @@ export class ChatController {
   readonly guiAccounts = createGuiAccountsClient({
     request: (body) => this.connection.request('request', body), subscribe: (listener) => this.subscribeEvents(listener),
   });
+  readonly dictation = createRemoteDictationClient({
+    request: body => this.connection.request('request', body),
+    subscribeAccountChange: changed => this.subscribeEvents(event => {
+      if (event.method === GUI_ACCOUNT_SELECTION_EVENT) changed();
+    }),
+  });
   readonly guiTools = createGuiToolsClient(<T>(body: object) => this.connection.request<T>('request', body),
     (event, fields) => this.connection.reportDiagnostic?.(event, fields),
     viewId => this.connection.openNativeMedia?.(viewId) ?? Promise.resolve(undefined),
@@ -87,7 +101,14 @@ export class ChatController {
       ? this.connection.mappingStreams.open(resource, url, options)
       : Promise.reject(new Error(MAPPING_UPDATE_REQUIRED)));
   private readonly listRequests = new ThreadListRequests(async () => {
-    if (this.active && this.transportConnected) await this.list({ background: true });
+    if (this.active && this.transportConnected) await this.list({ background: true, force: true });
+  });
+  private readonly threadList = new ThreadListCache(async (query, force) => {
+    const result = await this.request<ListResponse<Thread> & { sidebar?: SidebarSnapshot }>({
+      operation: 'list', ...query, ...(force ? { force: true } : {}),
+    });
+    this.applySidebar(result.sidebar);
+    return result;
   });
   private manualList?: Promise<void>;
   private readGeneration = 0;
@@ -124,7 +145,8 @@ export class ChatController {
   constructor(createConnection: (events: ConnectionEvents) => Pick<ChatConnection, 'request' | 'start' | 'stop'>
     & Partial<Pick<ChatConnection, 'confirmHostIdentity' | 'reportDiagnostic' | 'retryNow'
       | 'downloadsBulk' | 'setBulkSupport'>>,
-    private readonly offline?: OfflineHistoryStore, versions?: HistoryVersionSource) {
+    private readonly offline?: OfflineHistoryStore, versions?: HistoryVersionSource, sshProfiles?: SshProfileStore) {
+    if (sshProfiles) this.guiTools.terminal.ssh.profiles = sshProfiles;
     this.historyReader = new HistoryReader((body) => this.connection.request('request', body), versions);
     if (offline) this.offlineWriter = new OfflineWriter(offline, this.cacheFailure);
     this.connection = createConnection({
@@ -152,7 +174,7 @@ export class ChatController {
   setWorkspaceBusy = (workspaceBusy: boolean) => this.update({ workspaceBusy });
   suggestNextPrompt: import('../../chat/nextPromptSuggestion').RequestPromptSuggestion = target =>
     this.request({ operation: 'suggestNextPrompt', ...target });
-  readUsage = () => this.connection.request<UsageSummary>('request', { operation: 'usageSummary' });
+  readUsage = () => this.connection.request<unknown>('request', { operation: 'usageSummary' });
   readConversationMetrics: ReadConversationMetrics = (threadId) =>
     this.connection.request('request', { operation: CONVERSATION_METRICS_OPERATION, threadId });
   readonly contextSettings = createContextSettingsClient(<T>(body: unknown) =>
@@ -175,7 +197,11 @@ export class ChatController {
     for (const listener of this.listeners) listener();
   }
   private update(patch: Partial<ChatState>) {
+    const previous = this.state;
     this.state = syncChatProcessing({ ...this.state, ...patch }, this.state);
+    if (previous.search === this.state.search && previous.archived === this.state.archived) {
+      this.threadList.observe(previous.threads, this.state.threads, this.state.archived);
+    }
     this.emit();
   }
   private request<T>(body: Request) { return this.connection.request<T>('request', body); }
@@ -196,6 +222,7 @@ export class ChatController {
     this.historyReader.reset();
     this.queueConnection.reset();
     if (mode === 'offline') {
+      this.threadList.invalidate();
       this.skillGeneration += 1;
       this.composer.reset();
       this.update({ sidebar: { ...this.state.sidebar, revision: -1 } });
@@ -224,25 +251,37 @@ export class ChatController {
     }
     if (event?.method === HISTORY_CHANGED) {
       if (event.params.threadId === this.state.selected?.id) this.scheduleHistory();
+      if (event.params.thread) {
+        this.threadList.receive({ ...event, method: event.params.reason ?? 'thread/started' });
+        const cached = this.threadList.peek(this.state);
+        if (cached) this.update({ threads: cached.data });
+        return;
+      }
       if (event.params.reason?.startsWith('thread/')
-        || !this.state.threads.some((thread) => thread.id === event.params.threadId)) this.listRequests.changed();
+        || !this.state.threads.some((thread) => thread.id === event.params.threadId)) {
+        this.threadList.invalidate();
+        this.listRequests.changed();
+      }
       return;
     }
     if (event?.method === COMPOSER_EVENT) { this.composer.receive(event.params as unknown as ComposerSnapshot); return; }
     if (event?.method === SIDEBAR_EVENT) { this.applySidebar(event.params as unknown as SidebarSnapshot); return; }
     if (event?.method === QUEUE_EVENT) { this.applyQueue(event.params as unknown as QueueSnapshot); return; }
+    const missingSummary = this.threadList.receive(event);
+    const cached = this.threadList.peek(this.state);
     this.state = applyChatEvent(this.state, event);
+    if (cached) this.state = { ...this.state, threads: cached.data };
     this.emit();
     this.markViewed();
     if (event?.method === 'turn/completed' && event.params.threadId === this.state.selected?.id) {
       this.scheduleHistory();
     }
-    if (['thread/started', 'thread/name/updated', 'thread/archived', 'thread/unarchived', 'thread/deleted',
-      'turn/started', 'turn/completed'].includes(event.method)) this.listRequests.changed();
+    if (missingSummary) this.listRequests.changed();
     if (['thread/name/updated', 'thread/archived', 'thread/unarchived', 'thread/deleted'].includes(event.method)) {
       if (event.params.threadId === this.state.selected?.id) this.scheduleHistory();
     }
     if (event?.method === 'connection/closed' || event?.method === 'codex/disconnected') {
+      this.threadList.invalidate();
       this.skillGeneration += 1;
       this.synchronization += 1;
       this.listRequests.reset();
@@ -279,6 +318,8 @@ export class ChatController {
 
   private async listOffline() {
     if (!this.offline) return;
+    const memory = this.threadList.peek(this.state);
+    if (memory) { this.update({ threads: memory.data, cursor: memory.nextCursor }); return; }
     const generation = this.listRequests.generation;
     try {
       const cached = await this.offline.list();
@@ -308,6 +349,7 @@ export class ChatController {
   };
 
   stop() {
+    this.threadList.invalidate();
     this.previewDownloads?.dispose();
     void this.flushCache();
     this.active = false;
@@ -372,7 +414,10 @@ export class ChatController {
   private applySidebar(sidebar?: SidebarSnapshot) {
     if (!sidebar || !Number.isSafeInteger(sidebar.revision) || sidebar.revision < this.state.sidebar.revision
       || !sidebar.threads || !sidebar.readState) return;
-    this.update({ sidebar });
+    const selected = this.state.selected;
+    const entry = selected && sidebar.threads[selected.id];
+    this.update({ sidebar, ...(selected && entry && entry.cwd !== selected.cwd
+      ? { selected: { ...selected, cwd: entry.cwd } } : {}) });
     this.markViewed();
   }
 
@@ -447,19 +492,26 @@ export class ChatController {
 
   /** Search without replacing the sidebar list or its pagination. */
   searchThreads = (options: { search: string; archived: boolean; cursor?: string }) =>
-    this.request<ListResponse<Thread>>({ operation: 'list', ...options });
+    this.threadList.read(options);
 
-  list(options: { search?: string; archived?: boolean; more?: boolean; background?: boolean } = {}) {
+  list(options: { search?: string; archived?: boolean; more?: boolean; background?: boolean; force?: boolean } = {}) {
     const search = options.search ?? this.state.search;
     const archived = options.archived ?? this.state.archived;
     const cursor = options.more ? this.state.cursor ?? undefined : undefined;
-    const manual = !options.background && !options.more;
+    const manual = !options.background && !options.more && options.search === undefined && options.archived === undefined;
+    const changedScope = search !== this.state.search || archived !== this.state.archived;
+    if (changedScope) {
+      const cached = this.threadList.peek({ search, archived });
+      this.update({ search, archived, threads: cached?.data ?? [], cursor: cached?.nextCursor ?? null });
+    }
     const key = JSON.stringify([search, archived, cursor, Boolean(options.more)]);
     const scope = JSON.stringify([search, archived]);
     const promise = this.listRequests.run({ key, scope, more: options.more, fresh: manual },
       async (generation, revision) => {
-        this.update({ search, archived, loading: true });
-        await this.loadList({ search, archived, cursor, more: options.more }, generation, revision);
+        const cached = !options.more && !manual && !options.force ? this.threadList.get({ search, archived }) : undefined;
+        this.update({ search, archived, loading: !cached });
+        await this.loadList({ search, archived, cursor, more: options.more, force: manual || options.force },
+          generation, revision);
       });
     if (manual && this.manualList !== promise) {
       this.manualList = promise;
@@ -473,7 +525,7 @@ export class ChatController {
     return promise;
   }
 
-  private async loadList(options: { search: string; archived: boolean; cursor?: string; more?: boolean },
+  private async loadList(options: { search: string; archived: boolean; cursor?: string; more?: boolean; force?: boolean },
     generation: number, revision: number) {
     const { search, archived, cursor, more } = options;
     const before = this.state.threads;
@@ -483,11 +535,8 @@ export class ChatController {
       return;
     }
     try {
-      const result = await this.request<ListResponse<Thread> & { sidebar?: SidebarSnapshot }>({
-        operation: 'list', search, archived, cursor,
-      });
+      const result = await this.threadList.read({ search, archived, cursor }, options.force);
       if (!this.listRequests.accepts(generation, revision)) return;
-      this.applySidebar(result.sidebar);
       const { threads, summaries } = mergeThreadList({ before, current: this.state.threads,
         incoming: result.data, more });
       void this.offline?.updateSummaries?.(summaries, archived).catch(this.cacheFailure);
@@ -640,6 +689,7 @@ export class ChatController {
     const generation = this.synchronization;
     const selection = { ...this.state.settings, model: input.model ?? this.state.settings.model,
       effort: input.effort ?? this.state.settings.effort, access: input.access };
+    if (modelSelectionError(this.state.models, selection)) return false;
     const message = { ...input, ...(selection.model ? { model: selection.model } : {}),
       ...(selection.effort ? { effort: selection.effort } : {}) };
     this.update({ sending: true, error: '',
@@ -651,12 +701,13 @@ export class ChatController {
         const result = await this.request<{ thread: Thread }>({ operation: 'start', model: selection.model || undefined,
           access: input.access, cwd: this.state.draftProject?.cwd });
         thread = result.thread;
+        this.threadList.upsert(thread, false);
         this.listRequests.reset();
-        const threads = this.state.archived ? [] : this.state.threads;
+        const cached = this.threadList.peek({ archived: false, search: '' });
+        const threads = cached?.data ?? (this.state.archived || this.state.search ? [] : this.state.threads);
         this.update({ selected: thread, draftProject: null, selectedArchived: false,
           threads: [thread, ...threads.filter((entry) => entry.id !== result.thread.id)],
-          archived: false, search: '', cursor: null, loading: false, listRefreshing: false });
-        this.listRequests.changed();
+          archived: false, search: '', cursor: cached?.nextCursor ?? null, loading: false, listRefreshing: false });
         await this.composer.created(thread.id, selection);
       }
       this.ensureCurrent(generation);
@@ -746,9 +797,9 @@ export class ChatController {
   loadProjectFiles = (options: ProjectFilesRequest) =>
     this.connection.request<ProjectFilesResponse>('request', { operation: 'projectFiles', ...options });
 
-  loadProjectDirectories = (directory: string) =>
+  loadProjectDirectories = (directory: string, includeFiles = false) =>
     this.connection.request<import('../projectDirectories').ProjectDirectoriesResponse>('request', {
-      operation: 'projectDirectories', directory,
+      operation: 'projectDirectories', directory, includeFiles,
     });
 
   chooseDraftProject = (project: ChatProject) => {
@@ -833,6 +884,9 @@ export class ChatController {
 
   private completeThreadMutation(body: ThreadMutation) {
     const { threadId, operation } = body;
+    if (operation !== 'threadPin') this.threadList.receive({ method: operation === 'rename' ? 'thread/name/updated'
+      : operation === 'delete' ? 'thread/deleted' : operation === 'archive' ? 'thread/archived' : 'thread/unarchived',
+    params: { threadId, ...(operation === 'rename' ? { threadName: body.name } : {}) } });
     this.listRequests.reset();
     if (operation !== 'rename' && this.state.selected?.id === threadId) {
       this.readGeneration += 1; this.refreshThreadId = null; this.loadedThreadId = null;
@@ -860,7 +914,13 @@ export class ChatController {
     const selection = this.selectionGeneration;
     const selectedId = this.state.selected?.id;
     return forkConversation({ snapshot: this.snapshot, update: patch => this.update(patch),
-      request: () => this.connection.request('request', { operation: 'forkLatest', threadId: thread.id }),
+      request: async () => {
+        const result = await this.connection.request<{ thread: Thread }>('request', {
+          operation: 'forkLatest', threadId: thread.id,
+        });
+        if (generation === this.synchronization) this.threadList.upsert(result.thread, false);
+        return result;
+      },
       isCurrent: () => generation === this.synchronization && this.state.ready,
       canOpen: () => selection === this.selectionGeneration && selectedId === this.state.selected?.id
         && !this.state.sending,

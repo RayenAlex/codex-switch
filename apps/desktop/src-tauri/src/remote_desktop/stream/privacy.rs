@@ -186,13 +186,31 @@ async fn switch(
         super::pump::send_frame(stream, first).await?;
         return Ok(state);
     }
-    switch_privacy(
+    let state = switch_privacy(
         stream,
         path,
         encoder,
         matches!(target, Target::Privacy(true)),
     )
+    .await?;
+    #[cfg(windows)]
+    return remember(&stream.id, state).await;
+    #[cfg(not(windows))]
+    Ok(state)
+}
+
+#[cfg(windows)]
+async fn remember(id: &str, mut state: privacy::Snapshot) -> Result<privacy::Snapshot> {
+    let id = id.to_owned();
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::remote_desktop::with_lease(&id, |session| {
+            session.security.remember_privacy(state.privacy_screen)?;
+            state.security = Some(session.security.snapshot()?);
+            Ok(state)
+        })
+    })
     .await
+    .map_err(|_| DesktopError::Settings)?
 }
 
 async fn switch_privacy(
@@ -279,6 +297,7 @@ mod tests {
             Err(DesktopError::Expired)
         ));
         let snapshot = privacy::Snapshot {
+            security: None,
             resolutions: vec![],
             displays: vec![],
             display_id: "virtual".into(),

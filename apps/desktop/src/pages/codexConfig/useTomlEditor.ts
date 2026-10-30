@@ -1,4 +1,5 @@
-import { guiText } from "../../i18n/guiText";
+import inlineCopy from '@remoteai/i18n/copy/inline/desktop/pages/codexConfig/useTomlEditor';
+import { uiText } from "../../i18n/uiText";
 import { useEffect, useRef, useState } from "react";
 import { validateCodexConfigDocument } from "../../api/codexConfig";
 import type { Language } from "../../i18n";
@@ -92,9 +93,9 @@ export function useTomlEditor(props: TomlEditorProps) {
       baseRevision.current = nextRevision;
     }
     if (value !== latest.current) { setStatus("changed"); return false; }
-    if (nextRevision === false) return failure((language === "ru" ? guiText("未能保存，修改内容已保留。请稍后重试。", {}, language) : language === "zh"
-      ? "未能保存，修改内容已保留。请稍后重试。"
-      : "Could not save. Your changes are kept here. Please try again."), true);
+    if (nextRevision === false) return failure((language !== "zh" && language !== "en" ? uiText("client.configHelp.couldNotSaveYourEditsArePreservedPleaseTryAgain", {}, language) : language === "zh"
+      ? inlineCopy["text_50598f87"]
+      : inlineCopy["Could_not_save_Your_changes_dd2bcc79"]), true);
     setStatus("saved");
     return true;
   }
@@ -109,9 +110,9 @@ export function useTomlEditor(props: TomlEditorProps) {
     setSaving(true);
     const promise = saveValue(value).catch(() => {
       if (value !== latest.current) return false;
-      return failure((language === "ru" ? guiText("暂时无法校验或保存，修改内容已保留。请稍后重试。", {}, language) : language === "zh"
-        ? "暂时无法校验或保存，修改内容已保留。请稍后重试。"
-        : "Could not validate or save. Your changes are kept here. Please try again."));
+      return failure((language !== "zh" && language !== "en" ? uiText("client.configHelp.couldNotValidateOrSaveYourEditsArePreservedPlease", {}, language) : language === "zh"
+        ? inlineCopy["text_a1d77d35"]
+        : inlineCopy["Could_not_validate_or_save_861f1064"]));
     });
     const running = { value, promise };
     pending.current = running;

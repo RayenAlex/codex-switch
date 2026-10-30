@@ -24,7 +24,8 @@ export async function checkRemoteWindowLayout(page: Page) {
     .toBeLessThan(2);
   const footerBounds = (await footer.boundingBox())!;
   await scroll.hover({ position: { x: 200, y: 200 } });
-  await page.mouse.wheel(0, -400);
+  // The shortcut appears beyond half a viewport; a fixed 400px stops just short in a tall window.
+  await page.mouse.wheel(0, -scrollBounds.height);
   await expect(page.getByRole('button', { name: '回到底部', exact: true })).toBeVisible();
   expect((await footer.boundingBox())!.y).toBeCloseTo(footerBounds.y, 0);
   await page.getByRole('button', { name: '回到底部', exact: true }).click();

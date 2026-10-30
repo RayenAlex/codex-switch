@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { invoke } from '../../api/backend';
 import type { RequestSpeed } from '../../../../../shared/remote-chat/composer';
 import { subscribeGuiEvent } from './webEvents';
@@ -71,7 +71,7 @@ export class RequestSpeedBridge implements RequestSpeedSource {
       try {
         return await invoke<GuiRequestSettings>('codex_gui_set_request_speed', { speed });
       } catch {
-        throw new Error(guiText("速度模式未能切换，请确认电脑端支持所选模式后重试。"));
+        throw new Error(uiText("client.conversation.couldNotChangeTheSpeedModeCheckThatTheDesktop"));
       }
     });
   }

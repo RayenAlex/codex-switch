@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { defaultLanguage } from '../i18n';
-import { deviceLanguage, systemLanguage } from '../../../../shared/i18n/language';
+import { deviceLanguage, systemLanguage } from "../../../../shared/localization/language";
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 

@@ -2,6 +2,8 @@ import type { ConnectionMode, IceServer, PeerFactory, RpcMessage } from './proto
 import type { PacketCipherFactory } from './packetCipher';
 
 export interface LinkOptions {
+  /** Start data on the warm relay while direct discovery runs in the background. */
+  startOnRelay?: boolean;
   binaryBulk?: boolean;
   bulkRelay?: import('./bulkTransport').BulkRelay;
   directEndpoints?: (value?: import('./connectionEndpoints').ConnectionEndpoints) => void;
@@ -15,6 +17,7 @@ export interface LinkOptions {
   createNativePath?: import('./nativePath').NativePathFactory;
   createPeer: PeerFactory;
   createPacketCipher?: PacketCipherFactory;
+  createPacketCompression?: import('./packetCompression').PacketCompressionFactory;
   signal: (message: object) => void;
   relayBuffered: () => number;
   message: (message: RpcMessage) => void;

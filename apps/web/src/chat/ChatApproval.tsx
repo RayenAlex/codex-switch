@@ -19,14 +19,14 @@ export function ChatApproval({ event, ready, respond }: {
         [question.id, { answers: [answers[question.id]?.trim() ?? ''] }])) } : { id, decision });
     } finally { setBusy(false); }
   };
-  return <section className="chat-approval" aria-label={isQuestion ? t("需要你的补充") : t("需要你的确认")}>
-    <h2>{isQuestion ? t("需要你的补充") : t("需要你的确认")}</h2>
+  return <section className="chat-approval" aria-label={isQuestion ? t("client.chat.moreInformationNeeded") : t("client.chat.yourApprovalIsNeeded")}>
+    <h2>{isQuestion ? t("client.chat.moreInformationNeeded") : t("client.chat.yourApprovalIsNeeded")}</h2>
     {params.reason && <p className="chat-muted">{params.reason}</p>}
     {params.command && <pre>{params.command}</pre>}
     {(params.cwd || params.grantRoot) && <p className="chat-muted">{params.cwd || params.grantRoot}</p>}
-    {params.permissions?.network?.enabled && <p className="chat-muted">{t("访问网络")}</p>}
-    {params.permissions?.fileSystem?.read?.map((path) => <p key={path} className="chat-muted">{t("读取：")}{path}</p>)}
-    {params.permissions?.fileSystem?.write?.map((path) => <p key={path} className="chat-muted">{t("编辑：")}{path}</p>)}
+    {params.permissions?.network?.enabled && <p className="chat-muted">{t("client.chat.networkAccess")}</p>}
+    {params.permissions?.fileSystem?.read?.map((path) => <p key={path} className="chat-muted">{t("client.chat.read")}{path}</p>)}
+    {params.permissions?.fileSystem?.write?.map((path) => <p key={path} className="chat-muted">{t("client.chat.edit")}{path}</p>)}
     {questions.map((question) => <fieldset key={question.id} disabled={busy || !ready}>
       <legend>{question.question}</legend>
       {question.options?.map((option) => <label className="chat-choice" key={option.label}>
@@ -34,7 +34,7 @@ export function ChatApproval({ event, ready, respond }: {
           onChange={() => setAnswers((current) => ({ ...current, [question.id]: option.label }))} />
         <span><strong>{option.label}</strong><small>{option.description}</small></span>
       </label>)}
-      <input className="chat-answer" aria-label={question.question} placeholder={t("输入你的回答")}
+      <input className="chat-answer" aria-label={question.question} placeholder={t("client.chat.enterYourAnswer")}
         type={question.isSecret ? 'password' : 'text'} autoComplete="off" value={answers[question.id] ?? ''}
         onChange={(change) => setAnswers((current) => ({ ...current, [question.id]: change.target.value }))} />
     </fieldset>)}
@@ -42,10 +42,10 @@ export function ChatApproval({ event, ready, respond }: {
       {(isQuestion || !params.availableDecisions || params.availableDecisions.includes('accept')) &&
         <button type="button" className="chat-button chat-primary"
           disabled={!ready || busy || (isQuestion && questions.some((question) => !answers[question.id]?.trim()))}
-          onClick={() => { void send('accept'); }}>{isQuestion ? t("提交回答") : t("允许这一次")}</button>}
+          onClick={() => { void send('accept'); }}>{isQuestion ? t("client.chat.submitAnswer") : t("client.chat.allowOnce")}</button>}
       {!isQuestion && <button type="button" className="chat-button" disabled={!ready || busy}
         onClick={() => { void send(params.availableDecisions?.includes('decline') === false ? 'cancel' : 'decline'); }}>
-        {t("拒绝")}</button>}
+        {t("client.chat.deny")}</button>}
     </div>
   </section>;
 }

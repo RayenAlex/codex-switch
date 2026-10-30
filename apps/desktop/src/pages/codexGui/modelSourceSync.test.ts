@@ -68,11 +68,13 @@ it('switches the phone catalog with no PC page mounted and ignores shared Provid
   expect(await pc.send('must wait', [])).toBe(false);
   expect(events).toHaveBeenCalledWith(expect.objectContaining({ threadId: 'phone', syncing: true }));
   await pc.modelCatalog.ready();
-  expect((await bridge.read('phone')).settings.model).toBe('model-b');
-  expect(pc.getSnapshot().settings.model).toBe('model-b');
+  expect((await bridge.read('phone')).settings.model).toBe('model-a');
+  expect(pc.getSnapshot().settings.model).toBe('model-a');
   expect(events).toHaveBeenLastCalledWith(expect.objectContaining({ threadId: 'phone', syncing: false }));
   await expect(bridge.update({ model: 'model-a' }, 'phone')).rejects.toThrow('这个模型已不可用');
-  await expect(bridge.validateSend({ threadId: 'phone', model: 'model-a' })).rejects.toThrow('模型已更新');
+  await expect(bridge.validateSend({ threadId: 'phone', model: 'model-a' })).rejects.toThrow('当前账户不支持');
+  await expect(bridge.validateSend({ threadId: 'phone', model: 'model-b' })).rejects.toThrow('当前账户不支持');
+  await bridge.update({ model: 'model-b' }, 'phone');
   await expect(bridge.validateSend({ threadId: 'phone', model: 'model-b' }))
     .resolves.toMatchObject({ model: 'model-b' });
 });
@@ -97,7 +99,7 @@ it('does not acknowledge a switch before both routing and the new CLI catalog ar
   finishModels({ data: [model('model-b')], nextCursor: null });
   await switching;
   expect(pc.getSnapshot().modelCatalogLoading).toBe(false);
-  expect((await bridge.read(null)).settings.model).toBe('model-b');
+  expect((await bridge.read(null)).settings.model).toBe('model-a');
 });
 
 it('keeps sending blocked when the new Provider cannot be read and recovers on the next refresh', async () => {
@@ -109,26 +111,36 @@ it('keeps sending blocked when the new Provider cannot be read and recovers on t
   await expect(bridge.validateSend({ model: 'model-a' })).rejects.toThrow('offline');
   pc.modelCatalog.setProviderSource(readGuiProviderModels);
   await pc.modelCatalog.refresh();
-  expect((await bridge.read(null)).settings.model).toBe('model-b');
+  expect((await bridge.read(null)).settings.model).toBe('model-a');
 });
 
-it('persists fallbacks and updates live and queued conversations that the PC is not viewing', async () => {
+it('preserves saved, live and queued choices without writes when the account catalog changes', async () => {
   await bridge.update({ model: 'model-a' }, 'phone');
+  await bridge.update({ model: 'model-a' }, 'old');
   await pc.loadRemoteThread('phone');
   vi.mocked(guiApi.subscribe).mock.calls[0][0]({ method: 'turn/started', params: { threadId: 'phone',
     turn: { id: 'live', status: 'inProgress', items: [] } } });
   pc.queue.enqueue('phone', { text: 'next', images: [], skills: [] });
   await pc.select('pc');
+  vi.mocked(api.write).mockClear();
   selection = { kind: 'provider', id: 'b' };
   await pc.modelCatalog.invalidate();
   expect(pc.getSnapshot().selected).toBe('pc');
-  expect(saved.get('phone')?.selection).toEqual({ model: 'model-b', effort: 'high' });
-  expect(pc.getSnapshot().queued.phone[0]).toMatchObject({ model: 'model-b', effort: 'high' });
-  expect(api.write).toHaveBeenCalledWith('phone', { model: 'model-b', effort: 'high' });
+  expect(saved.get('phone')?.selection).toEqual({ model: 'model-a', effort: 'high' });
+  expect(saved.get('old')?.selection).toEqual({ model: 'model-a', effort: 'high' });
+  expect(pc.getSnapshot().queued.phone[0]).toMatchObject({ model: 'model-a', effort: 'high' });
+  expect(api.write).not.toHaveBeenCalled();
   const changes = pc.getSnapshot().conversations.phone.turns.flatMap(turn => turn.items)
     .filter(item => item.type === 'modelChange');
-  expect(changes.at(-1)).toMatchObject({ text: '模型已从 model-a 更改为 model-b',
-    summary: [expect.stringContaining('下一次请求')] });
+  expect(changes).toEqual([]);
+  await pc.select('old');
+  expect(pc.getSnapshot().settings).toMatchObject({ model: 'model-a', effort: 'high' });
+  expect(await pc.send('blocked', [])).toBe(false);
+  await expect(bridge.validateSend({ threadId: 'old' })).rejects.toThrow('当前账户不支持');
+  selection = { kind: 'provider', id: 'a' };
+  await pc.modelCatalog.invalidate();
+  await expect(bridge.validateSend({ threadId: 'old' })).resolves.toMatchObject({ model: 'model-a', effort: 'high' });
+  expect(api.write).not.toHaveBeenCalled();
 });
 
 it('returns to the official catalog when switching away from a custom Provider', async () => {
@@ -157,8 +169,12 @@ it('rechecks a queued message after its resume overlaps a Provider switch', asyn
   });
   finishResume({ thread: { id: 'phone', cwd: '', preview: '', updatedAt: 1 } });
   await flushing;
+  expect(vi.mocked(guiApi.request).mock.calls.filter(([request]) => request.operation === 'sendBatch')).toHaveLength(0);
+  expect(pc.getSnapshot().queued.phone[0]).toMatchObject({ model: 'model-a', effort: 'high' });
+  selection = { kind: 'provider', id: 'a' };
+  await pc.modelCatalog.invalidate();
   await vi.waitFor(() => expect(guiApi.request).toHaveBeenCalledWith(expect.objectContaining({
-    operation: 'sendBatch', model: 'model-b',
+    operation: 'sendBatch', model: 'model-a',
   })));
   expect(vi.mocked(guiApi.request).mock.calls.filter(([request]) => request.operation === 'sendBatch')).toHaveLength(1);
 });

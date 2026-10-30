@@ -2,7 +2,7 @@ import { Dropdown } from "antd";
 import {
   ArchiveRestore, ChevronDown, Download, Eye, Import, Power, RefreshCw, Upload,
 } from "lucide-react";
-import type { ThreadCopy } from "./copy";
+import type { ThreadCopy } from "@remoteai/i18n/copy/desktop/threads";
 
 interface ThreadTopbarProps {
   text: ThreadCopy;

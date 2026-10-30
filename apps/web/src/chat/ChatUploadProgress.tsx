@@ -7,14 +7,14 @@ export function ChatUploadProgress({ progress, reconnecting = false, inline = fa
 }) {
   useLanguage();
   if (!progress) return null;
-  let label = t('上传中');
-  if (progress.percent === 0) label = t('待上传');
-  if (progress.percent === 100) label = t('已上传');
-  if (progress.phase === 'preparing') label = t('准备中');
-  if (progress.phase === 'confirming') label = t('等待确认');
-  if (reconnecting && progress.percent < 100) label = t('等待连接');
+  let label = t("client.chat.uploading");
+  if (progress.percent === 0) label = t("client.chat.queued.2b6f8f");
+  if (progress.percent === 100) label = t("client.chat.uploaded");
+  if (progress.phase === 'preparing') label = t("client.shared.preparing");
+  if (progress.phase === 'confirming') label = t("client.chat.finishing");
+  if (reconnecting && progress.percent < 100) label = t("client.chat.waiting");
   return <span className={inline ? 'chat-upload-inline' : 'chat-upload-overlay'}
-    role="progressbar" aria-label={t('附件上传进度')} aria-valuetext={`${label} ${progress.percent}%`}
+    role="progressbar" aria-label={t("client.chat.attachmentUploadProgress")} aria-valuetext={`${label} ${progress.percent}%`}
     aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percent}>
     <span className="chat-upload-percent">{progress.percent}%</span>
     <span className="chat-upload-label">{label}</span>

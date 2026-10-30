@@ -1,5 +1,8 @@
-import { guiText } from "../../i18n/guiText";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
+import { displayText } from '../../i18n/uiText';
+import { uiText } from "../../i18n/uiText";
+import {
+  forwardRef, useContext, useEffect, useImperativeHandle, useRef, useState, type ReactNode,
+} from "react";
 import { flushSync } from "react-dom";
 import { Target, X } from "lucide-react";
 import { isDesktopApp } from "../../api/backend";
@@ -21,8 +24,12 @@ import { ImageAttachments } from "./ImageAttachments";
 import { useComposerDrop } from './useComposerDrop';
 import { IMAGE_TYPES, useComposerDraft } from "./useComposerDraft";
 import { ModelPicker } from "./ModelPicker";
+import { modelSelectionError } from "./modelSelection";
 import { useGuiRequestSpeed } from "./useGuiRequestSpeed";
 import { UsageStatus } from "./UsageStatus";
+import { DesktopUsageContext } from '../../../../../shared/chat/DesktopUsageContext';
+import { useConversationMetrics } from '../../../../../shared/remote-chat/client/useConversationMetrics';
+import { loadConversationMetrics } from '../../api/conversationMetrics';
 import { ConversationTokenStatus } from './ConversationTokenStatus';
 import { ProjectPicker } from "./ProjectPicker";
 import { GuiToolbox } from "./GuiToolbox";
@@ -53,6 +60,8 @@ export const Composer = forwardRef<ComposerHandle, {
   const [dictating, setDictating] = useState(false);
   const goalMode = useGoalMode(state.selected, Boolean(state.goalBusy));
   const requestSpeed = useGuiRequestSpeed(active);
+  const usageSnapshot = useContext(DesktopUsageContext);
+  const metrics = useConversationMetrics(loadConversationMetrics, state.selected, active && state.connection === 'ready');
   const workspaceBusy = Boolean(state.workspaceBusy);
   const { draft, reading: draftReading, editContent, appendDictation, removeImage, editImage, addImages, paste, pasteKeyDown,
     send: sendDraft, addAttachments, removeAttachment, addQuote, removeQuote, clearQuotes, editQueued }
@@ -87,7 +96,7 @@ export const Composer = forwardRef<ComposerHandle, {
   } }));
   const goal = state.selected ? state.goals?.[state.selected] : null;
   const canSend = !disabled && !reading && !state.modelSettingsLoading && !state.modelCatalogLoading
-    && state.models.length > 0 && hasDraft;
+    && !modelSelectionError(state.models, state.settings) && hasDraft;
   const send = async () => {
     if (!canSend || drop.isReading()) return;
     await sendDraft(goalMode.enabled, goalMode.exit);
@@ -122,7 +131,7 @@ export const Composer = forwardRef<ComposerHandle, {
       <ComposerQuotes quotes={draft.quotes ?? []} draftKey={key} active={active} disabled={disabled}
         onRemove={removeQuote} onClear={() => { clearQuotes(); skillInput.current?.focus(); }} />
       <input ref={fileInput} type="file" accept={IMAGE_TYPES.join(",")} multiple hidden disabled={disabled}
-        aria-label={guiText("选择图片")} onChange={(event) => {
+        aria-label={uiText("client.composer.chooseImages")} onChange={(event) => {
           addImages(Array.from(event.target.files ?? [])); event.target.value = "";
         }} />
       <SkillInput ref={skillInput} value={draft} draftKey={key} cwd={project} active={active}
@@ -133,8 +142,8 @@ export const Composer = forwardRef<ComposerHandle, {
         connected={state.connection === "ready"} disabled={disabled}
         compact={compactCommand(state, () => void controller.compact())}
         goal={{ enabled: !disabled && !running, run: goalMode.enter }}
-        placeholder={state.archived ? guiText("恢复对话后即可继续") : goalMode.enabled
-          ? guiText("描述想完成的目标…") : guiText("描述任务，% 引用文件，@ 引用对话，/ 技能，# Coze…")}
+        placeholder={state.archived ? uiText("client.composer.restoreThisConversationToContinue") : goalMode.enabled
+          ? uiText("client.chat.describeYourGoal") : uiText("client.fileReferences.describeATaskFilesConversationsSkillsCoze")}
         onChange={editContent} onPaste={paste} onPasteKeyDown={pasteKeyDown} onSend={() => void send()} />
       <div className={styles.composerControls}>
         <ComposerAddMenu cwd={project} active={active} disabled={disabled} anchor={composer}
@@ -148,15 +157,16 @@ export const Composer = forwardRef<ComposerHandle, {
           <div className={styles.composerSecondary}>
             {(goalMode.enabled || goal) && <div className={extras.goalChip}>
               <button type="button" onClick={() => goal && setDialog("goal")}
-                title={goal ? `${goal.objective} (${guiText(GOAL_STATUS[goal.status])})` : guiText("目标模式")}>
-                <Target size={14} /><span>{guiText("目标")}</span></button>
-              <button type="button" aria-label={guiText("移除目标")} disabled={disabled || Boolean(state.goalBusy)}
+                title={goal ? `${goal.objective} (${displayText(GOAL_STATUS[goal.status])})` : uiText("client.chat.goalMode")}>
+                <Target size={14} /><span>{uiText("client.chat.goal")}</span></button>
+              <button type="button" aria-label={uiText("client.mobile.removeGoal")} disabled={disabled || Boolean(state.goalBusy)}
                 onClick={async () => {
                   if (goal && state.selected && !await controller.goals.clear(state.selected)) return;
                   goalMode.exit(); skillInput.current?.focus();
                 }}><X size={13} /></button>
             </div>}
-            <UsageStatus active={active} threadId={state.selected} tokenUsage={current?.tokenUsage} />
+            <UsageStatus active={active} threadId={state.selected} tokenUsage={current?.tokenUsage}
+              tokens={current?.tokens} metrics={metrics} />
           </div>
           <ModelPicker models={state.models} model={state.settings.model} effort={state.settings.effort}
             speed={requestSpeed}
@@ -174,9 +184,10 @@ export const Composer = forwardRef<ComposerHandle, {
         </div>
       </div>
     </div>
-    <div className={styles.composerHint}><span>Codex{cliVersion ? ` ${cliVersion}` : ''}</span>
-      <ConversationTokenStatus threadId={state.selected} tokens={current?.tokens ?? 0}
-        active={active && state.connection === 'ready'} /></div>
+    <div className={`${styles.composerHint} cs-usage-footer-container`}>
+      <span>Codex{cliVersion ? ` ${cliVersion}` : ''}</span>
+      <ConversationTokenStatus threadId={state.selected} metrics={metrics}
+        turns={current?.turns} active={active && state.connection === 'ready'} usage={usageSnapshot.usage} /></div>
     {dialog === "files" && <ComposerFilesDialog onAdd={addAttachments} onImages={() => fileInput.current?.click()}
       onClose={() => setDialog(null)} onError={controller.report} />}
     {dialog === "goal" && <GoalDialog state={state} controller={controller} onClose={() => setDialog(null)} />}

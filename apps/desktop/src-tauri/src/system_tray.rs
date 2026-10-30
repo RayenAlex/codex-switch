@@ -1,3 +1,7 @@
+mod copy;
+use copy::floating_bubble_toggle_label;
+#[cfg(any(not(windows), test))]
+use copy::initial_menu_labels;
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, TrayIconBuilder, TrayIconEvent},
@@ -8,6 +12,7 @@ use crate::{commands, models::ProviderSummary, providers, storage::read_app_sett
 
 mod account_label;
 mod account_menu;
+mod localization;
 #[cfg(windows)]
 pub(crate) mod quick_menu;
 #[cfg(not(windows))]
@@ -116,16 +121,6 @@ fn build_initial_menu<R: Runtime>(
     )?)?;
     menu.append(&MenuItem::with_id(app, QUIT_ID, quit, true, None::<&str>)?)?;
     Ok(menu)
-}
-
-/// Labels shown until the first full menu is built; they follow the tray language policy.
-#[cfg(any(not(windows), test))]
-fn initial_menu_labels(language: Option<&str>) -> (&'static str, &'static str, &'static str) {
-    match language {
-        Some("zh") => ("Dashboard", "正在加载…", "Quit"),
-        Some("ru") => ("Обзор", "Загрузка…", "Выйти"),
-        _ => ("Dashboard", "Loading…", "Quit"),
-    }
 }
 
 pub(crate) fn show_dashboard<R: Runtime>(app: &AppHandle<R>) {
@@ -240,7 +235,7 @@ pub(crate) fn build_menu<R: Runtime>(
     let accounts_header = MenuItem::with_id(
         app,
         "tray:accounts-header",
-        if chinese { "账号" } else { "Accounts" },
+        copy::text(chinese, copy::Text::Accounts),
         false,
         None::<&str>,
     )?;
@@ -262,106 +257,46 @@ pub(crate) fn build_menu<R: Runtime>(
     menu.append(&MenuItem::with_id(
         app,
         SETTINGS_ID,
-        if chinese { "设置" } else { "Settings" },
+        copy::text(chinese, copy::Text::Settings),
         true,
         None::<&str>,
     )?)?;
     menu.append(&MenuItem::with_id(
         app,
         DASHBOARD_ID,
-        if chinese { "仪表板" } else { "Dashboard" },
+        copy::text(chinese, copy::Text::Dashboard),
         true,
         None::<&str>,
     )?)?;
     menu.append(&MenuItem::with_id(
         app,
         RESTART_CHATGPT_ID,
-        if chinese {
-            "重启 ChatGPT"
-        } else {
-            "Restart ChatGPT"
-        },
+        copy::text(chinese, copy::Text::RestartChatGPT),
         true,
         None::<&str>,
     )?)?;
     menu.append(&MenuItem::with_id(
         app,
         RESTART_APP_ID,
-        if chinese {
-            "重启 Remote AI"
-        } else {
-            "Restart Remote AI"
-        },
+        copy::text(chinese, copy::Text::RestartRemoteAI),
         true,
         None::<&str>,
     )?)?;
     menu.append(&MenuItem::with_id(
         app,
         QUIT_ID,
-        if chinese { "退出程序" } else { "Quit" },
+        copy::text(chinese, copy::Text::Quit),
         true,
         None::<&str>,
     )?)?;
-    if settings
-        .as_ref()
-        .and_then(|settings| settings.language.as_deref())
-        == Some("ru")
-    {
-        for (id, label) in [
-            ("tray:accounts-header", "Аккаунты"),
-            ("tray:providers-header", "Провайдеры"),
-            ("tray:providers-empty", "Нет провайдеров"),
-            ("tray:providers-error", "Не удалось загрузить провайдеров"),
-            (SETTINGS_ID, "Настройки"),
-            (DASHBOARD_ID, "Обзор"),
-            (RESTART_CHATGPT_ID, "Перезапустить ChatGPT"),
-            (RESTART_APP_ID, "Перезапустить Remote AI"),
-            (QUIT_ID, "Выйти"),
-            (
-                FLOATING_BUBBLE_TOGGLE_ID,
-                if floating_bubble_enabled {
-                    "Скрыть индикатор расхода"
-                } else {
-                    "Показать индикатор расхода"
-                },
-            ),
-        ] {
-            if let Some(item) = menu.get(id).and_then(|item| item.as_menuitem().cloned()) {
-                item.set_text(label)?;
-            }
-        }
-        if let Some(item) = menu
-            .get("tray:accounts-notice")
-            .and_then(|item| item.as_menuitem().cloned())
-        {
-            item.set_text(if item.text()? == "No accounts" {
-                "Нет аккаунтов"
-            } else {
-                "Не удалось загрузить аккаунты"
-            })?;
-        }
-        // Only the text changes; Windows owner-draw reads it again when the menu is drawn.
-        for item in menu.items()? {
-            if !item.id().as_ref().starts_with(ACCOUNT_PREFIX) {
-                continue;
-            }
-            if let Some(item) = item.as_check_menuitem() {
-                if let Some(label) = account_label::russian_account_label(&item.text()?) {
-                    item.set_text(label)?;
-                }
-            }
-        }
-    }
+    localization::localize(
+        &menu,
+        settings
+            .as_ref()
+            .and_then(|settings| settings.language.as_deref()),
+        floating_bubble_enabled,
+    )?;
     Ok(menu)
-}
-
-fn floating_bubble_toggle_label(chinese: bool, enabled: bool) -> &'static str {
-    match (chinese, enabled) {
-        (true, true) => "隐藏悬浮球 / 卡片",
-        (true, false) => "显示悬浮球 / 卡片",
-        (false, true) => "Hide Usage Bubble/Card",
-        (false, false) => "Show Usage Bubble/Card",
-    }
 }
 
 fn append_provider_items<R: Runtime>(
@@ -372,7 +307,7 @@ fn append_provider_items<R: Runtime>(
     let header = MenuItem::with_id(
         app,
         "tray:providers-header",
-        if chinese { "服务商" } else { "Providers" },
+        copy::text(chinese, copy::Text::Providers),
         false,
         None::<&str>,
     )?;
@@ -384,11 +319,7 @@ fn append_provider_items<R: Runtime>(
                 let empty = MenuItem::with_id(
                     app,
                     "tray:providers-empty",
-                    if chinese {
-                        "暂无服务商"
-                    } else {
-                        "No providers"
-                    },
+                    copy::text(chinese, copy::Text::NoProviders),
                     false,
                     None::<&str>,
                 )?;
@@ -405,11 +336,7 @@ fn append_provider_items<R: Runtime>(
             let item = MenuItem::with_id(
                 app,
                 "tray:providers-error",
-                if chinese {
-                    "服务商读取失败"
-                } else {
-                    "Unable to load providers"
-                },
+                copy::text(chinese, copy::Text::UnableToLoadProviders),
                 false,
                 None::<&str>,
             )?;

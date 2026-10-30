@@ -86,3 +86,19 @@ it('retains both the original startup failure and a different fallback failure',
     stage: 'fallback-open', desktopError: 'accessibility-permission',
   }));
 });
+
+it.each(['client.remoteDesktop.lockedRequiresUnattended', 'client.remoteDesktop.privacyRequiresUnattended',
+  'client.remoteDesktop.privacyFailed',
+  '请在电脑上确认安装，完成后再点一次隐私屏。', '隐私屏未能切换，请重新连接后重试。'])
+('preserves Windows setup refusals without silently falling back to ordinary capture: %s', async message => {
+  call.mockImplementation(async command => {
+    if (command === 'remote_desktop_open') {
+      return { id: 'windows-lease', nativeOnly: false, platform: 'windows' };
+    }
+    if (command === 'remote_desktop_stream_open') throw message;
+    return command === 'remote_desktop_stream_available';
+  });
+  await expect(new HostSession(DEFAULT_SETTINGS, []).open()).rejects.toBe(message);
+  expect(fallback.open).not.toHaveBeenCalled();
+  expect(call).toHaveBeenCalledWith('remote_desktop_stream_close', { id: 'windows-lease' });
+});

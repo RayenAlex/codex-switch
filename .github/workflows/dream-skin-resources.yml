@@ -89,12 +89,21 @@ jobs:
               "",
               "Remote AI downloads this pack silently after startup; it is not included in the application installer.",
             ].join("\n");
-            const releases = await github.paginate(github.rest.repos.listReleases, {
-              owner,
-              repo,
-              per_page: 100,
-            });
-            const existing = releases.find((release) => release.tag_name === tag);
+            // Published releases can be absent from the list while tag lookup still finds them.
+            // Prefer the published release over any duplicate draft for the same resource hash.
+            let existing;
+            try {
+              const { data } = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+              existing = data;
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              const releases = await github.paginate(github.rest.repos.listReleases, {
+                owner,
+                repo,
+                per_page: 100,
+              });
+              existing = releases.find((release) => release.tag_name === tag);
+            }
             if (existing) {
               await github.rest.repos.updateRelease({
                 owner,

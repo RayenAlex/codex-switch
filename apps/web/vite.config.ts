@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { imageEditorPlugin } from '../../shared/chat/imageEditorPlugin';
+import { fontSizePlugin } from '../../shared/appearance/fontSizePlugin';
 import { webVersionPlugin } from './build/webVersionPlugin';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
@@ -12,7 +13,9 @@ export default defineConfig(({ mode }) => {
   const apiTarget = env.VITE_DEV_API_URL || "http://127.0.0.1:8080";
   return {
     plugins: [react(), imageEditorPlugin(), webVersionPlugin()],
+    css: { postcss: { plugins: [fontSizePlugin()] } },
     clearScreen: false,
+    optimizeDeps: { include: ['pdfjs-dist/legacy/build/pdf.mjs'] },
     root: currentDir,
     base: env.VITE_WEB_BASE_PATH || "/web/",
     server: {

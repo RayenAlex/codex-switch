@@ -31,6 +31,7 @@ pub(super) async fn run(
     let result = video(&stream, path, &mut encoder, &mut privacy).await;
     if let Err(error) = result {
         eprintln!("desktop video stopped: {error}");
+        super::failure::notify(&stream, error).await;
     }
     encoder.stop().await;
     stream.close().await;
@@ -56,7 +57,7 @@ pub(super) async fn wait_connected(stream: &Stream) -> Result<()> {
             _ = connected.changed() => {},
             _ = cancel.changed() => return Err(DesktopError::Expired),
             _ = &mut timeout => return Err(DesktopError::Expired),
-            _ = lease.tick() => stream.keep_alive().await?,
+            _ = lease.tick() => maintain_access(stream).await?,
         }
     }
     stream.heartbeat.send_replace(Instant::now());
@@ -179,7 +180,7 @@ async fn monitor(
     encoder: &mut Encoder,
     progress: &mut Progress,
 ) -> Result<()> {
-    stream.keep_alive().await?;
+    maintain_access(stream).await?;
     report(stream, encoder, progress.frames, progress.started).await?;
     let bitrate = (progress.bytes as f64 * 8.0 / progress.started.elapsed().as_secs_f64()) as u32;
     let feedback = *stream.peer.borrow().feedback.borrow();
@@ -188,6 +189,14 @@ async fn monitor(
     }
     progress.reset();
     Ok(())
+}
+
+async fn maintain_access(stream: &Stream) -> Result<()> {
+    #[cfg(windows)]
+    tauri::async_runtime::spawn_blocking(super::super::session_access::check)
+        .await
+        .map_err(|_| DesktopError::Platform)??;
+    stream.keep_alive().await
 }
 
 pub(super) async fn send_frame(stream: &Stream, data: Vec<u8>) -> Result<()> {
@@ -284,7 +293,13 @@ pub(super) async fn inputs(
                 // keystroke; keep video/authorization alive so the next input can use the new desktop.
                 continue;
             }
-            _ => {
+            Ok(Err(error)) => {
+                super::failure::notify(&stream, error).await;
+                stream.cancel.send_replace(true);
+                return;
+            }
+            Err(error) => {
+                eprintln!("desktop input worker: {error}");
                 stream.cancel.send_replace(true);
                 return;
             }

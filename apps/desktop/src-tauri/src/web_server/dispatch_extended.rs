@@ -1,5 +1,28 @@
 fn dispatch_extended_command(app: AppHandle, command: &str, args: Value) -> Result<Value, String> {
     match command {
+        "get_quota_display_status" => serialize(block_on(crate::quota_display::get_quota_display_status(app))),
+        "set_quota_display_all_accounts" => serialize(block_on(crate::quota_display::set_quota_display_all_accounts(
+            app, argument(&args, "enabled")?,
+        ))),
+        "get_pet_dock_status" => serialize(block_on(crate::pet_dock::get_pet_dock_status(app))),
+        "set_pet_dock_enabled" => serialize(block_on(crate::pet_dock::set_pet_dock_enabled(
+            app, argument(&args, "enabled")?,
+        ))),
+        "set_pet_dock_labels_visible" => serialize(block_on(crate::pet_dock::set_pet_dock_labels_visible(
+            app, argument(&args, "showLabels")?,
+        ))),
+        "cloud_ssh_profiles" => serialize(block_on(crate::cloud::cloud_ssh_profiles(
+            app, argument(&args, "identity")?, argument(&args, "request")?,
+        ))),
+        "cloud_provider_market" => serialize(block_on(crate::cloud::cloud_provider_market(
+            app, argument(&args, "identity")?, argument(&args, "request")?,
+        ))),
+        "cloud_install_market_provider" => serialize(block_on(crate::cloud::cloud_install_market_provider(
+            app, argument(&args, "identity")?, argument(&args, "input")?,
+        ))),
+        "cloud_lounge_ticket" => serialize(block_on(crate::cloud::cloud_lounge_ticket(
+            app, argument(&args, "identity")?,
+        ))),
         "codex_gui_cli_status" => serialize(block_on(crate::codex_gui::releases::codex_gui_cli_status(app))),
         "codex_gui_cli_release" => serialize(block_on(crate::codex_gui::releases::codex_gui_cli_release())),
         "codex_gui_cli_check" => serialize(block_on(crate::codex_gui::releases::codex_gui_cli_check(app))),
@@ -208,6 +231,7 @@ fn dispatch_extended_command(app: AppHandle, command: &str, args: Value) -> Resu
         "cloud_push_provider" => serialize(block_on(crate::cloud::cloud_push_provider(
             app,
             argument(&args, "id")?,
+            argument(&args, "identity")?,
         ))),
         "cloud_delete_account" => serialize(block_on(crate::cloud::cloud_delete_account(
             app,

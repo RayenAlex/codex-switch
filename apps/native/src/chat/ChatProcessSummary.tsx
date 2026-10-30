@@ -16,20 +16,20 @@ export function ChatProcessSummary({ entry, onOpen, onInline }: {
   useLanguage();
   const running = entry.turn.status === 'inProgress';
   const elapsed = entry.timed ? turnElapsedMs(entry.turn, 0) : null;
-  const label = elapsed == null ? (running ? t("正在处理") : t("处理过程")) : t("用时 {value1}", { value1: formatTurnDuration(elapsed) });
+  const label = elapsed == null ? (running ? t("client.chat.working") : t("client.chat.activity")) : t("client.chat.duration", { value1: formatTurnDuration(elapsed) });
   const toggle = entry.inline || ['inProgress', 'interrupted', 'failed'].includes(entry.turn.status);
   return <View style={processStyles.row}>
-    <Pressable accessibilityRole="button" accessibilityLabel={t("查看处理过程，{value1} 项活动", { value1: entry.items.length })}
+    <Pressable accessibilityRole="button" accessibilityLabel={t("client.chat.viewActivityActions", { value1: entry.items.length })}
       style={processStyles.open} onPress={onOpen}>
       <Text style={[styles.subtitle, processStyles.label]}>
         {label}{'  '}<Ionicons name="chevron-forward" size={14} color={color(palette.muted, 'muted')} />
       </Text>
     </Pressable>
     {toggle && <Pressable accessibilityRole="button"
-      accessibilityLabel={entry.inline ? t("收起处理过程") : t("展开处理过程")}
+      accessibilityLabel={entry.inline ? t("client.chat.collapseActivity") : t("client.chat.expandActivity")}
       accessibilityState={{ expanded: entry.inline }} hitSlop={6}
       style={processStyles.toggle} onPress={() => onInline(entry.turn.id, !entry.inline)}>
-      <Text style={[styles.subtitle, processStyles.toggleLabel]}>{entry.inline ? t("收起") : t("展开")}</Text>
+      <Text style={[styles.subtitle, processStyles.toggleLabel]}>{entry.inline ? t("client.chat.collapse") : t("client.chat.expand")}</Text>
       <Ionicons name={entry.inline ? 'chevron-up' : 'chevron-down'} size={14} color={color(palette.muted, 'muted')} />
     </Pressable>}
   </View>;

@@ -11,6 +11,7 @@ if (enabled && previous?.version === VERSION) {
 previous?.dispose();
 if (!enabled) return;
 
+// i18n:context-usage:start
 const copy = {
   zh: {
     title: "背景信息窗口", view: "查看上下文用量", empty: "暂无上下文用量", unknown: "上下文容量未知",
@@ -30,6 +31,7 @@ const copy = {
     tokens: (used, total) => `Использовано ${used} токенов${total === null ? "" : `, всего ${total}`}`,
   },
 };
+// i18n:context-usage:end
 const state = { version: VERSION, entries: new Map(), open: null, frame: null, disposed: false, nextId: 0 };
 state.contextRuntime = createContextRuntime();
 const stylesheet = document.createElement("style");

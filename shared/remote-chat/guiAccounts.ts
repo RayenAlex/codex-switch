@@ -1,6 +1,8 @@
 import { object } from './protocol';
 
 export const GUI_ACCOUNTS_EVENT = 'guiAccounts/changed';
+// Account list updates also include balance refreshes; only this event invalidates pinned recordings.
+export const GUI_ACCOUNT_SELECTION_EVENT = 'guiAccounts/selectionChanged';
 
 export type GuiAccountSelection = { kind: 'none' } | { kind: 'account' | 'provider' | 'aggregate'; id: string };
 export type SelectableGuiAccount = Exclude<GuiAccountSelection, { kind: 'none' }>;
@@ -10,6 +12,7 @@ export interface GuiAccountChoice {
   name: string;
   detail: string;
   searchDetail?: string;
+  websiteUrl?: string;
   plan?: string;
   primaryRemainingPercent?: number | null;
   secondaryRemainingPercent?: number | null;
@@ -61,5 +64,5 @@ function isChoice(value: unknown): value is GuiAccountChoice {
   return isAccountKind(choice.kind) && isAccountId(choice.id)
     && typeof choice.name === 'string' && typeof choice.detail === 'string'
     && typeof choice.available === 'boolean'
-    && [choice.searchDetail, choice.plan].every(text => text === undefined || typeof text === 'string');
+    && [choice.searchDetail, choice.plan, choice.websiteUrl].every(text => text === undefined || typeof text === 'string');
 }

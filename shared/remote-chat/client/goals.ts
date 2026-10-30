@@ -1,4 +1,5 @@
 import type { ThreadGoal } from '../../../apps/desktop/src/pages/codexGui/goalTypes';
+import { modelSelectionError } from '../../../apps/desktop/src/pages/codexGui/modelSelection';
 import type { ChatState, Request, SendInput, Thread } from './types';
 import type { ComposerSettings } from '../composer';
 
@@ -56,6 +57,8 @@ export class RemoteGoals {
   start = async (input: SendInput) => {
     if (this.unavailable()) return false;
     const state = this.host.snapshot();
+    if (modelSelectionError(state.models, { model: input.model ?? state.settings.model,
+      effort: input.effort ?? state.settings.effort })) return false;
     if (state.selected && state.queue.threads[state.selected.id]?.length) {
       this.host.update({ error: '请先处理待发送消息，再开始目标。' }); return false;
     }

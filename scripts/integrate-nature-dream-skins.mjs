@@ -1,3 +1,4 @@
+import { dreamSkinCopy } from '@remoteai/i18n/tooling/dream-skin';
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -45,6 +46,11 @@ const themes = manifestNames.flatMap((filename) => {
 
 if (themes.length !== 100) {
   throw new Error(`Expected 100 nature themes, got ${themes.length}`);
+}
+
+for (const theme of themes) {
+  const key = theme.id.replace(/^preset-/, '').replace(/-([a-z0-9])/g, (_, letter) => letter.toUpperCase());
+  Object.assign(theme, dreamSkinCopy(key));
 }
 
 const ids = new Set();
@@ -176,132 +182,6 @@ mutateLatest(rustPath, (source) => {
 ${currentIds.map((id) => `    "${id}",`).join("\n")}
 ];`;
   return source.replace(arrayPattern, replacement);
-});
-
-const i18nPath = path.join(desktop, "src", "i18n.ts");
-mutateLatest(i18nPath, (source) => {
-  let cleaned = source;
-  const misplacedZhMarker = "\n  zh: {";
-  const misplacedZhStart = cleaned.indexOf(misplacedZhMarker);
-  if (misplacedZhStart < 0) {
-    throw new Error("Cannot find Chinese locale boundary");
-  }
-  const misplacedEnglishCloseMatches = [
-    ...cleaned.slice(0, misplacedZhStart).matchAll(/\r?\n  },/g),
-  ];
-  const misplacedEnglishClose = misplacedEnglishCloseMatches.at(-1);
-  const misplacedEnglishCloseAt = misplacedEnglishClose?.index ?? -1;
-  if (misplacedEnglishCloseAt < 0) {
-    throw new Error("Cannot find English locale boundary");
-  }
-  const misplacedEnglishCloseEnd =
-    misplacedEnglishCloseAt + misplacedEnglishClose[0].length;
-  const misplacedGap = cleaned.slice(
-    misplacedEnglishCloseEnd,
-    misplacedZhStart,
-  );
-  const misplacedPropertyPattern =
-    /[ \t]*"dreamSkin\.theme\.[^"]+\.(?:name|description)": [^\r\n]+,\r?\n?/g;
-  const misplacedProperties = [
-    ...misplacedGap.matchAll(misplacedPropertyPattern),
-  ].map((match) => match[0].trim());
-  const misplacedRemainder = misplacedGap
-    .replace(misplacedPropertyPattern, "")
-    .trim();
-  if (misplacedRemainder) {
-    throw new Error(
-      "Unexpected non-theme content exists between the English and Chinese locales",
-    );
-  }
-  if (misplacedProperties.length > 0) {
-    const englishBody = cleaned.slice(0, misplacedEnglishCloseAt);
-    const uniqueProperties = misplacedProperties.filter((property) => {
-      const key = property.match(/^"([^"]+)"/)?.[1];
-      return key && !englishBody.includes(`"${key}"`);
-    });
-    const propertyBlock = uniqueProperties
-      .map((property) => `    ${property}`)
-      .join("\n");
-    cleaned =
-      `${englishBody}\n${propertyBlock}` +
-      `${cleaned.slice(misplacedEnglishCloseAt, misplacedEnglishCloseEnd)}` +
-      `${cleaned.slice(misplacedZhStart)}`;
-  }
-
-  for (const theme of themes) {
-    for (const suffix of ["name", "description"]) {
-      const property = `dreamSkin.theme.${theme.localizationKey}.${suffix}`;
-      const escaped = property.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      cleaned = cleaned.replace(
-        new RegExp(`[ \\t]*"${escaped}": [^\\r\\n]+,`, "g"),
-        "",
-      );
-    }
-  }
-
-  const zhMarker = "\n  zh: {";
-  let zhStart = cleaned.indexOf(zhMarker);
-  if (zhStart < 0) {
-    throw new Error("Cannot find Chinese locale boundary");
-  }
-  let englishCloseMatches = [
-    ...cleaned.slice(0, zhStart).matchAll(/\r?\n  },/g),
-  ];
-  let englishClose = englishCloseMatches.at(-1);
-  let englishCloseAt = englishClose?.index ?? -1;
-  if (englishCloseAt < 0) {
-    throw new Error("Cannot find English locale insertion point");
-  }
-  const englishBody = cleaned
-    .slice(0, englishCloseAt)
-    .replace(/[ \t\r\n]+$/, "");
-  cleaned = `${englishBody}\n  },\n  zh: {${cleaned.slice(zhStart + zhMarker.length)}`;
-  zhStart = cleaned.indexOf(zhMarker);
-
-  const englishEntries = themes
-    .map(
-      (theme) =>
-        `    "dreamSkin.theme.${theme.localizationKey}.name": ${JSON.stringify(theme.nameEn)},\n` +
-        `    "dreamSkin.theme.${theme.localizationKey}.description": ${JSON.stringify(theme.descriptionEn)},\n`,
-    )
-    .join("");
-  englishCloseMatches = [
-    ...cleaned.slice(0, zhStart).matchAll(/\r?\n  },/g),
-  ];
-  englishClose = englishCloseMatches.at(-1);
-  englishCloseAt = englishClose?.index ?? -1;
-  if (englishCloseAt < 0) {
-    throw new Error("Cannot find English locale insertion point");
-  }
-  const englishInsertAt =
-    englishCloseAt + (cleaned.startsWith("\r\n", englishCloseAt) ? 2 : 1);
-  let updated = `${cleaned.slice(0, englishInsertAt)}${englishEntries}${cleaned.slice(englishInsertAt)}`;
-
-  let localeCloseMatches = [
-    ...updated.matchAll(/\r?\n  },\r?\n} as const;/g),
-  ];
-  let finalLocaleClose = localeCloseMatches.at(-1);
-  let zhEnd = finalLocaleClose?.index ?? -1;
-  if (zhEnd < 0) {
-    throw new Error("Cannot find Chinese locale insertion point");
-  }
-  updated = `${updated.slice(0, zhEnd).replace(/[ \t\r\n]+$/, "")}${updated.slice(zhEnd)}`;
-  localeCloseMatches = [
-    ...updated.matchAll(/\r?\n  },\r?\n} as const;/g),
-  ];
-  finalLocaleClose = localeCloseMatches.at(-1);
-  zhEnd = finalLocaleClose?.index ?? -1;
-  const chineseEntries = themes
-    .map(
-      (theme) =>
-        `    "dreamSkin.theme.${theme.localizationKey}.name": ${JSON.stringify(theme.nameZh)},\n` +
-        `    "dreamSkin.theme.${theme.localizationKey}.description": ${JSON.stringify(theme.descriptionZh)},\n`,
-    )
-    .join("");
-  const chineseInsertAt =
-    zhEnd + (updated.startsWith("\r\n", zhEnd) ? 2 : 1);
-  updated = `${updated.slice(0, chineseInsertAt)}${chineseEntries}${updated.slice(chineseInsertAt)}`;
-  return updated;
 });
 
 const sourcesPath = path.join(presetsRoot, "SOURCES.json");

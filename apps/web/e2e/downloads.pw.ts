@@ -1,3 +1,4 @@
+import { clickDownloadAction } from './download-test-actions';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
@@ -18,6 +19,25 @@ async function save(page: Page, name = 'sample.bin') {
   return readFile((await download.path())!);
 }
 
+test('download speed expires after two seconds without newly stored data', async ({ page }, info) => {
+  await open(page);
+  await expect(page.getByRole('button', { name: '当前项目', exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    window.downloadFixture.size = 64 * 1024 * 1024;
+    window.downloadFixture.delay = 300;
+    window.downloadFixture.windowSize(1);
+  });
+  await enqueue(page);
+  const speed = card(page).locator('.download-task-meta span').filter({ hasText: /\/s$/ });
+  await expect(speed).toBeVisible();
+  await page.evaluate(() => { window.downloadFixture.delay = 4_000; });
+  await expect(speed).toHaveCount(0, { timeout: 4_000 });
+  await expect(card(page)).toContainText('下载中');
+  await page.screenshot({ path: `../../.codex-tmp/download-speed-stalled-${info.project.name}.png` });
+  await clickDownloadAction(page, card(page), '暂停');
+  await expect(card(page)).toContainText('已暂停');
+});
+
 test('shows compression progress, cancels preparation, then saves all archive bytes', async ({ page }, info) => {
   await open(page);
   await page.getByRole('button', { name: '压缩下载文件夹', exact: true }).click();
@@ -33,13 +53,13 @@ test('shows compression progress, cancels preparation, then saves all archive by
   await expect(folder.getByRole('progressbar')).toHaveAttribute('value', '50');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath('archive-progress.png') });
-  await folder.getByRole('button', { name: '暂停', exact: true }).click();
+  await clickDownloadAction(page, folder, '暂停');
   await expect(folder).toContainText('已暂停');
   await expect.poll(() => page.evaluate(() => window.downloadFixture.closes)).toBe(1);
   const polls = await page.evaluate(() => window.downloadFixture.archivePolls);
   await page.waitForTimeout(600);
   expect(await page.evaluate(() => window.downloadFixture.archivePolls)).toBe(polls);
-  await folder.getByRole('button', { name: '继续下载', exact: true }).click();
+  await folder.getByRole('button', { name: /^(继续下载|重试)$/, exact: true }).click();
   await expect(folder).toContainText('正在压缩 · 50%');
   await page.evaluate(() => { window.downloadFixture.archiveReady = true; });
   await expect(card(page, 'folder.zip')).toContainText('文件已就绪');
@@ -50,19 +70,19 @@ test('pauses and resumes after reload, preserves complete bytes and deletes the 
   await open(page);
   await enqueue(page);
   await expect.poll(() => card(page).getByRole('progressbar').getAttribute('value')).not.toBe('0');
-  await card(page).getByRole('button', { name: '暂停', exact: true }).click();
+  await clickDownloadAction(page, card(page), '暂停');
   await expect(card(page)).toContainText('已暂停');
   const before = await card(page).getByRole('progressbar').getAttribute('value');
   await page.reload();
   await expect(card(page)).toContainText('已暂停');
   await expect(card(page).getByRole('progressbar')).toHaveAttribute('value', before!);
-  await card(page).getByRole('button', { name: '继续下载' }).click();
+  await card(page).getByRole('button', { name: /^(继续下载|重试)$/ }).click();
   await expect(card(page)).toContainText('文件已就绪');
   expect(await page.evaluate(() => window.downloadFixture.offsets[0])).toBeGreaterThan(0);
   const content = await save(page);
   expect(createHash('sha256').update(content).digest('hex'))
     .toBe(createHash('sha256').update(Buffer.alloc(4 * 1024 * 1024, 'A')).digest('hex'));
-  await card(page).getByRole('button', { name: '删除', exact: true }).click();
+  await clickDownloadAction(page, card(page), '删除');
   await page.getByRole('dialog').getByRole('button', { name: '删除', exact: true }).click();
   await expect(card(page)).toHaveCount(0);
   await page.reload();
@@ -99,7 +119,7 @@ test('file download cards show managed progress and preserve pause and resume ac
   await sheet.getByRole('button', { name: '关闭', exact: true }).click();
   await page.getByRole('button', { name: '预览文件' }).click();
   await expect(progress).toHaveAttribute('value', checkpoint!);
-  await sheet.getByRole('button', { name: '继续下载', exact: true }).click();
+  await sheet.getByRole('button', { name: /^(继续下载|重试)$/, exact: true }).click();
   await expect(sheet.getByRole('button', { name: '保存到设备', exact: true })).toBeEnabled();
   await expect(progress).toHaveAttribute('value', '100');
   const saving = page.waitForEvent('download');
@@ -116,7 +136,7 @@ test('uses five concurrent blocks by default and applies administrator changes w
   await expect.poll(() => page.evaluate(() => window.downloadFixture.active)).toBe(2);
   await page.evaluate(() => window.downloadFixture.windowSize(8));
   await expect.poll(() => page.evaluate(() => window.downloadFixture.peak)).toBe(8);
-  await card(page).getByRole('button', { name: '暂停', exact: true }).click();
+  await clickDownloadAction(page, card(page), '暂停');
   await expect(card(page)).toContainText('已暂停');
 });
 
@@ -126,11 +146,11 @@ test('pauses on disconnect and removes an active task without restoring a late r
   await expect.poll(() => card(page).getByRole('progressbar').getAttribute('value')).not.toBe('0');
   await page.getByRole('button', { name: '断开电脑' }).click();
   await expect(card(page)).toContainText('已暂停');
-  await expect(card(page).getByRole('button', { name: '继续下载' })).toBeDisabled();
+  await expect(card(page).getByRole('button', { name: /^(继续下载|重试)$/ })).toBeDisabled();
   await page.getByRole('button', { name: '连接电脑' }).click();
-  await card(page).getByRole('button', { name: '继续下载' }).click();
+  await card(page).getByRole('button', { name: /^(继续下载|重试)$/ }).click();
   await expect(card(page)).toContainText('下载中');
-  await card(page).getByRole('button', { name: '删除', exact: true }).click();
+  await clickDownloadAction(page, card(page), '删除');
   await page.getByRole('dialog').getByRole('button', { name: '删除', exact: true }).click();
   await expect(card(page)).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => window.downloadFixture.closes)).toBe(2);
@@ -145,12 +165,12 @@ test('rejects corrupt chunks and restarts when a partially downloaded file chang
   await expect(card(page)).toContainText('下载失败');
   await expect(card(page).getByRole('progressbar')).toHaveAttribute('value', '0');
   await page.evaluate(() => { window.downloadFixture.corrupt = false; });
-  await card(page).getByRole('button', { name: '继续下载' }).click();
+  await card(page).getByRole('button', { name: /^(继续下载|重试)$/ }).click();
   await expect.poll(() => card(page).getByRole('progressbar').getAttribute('value')).not.toBe('0');
-  await card(page).getByRole('button', { name: '暂停', exact: true }).click();
+  await clickDownloadAction(page, card(page), '暂停');
   await expect(card(page)).toContainText('已暂停');
   await page.evaluate(() => { window.downloadFixture.revision = 'second'; window.downloadFixture.offsets = []; });
-  await card(page).getByRole('button', { name: '继续下载' }).click();
+  await card(page).getByRole('button', { name: /^(继续下载|重试)$/ }).click();
   await expect(card(page)).toContainText('文件已就绪');
   expect(await page.evaluate(() => window.downloadFixture.offsets[0])).toBe(0);
   expect(await save(page)).toEqual(Buffer.alloc(4 * 1024 * 1024, 'B'));
@@ -167,7 +187,7 @@ test('browses computer folders, returns one level and saves empty files without 
   await page.getByRole('button', { name: '下载列表' }).click();
   await expect(card(page, 'empty.txt')).toContainText('文件已就绪');
   expect((await save(page, 'empty.txt')).length).toBe(0);
-  await page.locator('.downloads-page').evaluate(node => { node.style.fontSize = '24px'; });
+  await page.locator('.downloads-page, .download-workspace').evaluate(node => { node.style.fontSize = '24px'; });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(page.viewportSize()!.width);
   await page.screenshot({ path: `../../.codex-tmp/web-downloads-${info.project.name}.png`, fullPage: true });
 });
@@ -189,7 +209,7 @@ test('bulk revalidates persisted blocks after reload and replaces only a damaged
   await page.evaluate(() => { window.downloadFixture.bulk = true; window.downloadFixture.size = 8 * 1024 * 1024; });
   await enqueue(page);
   await expect.poll(() => card(page).getByRole('progressbar').getAttribute('value')).not.toBe('0');
-  await card(page).getByRole('button', { name: '暂停', exact: true }).click();
+  await clickDownloadAction(page, card(page), '暂停');
   await expect(card(page)).toContainText('已暂停');
   await page.reload();
   await page.evaluate(async () => {
@@ -208,7 +228,7 @@ test('bulk revalidates persisted blocks after reload and replaces only a damaged
       };
     });
   });
-  await card(page).getByRole('button', { name: '继续下载' }).click();
+  await card(page).getByRole('button', { name: /^(继续下载|重试)$/ }).click();
   await expect(card(page)).toContainText('文件已就绪');
   expect(await page.evaluate(() => window.downloadFixture.offsets.includes(0))).toBe(true);
   expect(await save(page)).toEqual(Buffer.alloc(8 * 1024 * 1024, 'A'));
@@ -234,7 +254,7 @@ test('bulk limits hash retries and refuses a corrupted ready file at export', as
   await expect(card(page)).toContainText('下载失败');
   expect(await page.evaluate(() => window.downloadFixture.offsets)).toEqual([0, 0, 0]);
   await page.evaluate(() => { window.downloadFixture.corrupt = false; });
-  await card(page).getByRole('button', { name: '继续下载' }).click();
+  await card(page).getByRole('button', { name: /^(继续下载|重试)$/ }).click();
   await expect(card(page)).toContainText('文件已就绪');
   await page.evaluate(async () => {
     await new Promise<void>((resolve, reject) => {
@@ -273,13 +293,13 @@ test('a manual pause during recovery remains paused until the user resumes', asy
   await expect.poll(() => card(page).getByRole('progressbar').getAttribute('value')).not.toBe('0');
   await page.getByRole('button', { name: '切换连接方式' }).click();
   await expect(card(page)).toContainText('正在重试');
-  await card(page).getByRole('button', { name: '暂停', exact: true }).click();
+  await clickDownloadAction(page, card(page), '暂停');
   await expect(card(page)).toContainText('已暂停');
   const requests = await page.evaluate(() => window.downloadFixture.offsets.length);
   await page.waitForTimeout(1500);
   await expect(card(page)).toContainText('已暂停');
   expect(await page.evaluate(() => window.downloadFixture.offsets.length)).toBe(requests);
-  await card(page).getByRole('button', { name: '继续下载' }).click();
+  await card(page).getByRole('button', { name: /^(继续下载|重试)$/ }).click();
   await expect(card(page)).toContainText('文件已就绪');
 });
 
@@ -330,7 +350,7 @@ test('bulk aborts a failed final save and makes missing stored data downloadable
   });
   await card(page).getByRole('button', { name: '保存到设备' }).click();
   await expect(card(page)).toContainText('文件校验失败');
-  await expect(card(page).getByRole('button', { name: '继续下载' })).toBeEnabled();
+  await expect(card(page).getByRole('button', { name: /^(继续下载|重试)$/ })).toBeEnabled();
   await expect(page.locator('body')).toHaveAttribute('data-aborted-saves', '2');
 });
 
@@ -347,7 +367,7 @@ test('legacy resume survives interrupted migration of chunks crossing bulk bound
     window.downloadFixture.bulk = true; window.downloadFixture.size = 8 * 1024 * 1024 + 17;
     window.downloadFixture.delay = 30;
   });
-  await card(page).getByRole('button', { name: '继续下载' }).click();
+  await card(page).getByRole('button', { name: /^(继续下载|重试)$/ }).click();
   await expect(card(page)).toContainText('文件已就绪');
   expect(await page.evaluate(() => window.downloadFixture.offsets)).toEqual([5, 6, 7, 8].map(n => n * 1024 * 1024));
   expect(await save(page)).toEqual(Buffer.alloc(8 * 1024 * 1024 + 17, 'A'));
@@ -364,7 +384,7 @@ test('legacy migration preserves valid blocks around corruption and rewrites onl
     window.downloadFixture.bulk = true; window.downloadFixture.size = 4 * 1024 * 1024 + 17;
     window.downloadFixture.delay = 30;
   });
-  await card(page).getByRole('button', { name: '继续下载' }).click();
+  await card(page).getByRole('button', { name: /^(继续下载|重试)$/ }).click();
   await expect(card(page)).toContainText('文件已就绪');
   expect(await page.evaluate(() => window.downloadFixture.offsets)).toEqual([1, 3, 4].map(n => n * 1024 * 1024));
   expect(await save(page)).toEqual(Buffer.alloc(4 * 1024 * 1024 + 17, 'A'));
@@ -380,7 +400,7 @@ test('legacy migration keeps a verified final partial block and removes an obsol
   await page.evaluate(() => {
     window.downloadFixture.bulk = true; window.downloadFixture.size = 1024 * 1024 + 17;
   });
-  await card(page).getByRole('button', { name: '继续下载' }).click();
+  await card(page).getByRole('button', { name: /^(继续下载|重试)$/ }).click();
   await expect(card(page)).toContainText('文件已就绪');
   expect(await page.evaluate(() => window.downloadFixture.offsets)).toEqual([]);
   expect(await save(page)).toEqual(Buffer.alloc(1024 * 1024 + 17, 'A'));
@@ -391,25 +411,25 @@ test('pausing bulk then losing the binary path preserves its checkpoint until re
   await page.evaluate(() => { window.downloadFixture.bulk = true; window.downloadFixture.size = 8 * 1024 * 1024; });
   await enqueue(page);
   await expect.poll(() => card(page).getByRole('progressbar').getAttribute('value')).not.toBe('0');
-  await card(page).getByRole('button', { name: '暂停', exact: true }).click();
+  await clickDownloadAction(page, card(page), '暂停');
   await expect(card(page)).toContainText('已暂停');
   const before = await page.evaluate(async () => (await window.downloadFixture.saved())[0]);
   expect(before.received).toBeGreaterThan(0);
   await page.evaluate(() => { window.downloadFixture.bulk = false; window.downloadFixture.offsets = []; });
-  await card(page).getByRole('button', { name: '继续下载' }).click();
+  await card(page).getByRole('button', { name: /^(继续下载|重试)$/ }).click();
   await expect(card(page)).toContainText('正在重试');
   const retrying = await page.evaluate(async () => (await window.downloadFixture.saved())[0]);
   expect(retrying.received).toBe(before.received);
   expect(retrying.checkpoint).toEqual(before.checkpoint);
   expect(await page.evaluate(() => window.downloadFixture.offsets)).toEqual([]);
-  await card(page).getByRole('button', { name: '暂停', exact: true }).click();
+  await clickDownloadAction(page, card(page), '暂停');
   await expect(card(page)).toContainText('已暂停');
   await page.reload();
   await page.evaluate(() => {
     window.downloadFixture.bulk = true; window.downloadFixture.size = 8 * 1024 * 1024;
     window.downloadFixture.delay = 30;
   });
-  await card(page).getByRole('button', { name: '继续下载' }).click();
+  await card(page).getByRole('button', { name: /^(继续下载|重试)$/ }).click();
   await expect(card(page)).toContainText('文件已就绪');
   const offsets = await page.evaluate(() => window.downloadFixture.offsets);
   for (const block of before.checkpoint!.committed) expect(offsets).not.toContain(block * 1024 * 1024);

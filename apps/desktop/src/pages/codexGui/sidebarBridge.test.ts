@@ -42,6 +42,12 @@ it('shares project overrides, running state and read receipts with the desktop i
   expect(bridge.snapshot().pins).toEqual(['one']);
   host.patch({ pins: [] });
   expect(bridge.snapshot().pins).toEqual([]);
+  const beforeProjectPin = bridge.snapshot().revision;
+  host.patch({ pinnedProjects: ['F:/renamed'] });
+  expect(bridge.snapshot().pinnedProjects).toEqual(['F:/renamed']);
+  expect(bridge.snapshot().revision).toBeGreaterThan(beforeProjectPin);
+  host.patch({ pinnedProjects: [] });
+  expect(bridge.snapshot().pinnedProjects).toEqual([]);
   bridge.markRead({ threadId: 'one', turnId: 'turn' });
   expect(state.threadReadState.one.unread).toBe(false);
   host.patch({ threadReadState: { one: { turnId: 'next', unread: true } } });

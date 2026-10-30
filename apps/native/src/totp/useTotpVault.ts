@@ -121,11 +121,11 @@ export function useTotpVault(
         setInitialized(true);
         if (enabled) {
           void synchronize(session, storedVault)
-            .catch((error) => notifyError(t("2FA 云同步失败：{value1}", { value1: String(error) })));
+            .catch((error) => notifyError(t("client.mobile.2faCloudSyncFailed", { value1: String(error) })));
         }
       })
       .catch(() => {
-        if (!cancelled) notifyError(t("读取本机 2FA 密钥失败"));
+        if (!cancelled) notifyError(t("client.mobile.couldNotReadLocal2faKeys"));
       });
     return () => { cancelled = true; };
   }, [notifyError, session, synchronize]);
@@ -140,10 +140,10 @@ export function useTotpVault(
     if (!next) return;
     vaultRef.current = next;
     setVault(next);
-    void persist(activeSession, next).catch(() => notifyError(t("保存 2FA 密钥失败")));
+    void persist(activeSession, next).catch(() => notifyError(t("client.mobile.couldNotSave2faKeys")));
     if (syncEnabledRef.current) {
       void synchronize(activeSession, next)
-        .catch((error) => notifyError(t("2FA 云同步失败：{value1}", { value1: String(error) })));
+        .catch((error) => notifyError(t("client.mobile.2faCloudSyncFailed", { value1: String(error) })));
     }
   }, [notifyError, persist, synchronize]);
 

@@ -25,7 +25,7 @@ export function useDesktopDownloads(options: {
         deviceName: device.name, ready: state.ready, mode: state.mode,
         threadId: state.selected?.id, cwd: state.selected?.cwd ?? state.draftProject?.cwd,
         client: controller.downloads, files: controller.files, git: controller.guiTools.git,
-        projectBrowser: controller.guiTools.projectBrowser });
+        projectBrowser: controller.guiTools.projectBrowser, ssh: controller.guiTools.terminal.ssh });
     };
     update();
     const unsubscribe = controller.subscribe(update);

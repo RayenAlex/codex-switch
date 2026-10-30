@@ -1,6 +1,23 @@
 use super::ServerMessage;
 
 #[test]
+fn parses_monitor_power_without_a_desktop_session() {
+    let message = serde_json::from_str::<ServerMessage>(
+        r#"{"type":"screen-power","commandId":"screen-1","action":"off"}"#,
+    )
+    .unwrap();
+    assert!(
+        matches!(message, ServerMessage::ScreenPower { command_id, action }
+        if command_id == "screen-1" && action == crate::platform::screen_power::Action::Off)
+    );
+    for action in ["toggle", "sleep", "shutdown"] {
+        let message =
+            serde_json::json!({"type": "screen-power", "commandId": "screen-1", "action": action});
+        assert!(serde_json::from_value::<ServerMessage>(message).is_err());
+    }
+}
+
+#[test]
 fn parses_gui_switches_separately_from_proxy_commands() {
     let account = serde_json::from_str::<ServerMessage>(
         r#"{"type":"switch-gui-account","commandId":"gui-1","accountId":"account-1"}"#,

@@ -10,6 +10,8 @@ import (
 	"github.com/codex-switch/admin-go/internal/devices"
 	"github.com/codex-switch/admin-go/internal/identity"
 	"github.com/codex-switch/admin-go/internal/platform"
+	"github.com/codex-switch/admin-go/internal/providermarket"
+	"github.com/codex-switch/admin-go/internal/sshprofiles"
 	"github.com/codex-switch/admin-go/internal/telemetryguard"
 	"github.com/gin-gonic/gin"
 )
@@ -33,7 +35,7 @@ func New(deps *platform.Dependencies) (*gin.Engine, *devices.Runtime, error) {
 	}
 	router.Use(contract.Middleware(deps))
 	registrations := []func(*gin.Engine, *platform.Dependencies) error{
-		identity.Register, accounts.Register, content.Register,
+		identity.Register, accounts.Register, content.Register, sshprofiles.Register, providermarket.Register,
 	}
 	for _, register := range registrations {
 		if err := register(router, deps); err != nil {
@@ -91,7 +93,21 @@ func cors() gin.HandlerFunc {
 }
 
 func recovery() gin.HandlerFunc {
-	return gin.CustomRecovery(func(c *gin.Context, recovered interface{}) {
+	handle := func(c *gin.Context, recovered interface{}) {
+		if c.Writer.Written() {
+			c.Abort()
+			return
+		}
 		c.AbortWithStatusJSON(500, gin.H{"statusCode": 500, "message": "Internal server error"})
-	})
+	}
+	standard := gin.CustomRecovery(handle)
+	// A nil writer also prevents Gin from constructing a request and stack dump.
+	private := gin.CustomRecoveryWithWriter(nil, handle)
+	return func(c *gin.Context) {
+		if platform.IsLoungeRequest(c) {
+			private(c)
+			return
+		}
+		standard(c)
+	}
 }

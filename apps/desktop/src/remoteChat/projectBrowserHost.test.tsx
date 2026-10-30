@@ -6,6 +6,7 @@ import { downloadProjectEntry } from '../../../../shared/project-browser/downloa
 import { browserHost } from '../../../web/src/chat/projectBrowser/browserHost';
 import { downloadManager } from '../../../web/src/downloads/manager';
 import { fileApi } from '../pages/codexGui/fileApi';
+import { terminalDirectory } from '../../../../shared/project-browser/terminalDirectory';
 
 const platform = vi.hoisted(() => ({ desktop: true }));
 vi.mock('../api/backend', () => ({ get isDesktopApp() { return platform.desktop; } }));
@@ -17,16 +18,26 @@ vi.mock('../../../web/src/downloads/manager', () => ({
 vi.mock('../../../web/src/chat/projectBrowser/ProjectBrowserButton', () => ({ ProjectBrowserButton: () => null }));
 beforeEach(() => { vi.clearAllMocks(); });
 
-it('opens local folders in the system browser and terminal with explicit application arguments', async () => {
+it('opens local folders and files in the system browser', async () => {
   const { LocalProjectBrowser } = await import('../pages/codexGui/LocalProjectBrowser');
   const element = LocalProjectBrowser({ cwd: '/project', active: true, connected: true });
   const host = (element.props as { host: BrowserHost }).host;
-  await host.open!({ name: 'folder', path: '/project/folder', directory: true }, 'explorer');
+  await host.open!({ name: 'folder', path: '/project/folder', directory: true });
   expect(fileApi.perform).toHaveBeenLastCalledWith({ path: '/project/folder', threadId: null },
     { type: 'open', application: 'default' });
-  await host.open!({ name: 'folder', path: '/project/folder', directory: true }, 'terminal');
-  expect(fileApi.perform).toHaveBeenLastCalledWith({ path: '/project/folder', threadId: null },
-    { type: 'open', application: 'terminal' });
+  await host.open!({ name: 'file', path: '/project/file', directory: false });
+  expect(fileApi.perform).toHaveBeenLastCalledWith({ path: '/project/file', threadId: null },
+    { type: 'open', application: 'explorer' });
+});
+
+it.each([
+  ['/project/src/file.ts', '/project/src'], ['/file.ts', '/'],
+  ['C:/file.ts', 'C:/'], ['C:\\file.ts', 'C:\\'],
+  ['C:\\项目 空格\\src\\file.ts', 'C:\\项目 空格\\src'],
+  ['\\\\server\\share\\file.ts', '\\\\server\\share'],
+])('opens file %s in its containing directory', (path, directory) => {
+  expect(terminalDirectory({ name: 'file.ts', path, directory: false })).toBe(directory);
+  expect(terminalDirectory({ name: 'folder', path: directory, directory: true })).toBe(directory);
 });
 
 it('queues a remote folder using the matching computer and pinned project', async () => {

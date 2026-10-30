@@ -1,3 +1,4 @@
+import inlineCopy from '@remoteai/i18n/copy/inline/admin/pages/ChatTrafficLimitModal';
 import { useState } from "react";
 import { Alert, App, InputNumber, Modal, Select, Space, Typography } from "antd";
 import type { TrafficApi, UserChatTraffic } from "../chat-traffic-types";
@@ -23,29 +24,29 @@ export function ChatTrafficLimitModal({ user, api, onClose, onSaved }: {
       await api(`/admin/api/chat-traffic/users/${user.id}/limit`, {
         method: "PATCH", body: JSON.stringify({ monthlyLimitBytes: bytes }),
       });
-      message.success({ content: zh ? "每月转发额度已更新。" : "Monthly relay allowance updated.",
+      message.success({ content: zh ? inlineCopy["text_a2e4e361"] : inlineCopy["Monthly_relay_allowance_updated_1566b7f7"],
         style: { maxWidth: 400 } });
       onSaved();
       onClose();
     } catch {
-      message.error({ content: zh ? "保存失败，请重试。" : "Unable to save. Please retry.", style: { maxWidth: 400 } });
+      message.error({ content: zh ? inlineCopy["text_3461df8d"] : inlineCopy["Unable_to_save_Please_retry_aa2c25e7"], style: { maxWidth: 400 } });
     } finally { setSaving(false); }
   };
-  return <Modal open title={zh ? "设置每月转发额度" : "Monthly relay allowance"} width={400}
+  return <Modal open title={zh ? inlineCopy["text_e2c5022d"] : inlineCopy["Monthly_relay_allowance_6c0d21f0"]} width={400}
     onCancel={onClose} onOk={() => void save()} confirmLoading={saving} okButtonProps={{ disabled: !valid }}
     cancelButtonProps={{ disabled: saving }} closable={!saving} maskClosable={!saving} keyboard={!saving}>
     <Space direction="vertical" size="middle" style={{ width: "100%" }}>
       <Typography.Text style={{ overflowWrap: "anywhere" }}>{user.email}</Typography.Text>
       <Space.Compact style={{ width: "100%" }}>
-        <InputNumber aria-label={zh ? "每月转发额度" : "Monthly relay allowance"} value={value} min={-1}
+        <InputNumber aria-label={zh ? inlineCopy["text_2f9c4e52"] : inlineCopy["Monthly_relay_allowance_6c0d21f0"]} value={value} min={-1}
           onChange={setValue} style={{ width: "100%" }} disabled={saving} />
-        <Select aria-label={zh ? "流量单位" : "Traffic unit"} value={unit} options={UNITS}
+        <Select aria-label={zh ? inlineCopy["text_23bf07ce"] : inlineCopy["Traffic_unit_e8fcf481"]} value={unit} options={UNITS}
           onChange={setUnit} style={{ width: 90 }} disabled={saving} />
       </Space.Compact>
-      <Typography.Text type="secondary">{zh ? "-1 表示不限量，0 表示禁用转发。1 GB = 1024 MB。"
-        : "-1 means unlimited; 0 disables relay. 1 GB = 1024 MB."}</Typography.Text>
-      <Alert type="info" showIcon message={zh ? "每月 1 日按北京时间重置额度。达到上限后仍可使用 P2P 直连。"
-        : "Resets on the first of each month (UTC+8). P2P remains available after the relay limit is reached."} />
+      <Typography.Text type="secondary">{zh ? inlineCopy["1_0_1_GB_1024_0b59a8b9"]
+        : inlineCopy["1_means_unlimited_0_disables_96118a1b"]}</Typography.Text>
+      <Alert type="info" showIcon message={zh ? inlineCopy["1_P2P_f392112e"]
+        : inlineCopy["Resets_on_the_first_of_7f256eee"]} />
     </Space>
   </Modal>;
 }

@@ -40,6 +40,17 @@ struct PendingDrop {
 #[derive(Default)]
 pub(crate) struct DroppedFilesState(Arc<Mutex<Option<PendingDrop>>>);
 
+impl DroppedFilesState {
+    /// Consume the native grant before creating a bounded SSH upload source. Call on a worker.
+    pub(crate) fn consume(&self, paths: &[PathBuf]) -> Result<(), String> {
+        authorize(
+            &mut *self.0.lock().map_err(|_| DropError::Read.to_string())?,
+            paths,
+        )
+        .map_err(|error| error.to_string())
+    }
+}
+
 /// Record the grant before Tauri forwards the drop to JavaScript. Window listeners run too late;
 /// multi-webview windows also deliver drops as webview events instead of window events.
 pub(crate) fn handle_run_event(app: &tauri::AppHandle, event: &tauri::RunEvent) {

@@ -36,9 +36,9 @@ it('preserves desktop account, concurrent and API display rules', () => {
   expect(formatTokens(usage.totalTokens)).toBe('50.29M');
   expect(formatTokens(1520)).toBe('1.5K');
   expect(formatCost(0.0002)).toBe('0.0002USD');
-  expect(usageTrailing(usage)).toMatchObject({ text: '95%', label: '剩余', tone: 'quota' });
+  expect(usageTrailing(usage)).toMatchObject({ text: '95%', label: "剩余", tone: 'quota' });
   expect(usageTrailing({ ...usage, primaryRemainingPercent: 175, primaryRemainingAggregated: true }))
-    .toMatchObject({ text: '175%', label: '合计剩余' });
+    .toMatchObject({ text: '175%', label: "合计剩余" });
   expect(usageTrailing({ ...usage, primaryRemainingPercent: 0 })).toMatchObject({ text: '0%', tone: 'low' });
   expect(usageTrailing({ ...usage, primaryRemainingPercent: 50 })).toMatchObject({ tone: 'cost' });
   expect(usageTrailing({ ...usage, primaryRemainingPercent: null,
@@ -91,7 +91,7 @@ it('ignores a previous device response and clears stale values on failure', asyn
   read.mockRejectedValueOnce(new Error('当前手机端暂不支持此操作。'));
   await act(async () => vi.advanceTimersByTimeAsync(5000));
   expect(result.usage).toBeNull();
-  expect(result.error).toBe('请更新电脑端后查看用量。');
+  expect(result.error).toBe("请更新电脑端后查看用量。");
   await act(async () => vi.advanceTimersByTimeAsync(5000));
   expect(result.error).toBe('');
   expect(result.usage?.primaryRemainingPercent).toBe(30);

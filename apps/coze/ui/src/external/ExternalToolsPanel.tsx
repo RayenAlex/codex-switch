@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import { useEffect, useState } from "react";
 import { Alert, Button, Input, InputNumber, List, Popconfirm, Select, Space, Tag, Typography } from "antd";
 import { formatDate, useT } from "../i18n";
@@ -15,49 +16,49 @@ export function ExternalToolsPanel({ resource }: { resource: Resource }) {
   const published = resource.mcpEnabled && Boolean(resource.publishedRevision);
   const enabled = tools.status?.settings.enabled === true;
   // One translated sentence; the bold mention is placed where the translation puts {mention}.
-  const [beforeMention, afterMention = ""] = t("在 Codex GUI 中输入 {mention} 并选择，即可在对话中调用。").split("{mention}");
+  const [beforeMention, afterMention = ""] = t("coze.agents.typeInCodexGuiAndSelectItToUseIt").split("{mention}");
   return <section className="panel">
-    <h2>{t("外部调用")}</h2>
-    <p>{t("让其他应用通过 MCP 或 API 使用这项内容。先发布，再创建专用密钥。")}</p>
+    <h2>{t("coze.agents.externalAccess")}</h2>
+    <p>{t("coze.agents.letOtherAppsUseThisContentThroughMcpOrThe")}</p>
     <p>{beforeMention}<strong>#{resource.name}</strong>{afterMention}</p>
-    {tools.error && <Alert type="error" message={t(tools.error)} closable onClose={() => tools.setError("")} />}
-    <h3>{t("连接范围")}</h3><p>{t("此设置适用于本机所有已开放的 Coze 内容。关闭后会暂停全部外部调用。")}</p>
+    {tools.error && <Alert type="error" message={displayError(tools.error)} closable onClose={() => tools.setError("")} />}
+    <h3>{t("coze.agents.connectionScope")}</h3><p>{t("coze.agents.thisSettingAppliesToAllCozeContentSharedFromThis")}</p>
     <Space wrap>
-      <Select aria-label={t("连接范围")} value={settings.mode} disabled={enabled || tools.busy}
+      <Select aria-label={t("coze.agents.connectionScope")} value={settings.mode} disabled={enabled || tools.busy}
         style={{ minWidth: 200 }} onChange={(mode) => setSettings({ ...settings, mode })}
-        options={[{ value: "local", label: t("仅本机应用") }, { value: "network", label: t("允许其他电脑") }]} />
-      <InputNumber aria-label={t("调用端口")} min={1024} max={65535} value={settings.port}
-        disabled={enabled || tools.busy} addonBefore={t("端口")}
+        options={[{ value: "local", label: t("coze.agents.appsOnThisComputerOnly") }, { value: "network", label: t("coze.agents.allowOtherComputers") }]} />
+      <InputNumber aria-label={t("coze.agents.accessPort")} min={1024} max={65535} value={settings.port}
+        disabled={enabled || tools.busy} addonBefore={t("coze.agents.port")}
         onChange={(port) => setSettings({ ...settings, port: port ?? 15461 })} />
-      {enabled ? <Popconfirm title={t("暂停全部外部调用？")} styles={{ root: { maxWidth: 400 } }}
+      {enabled ? <Popconfirm title={t("coze.agents.pauseAllExternalAccess")} styles={{ root: { maxWidth: 400 } }}
         onConfirm={() => tools.configure({ ...settings, enabled: false })}>
-        <Button loading={tools.busy}>{t("关闭外部调用")}</Button>
+        <Button loading={tools.busy}>{t("coze.agents.turnOffExternalAccess")}</Button>
       </Popconfirm> : <Button type="primary" disabled={!tools.status} loading={tools.busy}
-        onClick={() => void tools.configure({ ...settings, enabled: true })}>{t("开启外部调用")}</Button>}
+        onClick={() => void tools.configure({ ...settings, enabled: true })}>{t("coze.agents.turnOnExternalAccess")}</Button>}
     </Space>
     {settings.mode === "network" && <p>
-      {t("其他电脑需能连接此电脑的地址和端口，并在防火墙中放行。 跨公网使用时，请通过 VPN 或 HTTPS 网关连接。")}</p>}
-    <h3>{t("调用密钥")}</h3>
-    {!published && <Alert type="info" message={t("请先发布此内容，再创建调用密钥。")} />}
+      {t("coze.agents.otherComputersMustBeAbleToReachThisComputerS")}</p>}
+    <h3>{t("coze.agents.accessKeys")}</h3>
+    {!published && <Alert type="info" message={t("coze.agents.publishThisContentBeforeYouCreateAnAccessKey")} />}
     <Space wrap>
-      <Input aria-label={t("密钥用途")} value={name} maxLength={80} placeholder={t("应用名称或用途")}
+      <Input aria-label={t("coze.agents.keyPurpose")} value={name} maxLength={80} placeholder={t("coze.agents.appNameOrPurpose")}
         style={{ width: 200 }} onChange={(event) => setName(event.target.value)} />
-      <InputNumber aria-label={t("密钥有效天数")} min={1} max={365} value={days} addonAfter={t("天")}
+      <InputNumber aria-label={t("coze.agents.keyValidityInDays")} min={1} max={365} value={days} addonAfter={t("coze.agents.days")}
         onChange={(value) => setDays(value ?? 30)} />
       <Button disabled={!published || !name.trim()} loading={tools.busy}
-        onClick={() => void tools.issue(name, days)}>{t("创建密钥")}</Button>
+        onClick={() => void tools.issue(name, days)}>{t("coze.agents.createKey")}</Button>
     </Space>
-    {tools.issued && <Alert type="success" message={t("密钥仅显示这一次，请复制保存。")}
+    {tools.issued && <Alert type="success" message={t("coze.agents.thisKeyIsShownOnlyOnceCopyAndSaveIt")}
       closable onClose={tools.clearIssued} description={<Typography.Paragraph
         copyable={{ text: tools.issued.token }} style={{ overflowWrap: "anywhere", marginBottom: 0 }}>
         {tools.issued.token}</Typography.Paragraph>} />}
-    <List dataSource={tools.items} locale={{ emptyText: t("暂无调用密钥") }} renderItem={(item) => {
+    <List dataSource={tools.items} locale={{ emptyText: t("coze.agents.noAccessKeysYet") }} renderItem={(item) => {
       const expired = new Date(item.expiresAt).getTime() <= Date.now();
       return <List.Item actions={[<Button key="revoke" danger size="small"
         disabled={!!item.revokedAt || tools.busy} onClick={() => void tools.revoke(item.id)}>
-        {item.revokedAt ? t("已停用") : t("停用")}</Button>]}>
-        <List.Item.Meta title={<Space>{item.name}{expired && <Tag>{t("已过期")}</Tag>}</Space>}
-          description={t("有效期至 {date}", { date: formatDate(item.expiresAt) })} />
+        {item.revokedAt ? t("coze.agents.revoked") : t("coze.agents.revoke")}</Button>]}>
+        <List.Item.Meta title={<Space>{item.name}{expired && <Tag>{t("coze.agents.expired")}</Tag>}</Space>}
+          description={t("coze.agents.validUntil", { date: formatDate(item.expiresAt) })} />
       </List.Item>;
     }} />
     <ConnectionExamples resource={resource} urls={tools.status?.urls ?? []} token={tools.issued?.token} />

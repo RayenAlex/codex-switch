@@ -7,10 +7,12 @@ export interface ConnectionOptions {
   api: TerminalApi;
   cwd: string;
   session?: TerminalInfo;
+  npmScript?: string;
   size: TerminalSize;
   onEvent: (event: TerminalEvent) => void;
   onReady: (info: TerminalInfo) => void;
   onError: (message: string) => void;
+  onStartFailed?: () => void;
 }
 
 /** Serial input and coalesced resizing keep slow shells from accumulating IPC calls. */
@@ -34,13 +36,18 @@ export function connectTerminal(options: ConnectionOptions) {
   };
   const initialSize = { cols: options.size.cols, rows: options.size.rows };
   const opening = (options.session && api.attach
-    ? api.attach(options.session, initialSize, receive) : api.open(options.cwd, initialSize, receive)).then(async (info) => {
+    ? api.attach(options.session, initialSize, receive)
+    : api.open(options.cwd, initialSize, receive, options.npmScript ? { npmScript: options.npmScript } : undefined))
+    .then(async (info) => {
     id = info.id;
     detach = info.detach;
     if (disposed) { if (detach) detach(); else await api.close(id); return; }
     if (!exited && connected) options.onReady(info);
     void flushInput(); void flushSize();
-  }).catch(() => report("终端未能启动，请关闭此标签页后重试。"));
+  }).catch(() => {
+    if (!disposed) options.onStartFailed?.();
+    report("终端未能启动，请关闭此标签页后重试。");
+  });
 
   async function flushInput() {
     if (!id || disposed || exited || writing) return;

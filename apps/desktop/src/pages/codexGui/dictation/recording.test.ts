@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { MAX_RECORDING_SECONDS, startRecording } from './recording';
+import { MAX_RECORDING_SECONDS, startRecording } from '../../../../../../shared/chat/dictation/recording';
 
 class Recorder {
   static isTypeSupported = (mime: string) => mime.startsWith('audio/webm');

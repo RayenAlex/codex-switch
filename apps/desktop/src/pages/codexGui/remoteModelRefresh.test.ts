@@ -19,6 +19,29 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup.splice(0).forEach(stop => stop()); vi.clearAllTimers(); vi.useRealTimers(); });
 
+it('preserves the selected model when an older host refreshes only the catalog', async () => {
+  let models = [model];
+  const request = vi.fn(async (method: string, body?: Record<string, unknown>) => {
+    if (method === 'connect') return { ...chatHandshake, approvals: [] };
+    return { data: body?.operation === 'models' || body?.operation === 'modelsRefresh' ? models : [],
+      nextCursor: null };
+  });
+  const phone = new ChatController(events => ({
+    start() { events.mode('relay'); events.ready(); }, stop() {},
+    request: async <T>(method: string, body?: Record<string, unknown>) => await request(method, body) as T,
+  }));
+  cleanup.push(() => phone.stop());
+  phone.start();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(phone.snapshot().settings).toMatchObject({ model: model.model, effort: 'high' });
+  models = [{ ...model, id: 'other', model: 'other' }];
+  await phone.refreshModels();
+  expect(phone.snapshot().models).toEqual(models);
+  expect(phone.snapshot().settings).toMatchObject({ model: model.model, effort: 'high' });
+  expect(await phone.send({ text: 'blocked', access: 'workspace-write' })).toBe(false);
+  expect(request.mock.calls.some(([, body]) => body?.operation === 'composerSet')).toBe(false);
+});
+
 it.each(['empty', 'corrupt'])('recovers %s cache through a phone/Web action while polls stay passive', async mode => {
   const discover = vi.fn<() => Promise<typeof page>>();
   vi.mocked(guiApi.request).mockImplementation(async request => {

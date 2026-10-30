@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { useThreadConfirmation } from "../codex-threads/useThreadConfirmation";
 import { restartChatGpt, syncCodexThreadIndex } from "../../api/backend";
 import type { Language } from "../../i18n";
-import { threadCopy } from "../codex-threads/copy";
+import { threadCopy } from "@remoteai/i18n/copy/desktop/threads";
 import { ThreadList } from "../codex-threads/ThreadList";
 import { RepairModal, TransferModal, TrashModal } from "../codex-threads/ThreadModals";
 import { ThreadToolbar } from "../codex-threads/ThreadToolbar";

@@ -7,12 +7,20 @@ import { Messages } from '../src/pages/codexGui/Messages';
 import { conversation } from '../src/pages/codexGui/events';
 import type { Thread } from '../src/pages/codexGui/types';
 import { ChatMessages } from '../../web/src/chat/ChatMessages';
+import { MODEL_CAPACITY_MESSAGE } from '../src/pages/codexGui/requestError';
 import styles from '../src/pages/codexGui/styles.module.less';
 import '../../web/src/styles.css';
 import '../../web/src/chat/chat.css';
+import '../src/pages/codexGui/remote/remoteGui.less';
+
+const query = new URLSearchParams(location.search);
+const capacity = query.has('capacity');
+const remote = query.has('remote');
+const desktop = query.has('desktop');
 
 const initial: Thread = { id: 'retry-thread', cwd: '', preview: '', updatedAt: 1, turns: [{
-  id: 'failed', status: 'failed', error: { message: 'HTTP 502 Bad Gateway', additionalDetails: 'upstream timed out' },
+  id: 'failed', status: 'failed', error: capacity ? { message: MODEL_CAPACITY_MESSAGE }
+    : { message: 'HTTP 502 Bad Gateway', additionalDetails: 'upstream timed out' },
   items: [{ id: 'question', type: 'userMessage', text: '请继续检查项目。' },
     { id: 'progress', type: 'agentMessage', text: '正在检查连接。', phase: 'commentary' }],
 }] };
@@ -22,7 +30,6 @@ function Harness() {
   const [thread, setThread] = useState(initial);
   const [attempts, setAttempts] = useState(0);
   const [unavailable, setUnavailable] = useState(false);
-  const remote = new URLSearchParams(location.search).has('remote');
   const retry = async (target: TurnRetryTarget) => {
     if (target.threadId !== thread.id || target.turnId !== thread.turns?.at(-1)?.id) return false;
     setAttempts(value => value + 1);
@@ -39,8 +46,9 @@ function Harness() {
       <nav><label><input type="checkbox" checked={unavailable}
         onChange={event => setUnavailable(event.target.checked)} />暂不可用</label>
         <output aria-label="发送次数">{attempts}</output></nav>
-      {remote ? <div className="chat-page" style={{ flex: 1, minHeight: 0 }}><div className="chat-conversation">
-        <ChatMessages thread={thread} />
+      {remote ? <div className={`chat-page ${desktop ? `${styles.page} gui-remote-workspace` : ''}`}
+        style={{ flex: 1, minHeight: 0 }}><div className="chat-conversation">
+        <ChatMessages thread={thread} desktop={desktop} />
       </div></div> : <div className={`${styles.page} ${styles.collapsed}`} style={{ flex: 1, minHeight: 0 }}>
         <div className={styles.workspace}><Messages selected={thread.id} value={conversation(thread)} /></div>
       </div>}

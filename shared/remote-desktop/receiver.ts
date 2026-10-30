@@ -133,7 +133,8 @@ export class DesktopReceiver {
       if (!this.stopped) await this.signal(answer.sdp);
     } catch (error) {
       const failure = desktopFailure(error);
-      this.fail(error instanceof Error ? error.message : '暂时无法打开远程桌面，请重试。', failure.reason,
+      const message = typeof error === 'string' ? error : error instanceof Error ? error.message : undefined;
+      this.fail(message || '暂时无法打开远程桌面，请重试。', failure.reason,
         { ...failure, stage });
     }
   }
@@ -271,7 +272,10 @@ export class DesktopReceiver {
         if (message.kind === 'stats') {
           this.hostStats = message; this.options.stats({ ...message, ...this.measured });
         }
-        if (message.kind === 'error') this.fail(message.message || '远程操作未完成，请重试。');
+        if (message.kind === 'error') {
+          const failure = desktopFailure(message.message);
+          this.fail(message.message || '远程操作未完成，请重试。', failure.reason, failure);
+        }
       } catch { this.fail('桌面连接异常，请重新连接。'); }
     });
   }
@@ -308,7 +312,9 @@ export class DesktopReceiver {
     } catch (error) {
       if (this.stopped || this.pc !== pc) return;
       const failure = desktopFailure(error);
-      this.fail('桌面连接未能建立，请检查网络后重试。', failure.reason, { ...failure, stage: 'signal' });
+      const message = typeof error === 'string' ? error : error instanceof Error ? error.message : undefined;
+      this.fail(failure.desktopError !== 'unknown' && message ? message : '桌面连接未能建立，请检查网络后重试。',
+        failure.reason, { ...failure, stage: 'signal' });
     }
   }
 

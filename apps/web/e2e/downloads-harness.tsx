@@ -13,10 +13,12 @@ import '../src/chat/messages.css';
 import { fixtureBulkClient } from './bulk-download-fixture';
 import { resumeFixture } from './download-resume-fixture';
 import { openPreparedDownload, type ArchiveProgress } from '../../../shared/remote-chat/archiveDownload';
+import { setLanguage } from '../src/i18n';
 
 Object.defineProperty(window, 'showSaveFilePicker', { value: undefined, configurable: true });
 
 const fixture = { ...resumeFixture, size: 4 * 1024 * 1024, revision: 'first', corrupt: false,
+  setLanguage,
   opens: 0, openFailures: 0, mimeType: 'application/octet-stream', textContent: '',
   offsets: [] as number[], closes: 0,
   archiveReady: false, archivePolls: 0,

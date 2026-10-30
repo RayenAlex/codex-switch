@@ -1,4 +1,5 @@
-import { guiLanguage, guiText } from "../../i18n/guiText";
+import { displayText } from '../../i18n/uiText';
+import { guiLanguage, uiText } from "../../i18n/uiText";
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import type { DraftImage } from "./useComposerDraft";
@@ -18,25 +19,25 @@ export function ImageAttachments({ images, disabled, active = true, onRemove, on
   useEffect(() => { if (!active || !preview) setPreviewId(null); }, [active, preview]);
   useEffect(() => { if (!active || disabled || !editing) setEditingId(null); }, [active, disabled, editing]);
   if (!images.length) return null;
-  return <><div className={styles.attachments} aria-label={guiText("图片附件")}>
+  return <><div className={styles.attachments} aria-label={uiText("client.conversation.imageAttachments")}>
     {images.map((image, index) => <div className={styles.card} key={image.id}>
-      {image.url ? <button type="button" className={styles.thumbnail} aria-label={guiText("放大查看：图片 {value1}", { value1: index + 1 })}
+      {image.url ? <button type="button" className={styles.thumbnail} aria-label={uiText("client.conversation.enlargeImage", { value1: index + 1 })}
         onClick={() => setPreviewId(image.id)}>
-        <img src={image.url} alt={guiText("图片 {value1}：{value2}", { value1: index + 1, value2: image.name })} />
+        <img src={image.url} alt={uiText("client.conversation.image", { value1: index + 1, value2: image.name })} />
       </button>
-        : <span role="status">{guiText("正在读取…")}</span>}
-      <button type="button" className={styles.remove} aria-label={guiText("移除图片 {value1}", { value1: index + 1 })}
+        : <span role="status">{uiText("client.composer.loading")}</span>}
+      <button type="button" className={styles.remove} aria-label={uiText("client.chat.removeImage", { value1: index + 1 })}
         disabled={disabled} onClick={() => onRemove(image.id)}><X size={14} /></button>
       {image.url && <button type="button" className={styles.edit}
-        aria-label={guiText("标注图片 {value1}", { value1: index + 1 })}
-        disabled={disabled} onClick={() => setEditingId(image.id)}>{guiText("标注")}</button>}
+        aria-label={uiText("client.chat.annotateImage", { value1: index + 1 })}
+        disabled={disabled} onClick={() => setEditingId(image.id)}>{uiText("client.chat.annotate")}</button>}
     </div>)}
   </div>
     {active && preview && previewUrl && <ImagePreview key={preview.id} thumbnail={previewUrl} description={preview.name}
       load={async () => previewUrl}
       close={() => setPreviewId(null)} />}
     {active && !disabled && editing?.url && <ImageEditor key={editing.id} dataUrl={editing.url}
-      translate={guiText} language={guiLanguage()} mode="direct"
+      translate={displayText} language={guiLanguage()} mode="direct"
       save={(url) => onEdit(editing.id, url)} close={() => setEditingId(null)} />}
   </>;
 }

@@ -1,6 +1,6 @@
 import type { Route } from '../App';
-import { copy, homeFaqs } from '../content/copy';
-import { featureContent, features, findFeature } from '../content/features';
+import { copy, homeFaqs } from '@remoteai/i18n/website-content/copy';
+import { featureContent, features, findFeature } from '@remoteai/i18n/website-content/features';
 import { pageMetadata } from './metadata';
 import { resourceMarkdown } from './resource-content';
 import { pagePath, SITE_URL, sourceUrl, LINKS } from './site';

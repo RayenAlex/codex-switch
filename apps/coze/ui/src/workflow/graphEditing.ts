@@ -8,22 +8,22 @@ export const edgeId = (edge: Edge) => JSON.stringify([edge.source, edge.target, 
 
 /**
  * Drafts may be disconnected; only reject connections that cannot become executable.
- * Returns the untranslated Chinese source; translate it with `t()` where it is shown.
+ * Returns a semantic message key; format it only where the error is displayed.
  */
 export function connectionError(graph: Graph, edge: Edge): string | undefined {
   const source = graph.nodes.find((node) => node.id === edge.source);
   const target = graph.nodes.find((node) => node.id === edge.target);
-  if (!source || !target) return msg("请连接画布中的节点。");
-  if (source.id === target.id) return msg("不能连接节点自身。");
-  if (target.type === "start" || isTerminal(source.type)) return msg("请从输出端口连接到输入端口。");
-  if ((source.type === "condition") !== (typeof edge.port === "boolean")) return msg("请选择条件分支。");
-  if (graph.edges.some((item) => edgeId(item) === edgeId(edge))) return msg("这两个端口已经连接。");
-  if (graph.edges.length >= MAX_EDGES) return msg("连线数量已达到上限。");
+  if (!source || !target) return msg("coze.index.connectNodesThatAreOnTheCanvas");
+  if (source.id === target.id) return msg("coze.index.aNodeCanTConnectToItself");
+  if (target.type === "start" || isTerminal(source.type)) return msg("coze.index.connectAnOutputPortToAnInputPort");
+  if ((source.type === "condition") !== (typeof edge.port === "boolean")) return msg("coze.index.chooseAConditionBranch");
+  if (graph.edges.some((item) => edgeId(item) === edgeId(edge))) return msg("coze.index.thesePortsAreAlreadyConnected");
+  if (graph.edges.length >= MAX_EDGES) return msg("coze.index.youVeReachedTheMaximumNumberOfConnections");
   const pending = [target.id];
   const visited = new Set<string>();
   while (pending.length) {
     const id = pending.pop()!;
-    if (id === source.id) return msg("这条连线会形成回路，请使用循环节点。");
+    if (id === source.id) return msg("coze.index.thisConnectionWouldCreateACycleUseALoopNode");
     if (visited.has(id)) continue;
     visited.add(id);
     pending.push(...graph.edges.filter((item) => item.source === id).map((item) => item.target));

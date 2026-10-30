@@ -22,10 +22,10 @@ export function useSaveImage(options: { load: () => Promise<string>; save?: (url
     try {
       const url = await options.load();
       await (options.save ?? saveImage)(url);
-      if (mounted.current) setMessage(t("已保存到相册"));
+      if (mounted.current) setMessage(t("client.mobile.savedToPhotos"));
     } catch (error) {
       if (mounted.current) setMessage(error instanceof ImageSavePermissionError || error instanceof DownloadPolicyError
-        ? error.message : t("保存失败，请重试"));
+        ? error.message : t("client.mobile.couldNotSaveTryAgain"));
     } finally {
       busy.current = false;
       if (mounted.current) setSaving(false);

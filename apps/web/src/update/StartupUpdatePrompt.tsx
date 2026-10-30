@@ -13,14 +13,14 @@ export function StartupUpdatePrompt() {
     try {
       await update.ignoreVersion();
     } catch {
-      Toast.show({ icon: 'fail', content: t('未能保存，请重试') });
+      Toast.show({ icon: 'fail', content: t("client.settings.couldNotSavePleaseTryAgain") });
     }
   };
-  return <Dialog visible title={t('发现新版本')} closeOnMaskClick={false}
+  return <Dialog visible title={t("client.settings.updateAvailable")} closeOnMaskClick={false}
     bodyStyle={{ width: 'calc(100vw - 48px)', maxWidth: 400 }}
-    content={t('Remote AI v{version} 已发布，刷新页面即可更新。', { version: update.release.version })}
+    content={t("client.settings.remoteAiVIsAvailableRefreshThePageToUpdate", { version: update.release.version })}
     actions={[[
-      { key: 'ignore', text: t('忽略本版本'), onClick: ignore },
-      { key: 'update', text: t('立即更新'), bold: true, onClick: reloadForUpdate },
+      { key: 'ignore', text: t("client.settings.skipThisVersion"), onClick: ignore },
+      { key: 'update', text: t("client.settings.updateNow"), bold: true, onClick: reloadForUpdate },
     ]]} />;
 }

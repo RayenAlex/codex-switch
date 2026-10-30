@@ -1,7 +1,7 @@
 import { ArrowLeft, ArrowUpRight, Check } from 'lucide-react';
-import { copy } from '../content/copy';
-import { featureContent, features } from '../content/features';
-import type { Feature, Language } from '../content/types';
+import { copy } from '@remoteai/i18n/website-content/copy';
+import { featureContent, features } from '@remoteai/i18n/website-content/features';
+import type { Feature, Language } from '@remoteai/i18n/website-content/types';
 import { href, sourceUrl } from '../lib/site';
 import { Actions, ClosingCta, Faq } from '../components/Shared';
 import { FeatureIcon } from '../components/FeatureIcon';

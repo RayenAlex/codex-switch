@@ -1,16 +1,15 @@
 from pathlib import Path
 import json
-import re
 
 from PIL import Image, ImageDraw, ImageFont
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST = ROOT / "scripts" / "integrate-sci-fi-dream-skins.mjs"
+MANIFEST = ROOT / "packages" / "i18n" / "tooling" / "dreamSkinScienceFiction.json"
 PRESETS = ROOT / "apps" / "desktop" / "src-tauri" / "resources" / "dream-skin" / "presets"
 OUTPUT = ROOT / "docs" / "assets" / "dream-skin-sci-fi-contact-sheet.jpg"
 
-slugs = re.findall(r'^  \["([^"]+)",', MANIFEST.read_text(encoding="utf-8"), re.MULTILINE)
+slugs = [theme[0] for theme in json.loads(MANIFEST.read_text(encoding="utf-8"))]
 if len(slugs) != 100:
     raise RuntimeError(f"Expected 100 science-fiction themes, found {len(slugs)}")
 

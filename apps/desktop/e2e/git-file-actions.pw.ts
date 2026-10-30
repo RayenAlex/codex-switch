@@ -11,7 +11,8 @@ for (const width of [390, 820]) {
     await expect(page.getByRole('button', { name: '推送 Push', exact: true })).toHaveText('2');
     await page.getByRole('button', { name: '切换分支', exact: true }).click();
     await expect(page.locator('.git-current-branch')).toHaveText('当前选择：main → origin/main');
-    await page.getByRole('button', { name: '关闭菜单', exact: true }).click();
+    await page.getByRole('textbox', { name: '提交说明', exact: true }).click();
+    await expect(page.locator('.git-menu')).toBeHidden();
     const selected = page.getByRole('checkbox', { name: '选择 src/app.ts', exact: true });
     await selected.check();
     const draft = page.getByRole('textbox', { name: '提交说明', exact: true });

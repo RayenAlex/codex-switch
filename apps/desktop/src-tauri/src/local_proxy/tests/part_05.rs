@@ -392,6 +392,7 @@ fn deepseek_none_disables_thinking_without_effort() {
 #[test]
 fn provider_image_generation_request_preserves_gpt_image_model() {
     let provider = ProviderProfile {
+        account_alias: None,
         request_options: Default::default(),
         id: "images".to_string(),
         kind: ProviderKind::Custom,
@@ -411,6 +412,8 @@ fn provider_image_generation_request_preserves_gpt_image_model() {
         fast_mode_enabled: false,
         websocket_enabled: false,
         api_format: ProviderApiFormat::OpenaiResponses,
+        balance_script: None,
+        market_source: None,
         balance_platform: None,
         balance_query_url: None,
         balance_query_token: None,

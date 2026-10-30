@@ -41,7 +41,7 @@ export function TotpCodeCard({ code, entry, now, onCopied, onDelete, onEdit }: T
       await Clipboard.setStringAsync(code);
       onCopied();
     } catch {
-      Toast.fail(t('复制失败，请重试'));
+      Toast.fail(t("client.app.couldNotCopyPleaseTryAgain"));
     }
   };
   return <View style={styles.codeCard}>
@@ -51,32 +51,32 @@ export function TotpCodeCard({ code, entry, now, onCopied, onDelete, onEdit }: T
         <Text style={styles.issuer} numberOfLines={1}>{entry.issuer}</Text>
         <Text style={styles.account} numberOfLines={1}>{entry.accountName}</Text>
       </View>
-      <Pressable accessibilityRole="button" accessibilityLabel={t("管理 {value1} 的 2FA 密钥", { value1: entry.issuer })}
+      <Pressable accessibilityRole="button" accessibilityLabel={t("client.settings.manage2faKeyFor", { value1: entry.issuer })}
         style={({ pressed }) => [styles.moreButton, pressed && styles.pressed]} onPress={() => setMenuOpen(true)}>
         <Ionicons name="ellipsis-horizontal" size={21} color={color("#838b99", 'muted')} />
       </Pressable>
     </View>
     <View style={[styles.codeBody, compact && styles.compactCodeBody]}>
-      <Pressable accessibilityRole="button" accessibilityLabel={t("复制 {value1} 验证码", { value1: entry.issuer })}
+      <Pressable accessibilityRole="button" accessibilityLabel={t("client.settings.copyCode", { value1: entry.issuer })}
         disabled={!code} style={styles.codeButton} onPress={() => void copy()}>
         <View style={styles.codeRow}>
           <Text style={styles.codeValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
             {displayCode(code)}
           </Text>
-          <Text style={styles.countdown}>{remaining}{' '}{t("秒")}</Text>
+          <Text style={styles.countdown}>{remaining}{' '}{t("client.accounts.s")}</Text>
         </View>
         <View style={styles.progressTrack}><View style={[styles.progressFill, { width: progress }]} /></View>
       </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel={t("复制 {value1} 验证码到剪贴板", { value1: entry.issuer })}
+      <Pressable accessibilityRole="button" accessibilityLabel={t("client.settings.copyCodeToClipboard", { value1: entry.issuer })}
         disabled={!code} onPress={() => void copy()}
         style={({ pressed }) => [styles.copyButton, compact && styles.compactCopyButton, pressed && styles.pressed]}>
         <Ionicons name="copy-outline" size={21} color={color("#008956", 'accent')} />
-        {!compact && <Text style={styles.copyText}>{t("复制")}</Text>}
+        {!compact && <Text style={styles.copyText}>{t("client.projectBrowser.copied")}</Text>}
       </Pressable>
     </View>
     <TotpOptionsMenu title={entry.issuer} visible={menuOpen} onClose={() => setMenuOpen(false)} options={[
-      { label: t("编辑密钥"), icon: 'create-outline', onPress: onEdit },
-      { label: t("删除密钥"), icon: 'trash-outline', onPress: onDelete, danger: true },
+      { label: t("client.settings.editKey"), icon: 'create-outline', onPress: onEdit },
+      { label: t("client.settings.deleteKey"), icon: 'trash-outline', onPress: onDelete, danger: true },
     ]} />
   </View>;
 }

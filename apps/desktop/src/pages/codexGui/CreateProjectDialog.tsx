@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useRef, useState } from "react";
 import { Button, Input, Modal, type InputRef } from "antd";
 import { Folder, FolderPlus } from "lucide-react";
@@ -31,34 +31,34 @@ export function CreateProjectDialog({ disabled, onCreate, onClose, onError }: {
     if (busy) return;
     setChoosing(true);
     try {
-      const selected = await open({ directory: true, multiple: false, title: guiText("选择源文件夹") });
+      const selected = await open({ directory: true, multiple: false, title: uiText("client.composer.chooseSourceFolder") });
       if (typeof selected === "string") setFolder(selected);
     } catch (error) { onError(error); }
     finally { setChoosing(false); }
   };
-  return <Modal open centered title={guiText("创建项目")} width={640} className={styles.dialog}
+  return <Modal open centered title={uiText("client.composer.createProject")} width={640} className={styles.dialog}
     onCancel={onClose} maskClosable={!choosing} keyboard={!choosing} closable={!choosing}
     afterOpenChange={(visible) => { if (visible) input.current?.focus(); }}
     footer={<div className={styles.actions}>
-      <Button type="text" disabled={choosing} onClick={onClose}>{guiText("取消")}</Button>
+      <Button type="text" disabled={choosing} onClick={onClose}>{uiText("client.accounts.cancel")}</Button>
       <Button className={styles.create} type="primary" disabled={busy || !name.trim() || !path.trim()}
-        onClick={confirm}>{guiText("创建项目")}</Button>
+        onClick={confirm}>{uiText("client.composer.createProject")}</Button>
     </div>}>
     <Input ref={input} className={styles.name} prefix={<Folder size={19} aria-hidden="true" />}
-      aria-label={guiText("项目名称")} placeholder={guiText("项目名称")} value={name} maxLength={120} disabled={busy}
+      aria-label={uiText("client.composer.projectName")} placeholder={uiText("client.composer.projectName")} value={name} maxLength={120} disabled={busy}
       onChange={(event) => setName(event.target.value)} onPressEnter={confirm} />
-    <div className={styles.label}>{guiText("源文件夹")}</div>
+    <div className={styles.label}>{uiText("client.composer.sourceFolder")}</div>
     {isDesktopApp ? <button ref={folder} type="button" className={styles.folder} disabled={busy}
       data-dragging={drop.dragging || undefined} aria-busy={drop.reading}
       onClick={() => void chooseFolder()}>
       <FolderPlus size={23} aria-hidden="true" />
       {path ? <><strong>{folderName(path)}</strong><span className={styles.path}>{path}</span>
-        <small>{guiText("点击或拖入其他文件夹以更换")}</small></> : <span>
-        {choosing || drop.reading ? guiText("正在读取文件夹…") : guiText("拖入文件夹，或点击选择")}</span>}
+        <small>{uiText("client.composer.clickOrDropAnotherFolderToChangeIt")}</small></> : <span>
+        {choosing || drop.reading ? uiText("client.downloads.readingFolder") : uiText("client.composer.dropAFolderHereOrClickToChoose")}</span>}
     </button> : <div className={styles.hostFolder}>
-      <Input aria-label={guiText("源文件夹路径")} placeholder={guiText("输入源文件夹的完整路径")} value={path} disabled={busy}
+      <Input aria-label={uiText("client.composer.sourceFolderPath")} placeholder={uiText("client.composer.enterTheFullPathToTheSourceFolder")} value={path} disabled={busy}
         onChange={(event) => setPath(event.target.value)} onPressEnter={confirm} />
-      <p>{guiText("填写运行 Remote AI 的主机上的文件夹路径。")}</p>
+      <p>{uiText("client.composer.enterTheFolderPathOnTheComputerRunningRemoteAi")}</p>
     </div>}
   </Modal>;
 }

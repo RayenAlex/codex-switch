@@ -4,6 +4,8 @@
 .pf-tree-search:focus-within { border-color: var(--pf-accent); }
 .pf-tree-search input { width: 100%; min-width: 0; padding: 6px 0; border: 0; outline: none;
   background: transparent; color: var(--pf-ink); font: inherit; }
+/* The rounded wrapper supplies the focus indicator, including inside chat pages. */
+.pf-tree-search input:focus, .pf-tree-search input:focus-visible { outline: none; box-shadow: none; }
 .pf-tree-search input::placeholder { color: var(--pf-muted); }
 .pf-tree-search input::-webkit-search-cancel-button { display: none; }
 .pf-browser .pf-tree-search button { min-height: 26px; width: 24px; padding: 3px; }

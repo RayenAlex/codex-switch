@@ -12,12 +12,12 @@ import { palette, useStyles } from './styles';
 import { SelectableChatText } from './SelectableChatText';
 import type { CopyAction } from './CopyTextButton';
 
-const KINDS: Record<string, string> = { get add() { return t("新增"); }, get delete() { return t("删除"); }, get update() { return t("修改"); } };
+const KINDS: Record<string, string> = { get add() { return t("client.git.added"); }, get delete() { return t("client.projectBrowser.deleted"); }, get update() { return t("client.git.modified"); } };
 
 export function DiffCounts({ added, removed }: { added: number; removed: number }) {
   const diffStyles = useDiffStyles();
   useLanguage();
-  return <View style={diffStyles.counts} accessibilityLabel={t("新增 {value1} 行，删除 {value2} 行", { value1: added, value2: removed })}>
+  return <View style={diffStyles.counts} accessibilityLabel={t("client.mobile.linesAddedLinesRemoved", { value1: added, value2: removed })}>
     <Text style={diffStyles.added}>+{added}</Text><Text style={diffStyles.removed}>−{removed}</Text>
   </View>;
 }
@@ -38,7 +38,7 @@ export function ChatDiff({ files, copy, onComment }: {
   const removed = files.reduce((sum, file) => sum + file.removed, 0);
   return <View style={diffStyles.document}>
     <View style={diffStyles.summary}>
-      <Text style={styles.subtitle}>{new Set(files.map((file) => file.path)).size}{' '}{t("个文件")}</Text>
+      <Text style={styles.subtitle}>{new Set(files.map((file) => file.path)).size}{' '}{t("client.chat.files.2d4a2a")}</Text>
       <DiffCounts added={added} removed={removed} />
     </View>
     {groups.map((group) => <View key={group.directory} style={diffStyles.group}>
@@ -46,23 +46,23 @@ export function ChatDiff({ files, copy, onComment }: {
         <Feather name="folder" size={15} color={color(palette.muted, 'muted')} />
         <View style={styles.fill}>
           <Text accessibilityRole="header" style={diffStyles.folderName}>
-            {group.directory.split('/').pop() ? group.name : t("根目录")}</Text>
+            {group.directory.split('/').pop() ? group.name : t("client.runtimeErrors.rootFolder")}</Text>
           <Text style={diffStyles.folderPath}>{group.directory || '.'}</Text>
         </View>
       </View>
       {group.entries.map(({ file, index }) => <Pressable key={`${file.path}:${index}`} accessibilityRole="button"
-        accessibilityLabel={t("查看 {value1} 的修改", { value1: file.path })} style={diffStyles.file}
+        accessibilityLabel={t("client.mobile.viewChangesTo", { value1: file.path })} style={diffStyles.file}
         onPress={() => setSelectedKey(`${file.path}:${index}`)}>
         <Feather name="file-text" size={15} color={color(palette.muted, 'muted')} />
         <SelectableChatText style={[styles.messageText, styles.fill]}
           copy={index === lastIndex ? copy : undefined}>{file.path.split(/[\\/]/).pop()}</SelectableChatText>
-        <Text style={styles.subtitle}>{file.previousPath ? t("重命名") : KINDS[file.kind] ?? t("修改")}</Text>
+        <Text style={styles.subtitle}>{file.previousPath ? t("client.projectBrowser.renamed") : KINDS[file.kind] ?? t("client.git.modified")}</Text>
         <DiffCounts added={file.added} removed={file.removed} />
         <Feather name="chevron-right" size={15} color={color(palette.muted, 'muted')} />
       </Pressable>)}
     </View>)}
-    {selected && <BottomSheet fullWidthContent visible tall title={t("文件差异")} subtitle={selected.path}
-      onClose={() => setSelectedKey(null)} onBack={() => setSelectedKey(null)} dragFromHeaderOnly>
+    {selected && <BottomSheet fullWidthContent visible tall title={t("client.mobile.fileDiff")} subtitle={selected.path}
+      onClose={() => setSelectedKey(null)} onBack={() => setSelectedKey(null)}>
       <ChatDiffContent key={selectedKey} file={selected} onComment={onComment ? line => {
         setSelectedKey(null); onComment(selected, line);
       } : undefined} />

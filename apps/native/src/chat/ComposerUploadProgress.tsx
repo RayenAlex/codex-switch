@@ -9,14 +9,14 @@ export function ComposerUploadProgress({ progress, reconnecting = false, inline 
   const styles = useStyles();
   useLanguage();
   if (!progress) return null;
-  let label = t("上传中");
-  if (progress.percent === 0) label = t("待上传");
-  if (progress.percent === 100) label = t("已上传");
-  if (progress.phase === 'preparing') label = t("准备中");
-  if (progress.phase === 'confirming') label = t("等待确认");
-  if (reconnecting && progress.percent < 100) label = t("等待连接");
+  let label = t("client.chat.uploading");
+  if (progress.percent === 0) label = t("client.chat.queued.2b6f8f");
+  if (progress.percent === 100) label = t("client.chat.uploaded");
+  if (progress.phase === 'preparing') label = t("client.shared.preparing");
+  if (progress.phase === 'confirming') label = t("client.chat.finishing");
+  if (reconnecting && progress.percent < 100) label = t("client.chat.waiting");
   return <View pointerEvents="none" style={inline ? styles.inline : styles.overlay}
-    accessibilityRole="progressbar" accessibilityLabel={t("附件上传进度，{value1}", { value1: label })}
+    accessibilityRole="progressbar" accessibilityLabel={t("client.mobile.attachmentUploadProgress", { value1: label })}
     accessibilityValue={{ min: 0, max: 100, now: progress.percent, text: `${label} ${progress.percent}%` }}>
     <Text style={[styles.percent, inline && styles.inlineText]}>{progress.percent}%</Text>
     <Text style={[styles.label, inline && styles.inlineText]}>{label}</Text>

@@ -65,6 +65,7 @@ export interface ChatState {
   sending: boolean;
   workspaceBusy?: boolean;
   threadActionBusy?: string;
+  projectActionBusy?: string;
   compacting?: string;
   error: string;
 }

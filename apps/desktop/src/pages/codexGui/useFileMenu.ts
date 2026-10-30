@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useContext, useEffect, useRef, useState } from "react";
 import { message } from "antd";
 import { isTauri } from "@tauri-apps/api/core";
@@ -44,20 +44,20 @@ export function useFileMenu(target: FileReference) {
       const result = desktop ? await api.perform({ ...target, threadId }, action)
         : { path: target.path, text: undefined, saved: false };
       if (action.type === "copyFile" && desktop) {
-        void message.success({ content: guiText(environment ? "文件已复制到远程电脑的剪贴板。"
-          : "文件已复制，可粘贴到文件夹。"), style: FEEDBACK_STYLE });
+        void message.success({ content: uiText(environment ? "client.composer.fileCopiedToTheRemoteComputerSClipboard"
+          : "client.composer.fileCopiedYouCanPasteItIntoAFolder"), style: FEEDBACK_STYLE });
       }
       if (action.type === "copyPath" || action.type === "copyContents") {
         await navigator.clipboard.writeText(action.type === "copyPath" ? result.path : result.text ?? "");
-        void message.success({ content: guiText("已复制"), style: FEEDBACK_STYLE });
+        void message.success({ content: uiText("client.chat.copied"), style: FEEDBACK_STYLE });
       }
       if (action.type === "saveAs" && result.saved) {
-        void message.success({ content: guiText("文件已保存"), style: FEEDBACK_STYLE });
+        void message.success({ content: uiText("client.workspaceActions.fileSaved"), style: FEEDBACK_STYLE });
       }
       if (action.type === "saveAs" && environment) animateDownloadToNavigation(origin);
     } catch (error) {
       // Native errors are intentionally limited to friendly messages at the IPC boundary.
-      void message.error({ content: typeof error === "string" ? error : guiText("操作未完成，请稍后重试。"),
+      void message.error({ content: typeof error === "string" ? error : uiText("client.errors.theOperationFailedPleaseTryAgain"),
         style: FEEDBACK_STYLE });
     } finally { flight.current = false; setBusy(false); }
   };
@@ -76,7 +76,7 @@ export function useFileMenu(target: FileReference) {
       if (!remotePreview || !await remotePreview(file)) setOpen(true);
     } catch (error) {
       setOpen(true);
-      void message.error({ content: typeof error === "string" ? error : guiText("预览未能打开，请选择其他打开方式。"),
+      void message.error({ content: typeof error === "string" ? error : uiText("client.workspaceActions.couldNotOpenThePreviewChooseAnotherAppToOpen"),
         style: FEEDBACK_STYLE });
     } finally { flight.current = false; setBusy(false); }
   };

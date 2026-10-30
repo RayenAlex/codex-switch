@@ -1,3 +1,4 @@
+import { displayText } from '../i18n/index';
 import { Text, View } from 'react-native';
 import { connectionEndpointRows } from '../../../../shared/remote-chat/connectionEndpoints';
 import { publicEndpointRows } from '../../../../shared/remote-chat/publicEndpoints';
@@ -10,22 +11,22 @@ export function ChatConnectionAddresses({ state }: { state: ChatState }) {
   const current = connectionEndpointRows(state.mode, state.directEndpoints);
   return <>
     {current.length > 0 && <View style={css.addresses}>
-      <Text style={css.label}>{t('当前 P2P 连接')}</Text>
+      <Text style={css.label}>{t("client.chatReliability.currentP2pConnection")}</Text>
       {current.map(row => <View key={row.id} style={css.addressRow}>
-        <Text style={css.label}>{t(row.label)}</Text>
+        <Text style={css.label}>{displayText(row.label)}</Text>
         {row.address ? <Text selectable style={css.address}>{row.address}</Text>
-          : <Text style={css.detail}>{t('暂无法获取')}</Text>}
+          : <Text style={css.detail}>{t("client.chatReliability.currentlyUnavailable")}</Text>}
       </View>)}
-      <Text style={css.detail}>{t('优先显示当前连接对应的公网地址，无法确认时显示本地地址。')}</Text>
+      <Text style={css.detail}>{t("client.chatReliability.showsPublicAddressesForTheCurrentConnectionWhenConfirmedOtherwise")}</Text>
     </View>}
     <View style={css.addresses}>
       {publicEndpointRows(state.publicEndpoints).map(row => <View key={row.id} style={css.addressRow}>
-        <Text style={css.label}>{t(row.label)}</Text>
+        <Text style={css.label}>{displayText(row.label)}</Text>
         {row.addresses.length ? row.addresses.map(address =>
           <Text key={address} selectable style={css.address}>{address}</Text>)
-          : <Text style={css.detail}>{t('尚未识别')}</Text>}
+          : <Text style={css.detail}>{t("client.chatReliability.notDetectedYet")}</Text>}
       </View>)}
-      <Text style={css.detail}>{t('显示本次连接识别到的公网地址。')}</Text>
+      <Text style={css.detail}>{t("client.chatReliability.publicAddressesDetectedDuringThisConnection")}</Text>
     </View>
   </>;
 }

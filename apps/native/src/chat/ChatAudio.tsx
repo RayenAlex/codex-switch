@@ -12,14 +12,14 @@ function attribute(value: string) {
 export function ChatAudio({ source }: { source: string }) {
   const styles = useStyles();
   useLanguage();
-  if (!AUDIO_SOURCE.test(source)) return <Text style={styles.subtitle}>{t("此音频暂时无法播放。")}</Text>;
+  if (!AUDIO_SOURCE.test(source)) return <Text style={styles.subtitle}>{t("client.mobile.cannotPlayThisAudioRightNow")}</Text>;
   const html = `<meta name="viewport" content="width=device-width,initial-scale=1">`
     + `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; media-src https: http: data:; `
     + `style-src 'unsafe-inline'">`
-    + `<body style="margin:0;background:transparent"><audio aria-label="${attribute(t('工具返回的音频'))}" `
+    + `<body style="margin:0;background:transparent"><audio aria-label="${attribute(t("client.chat.audioReturnedByTool"))}" `
     + `controls preload="none" `
     + `style="width:100%" src="${attribute(source)}"></audio></body>`;
-  return <View style={{ height: 64 }} accessibilityLabel={t("工具返回的音频")}>
+  return <View style={{ height: 64 }} accessibilityLabel={t("client.chat.audioReturnedByTool")}>
     <WebView source={{ html }} originWhitelist={['about:blank']} javaScriptEnabled={false}
       domStorageEnabled={false} allowFileAccess={false} mixedContentMode="never"
       onShouldStartLoadWithRequest={(request) => request.url === 'about:blank'}

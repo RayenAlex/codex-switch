@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useGuiLanguage } from '../../i18n/useGuiLanguage';
 import { useId, useMemo } from "react";
 import { ChevronRight, FileText } from "lucide-react";
@@ -11,7 +11,7 @@ function TurnChangesBadge({ turn }: { turn: Turn }) {
   useGuiLanguage();
   const id = useId();
   const files = useTurnChangedFiles(turn);
-  const title = guiText("本轮修改");
+  const title = uiText("client.chat.changesThisTurn");
   const entry = useMemo(() => ({ id, title, files }), [id, files, title]);
   const panel = useDetailsEntry(entry);
   if (!files.length) return null;
@@ -20,9 +20,9 @@ function TurnChangesBadge({ turn }: { turn: Turn }) {
   const removed = files.reduce((sum, file) => sum + file.removed, 0);
   return <div className={styles.wrap}>
     <button type="button" className={styles.badge} onClick={() => panel?.open(entry)}
-      aria-label={guiText("查看本轮修改：已编辑 {value1} 个文件，新增 {value2} 行，删除 {value3} 行", { value1: count, value2: added, value3: removed })}>
+      aria-label={uiText("client.conversation.viewChangesThisTurnFilesEditedLinesAddedLinesRemoved", { value1: count, value2: added, value3: removed })}>
       <FileText size={15} aria-hidden="true" />
-      <span>{guiText("已编辑")} {count} {guiText("个文件")}</span>
+      <span>{uiText("client.chat.edited")} {count} {uiText("client.chat.files.2d4a2a")}</span>
       <span className={styles.counts}>
         <span className={styles.added}>+{added}</span><span className={styles.removed}>−{removed}</span>
       </span>

@@ -10,8 +10,9 @@ import { SelectableChatText } from './SelectableChatText';
 import type { CopyAction } from './CopyTextButton';
 import { nativeTextSelection } from './nativeTextSelection';
 
-export function ChatMath({ markup, muted, fontSize, copy, compact = false, flushTop = false }: MathTextOptions & {
-  markup: string; copy?: CopyAction; compact?: boolean; flushTop?: boolean;
+export function ChatMath({ markup, muted, fontSize, copy, compact = false,
+  flushTop = false, flushBottom = false }: MathTextOptions & {
+  markup: string; copy?: CopyAction; compact?: boolean; flushTop?: boolean; flushBottom?: boolean;
 }) {
   const styles = useStyles();
   const openFile = useContext(ChatFileContext);
@@ -21,7 +22,8 @@ export function ChatMath({ markup, muted, fontSize, copy, compact = false, flush
     muted, fontSize, theme, longPressTimeoutMs: nativeTextSelection?.longPressTimeoutMs,
   }),
     baseUrl: 'about:blank' }), [markup, muted, fontSize, theme]);
-  return <View style={[styles.container, compact && styles.compact, flushTop && styles.flushTop]}>
+  return <View style={[styles.container, compact && styles.compact,
+    flushTop && styles.flushTop, flushBottom && styles.flushBottom]}>
     <WebView source={source} style={styles.content} containerStyle={{ flex: 0, height }} scrollEnabled={false}
       originWhitelist={['*']} onShouldStartLoadWithRequest={({ url }) => {
         if (url === 'about:blank') return true;
@@ -46,5 +48,6 @@ const useStyles = createThemedStyles(() => ({
   container: { minWidth: 120, alignSelf: 'stretch', marginVertical: 6 },
   compact: { marginVertical: 0 },
   flushTop: { marginTop: 0 },
+  flushBottom: { marginBottom: 0 },
   content: { backgroundColor: 'transparent' },
 }));

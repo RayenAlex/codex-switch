@@ -45,6 +45,15 @@ impl Stream {
         for server in &request.ice_servers {
             server.validate()?;
         }
+        #[cfg(windows)]
+        let display_state = {
+            let (id, runtime) = (request.id.clone(), path.clone());
+            tauri::async_runtime::spawn_blocking(move || {
+                super::super::privacy::prepare_saved(&id, &runtime)
+            })
+            .await
+            .map_err(|_| DesktopError::Privacy)??
+        };
         let display = super::capture_recovery::display(&request.id).await?;
         let (mut encoder, _) = open_encoder(&path, &mut profile, &display, &request.id).await?;
         let peer = match peer::create_codec(
@@ -95,6 +104,10 @@ impl Stream {
             stream.close().await;
         }
         let mut offer = offer?;
+        #[cfg(windows)]
+        {
+            offer.display_state = display_state;
+        }
         offer.relay_standby = stream.relay_standby;
         tokio::spawn(super::audio::run(Arc::clone(&stream), path.clone()));
         tokio::spawn(pump::run(Arc::clone(&stream), path, encoder, changes));

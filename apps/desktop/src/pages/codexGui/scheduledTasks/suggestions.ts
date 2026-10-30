@@ -1,14 +1,14 @@
-import { guiText } from "../../../i18n/guiText";
+import { uiText } from "../../../i18n/uiText";
 import type { TaskInput } from "./types";
 
 export const TASK_SUGGESTIONS: (TaskInput & { description: string; icon: "briefing" | "review" | "monitor" })[] = [
-  { get title() { return guiText("每日简报"); }, get description() { return guiText("以日历、未读电子邮件和优先事项摘要开启每个工作日"); }, icon: "briefing",
-    get prompt() { return guiText("根据可用的日历、未读邮件和最近工作，整理今天的简报，列出重要安排和优先事项。信息不足时请明确说明。"); },
+  { get title() { return uiText("client.scheduledTasks.dailyBriefing"); }, get description() { return uiText("client.scheduledTasks.startEachWeekdayWithASummaryOfYourCalendarUnread"); }, icon: "briefing",
+    get prompt() { return uiText("client.scheduledTasks.prepareTodaySBriefingUsingTheAvailableCalendarUnreadEmails"); },
     cwd: "", schedule: { kind: "weekdays", time: "08:00" } },
-  { get title() { return guiText("每周回顾"); }, get description() { return guiText("每周五将你最近的工作整理成简明的状态更新"); }, icon: "review",
-    get prompt() { return guiText("回顾本周的工作，整理完成事项、当前进展、遇到的问题和下周重点，生成一份简洁的状态更新。"); },
+  { get title() { return uiText("client.scheduledTasks.weeklyReview"); }, get description() { return uiText("client.scheduledTasks.turnYourRecentWorkIntoAConciseStatusUpdateEvery"); }, icon: "review",
+    get prompt() { return uiText("client.scheduledTasks.reviewThisWeekSWorkAndWriteAConciseStatus"); },
     cwd: "", schedule: { kind: "weekly", time: "16:00", weekday: 4 } },
-  { get title() { return guiText("跟进监控"); }, get description() { return guiText("查看最近的电子邮件和日历活动，并标记需要你关注的事项"); }, icon: "monitor",
-    get prompt() { return guiText("查看可用的最近邮件和日历活动，找出尚未回复、即将到期或需要跟进的事项，按优先级列出。"); },
+  { get title() { return uiText("client.scheduledTasks.followUpMonitor"); }, get description() { return uiText("client.scheduledTasks.reviewRecentEmailsAndCalendarEventsAndFlagItemsThat"); }, icon: "monitor",
+    get prompt() { return uiText("client.scheduledTasks.reviewAvailableRecentEmailsAndCalendarEventsListUnansweredMessages"); },
     cwd: "", schedule: { kind: "weekdays", time: "09:00" } },
 ];

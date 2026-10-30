@@ -1,4 +1,4 @@
-import { guiText } from "../i18n/guiText";
+import { uiText } from "../i18n/uiText";
 
 const ACCOUNT_FILE_ACCEPT = ".json,.jsonl,.ndjson";
 const MAX_ACCOUNT_FILE_BYTES = 20 * 1024 * 1024;
@@ -17,7 +17,7 @@ export function chooseBrowserAccountFile(): Promise<string | null> {
       cleanup();
       if (!file) { resolve(null); return; }
       if (file.size > MAX_ACCOUNT_FILE_BYTES) {
-        reject(new Error(guiText("请选择小于 20 MB 的账户文件")));
+        reject(new Error(uiText("client.desktopMisc.chooseAnAccountFileSmallerThan20Mb")));
         return;
       }
       void file.text().then(resolve, reject);

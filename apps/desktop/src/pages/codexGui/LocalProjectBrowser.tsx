@@ -10,9 +10,9 @@ import { projectDownloads } from '../../../../../shared/project-browser/download
 const client = createProjectBrowserClient(request => guiApi.request(request),
   projectDownloads(request => guiApi.request(request)));
 const host = browserHost(client);
-if (isDesktopApp) host.open = async (entry, application) => {
+if (isDesktopApp) host.open = async entry => {
   await fileApi.perform({ path: entry.path, threadId: null },
-    { type: 'open', application: application === 'explorer' && entry.directory ? 'default' : application });
+    { type: 'open', application: entry.directory ? 'default' : 'explorer' });
 };
 
 export function LocalProjectBrowser(props: { cwd: string; active: boolean; connected: boolean }) {

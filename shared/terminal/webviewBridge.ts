@@ -1,5 +1,6 @@
 import { connectTerminal } from './connection';
 import type { TerminalApi, TerminalEvent, TerminalInfo, TerminalSize } from './types';
+import { ZmodemTransfer, type ZmodemOptions } from './zmodem';
 
 const MAX_BUFFER_BYTES = 512 * 1024;
 const MAX_INPUT_CHARACTERS = 32 * 1024;
@@ -25,6 +26,7 @@ export function parseTerminalMessage(raw: string): Message | null {
 export function createTerminalBridge(options: {
   api: TerminalApi; cwd: string; emit: (event: TerminalEvent) => void; status: (message: string) => void;
   session?: TerminalInfo;
+  zmodem?: Pick<ZmodemOptions, 'change' | 'file'>;
 }) {
   let connection: ReturnType<typeof connectTerminal> | undefined;
   let attached = false;
@@ -33,7 +35,7 @@ export function createTerminalBridge(options: {
   let bytes = 0;
   let exit: TerminalEvent | undefined;
   let connectionStatus: TerminalEvent | undefined;
-  const event = (value: TerminalEvent) => {
+  const displayEvent = (value: TerminalEvent) => {
     if (value.type === 'reset') { output.length = 0; bytes = 0; }
     if (value.type === 'output') {
       output.push(value.data.slice(-MAX_BUFFER_BYTES)); bytes += output.at(-1)!.length;
@@ -47,6 +49,19 @@ export function createTerminalBridge(options: {
     }
     if (attached) options.emit(value);
   };
+  const transfer = options.zmodem && options.session?.ssh && options.api.writeBinary
+    ? new ZmodemTransfer({ ...options.zmodem,
+      output: data => displayEvent({ type: 'output', data }),
+      write: bytes => options.api.writeBinary!(options.session!.id, bytes),
+      binaryMode: options.api.binaryMode
+        ? (token, enabled) => options.api.binaryMode!(options.session!.id, token, enabled) : undefined }) : undefined;
+  const event = (value: TerminalEvent) => {
+    if (value.type === 'output' && transfer) { transfer.output(value.data); return; }
+    if (value.type === 'reset' || value.type === 'exit' || (value.type === 'connection' && !value.connected)) {
+      transfer?.disconnect();
+    }
+    displayEvent(value);
+  };
   const receive = (raw: string) => {
     const value = parseTerminalMessage(raw);
     if (disposed || !value) return;
@@ -58,9 +73,14 @@ export function createTerminalBridge(options: {
       if (!connection) connection = connectTerminal({ ...options, size: value,
         onEvent: event, onReady: () => options.status(''), onError: options.status });
       else connection.resize(value);
-    } else if (attached && value.type === 'input') connection?.input(value.data);
+    } else if (attached && value.type === 'input') {
+      if (transfer?.busy) { if (value.data === '\x03') transfer.cancel(); return; }
+      connection?.input(value.data);
+    }
     else if (attached && value.type === 'resize') connection?.resize(value);
   };
-  return { receive, detach: () => { attached = false; },
-    dispose: () => { disposed = true; attached = false; connection?.dispose(); output.length = 0; } };
+  return { receive, transfer, detach: () => { attached = false; },
+    dispose: () => {
+      disposed = true; attached = false; transfer?.dispose(); connection?.dispose(); output.length = 0;
+    } };
 }

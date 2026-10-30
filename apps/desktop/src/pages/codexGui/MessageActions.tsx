@@ -1,4 +1,4 @@
-import { guiLocale, guiText } from "../../i18n/guiText";
+import { guiLocale, uiText } from "../../i18n/uiText";
 import { Button, Tooltip } from "antd";
 import { Split } from "lucide-react";
 import { CopyButton } from "./CopyButton";
@@ -16,8 +16,8 @@ export function MessageActions({ text, completedAt, onFork, forkDisabled }: {
   const timestamp = date && Number.isFinite(date.getTime()) ? date : null;
   return <div className={styles.actions}>
     <CopyButton text={text} />
-    <Tooltip title={guiText("分支到新聊天")} styles={{ root: { maxWidth: 400 } }}>
-      <Button type="text" size="small" aria-label={guiText("分支到新聊天")} disabled={!onFork || forkDisabled}
+    <Tooltip title={uiText("client.conversation.branchIntoANewChat")} styles={{ root: { maxWidth: 400 } }}>
+      <Button type="text" size="small" aria-label={uiText("client.conversation.branchIntoANewChat")} disabled={!onFork || forkDisabled}
         icon={<Split size={14} />} onClick={onFork} />
     </Tooltip>
     {timestamp && <time className={styles.timestamp} dateTime={timestamp.toISOString()}>

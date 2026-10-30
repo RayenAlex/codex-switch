@@ -10,7 +10,7 @@ import {
   restoreCodexThreads,
 } from "../../api/backend";
 import type { CodexThreadBinEntry } from "../../types";
-import type { ThreadCopy } from "./copy";
+import type { ThreadCopy } from "@remoteai/i18n/copy/desktop/threads";
 
 interface TrashOptions {
   selected: Set<string>;

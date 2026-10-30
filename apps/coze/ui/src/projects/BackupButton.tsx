@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import { useState } from "react";
 import { Alert, App, Button, Modal, Upload } from "antd";
 import { Download, FolderArchive, Upload as UploadIcon } from "lucide-react";
@@ -17,7 +18,7 @@ export function BackupButton({ onRestored }: { onRestored: () => void }) {
         headers: { Authorization: `Bearer ${sessionStorage.getItem("coze-session") ?? ""}` } });
       if (!response.ok) {
         const result = await response.json() as { error?: string };
-        throw new Error(result.error ?? msg("备份操作未完成，请稍后重试。"));
+        throw new Error(result.error ?? msg("coze.index.couldnTCompleteTheBackupOperationTryAgainLater"));
       }
       if (file) { onRestored(); setOpen(false); return; }
       const url = URL.createObjectURL(await response.blob());
@@ -28,26 +29,26 @@ export function BackupButton({ onRestored }: { onRestored: () => void }) {
   };
   const restore = (file: File) => {
     // App.useApp().modal follows the ConfigProvider locale and theme; static Modal.confirm does not.
-    modal.confirm({ title: t("用备份替换当前内容？"), width: 400,
-      content: t("当前内容会被替换，分享链接会失效。建议先下载一份备份。"),
-      okText: t("恢复备份"), cancelText: t("取消"), okButtonProps: { danger: true }, onOk: () => perform(file) });
+    modal.confirm({ title: t("coze.index.replaceYourCurrentContentWithTheBackup"), width: 400,
+      content: t("coze.index.yourCurrentContentWillBeReplacedAndAccessLinksWill"),
+      okText: t("coze.index.restoreBackup"), cancelText: t("coze.core.cancel"), okButtonProps: { danger: true }, onOk: () => perform(file) });
     return false;
   };
-  return <><button className="studio-nav-button" aria-label={t("备份与恢复")} onClick={() => setOpen(true)}>
-    <FolderArchive size={18} /><span>{t("备份与恢复")}</span></button>
-    <Modal className="studio-dialog" title={t("备份与恢复")} open={open} width={400} centered
+  return <><button className="studio-nav-button" aria-label={t("coze.index.backupAndRestore")} onClick={() => setOpen(true)}>
+    <FolderArchive size={18} /><span>{t("coze.index.backupAndRestore")}</span></button>
+    <Modal className="studio-dialog" title={t("coze.index.backupAndRestore")} open={open} width={400} centered
       footer={null} onCancel={() => setOpen(false)}>
-      <p>{t("保存一份完整备份，随时恢复你的创作内容。")}</p>
-      <section className="backup-option"><h3><Download size={18} />{t("下载备份")}</h3>
-        <p>{t("包含应用、文档、对话、发布版本和运行记录。")}</p>
-        <Button block type="primary" loading={busy} onClick={() => void perform()}>{t("下载完整备份")}</Button>
+      <p>{t("coze.index.saveAFullBackupSoYouCanRestoreYourWork")}</p>
+      <section className="backup-option"><h3><Download size={18} />{t("coze.index.downloadBackup")}</h3>
+        <p>{t("coze.index.includesAppsDocumentsConversationsPublishedVersionsAndRunHistory")}</p>
+        <Button block type="primary" loading={busy} onClick={() => void perform()}>{t("coze.index.downloadFullBackup")}</Button>
       </section>
-      <section className="backup-option"><h3><UploadIcon size={18} />{t("恢复备份")}</h3>
-        <p>{t("选择备份文件，恢复后将替换当前内容。")}</p>
+      <section className="backup-option"><h3><UploadIcon size={18} />{t("coze.index.restoreBackup")}</h3>
+        <p>{t("coze.index.chooseABackupFileRestoringItReplacesYourCurrentContent")}</p>
         <Upload className="backup-upload" accept=".coze" beforeUpload={restore}
           showUploadList={false} disabled={busy}>
-          <Button block disabled={busy}>{t("选择备份文件")}</Button></Upload>
+          <Button block disabled={busy}>{t("coze.index.chooseBackupFile")}</Button></Upload>
       </section>
-      {error && <Alert style={{ marginTop: 12 }} type="error" message={t(error)} />}
+      {error && <Alert style={{ marginTop: 12 }} type="error" message={displayError(error)} />}
     </Modal></>;
 }

@@ -3,11 +3,11 @@ import { FileEnvironmentContext } from './fileEnvironment';
 import { Dropdown, message } from 'antd';
 import { isTauri } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { guiText } from '../../i18n/guiText';
+import { uiText } from "../../i18n/uiText";
 import { copyText } from '../../utils/clipboard';
 
 function reportLinkError() {
-  void message.error({ content: guiText('链接暂时无法打开，请稍后重试。'),
+  void message.error({ content: uiText("client.conversation.couldNotOpenTheLinkPleaseTryAgainShortly"),
     style: { maxWidth: 400, marginInline: 'auto' } });
 }
 
@@ -26,12 +26,12 @@ export function WebsiteLinkMenu({ href, children }: { href: string; children: Re
   if (!isTauri()) return children;
   const copy = async () => {
     try { await copyText(href); }
-    catch { void message.error({ content: guiText('复制失败，请重试。'),
+    catch { void message.error({ content: uiText("client.chat.couldNotCopyTryAgain"),
       style: { maxWidth: 400, marginInline: 'auto' } }); }
   };
   return <Dropdown trigger={['contextMenu']} overlayStyle={{ maxWidth: 400 }} menu={{ items: [
-    { key: 'open', label: guiText('在浏览器中打开'),
+    { key: 'open', label: uiText("client.workspaceActions.openInBrowser"),
       onClick: () => { void openWebsiteInBrowser(href, environment?.resolveWebsite); } },
-    { key: 'copy', label: guiText('复制链接'), onClick: () => { void copy(); } },
+    { key: 'copy', label: uiText("client.mobile.copyLink"), onClick: () => { void copy(); } },
   ] }}>{children}</Dropdown>;
 }

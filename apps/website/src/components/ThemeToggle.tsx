@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { Moon, Sun } from 'lucide-react';
-import type { Language } from '../content/types';
+import type { Language } from '@remoteai/i18n/website-content/types';
 import { syncAppearance, toggleAppearance } from '../lib/appearance';
-import { ui } from '../lib/ui-text';
+import { ui } from '@remoteai/i18n/website-content/ui-text';
 
 export function ThemeToggle({ language }: { language: Language }) {
   useEffect(() => {

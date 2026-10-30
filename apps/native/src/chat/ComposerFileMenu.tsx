@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import Feather from '@expo/vector-icons/Feather';
 import { FlatList, Pressable, Text, View } from 'react-native';
 import { t, useLanguage } from '../i18n';
@@ -16,10 +17,10 @@ export function ComposerFileMenu(props: {
   const color = useThemeColor();
   const { query, threadId, cwd, ready, load, choose, close } = props;
   const result = useProjectFileCandidates({ active: true, connected: ready, query, threadId, cwd, load });
-  return <View accessibilityLabel={t('引用文件或文件夹')} style={styles.root}>
+  return <View accessibilityLabel={t("client.fileReferences.referenceAFileOrFolder")} style={styles.root}>
     <View style={styles.heading}>
-      <Text style={styles.detail}>{t('引用文件或文件夹')}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={t('关闭文件列表')} onPress={close} hitSlop={8}>
+      <Text style={styles.detail}>{t("client.fileReferences.referenceAFileOrFolder")}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={t("client.fileReferences.closeFileList")} onPress={close} hitSlop={8}>
         <Feather name="x" size={18} color={color('#777', 'muted')} />
       </Pressable>
     </View>
@@ -33,11 +34,11 @@ export function ComposerFileMenu(props: {
           <Text style={styles.detail}>{item.relativePath ?? item.path}</Text></View>
       </Pressable>}
       ListFooterComponent={<>
-        {result.loading && <Text style={styles.message}>{t('正在搜索文件…')}</Text>}
-        {!!result.error && <Text accessibilityRole="alert" style={styles.message}>{t(result.error)}</Text>}
+        {result.loading && <Text style={styles.message}>{t("client.fileReferences.searchingFiles")}</Text>}
+        {!!result.error && <Text accessibilityRole="alert" style={styles.message}>{displayError(result.error)}</Text>}
         {!result.loading && !result.error && !result.entries.length
-          && <Text style={styles.message}>{t('没有找到匹配的文件或文件夹')}</Text>}
-        {result.truncated && <Text style={styles.message}>{t('仅显示部分结果，请输入更完整的名称或路径')}</Text>}
+          && <Text style={styles.message}>{t("client.fileReferences.noMatchingFilesOrFolders")}</Text>}
+        {result.truncated && <Text style={styles.message}>{t("client.fileReferences.showingPartialResultsEnterAMoreSpecificNameOrPath")}</Text>}
       </>} />
   </View>;
 }

@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page, type APIRequestContext, type TestInfo } from '@playwright/test';
 import type { Thread } from '../src/chat/types';
+import { testText } from '../../../scripts/i18n-fixture.mjs';
 
 interface FixtureState {
   synchronization: Array<{ bytes: number; changedItems: number; text: string }>;
@@ -23,7 +24,11 @@ export async function operationCount(request: APIRequestContext, operation: stri
 }
 export async function navigate(page: Page, label: string) {
   const mobile = (page.viewportSize()?.width ?? 0) <= 860;
-  await click(page.locator(mobile ? '.mobile-tabbar' : '.desktop-sidebar nav').getByText(label, { exact: true }));
+  const language = (await page.locator('html').getAttribute('lang'))?.split('-')[0] ?? 'zh';
+  const discoveryChild = label === testText('client.app.devices', {}, language) || label === '2FA';
+  await click(page.locator(mobile ? '.mobile-tabbar' : '.desktop-sidebar nav')
+    .getByText(discoveryChild ? testText('client.discovery.title', {}, language) : label, { exact: true }));
+  if (discoveryChild) await click(page.locator('.discovery-list').getByRole('button', { name: label, exact: true }));
 }
 export async function openChatList(page: Page) {
   const toggle = page.getByRole('button', { name: '打开聊天列表', exact: true });

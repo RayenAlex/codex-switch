@@ -1,3 +1,4 @@
+import { displayText } from '../../i18n/index';
 import { useThemeColor } from '../../theme/store';
 import { Pressable, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -10,10 +11,10 @@ import { useDisplaySettingsStyles as useS } from './displaySettingsStyles';
 export function DisplayMonitorSettings({ displays, settings, saving, update, stats }: DisplaySettingsProps) {
   const s = useS();
   const color = useThemeColor();
-  return <DisplaySettingsSection icon="monitor" title="显示器" description="选择要使用的显示器">
+  return <DisplaySettingsSection icon="monitor" title="client.remoteDesktop.monitor" description="client.remoteDesktop.chooseTheMonitorToUse">
     {displays.length > 0 && <View style={s.monitorGrid}>
       {displays.map(item => <Pressable key={item.id} disabled={saving} accessibilityRole="radio"
-        accessibilityLabel={displayLabel(item, t)}
+        accessibilityLabel={displayLabel(item, displayText)}
         accessibilityState={{ checked: settings.displayId === item.id, disabled: saving }}
         style={[s.monitorCard, settings.displayId === item.id && s.monitorSelected, saving && s.disabled]}
         onPress={() => { void update({ ...settings, displayId: item.id }); }}>
@@ -23,15 +24,15 @@ export function DisplayMonitorSettings({ displays, settings, saving, update, sta
         <View style={s.monitorPreview} accessible={false}>
           <View style={s.monitorWave} /><View style={s.monitorShine} />
         </View>
-        <Text style={s.monitorName}>{displayName(item, t)}{item.primary && `（${t('主屏')}）`}</Text>
+        <Text style={s.monitorName}>{displayName(item, displayText)}{item.primary && `（${t("client.remoteDesktop.primary")}）`}</Text>
         <Text style={s.monitorResolution}>{item.width} × {item.height}</Text>
       </Pressable>)}
     </View>}
-    <Pressable style={s.toggle} accessibilityRole="switch" accessibilityLabel={t('隐藏连接状态')}
+    <Pressable style={s.toggle} accessibilityRole="switch" accessibilityLabel={t("client.remoteDesktop.hideConnectionStats")}
       accessibilityState={{ checked: !stats.visible }} onPress={stats.toggle}>
       <MaterialCommunityIcons name="view-dashboard-outline" size={20} color={color("#7e9bc6", 'info')} />
-      <View style={s.headerCopy}><Text style={s.text}>{t('隐藏连接状态')}</Text>
-        <Text style={s.toggleDescription}>{t('连接后不在屏幕上显示状态信息')}</Text></View>
+      <View style={s.headerCopy}><Text style={s.text}>{t("client.remoteDesktop.hideConnectionStats")}</Text>
+        <Text style={s.toggleDescription}>{t("client.remoteDesktop.keepConnectionStatsOffTheScreen")}</Text></View>
       <View style={[s.switchTrack, !stats.visible && s.switchOn]}>
         <View style={[s.switchThumb, !stats.visible && s.switchThumbOn]} /></View>
     </Pressable>

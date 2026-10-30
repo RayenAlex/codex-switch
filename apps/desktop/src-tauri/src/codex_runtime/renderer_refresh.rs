@@ -86,14 +86,7 @@ impl RendererRefresh for PendingRefresh<'_> {
 
     fn refresh(&mut self) -> Result<(), String> {
         let request = self.request;
-        let result = crate::dream_skin_native::refresh_codex_models(
-            &request.models,
-            &request.fast_mode_models,
-            &request.image_input_models,
-            &request.model_reasoning_efforts,
-            &request.selected_model,
-            request.reasoning_profile,
-        )?;
+        let result = crate::dream_skin_native::refresh_codex_models(request)?;
         // Ordinary launches deliberately have no renderer channel. Preserve their
         // immediate no-op instead of making blocking settings callers wait for CDP.
         if result.refreshed || result.reason.as_deref() == Some("runtime-not-initialized") {

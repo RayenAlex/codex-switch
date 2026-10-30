@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { CircleAlert, ChevronDown } from "lucide-react";
 import type { Turn } from "./types";
 import { isModelCapacityError, requestErrorDetails } from "./requestError";
@@ -9,13 +9,13 @@ import { TurnRetryButton } from "./TurnRetryButton";
 import styles from "./RequestErrorNotice.module.less";
 
 function noticeMessage(turn: Turn, record: TurnRequestError): string {
-  if (!record.willRetry) return guiText("本次回复遇到问题，已中断。");
-  if (turn.status === "completed") return guiText("本次回复曾出现连接中断，现已恢复。");
-  if (turn.status === "interrupted" || turn.status === "failed") return guiText("本次回复曾出现连接中断。");
+  if (!record.willRetry) return uiText("client.chat.thisReplyStoppedBecauseOfAProblem");
+  if (turn.status === "completed") return uiText("client.chat.theConnectionWasInterruptedAndHasRecovered");
+  if (turn.status === "interrupted" || turn.status === "failed") return uiText("client.chat.theConnectionWasInterruptedDuringThisReply");
   const resumed = turn.items.slice(requestErrorPosition(turn, record))
     .some((item) => item.type !== "userMessage" && item.type !== "modelChange");
-  if (resumed) return guiText("本次回复曾出现连接中断，现已恢复。");
-  return guiText("连接暂时中断，Codex 正在重试…");
+  if (resumed) return uiText("client.chat.theConnectionWasInterruptedAndHasRecovered");
+  return uiText("client.chat.connectionInterruptedCodexIsRetrying");
 }
 
 export function RequestErrorNotice({ turn, record, count = 1, retry, onCancelRetry }: {
@@ -31,7 +31,7 @@ export function RequestErrorNotice({ turn, record, count = 1, retry, onCancelRet
   if (!details) return <div className={styles.notice}><span role="status">{message}</span>{action}</div>;
   return <div className={styles.notice} data-request-error={record.id}>
     <DeferredDetails className={styles.errorRow} summary={
-      <summary className={styles.summary} aria-label={guiText("查看报错详情")}>
+      <summary className={styles.summary} aria-label={uiText("client.chat.viewErrorDetails")}>
         <CircleAlert size={15} aria-hidden="true" />
         <span className={styles.preview} role="status">{details.replace(/\s+/g, " ")}</span>
         {count > 1 && <span className={styles.count}>×{count}</span>}

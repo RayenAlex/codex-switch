@@ -1,12 +1,32 @@
 export type ThemeMode = 'light' | 'dark';
+export type ThemePreference = ThemeMode | 'system';
+
+export const THEME_LABELS = {
+  system: 'client.settings.followSystem',
+  light: 'client.settings.light',
+  dark: 'client.settings.dark',
+} as const;
 
 export const THEME_OPTIONS = [
-  { value: 'light', label: '明亮' },
-  { value: 'dark', label: '暗黑' },
+  { value: 'light', label: THEME_LABELS.light },
+  { value: 'dark', label: THEME_LABELS.dark },
+] as const;
+
+export const THEME_PREFERENCE_OPTIONS = [
+  { value: 'system', label: THEME_LABELS.system },
+  ...THEME_OPTIONS,
 ] as const;
 
 export function isThemeMode(value: unknown): value is ThemeMode {
   return value === 'light' || value === 'dark';
+}
+
+export function isThemePreference(value: unknown): value is ThemePreference {
+  return value === 'system' || isThemeMode(value);
+}
+
+export function resolveThemeMode(preference: ThemePreference, systemMode: unknown): ThemeMode {
+  return preference === 'system' ? (systemMode === 'dark' ? 'dark' : 'light') : preference;
 }
 
 export const darkColors = {

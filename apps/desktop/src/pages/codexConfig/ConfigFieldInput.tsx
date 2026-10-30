@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useContext, useEffect, useRef, useState } from "react";
 import { AutoComplete, Input, Select, Spin } from "antd";
 import { ChevronDown } from "lucide-react";
@@ -18,17 +18,17 @@ interface ConfigFieldInputProps {
 
 function validateNumber(text: string, schema: ConfigSchema): string | undefined {
   const value = Number(text);
-  if (!text.trim() || !Number.isFinite(value)) return guiText("请输入有效的数字。");
-  if (schemaType(schema) === "integer" && !Number.isSafeInteger(value)) return guiText("请输入可精确保存的整数。");
-  if (schema.minimum !== undefined && value < schema.minimum) return guiText("不能小于 {value1}。", { value1: schema.minimum });
-  if (schema.maximum !== undefined && value > schema.maximum) return guiText("不能大于 {value1}。", { value1: schema.maximum });
+  if (!text.trim() || !Number.isFinite(value)) return uiText("client.configEditor.enterAValidNumber");
+  if (schemaType(schema) === "integer" && !Number.isSafeInteger(value)) return uiText("client.configEditor.enterAnIntegerThatCanBeStoredWithoutLosingPrecision");
+  if (schema.minimum !== undefined && value < schema.minimum) return uiText("client.configEditor.mustBeAtLeast", { value1: schema.minimum });
+  if (schema.maximum !== undefined && value > schema.maximum) return uiText("client.configEditor.mustBeAtMost", { value1: schema.maximum });
   return undefined;
 }
 
 function validateText(value: string, schema: ConfigSchema): string | undefined {
-  if (schema.minLength !== undefined && value.length < schema.minLength) return guiText("至少输入 {value1} 个字符。", { value1: schema.minLength });
-  if (schema.maxLength !== undefined && value.length > schema.maxLength) return guiText("最多输入 {value1} 个字符。", { value1: schema.maxLength });
-  if (schema.pattern && !new RegExp(schema.pattern).test(value)) return guiText("输入内容不符合此配置项的格式。");
+  if (schema.minLength !== undefined && value.length < schema.minLength) return uiText("client.configEditor.enterAtLeastCharacters", { value1: schema.minLength });
+  if (schema.maxLength !== undefined && value.length > schema.maxLength) return uiText("client.configEditor.enterNoMoreThanCharacters", { value1: schema.maxLength });
+  if (schema.pattern && !new RegExp(schema.pattern).test(value)) return uiText("client.configEditor.theValueDoesNotMatchTheRequiredFormatForThis");
   return undefined;
 }
 
@@ -59,7 +59,7 @@ function useConfigDraft({ schema, value, disabled, onCommit }: ConfigFieldInputP
     const success = await onCommit(replacement);
     inFlight.current = undefined;
     if (success && latest.current === submitted) dirty.current = false;
-    setError(success ? undefined : guiText("未能保存，请检查提示后重试。"));
+    setError(success ? undefined : uiText("client.configEditor.couldNotSaveCheckTheMessageAndTryAgain"));
   };
   const change = (next: string) => {
     dirty.current = true;
@@ -77,7 +77,7 @@ function DraftInput(props: ConfigFieldInputProps) {
   const modelCatalog = useContext(ConfigModelsContext);
   const shared = {
     value: draft, disabled, "aria-label": label, status: error ? "error" as const : undefined,
-    placeholder: value === "" ? guiText("空文本") : guiText("使用默认值"), onBlur: () => { void commit(); },
+    placeholder: value === "" ? uiText("client.configEditor.emptyText") : uiText("client.configEditor.useDefault"), onBlur: () => { void commit(); },
     onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => change(event.target.value),
   };
   const multiline = /instructions|prompt|description/.test(fieldKey) || draft.includes("\n");
@@ -93,7 +93,7 @@ function DraftInput(props: ConfigFieldInputProps) {
     options={suggestions.filter((item) => optionLabel(item).toLowerCase().includes(search.toLowerCase()))
       .map((item) => ({ value: item, label: optionLabel(item) }))}
     onSelect={(next) => { change(next); void commit(); }} onBlur={() => { void commit(); }}>
-    <Input aria-label={label} placeholder={guiText("选择或输入自定义值")} status={shared.status}
+    <Input aria-label={label} placeholder={uiText("client.configEditor.chooseOrEnterACustomValue")} status={shared.status}
       suffix={fieldKey === "model" && modelCatalog.loading
         ? <Spin size="small" /> : <ChevronDown size={14} aria-hidden="true" />} />
   </AutoComplete>;
@@ -109,7 +109,7 @@ function ChoiceInput(props: ConfigFieldInputProps) {
   const [error, setError] = useState(false);
   const boolean = schemaType(schema, value) === "boolean";
   const options = boolean ? [
-    { value: "true", label: guiText("开启") }, { value: "false", label: guiText("关闭") },
+    { value: "true", label: uiText("client.configEditor.on") }, { value: "false", label: uiText("client.projectBrowser.close") },
   ] : (schema.enum ?? []).map((item) => ({ value: JSON.stringify(item), label: optionLabel(String(item)) }));
   const selected = value === undefined ? undefined : JSON.stringify(value);
   if (selected !== undefined && !options.some((option) => option.value === selected)) {
@@ -122,11 +122,11 @@ function ChoiceInput(props: ConfigFieldInputProps) {
     setError(!success);
   };
   return <div className={styles.inputWrap}>
-    <Select allowClear aria-label={label} placeholder={guiText("使用默认值")} options={options}
+    <Select allowClear aria-label={label} placeholder={uiText("client.configEditor.useDefault")} options={options}
       className={styles.select} value={pending ? pending.value || undefined : selected}
       disabled={disabled || pending !== undefined} showSearch optionFilterProp="label"
       onChange={(next: string | undefined) => { void commit(next); }} />
-    {error && <span role="alert" className={styles.error}>{guiText("未能保存，请重试。")}</span>}
+    {error && <span role="alert" className={styles.error}>{uiText("client.configEditor.couldNotSavePleaseTryAgain")}</span>}
   </div>;
 }
 

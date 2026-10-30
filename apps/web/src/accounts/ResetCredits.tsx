@@ -18,33 +18,33 @@ export function ResetCredits({ account, state, privateMode, onBack, onUpdated }:
   const useCredit = async () => {
     if (busy.current || !state.credits?.length) return;
     busy.current = true;
-    const confirmed = await Dialog.confirm({ title: t("确认使用重置卡？"),
-      content: t("使用一张重置卡，恢复当前可重置的用量额度。"), confirmText: t("使用重置卡"), cancelText: t("取消") });
+    const confirmed = await Dialog.confirm({ title: t("client.accounts.useAResetCredit"),
+      content: t("client.accounts.useOneResetCreditToRestoreTheQuotaEligibleFor"), confirmText: t("client.accounts.useResetCredit"), cancelText: t("client.accounts.cancel") });
     if (!confirmed) { busy.current = false; return; }
     setConsuming(true);
     try {
       await consumeResetCredit(account.id);
-      Toast.show({ icon: 'success', content: t("重置卡已使用") });
+      Toast.show({ icon: 'success', content: t("client.accounts.resetCreditUsed") });
       await Promise.all([state.reload(), onUpdated()]);
     } catch {
-      Toast.show({ icon: 'fail', content: t("使用失败，请稍后重试") });
+      Toast.show({ icon: 'fail', content: t("client.accounts.couldNotUseTheCreditPleaseTryAgainLater") });
     } finally { busy.current = false; setConsuming(false); }
   };
   const close = () => { if (!busy.current) onBack(); };
-  return <AdaptiveSheet open title={t("重置卡详情")} onClose={close} onBack={close}
+  return <AdaptiveSheet open title={t("client.accounts.resetCredits.277d04")} onClose={close} onBack={close}
     subtitle={privateMode ? maskEmail(account.email) : account.email}>
-    <div className="reset-credit-summary"><span>{t("当前可用")}</span>
-      <strong>{state.loading || state.error ? '—' : state.credits?.length ?? 0}<small>  {t("张")}</small></strong></div>
-    {state.loading ? <div className="sheet-loading"><SpinLoading /><span>{t("正在读取重置卡")}</span></div>
-      : state.error ? <div className="detail-load-error" role="alert"><p>{t("重置卡暂时无法读取，请稍后重试")}</p>
-        <Button size="small" onClick={() => void state.reload()}>{t("重新读取")}</Button></div>
-        : !state.credits?.length ? <Empty description={t("当前没有可用重置卡")} />
+    <div className="reset-credit-summary"><span>{t("client.accounts.availableNow")}</span>
+      <strong>{state.loading || state.error ? '—' : state.credits?.length ?? 0}<small>  {t("client.accounts.credits.f56a04")}</small></strong></div>
+    {state.loading ? <div className="sheet-loading"><SpinLoading /><span>{t("client.accounts.loadingResetCredits")}</span></div>
+      : state.error ? <div className="detail-load-error" role="alert"><p>{t("client.accounts.couldNotLoadResetCreditsPleaseTryAgainLater")}</p>
+        <Button size="small" onClick={() => void state.reload()}>{t("client.accounts.reload")}</Button></div>
+        : !state.credits?.length ? <Empty description={t("client.accounts.noResetCreditsAvailable")} />
           : <div className="reset-credit-list">{state.credits.map((credit, index) =>
             <article key={`${credit.expiresAt}-${index}`}><header><RefreshCw size={20} />
-              <strong>{t("重置卡")} {index + 1}</strong><span>{t("可用")}</span></header>
-              <p><span>{t("发放时间")}</span>{displayFullDate(credit.issuedAt)}</p>
-              <p><span>{t("到期时间")}</span>{displayFullDate(credit.expiresAt)}</p></article>)}</div>}
+              <strong>{t("client.accounts.resetCredits")} {index + 1}</strong><span>{t("client.accounts.available")}</span></header>
+              <p><span>{t("client.accounts.issued")}</span>{displayFullDate(credit.issuedAt)}</p>
+              <p><span>{t("client.accounts.expires")}</span>{displayFullDate(credit.expiresAt)}</p></article>)}</div>}
     <Button block color="primary" loading={consuming} disabled={state.loading || state.error || !state.credits?.length}
-      onClick={() => void useCredit()}>{t("使用重置卡")}</Button>
+      onClick={() => void useCredit()}>{t("client.accounts.useResetCredit")}</Button>
   </AdaptiveSheet>;
 }

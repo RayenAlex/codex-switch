@@ -6,4 +6,6 @@ object NativeConnectivity {
     @JvmStatic external fun receiveBulk(owner: String, id: String): ByteArray?
     @JvmStatic external fun sendBulk(owner: String, id: String, generation: Long, bytes: ByteArray): Boolean
     @JvmStatic external fun receivePacket(owner: String, id: String): ByteArray?
+    @JvmStatic external fun encodeChatPacket(bytes: ByteArray): ByteArray?
+    @JvmStatic external fun decodeChatPacket(bytes: ByteArray): ByteArray?
 }

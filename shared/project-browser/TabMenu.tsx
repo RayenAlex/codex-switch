@@ -6,15 +6,15 @@ import { tabsToClose, type CloseTabCommand, type TabCommand, type TabMenuTarget 
 import { focusFirstMenuItem, MENU_MARGIN, moveMenuFocus } from './treeMenuNavigation';
 
 const CLOSE_ITEMS: { action: CloseTabCommand; label: string }[] = [
-  { action: 'close', label: '关闭' }, { action: 'closeOthers', label: '关闭其他标签页' },
-  { action: 'closeAll', label: '关闭所有标签页' }, { action: 'closeUnmodified', label: '关闭未修改的标签页' },
-  { action: 'closeRight', label: '关闭右侧标签页' },
+  { action: 'close', label: "client.projectBrowser.close" }, { action: 'closeOthers', label: "client.projectBrowser.closeOtherTabs" },
+  { action: 'closeAll', label: "client.projectBrowser.closeAllTabs" }, { action: 'closeUnmodified', label: "client.projectBrowser.closeUnmodifiedTabs" },
+  { action: 'closeRight', label: "client.projectBrowser.closeTabsToTheRight" },
 ];
 const SPLIT_ITEMS = [
-  { action: 'splitRight', label: '向右拆分', Icon: Columns2 },
-  { action: 'moveRight', label: '拆分并移到右侧' },
-  { action: 'splitDown', label: '向下拆分', Icon: Rows2 },
-  { action: 'moveDown', label: '拆分并移到下方' },
+  { action: 'splitRight', label: "client.projectBrowser.splitRight", Icon: Columns2 },
+  { action: 'moveRight', label: "client.projectBrowser.splitAndMoveRight" },
+  { action: 'splitDown', label: "client.projectBrowser.splitDown", Icon: Rows2 },
+  { action: 'moveDown', label: "client.projectBrowser.splitAndMoveDown" },
 ] as const;
 
 export function TabMenu({ target, tabs, blocked, connected, command, close, t }: {
@@ -55,7 +55,7 @@ export function TabMenu({ target, tabs, blocked, connected, command, close, t }:
       if (!pressed.current && event.detail !== 0) { event.preventDefault(); event.stopPropagation(); }
       pressed.current = false;
     }} onClick={event => { if (event.target === event.currentTarget) { event.stopPropagation(); close(); } }}>
-    <div ref={element} className="pf-tree-menu pf-tab-menu" role="menu" aria-label={t('标签页操作')}
+    <div ref={element} className="pf-tree-menu pf-tab-menu" role="menu" aria-label={t("client.projectBrowser.tabActions")}
       style={position} onKeyDown={moveMenuFocus}>
       {CLOSE_ITEMS.map(({ action, label }) => {
         const paths = tabsToClose(tabs, target.path, action);
@@ -66,10 +66,10 @@ export function TabMenu({ target, tabs, blocked, connected, command, close, t }:
         </button>;
       })}
       <div role="separator" />
-      <button type="button" role="menuitem" onClick={() => choose('copyPath')}><span>{t('复制路径')}</span></button>
+      <button type="button" role="menuitem" onClick={() => choose('copyPath')}><span>{t("client.composer.copyPath")}</span></button>
       <button type="button" role="menuitem"
         disabled={blocked || !connected || tabs.some(tab => tab.saving || tab.loading)}
-        onClick={() => choose('rename')}><span>{t('重命名')}</span></button>
+        onClick={() => choose('rename')}><span>{t("client.projectBrowser.renamed")}</span></button>
       <div role="separator" />
       {SPLIT_ITEMS.map(item => <button key={item.action} type="button" role="menuitem"
         disabled={blocked} onClick={() => choose(item.action)}>

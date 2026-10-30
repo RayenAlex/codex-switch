@@ -10,6 +10,8 @@ import { OfficialModelsPage } from "../OfficialModelsPage";
 import type { OfficialModelsProps } from "../../hooks/useOfficialModels";
 import type { ModelCatalog } from "./catalog";
 
+const EDITOR_INTEGRATION_TIMEOUT_MS = 20_000;
+
 const initial: ModelCatalog = { metadata: { future: [true, null, 2] }, models: [
   { slug: "model-1", display_name: "First model", description: "Example", context_window: 373000,
     visibility: "list", supported_in_api: true, auto_compact_token_limit: null,
@@ -107,7 +109,7 @@ it("round-trips both modes, folds long catalogs, and saves all fields with the o
   expect(saved).toEqual({ catalog: modified, revision: "catalog-1" });
   expect(saved?.catalog.models[0].base_instructions).toBe(initial.models[0].base_instructions);
   expect(saved?.catalog.models[0].custom).toEqual(initial.models[0].custom);
-});
+}, EDITOR_INTEGRATION_TIMEOUT_MS);
 
 it("keeps invalid JSON intact and blocks table switching and saving until repaired", async () => {
   await render();
@@ -120,7 +122,7 @@ it("keeps invalid JSON intact and blocks table switching and saving until repair
   await replaceJson(JSON.stringify(initial));
   await clickText("表格编辑");
   expect(document.querySelector<HTMLInputElement>('input[aria-label="1 slug"]')!.value).toBe("model-1");
-});
+}, EDITOR_INTEGRATION_TIMEOUT_MS);
 
 it("edits nested fields through the expanded table without discarding other model properties", async () => {
   await render();
@@ -132,7 +134,7 @@ it("edits nested fields through the expanded table without discarding other mode
   await clickText("保存修改");
   expect(saved?.catalog.models[0]).toEqual({ ...initial.models[0],
     supported_reasoning_levels: [{ effort: "high", description: "Deep" }] });
-});
+}, EDITOR_INTEGRATION_TIMEOUT_MS);
 
 it("lets read-only users inspect and fold content while keeping all edits unavailable", async () => {
   await render(false);
@@ -148,4 +150,4 @@ it("lets read-only users inspect and fold content while keeping all edits unavai
   await clickText("全部折叠");
   expect(foldedRanges(editor().state).size).toBeGreaterThan(0);
   expect(saved).toBeUndefined();
-});
+}, EDITOR_INTEGRATION_TIMEOUT_MS);

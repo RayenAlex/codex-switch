@@ -1,11 +1,14 @@
+import { resources as clientResources } from '@remoteai/i18n/client';
+const english: Readonly<Record<string, string>> = clientResources.en;
+const russianCopy: Readonly<Record<string, string>> = clientResources.ru;
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { english } from "../../../../../shared/i18n/en";
-import { russian as russianCopy } from "../../../../../shared/i18n/ru";
-import { setGuiLanguage } from "../../i18n/guiText";
+
+
+import { setGuiLanguage } from "../../i18n/uiText";
 import { ComputerUseCard } from "./ComputerUseCard";
 import { RemoteCommandCard } from "./RemoteCommandCard";
 
@@ -56,7 +59,7 @@ it("keeps the Chinese Computer Use copy and switches it to Russian without remou
 
   await act(async () => setGuiLanguage("ru"));
   expect(container.textContent).toContain("Компьютерный помощник Computer Use");
-  expect(container.textContent).toContain(russian["已安装 · 请开启桌面操作权限"]);
+  expect(container.textContent).toContain(russian["client.desktopBuiltinPlugins.installedAllowDesktopControlPermissions"]);
   expect(container.textContent).toContain("Универсальный доступ");
   expect(ariaLabels()).toEqual(["Разрешить запись экрана"]);
   expect(buttonText()).toEqual(["Разрешить", "Отключить", "Удалить"]);
@@ -75,21 +78,21 @@ it("uses the Enable action label and shows remote command errors in the interfac
     version: "1.0.0" });
   await act(async () => root.render(<RemoteCommandCard homeId="codex-gui" active onBusyChange={vi.fn()} />));
   expect(container.querySelector("h3")?.textContent).toBe("Удалённые команды");
-  expect(container.querySelector("[role=status]")?.textContent).toBe(russian["已停用 · 无法调用或接收远程命令"]);
+  expect(container.querySelector("[role=status]")?.textContent).toBe(russian["client.desktopBuiltinPlugins.disabledCanTSendOrReceiveRemoteCommands"]);
   expect(buttonText()).toEqual(["Включить", "Удалить"]);
 
   api.remoteCommandAction.mockRejectedValueOnce("操作未完成，请重试。");
   await act(async () => container.querySelector<HTMLButtonElement>(".official-plugin-toggle")!.click());
-  expect(container.querySelector("[role=alert]")?.textContent).toBe(russian["操作未完成，请重试。"]);
+  expect(container.querySelector("[role=alert]")?.textContent).toBe(russian["client.projectBrowser.unableToCompleteTheActionPleaseTryAgain"]);
   expect(buttonText()).toContain("Проверить снова");
   expect(container.textContent).not.toMatch(han);
 });
 
-it("has English and Russian copy for every Chinese source in the built-in plugin cards", () => {
+it("has English and Russian copy for every semantic key in the built-in plugin cards", () => {
   const files = ["./ComputerUseCard/index.tsx", "./ComputerUseCard/Permissions.tsx", "./RemoteCommandCard/index.tsx",
     "./OfficialPluginsMarket/CliInstallButton.tsx", "./OfficialPluginsMarket/index.tsx"];
   const sources = files
-    .flatMap(file => [...readFileSync(new URL(file, import.meta.url), "utf8").matchAll(/"([^"\n]*[一-鿿][^"\n]*)"/g)])
+    .flatMap(file => [...readFileSync(new URL(file, import.meta.url), "utf8").matchAll(/["'](client\.[^"'\n]+)["']/g)])
     .map(match => match[1])
     // Search alias strings are matched against user queries and never displayed.
     .filter(source => !/^(computer use|remote command) /.test(source));

@@ -1,12 +1,8 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import { after, before, test } from "node:test";
 import { chromium, expect } from "@playwright/test";
 
-const source = await readFile(new URL(
-  "../apps/desktop/src-tauri/src/dream_skin_native/speed_selector_overlay.rs", import.meta.url), "utf8");
-const overlay = source.slice(source.indexOf('r#"') + 3, source.lastIndexOf('"#;'));
-const expression = (tier = "default") => overlay.replace("__CODEX_SWITCH_SERVICE_TIER__", JSON.stringify(tier));
+import { composerUsageOverlayForTier as expression } from './fixtures/usage-statusline-source.mjs';
 let browser;
 before(async () => { browser = await chromium.launch({ headless: true }); });
 after(async () => { await browser?.close(); });
@@ -18,7 +14,8 @@ async function setup(page, dark = false) {
     #composer { margin-top: 100px; border: 1px solid #aaa; padding: 12px; border-radius: 16px; }
     #toolbar { display: flex; align-items: center; justify-content: flex-end; }
     [contenteditable] { min-height: 48px; }
-  </style><div id="composer"><div contenteditable="true" aria-label="Message">Draft</div>
+  </style><div id="composer" data-composer-surface-variant="default">
+    <div contenteditable="true" aria-label="Message">Draft</div>
     <div id="toolbar"><div><div><button data-composer-navigation-target="reasoning">GPT-6-Astra</button>
     </div></div></div></div>`);
   await page.evaluate(() => {

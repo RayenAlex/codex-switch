@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { GUI_CODEX_HOME_ID } from "../../types";
 import { CodexThreadsPage } from "../CodexThreadsPage";
 import { getGuiController } from "./session";
@@ -14,7 +14,7 @@ export default function GuiMigrationPage({ active, notify }: {
   active: boolean;
   notify: (message: string) => void;
 }) {
-  return <section className={styles.page} aria-label={guiText("对话迁移")}>
+  return <section className={styles.page} aria-label={uiText("client.workspaceSettings.conversationMigration")}>
     <CodexThreadsPage language="zh" notify={notify} active={active} embedded
       excludedHomeIds={EXCLUDED_SOURCE_HOMES} migrationTargetHomeId={GUI_CODEX_HOME_ID}
       onHomeMigrated={refreshMigratedConversations} />

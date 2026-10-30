@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { invoke } from "../../api/backend";
@@ -11,12 +11,13 @@ const RESOURCE_ERROR = "图片过大，暂时无法预览。请缩小尺寸后�
 
 function previewError(error: unknown) {
   const message = error instanceof Error ? error.message : error;
-  return guiText(message === RESOURCE_ERROR ? RESOURCE_ERROR : "图片无法读取，请重新选择。");
+  return uiText(message === RESOURCE_ERROR ? "client.shared.thisImageIsTooLargeToPreviewResizeItAnd"
+    : "client.shared.couldNotReadTheImagePleaseChooseItAgain");
 }
 
 async function loadImage(path: string, variant: "thumbnail" | "original") {
   const { url } = await invoke<{ url: string }>("codex_gui_attachment_preview", { request: { path, variant } });
-  if (!isInlineImage(url)) throw new Error(guiText("图片加载失败"));
+  if (!isInlineImage(url)) throw new Error(uiText("client.composer.couldNotLoadImage"));
   return url;
 }
 
@@ -39,14 +40,14 @@ export function ComposerFileImage({ item, disabled, active, onRemove }: {
   useEffect(() => { if (!active) setPreview(false); }, [active]);
   return <div className={styles.card}>
     {error && <span className={styles.status} role="status">{error}<button type="button"
-      onClick={() => setAttempt((value) => value + 1)}>{guiText("重试")}</button>
+      onClick={() => setAttempt((value) => value + 1)}>{uiText("client.terminal.retry")}</button>
     </span>}
-    {!error && url && <button type="button" className={styles.thumbnail} aria-label={guiText("放大查看：{value1}", { value1: item.name })}
+    {!error && url && <button type="button" className={styles.thumbnail} aria-label={uiText("client.chat.enlarge", { value1: item.name })}
       onClick={() => setPreview(true)}>
       <img src={url} alt={item.name} onError={() => setError(previewError(undefined))} />
     </button>}
-    {!error && !url && <span role="status">{guiText("正在读取…")}</span>}
-    <button type="button" className={styles.remove} disabled={disabled} aria-label={guiText("移除附件：{value1}", { value1: item.name })}
+    {!error && !url && <span role="status">{uiText("client.composer.loading")}</span>}
+    <button type="button" className={styles.remove} disabled={disabled} aria-label={uiText("client.composer.removeAttachment", { value1: item.name })}
       onClick={() => onRemove(item.path)}><X size={14} /></button>
     {active && preview && url && <ImagePreview thumbnail={url} description={item.name}
       load={() => loadImage(item.path, "original")} close={() => setPreview(false)} />}

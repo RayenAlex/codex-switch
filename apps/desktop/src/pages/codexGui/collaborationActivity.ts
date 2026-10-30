@@ -1,17 +1,18 @@
-import { guiText } from "../../i18n/guiText";
+import { displayText } from '../../../../../shared/localization/messages';
+import { uiText } from "../../i18n/uiText";
 import type { Item } from "./types";
 
 const ACTIVITY_LABELS: Record<string, string> = {
-  get started() { return guiText("已启动协作任务"); }, get interacted() { return guiText("协作消息"); }, get interrupted() { return guiText("已停止协作任务"); }, get completed() { return guiText("协作任务已完成"); },
+  get started() { return uiText("client.shared.collaborationStarted"); }, get interacted() { return uiText("client.shared.collaborationMessage"); }, get interrupted() { return uiText("client.shared.collaborationStopped"); }, get completed() { return uiText("client.shared.collaborationCompleted"); },
 };
 const TOOL_LABELS: Record<string, string> = {
-  get spawnAgent() { return guiText("启动协作任务"); }, get sendInput() { return guiText("发送任务说明"); }, get resumeAgent() { return guiText("继续协作任务"); },
-  get wait() { return guiText("等待协作进展"); }, get closeAgent() { return guiText("关闭协作任务"); }, get sendMessage() { return guiText("发送协作消息"); },
-  get followupTask() { return guiText("追加协作任务"); }, get interruptAgent() { return guiText("停止协作任务"); }, get listAgents() { return guiText("查看协作任务"); },
+  get spawnAgent() { return uiText("client.shared.startCollaboration"); }, get sendInput() { return uiText("client.shared.sendTaskInstructions"); }, get resumeAgent() { return uiText("client.shared.resumeCollaboration"); },
+  get wait() { return uiText("client.shared.waitForCollaboration"); }, get closeAgent() { return uiText("client.shared.closeCollaboration"); }, get sendMessage() { return uiText("client.shared.sendCollaborationMessage"); },
+  get followupTask() { return uiText("client.shared.addFollowUpTask"); }, get interruptAgent() { return uiText("client.shared.stopCollaboration"); }, get listAgents() { return uiText("client.shared.viewCollaboration"); },
 };
 const STATUS_LABELS: Record<string, string> = {
-  get pendingInit() { return guiText("准备中"); }, get running() { return guiText("进行中"); }, get inProgress() { return guiText("进行中"); }, get completed() { return guiText("已完成"); },
-  get interrupted() { return guiText("已停止"); }, get errored() { return guiText("失败"); }, get failed() { return guiText("失败"); }, get shutdown() { return guiText("已关闭"); }, get notFound() { return guiText("未找到任务"); },
+  get pendingInit() { return uiText("client.shared.preparing"); }, get running() { return uiText("client.chat.inProgress"); }, get inProgress() { return uiText("client.chat.inProgress"); }, get completed() { return uiText("client.chat.completed"); },
+  get interrupted() { return uiText("client.chat.stopped"); }, get errored() { return uiText("client.taskReview.failed"); }, get failed() { return uiText("client.taskReview.failed"); }, get shutdown() { return uiText("client.shared.closed"); }, get notFound() { return uiText("client.shared.taskNotFound"); },
 };
 
 export function isCollaborationActivity(item: Item): boolean {
@@ -19,23 +20,23 @@ export function isCollaborationActivity(item: Item): boolean {
 }
 
 export function collaborationTaskName(item: Item): string {
-  return item.agentPath?.split("/").filter(Boolean).at(-1) || guiText("协作任务");
+  return item.agentPath?.split("/").filter(Boolean).at(-1) || uiText("client.chat.collaboration");
 }
 
 export function collaborationStatus(status?: string): string {
-  return STATUS_LABELS[status ?? ""] ?? guiText("状态待更新");
+  return STATUS_LABELS[status ?? ""] ?? uiText("client.shared.awaitingStatus");
 }
 
-export function collaborationSummary(item: Item, translate = (text: string) => text): string {
+export function collaborationSummary(item: Item, translate = displayText): string {
   if (item.type === "subAgentActivity") {
-    const label = translate(ACTIVITY_LABELS[item.kind ?? ""] ?? guiText("协作进度更新"));
-    return guiText("{value1} · {value2}", { value1: label, value2: item.agentPath ? collaborationTaskName(item) : translate("协作任务") });
+    const label = translate(ACTIVITY_LABELS[item.kind ?? ""] ?? uiText("client.shared.collaborationUpdate"));
+    return uiText("client.interface.message.7c639b", { value1: label, value2: item.agentPath ? collaborationTaskName(item) : translate("client.chat.collaboration") });
   }
-  const label = TOOL_LABELS[item.tool ?? ""] ?? guiText("协作任务");
+  const label = TOOL_LABELS[item.tool ?? ""] ?? uiText("client.chat.collaboration");
   const count = new Set([...item.receiverThreadIds ?? [], ...Object.keys(item.agentsStates ?? {})]).size;
   const status = item.tool === "wait" && item.status === "completed"
-    ? guiText("本次等待结束") : item.status && collaborationStatus(item.status);
-  return [translate(label), count ? guiText("{value1} {value2}", { value1: count, value2: translate("个任务") }) : undefined, status && translate(status)]
+    ? uiText("client.shared.waitEnded") : item.status && collaborationStatus(item.status);
+  return [translate(label), count ? uiText("client.interface.message.4040b7", { value1: count, value2: translate("client.shared.tasks") }) : undefined, status && translate(status)]
     .filter(Boolean).join(" · ");
 }
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from 'antd';
 import { Monitor } from 'lucide-react';
 import { isDesktopApp } from '../../api/backend';
-import { guiText } from '../../i18n/guiText';
+import { uiText } from "../../i18n/uiText";
 import { useGuiLanguage } from '../../i18n/useGuiLanguage';
 import { RemoteDesktopSettingsModal } from './RemoteDesktopSettingsModal';
 
@@ -14,10 +14,10 @@ export function RemoteDesktopSettingsCard() {
     <section className="settings-card">
       <div className="settings-icon"><Monitor size={23} /></div>
       <div className="settings-card-content">
-        <div className="settings-card-copy"><h3>{guiText('远程桌面')}</h3>
-          <p>{guiText('管理其他设备访问这台电脑的权限。')}</p></div>
+        <div className="settings-card-copy"><h3>{uiText("client.remoteDesktop.remoteDesktop")}</h3>
+          <p>{uiText("client.desktopRemoteSettings.manageHowOtherDevicesCanAccessThisComputer")}</p></div>
         <div className="settings-field">
-          <Button onClick={() => setOpen(true)}>{guiText('远程设置')}</Button>
+          <Button onClick={() => setOpen(true)}>{uiText("client.desktopRemoteSettings.remoteSettings")}</Button>
         </div>
       </div>
     </section>

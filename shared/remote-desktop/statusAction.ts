@@ -13,7 +13,7 @@ export const PRIVACY_SETUP_MESSAGES = [
 /** Setup leaves capture connected, so its retry must not tear down the current desktop. */
 export function desktopStatusAction(session: StatusSession) {
   if (PRIVACY_SETUP_MESSAGES.some(message => message === session.status)) {
-    return { label: '重试隐私屏', run: () => { void session.togglePrivacy(); } };
+    return { label: "client.remoteDesktop.retryPrivacyScreen", run: () => { void session.togglePrivacy(); } };
   }
-  return { label: session.waitingForPermission ? '检查授权' : '重新连接', run: session.retry };
+  return { label: session.waitingForPermission ? "client.remoteDesktop.checkPermissions" : "client.mobile.reconnect", run: session.retry };
 }

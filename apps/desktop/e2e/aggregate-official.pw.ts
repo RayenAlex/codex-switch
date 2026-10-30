@@ -30,7 +30,7 @@ for (const width of [1440, 900]) {
     await openManager();
     await page.locator("#memberProviderIds").click();
     await page.locator("#memberProviderIds").fill("alex");
-    await page.locator(".ant-select-item-option-content").filter({ hasText: "alex" }).click();
+    await page.locator("#memberProviderIds").press("Enter");
     await page.locator("#memberProviderIds").press("Escape");
     const officialModel = page.locator('[id="memberModels_account:demo-1"]');
     await officialModel.fill("gpt-official");

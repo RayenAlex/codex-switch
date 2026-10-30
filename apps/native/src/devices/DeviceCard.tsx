@@ -14,7 +14,7 @@ function platformInfo(platform: string): { label: string; icon: IconName } {
     case 'darwin':
     case 'macos': return { label: 'macOS', icon: 'logo-apple' };
     case 'linux': return { label: 'Linux', icon: 'logo-tux' };
-    default: return { label: platform || t("未知平台"), icon: 'desktop-outline' };
+    default: return { label: platform || t("client.app.unknownPlatform"), icon: 'desktop-outline' };
   }
 }
 
@@ -23,16 +23,16 @@ function modelLabel(device: RemoteDevice, accounts: AccountSummary[], providers:
   const selection = remoteModelOptions(device, target);
   const account = accounts.find(item => item.id === selection.accountId);
   const provider = providers.find(item => item.id === selection.providerId);
-  if (selection.group) return t("分组 · {value1}", { value1: selection.group });
-  if (!selection.providerId) return account ? t("官方 · {value1}", { value1: account.email }) : t("未选择");
-  if (!provider) return t("模型信息暂不可用");
+  if (selection.group) return t("client.app.group", { value1: selection.group });
+  if (!selection.providerId) return account ? t("client.app.official", { value1: account.email }) : t("client.app.notSelected");
+  if (!provider) return t("client.app.modelInformationUnavailable");
   return `${provider.name}${provider.model ? ` · ${provider.model}` : ''}`;
 }
 
 function lastSeenLabel(device: RemoteDevice) {
-  if (device.online) return t("当前在线");
+  if (device.online) return t("client.app.onlineNow");
   const date = new Date(device.lastSeenAt);
-  if (Number.isNaN(date.getTime())) return t("时间未知");
+  if (Number.isNaN(date.getTime())) return t("client.app.unknownTime");
   return new Intl.DateTimeFormat(getLocale(), {
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
   }).format(date);
@@ -63,7 +63,7 @@ function DeviceIdentity({ device, busy }: { device: RemoteDevice; busy: boolean 
     <View style={[styles.badge, !device.online && styles.badgeOffline]}>
       {busy ? <ActivityIndicator size="small" color={color(deviceColors.green, 'accent')} />
         : <View style={[styles.dot, !device.online && styles.dotOffline]} />}
-      <Text style={[styles.badgeText, !device.online && styles.muted]}>{device.online ? t("在线") : t("离线")}</Text>
+      <Text style={[styles.badgeText, !device.online && styles.muted]}>{device.online ? t("client.chat.online") : t("client.chat.offline")}</Text>
     </View>
   </View>;
 }
@@ -83,22 +83,22 @@ export function DeviceCard({ device, accounts, providers, busy, onSwitchModel, o
   const authAccount = accounts.find((item) => item.id === device.openaiAuthAccountId);
   const disabled = !device.online || busy;
   return <View>
-    <Pressable accessibilityRole="button" accessibilityLabel={`${device.name}，${device.online ? t("在线") : t("离线")}`}
-      accessibilityHint={device.online ? t("打开切换模型抽屉") : t("设备上线后可切换模型")}
+    <Pressable accessibilityRole="button" accessibilityLabel={`${device.name}，${device.online ? t("client.chat.online") : t("client.chat.offline")}`}
+      accessibilityHint={device.online ? t("client.mobile.openModelSelection") : t("client.mobile.connectTheDeviceToSwitchModels")}
       accessibilityState={{ disabled, busy }} disabled={disabled} onPress={onSwitchModel}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
       <DeviceIdentity device={device} busy={busy} />
       <View style={styles.divider} />
-      <DeviceDetail icon="person-outline" label={t("代理接口")} value={modelLabel(device, accounts, providers, 'proxy')} />
+      <DeviceDetail icon="person-outline" label={t("client.app.proxyApi")} value={modelLabel(device, accounts, providers, 'proxy')} />
       {device.capabilities.includes('gui-model-switch') && <DeviceDetail icon="desktop-outline" label="Codex GUI"
         value={modelLabel(device, accounts, providers, 'gui')} />}
-      <DeviceDetail icon="server-outline" label={t("设备账号")}
-        value={account?.email ?? (device.activeAccountId ? t("账号信息暂不可用") : t("未选择"))} />
-      <DeviceDetail icon="key-outline" label={t("代理登录态")}
-        value={authAccount?.email ?? (device.openaiAuthAccountId ? t("账号信息暂不可用") : t("未设置"))} />
-      <DeviceDetail icon="time-outline" label={t("最后在线")} value={lastSeenLabel(device)} />
+      <DeviceDetail icon="server-outline" label={t("client.app.deviceAccount")}
+        value={account?.email ?? (device.activeAccountId ? t("client.app.accountInformationUnavailable") : t("client.app.notSelected"))} />
+      <DeviceDetail icon="key-outline" label={t("client.app.proxySignIn")}
+        value={authAccount?.email ?? (device.openaiAuthAccountId ? t("client.app.accountInformationUnavailable") : t("client.accounts.notSet"))} />
+      <DeviceDetail icon="time-outline" label={t("client.app.lastOnline")} value={lastSeenLabel(device)} />
     </Pressable>
-    <Pressable accessibilityRole="button" accessibilityLabel={t("{value1} 的更多操作", { value1: device.name })}
+    <Pressable accessibilityRole="button" accessibilityLabel={t("client.app.moreActionsFor", { value1: device.name })}
       onPress={onOpenMenu} style={({ pressed }) => [styles.menuTrigger, pressed && styles.pressed]}>
       <Ionicons name="ellipsis-vertical" size={20} color={color(deviceColors.muted, 'muted')} />
     </Pressable>

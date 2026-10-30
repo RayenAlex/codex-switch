@@ -13,7 +13,7 @@ export const toNodes = (graph: Graph, selected?: string): CanvasNode[] => graph.
 export const toEdges = (graph: Graph, t: Translate = translateNow): FlowEdge[] => graph.edges.map((edge) => ({
   id: edgeId(edge), source: edge.source, target: edge.target, targetHandle: "input",
   sourceHandle: edge.port == null ? "output" : String(edge.port),
-  label: edge.port == null ? undefined : edge.port ? t("成立") : t("不成立"),
+  label: edge.port == null ? undefined : edge.port ? t("coze.index.true") : t("coze.index.false"),
   markerEnd: { type: MarkerType.ArrowClosed, color: "#8979d8" },
   interactionWidth: 24, ariaLabel: `${edge.source} → ${edge.target}`,
 }));

@@ -1,3 +1,4 @@
+import { displayText } from '../i18n/index';
 import { t, useLanguage } from '../i18n';
 import { useMemo } from 'react';
 import type { Item } from './types';
@@ -18,7 +19,7 @@ import { CommandOutput } from '../../../../shared/chat/CommandOutput';
 import { ChatCopyButton } from './ChatCopyButton';
 
 const FILE_CHANGE_STATUS: Record<string, string> = {
-  declined: '未应用', failed: '修改失败', inProgress: '正在修改',
+  declined: "client.chat.notApplied", failed: "client.chat.editFailed", inProgress: "client.chat.editing",
 };
 
 function SearchContent({ item }: { item: Item }) {
@@ -28,7 +29,7 @@ function SearchContent({ item }: { item: Item }) {
       <p key={index}>{query}</p>)}
     {item.action?.url && /^https?:\/\//i.test(item.action.url) &&
       <ChatFileLink href={item.action.url}>{item.action.url}</ChatFileLink>}
-    {item.action?.pattern && <p>{t("查找：")}{item.action.pattern}</p>}
+    {item.action?.pattern && <p>{t("client.chat.find")}{item.action.pattern}</p>}
     {item.results?.map((result, index) => <article key={index}>
       <ChatFileLink href={/^https?:\/\//i.test(result.url ?? '') ? result.url : undefined}>
         {result.title || result.url}</ChatFileLink><p>{result.snippet}</p></article>)}
@@ -44,32 +45,32 @@ export function ChatToolContent({ item }: { item: Item }) {
   }
   if (item.type === 'commandExecution') return <>
     <p className="chat-muted">{item.cwd}{item.durationMs != null && ` · ${formatTurnDuration(item.durationMs)}`}</p>
-    <CommandOutput command={item.command ?? ''} label={t("工具内容")}
-      output={item.aggregatedOutput || (item.status === 'inProgress' ? t("等待输出…") : t("没有文本输出"))}
-      copyCommand={<ChatCopyButton text={item.command ?? ''} label={t("复制命令")} iconOnly />}
-      copyOutput={<ChatCopyButton text={item.aggregatedOutput ?? ''} label={t("复制输出")} iconOnly />} />
-    {item.exitCode != null && <p className={item.exitCode ? 'chat-error' : 'chat-muted'}>{t("退出码：")}{item.exitCode}</p>}
+    <CommandOutput command={item.command ?? ''} label={t("client.workspaceActions.toolContent")}
+      output={item.aggregatedOutput || (item.status === 'inProgress' ? t("client.chat.waitingForOutput") : t("client.chat.noTextOutput"))}
+      copyCommand={<ChatCopyButton text={item.command ?? ''} label={t("client.chat.copyCommand")} iconOnly />}
+      copyOutput={<ChatCopyButton text={item.aggregatedOutput ?? ''} label={t("client.chat.copyOutput")} iconOnly />} />
+    {item.exitCode != null && <p className={item.exitCode ? 'chat-error' : 'chat-muted'}>{t("client.chat.exitCode")}{item.exitCode}</p>}
   </>;
   if (item.type === 'fileChange') return <ChatDiff files={files}
     status={FILE_CHANGE_STATUS[item.status ?? '']} />;
   if (['mcpToolCall', 'dynamicToolCall', 'functionCallOutput'].includes(item.type)) return <ChatToolResult item={item} />;
   if (item.type === 'webSearch') return <SearchContent item={item} />;
   if (isCollaborationActivity(item)) return <>
-    <p>{collaborationSummary(item, t)}</p>{item.prompt && <ChatMarkdown text={item.prompt} />}
+    <p>{collaborationSummary(item, displayText)}</p>{item.prompt && <ChatMarkdown text={item.prompt} />}
     {item.text && item.text !== item.prompt && <ChatMarkdown text={item.text} />}
     {collaborationStates(item).map((state, index) => <div key={index}>
-      <p className="chat-muted">{t("协作任务")} {index + 1} · {t(collaborationStatus(state.status))}</p>
+      <p className="chat-muted">{t("client.chat.collaboration")} {index + 1} · {displayText(collaborationStatus(state.status))}</p>
       {state.message && <ChatMarkdown text={state.message} />}</div>)}
   </>;
   if (['imageView', 'imageGeneration'].includes(item.type)) return <>
     <ChatImage source={generatedImageSource(item)} compact={item.type === 'imageView'}
-      description={item.type === 'imageView' ? t("查看的图片") : t("生成的图片")} />
+      description={item.type === 'imageView' ? t("client.chat.viewedImage") : t("client.chat.generatedImage")} />
     <p className="chat-muted">{item.path || item.savedPath}</p>
     {item.failure?.message && <p className="chat-error">{item.failure.message}</p>}
     {item.revisedPrompt && <ChatMarkdown text={item.revisedPrompt} />}
   </>;
-  if (item.type === 'contextCompaction') return <p>{t("较早的对话已整理为摘要，可以继续处理当前任务。")}</p>;
-  if (item.type === 'sleep') return <p>{t("等待时长：")}{formatTurnDuration(item.durationMs ?? 0)}</p>;
+  if (item.type === 'contextCompaction') return <p>{t("client.chat.earlierMessagesHaveBeenSummarizedYouCanContinueYourCurrent")}</p>;
+  if (item.type === 'sleep') return <p>{t("client.chat.waitDuration")}{formatTurnDuration(item.durationMs ?? 0)}</p>;
   return <>{messageSections(item).map((section, index) => <ChatCodeBlock key={index}
-    text={section.text} label={t(section.title)} copyLabel={t("复制{value1}", { value1: t(section.title) })} />)}</>;
+    text={section.text} label={displayText(section.title)} copyLabel={t("client.accounts.copy", { value1: displayText(section.title) })} />)}</>;
 }

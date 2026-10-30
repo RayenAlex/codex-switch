@@ -56,6 +56,7 @@ const ASSETS: &[(&str, &[u8])] = assets![
     "ui.css",
     "icon.png",
     "i18n.js",
+    "messages.generated.js",
     "_locales/zh_CN/messages.json",
     "_locales/en/messages.json",
     "_locales/ru/messages.json",

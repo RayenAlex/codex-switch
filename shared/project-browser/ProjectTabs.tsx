@@ -25,7 +25,7 @@ function ProjectTab({ tab, active, choose, close, menu, navigate, blocked, t }: 
   return <Tooltip title={tab.path} placement="bottomLeft"
     styles={{ root: { maxWidth: 'min(400px, calc(100vw - 16px))' },
       body: { overflowWrap: 'anywhere', whiteSpace: 'normal' } }}>
-    <div className="pf-tab" data-path={tab.path} data-active={active} {...gesture}>
+    <div className="pf-tab" data-overflow-tab data-path={tab.path} data-active={active} {...gesture}>
       <button ref={button} type="button" role="tab" aria-selected={active} aria-label={name}
         aria-haspopup="menu" tabIndex={active ? 0 : -1} onClick={choose} onKeyDown={event => {
           if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
@@ -36,9 +36,9 @@ function ProjectTab({ tab, active, choose, close, menu, navigate, blocked, t }: 
           if (navigate(event.key)) event.preventDefault();
         }}>
         <span className="pf-tab-name">{name}</span>
-        {isDirty(tab) && <span className="pf-dirty-dot" aria-label={t('未保存')} />}
+        {isDirty(tab) && <span className="pf-dirty-dot" aria-label={t("client.projectBrowser.unsaved")} />}
       </button>
-      <button type="button" className="pf-tab-close" aria-label={`${t('关闭文件')} ${name}`}
+      <button type="button" className="pf-tab-close" aria-label={`${t("client.projectBrowser.closeFile")} ${name}`}
         disabled={tab.saving || blocked} onClick={close}><X size={14} /></button>
     </div>
   </Tooltip>;
@@ -59,7 +59,7 @@ export function ProjectTabs({ tabs, activePath, choose, close, t, groupId, block
     overflow.viewport.current?.querySelectorAll<HTMLButtonElement>('[role=tab]')[index]?.focus({ preventScroll: true });
   };
   return <><div ref={overflow.bar} className="pf-tabs-bar" data-clipped-left={overflow.clippedLeft}>
-    <div ref={overflow.viewport} className="pf-tabs" role="tablist" aria-label={t('打开的文件')}>
+    <div ref={overflow.viewport} className="pf-tabs" role="tablist" aria-label={t("client.projectBrowser.openFiles")}>
       {tabs.map((tab, index) => <ProjectTab key={tab.path} tab={tab} active={tab.path === activePath}
         choose={() => select(tab.path)} close={() => close(tab.path)} t={t} blocked={blocked}
         menu={point => setMenu({ ...point, groupId, path: tab.path })}
@@ -72,7 +72,7 @@ export function ProjectTabs({ tabs, activePath, choose, close, t, groupId, block
           return true;
         }} />)}
     </div>
-    {overflow.overflowing && <button type="button" className="pf-tabs-more" aria-label={t('更多标签页')}
+    {overflow.overflowing && <button type="button" className="pf-tabs-more" aria-label={t("client.projectBrowser.moreTabs")}
       aria-haspopup="menu" aria-expanded={!!overflowAnchor}
       onClick={event => { dismiss(); setOverflowAnchor(event.currentTarget); }}><Ellipsis size={18} /></button>}
   </div>

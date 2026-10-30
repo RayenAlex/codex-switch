@@ -19,6 +19,7 @@ vi.mock('react', async () => ({ ...await vi.importActual<typeof import('react')>
   useSyncExternalStore: (_subscribe: unknown, snapshot: () => unknown) => snapshot(),
 }));
 vi.mock('react-native', () => ({ View: 'View', Image: 'Image', Pressable: 'Pressable', Text: 'Text',
+  Platform: { OS: 'android' },
   StyleSheet: { create: <T,>(styles: T) => styles, absoluteFillObject: { position: 'absolute' } } }));
 vi.mock('@expo/vector-icons', () => ({ Ionicons: 'Icon', MaterialCommunityIcons: 'Icon' }));
 vi.mock('./useTrackpad', () => ({ useTrackpad: vi.fn(() => ({ panHandlers: {} })) }));

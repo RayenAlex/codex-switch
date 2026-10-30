@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { message } from "antd";
-import { guiText } from "../../../i18n/guiText";
+import { uiText } from "../../../i18n/uiText";
 import { filePreviewApi, type FilePreviewData } from "./api";
 import { FileEnvironmentContext } from '../fileEnvironment';
 
@@ -80,7 +80,7 @@ export function usePreviewHistory({ onOpen, onNavigate }: { onOpen: () => void; 
   const openRemoteFile = useCallback((file: FilePreviewTarget) => visit({ kind: "remoteFile", file }), [visit]);
   const openWebsite = useCallback((url: string, options: WebsitePreviewOptions = {}) => {
     void visit({ kind: "website", url, resolved: options.resolved }).catch(() => { void message.error({
-      content: guiText("链接暂时无法打开，请稍后重试。"), style: { maxWidth: 400, marginInline: "auto" },
+      content: uiText("client.conversation.couldNotOpenTheLinkPleaseTryAgainShortly"), style: { maxWidth: 400, marginInline: "auto" },
     }); });
   }, [visit]);
   const navigate = useCallback(async (direction: -1 | 1) => {
@@ -91,7 +91,7 @@ export function usePreviewHistory({ onOpen, onNavigate }: { onOpen: () => void; 
     let opened = false;
     try { opened = await visit(target, index); }
     catch { /* Keep the current preview and history available for another attempt. */ }
-    if (!opened) void message.error({ content: guiText("预览未能打开，请稍后重试。"),
+    if (!opened) void message.error({ content: uiText("client.workspaceActions.couldNotOpenThePreviewPleaseTryAgainShortly"),
       style: { maxWidth: 400, marginInline: "auto" } });
   }, [visit]);
   // Reset the owning computer before child effects can open a preview in the new workspace.

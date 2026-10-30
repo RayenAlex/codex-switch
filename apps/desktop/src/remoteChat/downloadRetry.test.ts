@@ -6,10 +6,13 @@ import { DownloadPolicyError } from '../../../../shared/remote-chat/policy';
 
 it('retries five times per run and isolates tasks until explicitly resumed', () => {
   const retries = new DownloadRetry();
+  expect(retries.attempt('first')).toBe(0);
   expect(Array.from({ length: 7 }, () => retries.next('first')))
     .toEqual([1000, 2000, 4000, 8000, 16000, undefined, undefined]);
+  expect(retries.attempt('first')).toBe(5);
   expect(retries.next('second')).toBe(1000);
   retries.clear('first');
+  expect(retries.attempt('first')).toBe(0);
   expect(retries.next('first')).toBe(1000);
 });
 

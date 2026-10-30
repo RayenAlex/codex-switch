@@ -1,9 +1,12 @@
+import { testBrowserChannel, testBrowserLaunchOptions } from '../../scripts/test-browser.mjs';
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e', testMatch: '**/startup-update.pw.ts', workers: 1, timeout: 30_000,
   outputDir: '../../.codex-tmp/startup-update-playwright', reporter: 'list',
-  use: { baseURL: 'http://127.0.0.1:1428/web/', channel: process.env.CHAT_TEST_BROWSER ?? 'msedge',
+  use: {
+    launchOptions: testBrowserLaunchOptions(),
+    baseURL: 'http://127.0.0.1:1428/web/', channel: testBrowserChannel(process.env.CHAT_TEST_BROWSER),
     locale: 'zh-CN', headless: true, screenshot: 'only-on-failure', trace: 'retain-on-failure' },
   projects: [
     { name: 'mobile', use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },

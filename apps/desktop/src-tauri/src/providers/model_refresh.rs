@@ -113,6 +113,7 @@ fn provider_model_refresh_request(
         image_input_route_enabled(paths),
     );
     ModelRefreshSource::Configured(ModelRefreshRequest {
+        display_names: Default::default(),
         fast_mode_models: if provider.fast_mode_enabled {
             models.clone()
         } else {
@@ -136,8 +137,13 @@ fn provider_group_model_refresh_request(
         &catalog.image_input_models,
         image_input_route_enabled(paths),
     );
-    let selected_model = catalog.models.first().cloned()?;
+    let selected_model = fs::read_to_string(&paths.current_config)
+        .ok()
+        .and_then(|config| codex_config::root_model(&config))
+        .filter(|model| catalog.models.contains(model))
+        .or_else(|| catalog.models.first().cloned())?;
     Some(ModelRefreshSource::Configured(ModelRefreshRequest {
+        display_names: group_display_names::display_names(providers),
         fast_mode_models: if catalog.fast_mode_enabled {
             catalog.models.clone()
         } else {
@@ -152,11 +158,12 @@ fn provider_group_model_refresh_request(
 }
 
 fn codex_visible_models(provider: &ProviderProfile) -> Vec<String> {
-    if provider.model_selection_controlled_by_codex {
-        provider.models.clone()
-    } else {
-        vec![CODEX_SWITCH_CONTROL_MODEL.to_string()]
+    if !provider.model_selection_controlled_by_codex {
+        return vec![CODEX_SWITCH_CONTROL_MODEL.to_string()];
     }
+    let mut models = provider.models.clone();
+    model_order::sort_models(&mut models);
+    models
 }
 
 pub(crate) fn codex_image_input_models(provider: &ProviderProfile) -> Vec<String> {
@@ -369,6 +376,12 @@ pub(crate) struct ProviderInput {
     pub(crate) api_format: ProviderApiFormat,
     #[serde(default)]
     pub(crate) request_options: Option<crate::models::ProviderRequestOptions>,
+    #[serde(default)]
+    pub(crate) balance_script: Option<crate::models::ProviderBalanceScript>,
+    #[serde(default)]
+    pub(crate) market_source: Option<crate::models::ProviderMarketSource>,
+    #[serde(default)]
+    pub(crate) clear_balance_script: bool,
     #[serde(default)]
     pub(crate) balance_platform: Option<ProviderBalancePlatform>,
     #[serde(default)]

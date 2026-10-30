@@ -1,5 +1,5 @@
 import { NativeModules } from 'react-native';
-import { subscribeInterfaceLanguage } from '../../../../shared/i18n/interfaceLanguage';
+import { subscribeInterfaceLanguage } from "../../../../shared/localization/interfaceLanguage";
 import { t } from '../i18n';
 
 export interface SelectionLabels { copy: string; selectAll: string; quote: string }
@@ -15,7 +15,7 @@ interface SelectionBridge {
 
 export const nativeTextSelection = NativeModules.ChatTextSelection as SelectionBridge | undefined;
 
-export const selectionLabels = (): SelectionLabels => ({ copy: t('复制'), selectAll: t('全选'), quote: t('引用') });
+export const selectionLabels = (): SelectionLabels => ({ copy: t("client.projectBrowser.copied"), selectAll: t("client.projectBrowser.selectAll"), quote: t("client.chat.quote") });
 
 /** The Android selection toolbar is native, so it receives its titles again after each language change. */
 export function syncSelectionLabels(bridge: SelectionBridge | undefined = nativeTextSelection): () => void {

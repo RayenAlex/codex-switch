@@ -10,7 +10,7 @@ import { HostIdentityVerification } from './HostIdentityVerification';
 import { ChatConnectionHealth } from './ChatConnectionHealth';
 import { useConnectionInfoStyles } from './connectionInfoStyles';
 
-const modeLabels = { get connecting() { return t("正在连接…"); }, direct: 'P2P', relay: 'Relay', get offline() { return t("等待重新连接"); } };
+const modeLabels = { get connecting() { return t("client.settings.connecting"); }, direct: 'P2P', relay: 'Relay', get offline() { return t("client.chat.waitingToReconnect"); } };
 
 export function ChatConnectionInfo({ state, controller, device, active }: {
   state: ChatState; controller: ChatController; device?: RemoteDevice; active: boolean;
@@ -21,15 +21,15 @@ export function ChatConnectionInfo({ state, controller, device, active }: {
   const [healthOpen, setHealthOpen] = useState(false);
   const canReconnect = active && device && !state.ready && !state.connecting && state.mode !== 'connecting';
   let status = modeLabels[state.mode];
-  if (!state.ready && (state.mode === 'direct' || state.mode === 'relay')) status = t("正在同步聊天…");
-  if (!state.ready && state.error && !state.connecting) status = t("连接未完成");
+  if (!state.ready && (state.mode === 'direct' || state.mode === 'relay')) status = t("client.chat.syncingChats");
+  if (!state.ready && state.error && !state.connecting) status = t("client.chat.connectionIncomplete");
   return <>
     <View style={styles.container}>
       <View style={styles.summary}>
         <Text numberOfLines={1} ellipsizeMode="tail" style={[styles.text, styles.name]}>
-          {device ? device.name : t("选择电脑，开始聊天")}</Text>
+          {device ? device.name : t("client.chat.chooseAComputerToStartChatting")}</Text>
         {device && <Pressable accessibilityRole="button" style={styles.status}
-          accessibilityLabel={`${status} · ${t('连接体检')}`} accessibilityState={{ expanded: healthOpen }}
+          accessibilityLabel={`${status} · ${t("client.chatReliability.connectionCheck")}`} accessibilityState={{ expanded: healthOpen }}
           onPress={() => setHealthOpen(true)}>
           <Text numberOfLines={1} ellipsizeMode="tail" style={styles.text}>{' · '}{status}</Text>
         </Pressable>}
@@ -37,7 +37,7 @@ export function ChatConnectionInfo({ state, controller, device, active }: {
       <View style={styles.actions}>
         {state.error === HOST_IDENTITY_CHANGED && <Pressable style={styles.action}
           onPress={() => setVerifying(true)} accessibilityRole="button">
-          <Text style={styles.actionText}>{t("核对电脑身份")}</Text>
+          <Text style={styles.actionText}>{t("client.remoteDesktop.verifyComputerIdentity")}</Text>
         </Pressable>}
         {canReconnect && <ChatReconnectButton retryAt={state.retryAt} onPress={controller.connectNow} />}
       </View>

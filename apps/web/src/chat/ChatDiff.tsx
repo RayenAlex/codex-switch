@@ -13,12 +13,12 @@ function DiffContent({ file, onComment }: { file: DiffFile; onComment?: (file: D
   useLanguage();
   const { limit, loadMore, endRef, onScroll } = useDiffAutoLoad(file.lines.length, PAGE_LINES);
   return <div className="chat-diff-content">
-    <ChatCopyButton text={file.raw} label={t("复制差异")} />
+    <ChatCopyButton text={file.raw} label={t("client.chat.copyDiff.c90ddd")} />
     <pre tabIndex={0} onScroll={onScroll}>{file.lines.slice(0, limit).map((line, index) =>
       <span className={`chat-diff-line ${line.kind}`} key={index}>
         {onComment && (line.oldLine || line.newLine) && <button type="button" className="chat-diff-comment"
-          aria-label={t('对第 {value1} 行留言', { value1: line.newLine ?? line.oldLine ?? 0 })}
-          onClick={() => onComment(file, line)}>{t('留言')}</button>}
+          aria-label={t("client.taskReview.commentOnLine", { value1: line.newLine ?? line.oldLine ?? 0 })}
+          onClick={() => onComment(file, line)}>{t("client.taskReview.comment")}</button>}
         <span>{line.oldLine ?? ''}</span><span>{line.newLine ?? ''}</span>
         <code>{line.kind === 'add' ? '+' : line.kind === 'remove' ? '−' : ' '}{line.text}{'\n'}</code>
       </span>)}
@@ -26,7 +26,7 @@ function DiffContent({ file, onComment }: { file: DiffFile; onComment?: (file: D
         style={{ display: 'block', position: 'sticky', left: 0, width: 1, height: 1 }} />}
     </pre>
     {limit < file.lines.length && <button type="button" className="chat-text-action"
-      onClick={loadMore}>{t("显示更多差异")}</button>}
+      onClick={loadMore}>{t("client.chat.showMoreChanges")}</button>}
   </div>;
 }
 
@@ -35,16 +35,16 @@ export function ChatDiff({ files, status, onComment }: {
 }) {
   useLanguage();
   const panel = useContext(DetailsContext);
-  if (panel && !onComment) return <ChatFilesSummary files={files} title="文件修改记录" status={status} />;
+  if (panel && !onComment) return <ChatFilesSummary files={files} title="client.chat.fileChanges" status={status} />;
   return <div className="chat-diff">{groupDiffFiles(files).map(group =>
     <section key={group.directory}><h3><Folder size={17} />
-      {group.directory.split('/').pop() ? group.name : t('根目录')}</h3>
+      {group.directory.split('/').pop() ? group.name : t("client.runtimeErrors.rootFolder")}</h3>
       <p className="chat-diff-folder">{group.directory || '.'}</p>
       {group.entries.map(({ file, index }) => <details key={index} className="chat-diff-file">
         <summary><FileText size={16} /><span title={file.path}>{file.path.split(/[\\/]/).at(-1)}</span>
           <b className="chat-added">+{file.added}</b><b className="chat-removed">−{file.removed}</b>
           <ChevronDown size={15} /></summary>
-        {file.previousPath && <p className="chat-muted">{t("原路径：")}{file.previousPath}</p>}
+        {file.previousPath && <p className="chat-muted">{t("client.chat.originalPath")}{file.previousPath}</p>}
         <DiffContent file={file} onComment={onComment} />
       </details>)}
     </section>)}</div>;

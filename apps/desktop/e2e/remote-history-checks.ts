@@ -48,7 +48,26 @@ export async function checkRemoteHistory(options: Options) {
   await checkPrefetchAnchor(page);
   await expect(page.getByText(/已加载 \d+ 条历史记录/)).toHaveCount(0);
   await page.screenshot({ path: `../../.codex-tmp/remote-history-${blocked ? 'relay' : 'direct'}.png` });
+  await checkLatestShortcut(page);
   expect(await host.evaluate(() => window.chatTest.demoState().streamErrors)).toEqual([]);
+}
+
+async function checkLatestShortcut(page: Page) {
+  const viewport = page.getByLabel('聊天记录');
+  const button = page.getByRole('button', { name: '回到底部', exact: true });
+  for (const [extra, visible] of [[0, false], [1, true], [0, false], [1, true]] as const) {
+    await viewport.evaluate((node, extra) => {
+      const remaining = Math.floor(node.clientHeight / 2) + extra;
+      node.scrollTop = node.scrollHeight - node.clientHeight - remaining;
+      node.dispatchEvent(new Event('scroll'));
+    }, extra);
+    if (visible) await expect(button).toBeVisible();
+    else await expect(button).toHaveCount(0);
+  }
+  await button.click();
+  await expect.poll(() => viewport.evaluate(node => node.scrollHeight - node.clientHeight - node.scrollTop))
+    .toBeLessThan(2);
+  await expect(button).toHaveCount(0);
 }
 
 async function checkPrefetchAnchor(page: Page) {

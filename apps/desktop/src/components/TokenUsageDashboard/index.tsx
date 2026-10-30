@@ -1,5 +1,7 @@
+import inlineCopy from '@remoteai/i18n/copy/inline/desktop/components/TokenUsageDashboard/index';
+import { interpolate as interpolateCopy } from '@remoteai/i18n';
 import { getLocale } from "../../i18n";
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useMemo, useState } from "react";
 import { Button, InputNumber } from "antd";
 import { BarChart, HeatmapChart, LineChart, PieChart } from "echarts/charts";
@@ -68,57 +70,57 @@ export function TokenUsageDashboard({
   const { entries, dailyUsage, breakdown, quotaHistory, loading, error, analyticsError, quotaError,
     updatedAt, startTs, endTs, load } = useDashboardData({ weeks, refreshSeconds, thresholdTokens });
   const locale = getLocale(language);
-  const labels = (language === "ru" ? {
-    eyebrow: "PROVIDER / TOKEN",
-    title: guiText("Token 消耗汇总", {}, language),
-    period: guiText("最近 {value1} 周", { value1: weeks }, language),
-    refresh: guiText("刷新", {}, language),
-    updated: guiText("更新于", {}, language),
-    heatmap: guiText("每日 Token 热力图", {}, language),
-    heatmapHint: guiText("颜色越深表示当天 Token 消耗越多，100M 及以上为最深色", {}, language),
-    trend: guiText("每日 Token 趋势", {}, language),
-    breakdown: guiText("Token 类型累计", {}, language),
-    providers: guiText("Provider 消耗排行", {}, language),
-    models: guiText("模型消耗排行", {}, language),
-    accounts: guiText("账户消耗排行", {}, language),
-    recent: guiText("排行基于最近 {value1} 条代理请求", { value1: entries.length }, language),
-    noData: guiText("暂无 Token 数据", {}, language),
+  const labels = (language !== "zh" && language !== "en" ? {
+    eyebrow: inlineCopy["PROVIDER_TOKEN_01cf0729"],
+    title: uiText("client.usage.tokenUsageSummary", {}, language),
+    period: uiText("client.usage.lastWeeks", { value1: weeks }, language),
+    refresh: uiText("client.chat.refresh", {}, language),
+    updated: uiText("client.accounts.updated", {}, language),
+    heatmap: uiText("client.mobile.dailyTokenHeatmap", {}, language),
+    heatmapHint: uiText("client.usage.darkerColorsIndicateHigherDailyTokenUsageTheDarkestShade", {}, language),
+    trend: uiText("client.chat.dailyTokenTrend", {}, language),
+    breakdown: uiText("client.mobile.tokenTotalsByType", {}, language),
+    providers: uiText("client.chat.providerUsageRanking", {}, language),
+    models: uiText("client.chat.modelUsageRanking", {}, language),
+    accounts: uiText("client.chat.accountUsageRanking", {}, language),
+    recent: uiText("client.usage.rankingsUseTheLatestProxyRequests", { value1: entries.length }, language),
+    noData: uiText("client.chat.noTokenDataYet", {}, language),
   } : language === "zh" ? {
-    eyebrow: "PROVIDER / TOKEN",
-    title: "Token 消耗汇总",
-    period: `最近 ${weeks} 周`,
-    refresh: "刷新",
-    updated: "更新于",
-    heatmap: "每日 Token 热力图",
-    heatmapHint: "颜色越深表示当天 Token 消耗越多，100M 及以上为最深色",
-    trend: "每日 Token 趋势",
-    breakdown: "Token 类型累计",
-    providers: "Provider 消耗排行",
-    models: "模型消耗排行",
-    accounts: "账户消耗排行",
-    recent: `排行基于最近 ${entries.length} 条代理请求`,
-    noData: "暂无 Token 数据",
+    eyebrow: inlineCopy["PROVIDER_TOKEN_01cf0729"],
+    title: inlineCopy["Token_3e0d654c"],
+    period: interpolateCopy(inlineCopy["value1_f8ae290d"], { value1: String(weeks) }),
+    refresh: inlineCopy["text_aee88743"],
+    updated: inlineCopy["text_7153f091"],
+    heatmap: inlineCopy["Token_4ba5f066"],
+    heatmapHint: inlineCopy["Token_100M_38be0b6d"],
+    trend: inlineCopy["Token_6fad0d78"],
+    breakdown: inlineCopy["Token_0f469306"],
+    providers: inlineCopy["Provider_30e3cd68"],
+    models: inlineCopy["text_d3767977"],
+    accounts: inlineCopy["text_0447b84f"],
+    recent: interpolateCopy(inlineCopy["value1_ac41e162"], { value1: String(entries.length) }),
+    noData: inlineCopy["Token_739a63b2"],
   } : {
-    eyebrow: "PROVIDER / TOKEN",
-    title: "Token Usage Summary",
-    period: `Last ${weeks} weeks`,
-    refresh: "Refresh",
-    updated: "Updated",
-    heatmap: "Daily Token Heatmap",
-    heatmapHint: "Darker cells indicate higher daily usage; 100M or more uses the darkest level",
-    trend: "Daily Token Trend",
-    breakdown: "Token Type Totals",
-    providers: "Provider Usage Ranking",
-    models: "Model Usage Ranking",
-    accounts: "Account Usage Ranking",
-    recent: `Rankings use the latest ${entries.length} proxy requests`,
-    noData: "No token data",
+    eyebrow: inlineCopy["PROVIDER_TOKEN_01cf0729"],
+    title: inlineCopy["Token_Usage_Summary_22ece17d"],
+    period: interpolateCopy(inlineCopy["Last_value1_weeks_90109187"], { value1: String(weeks) }),
+    refresh: inlineCopy["Refresh_0e916101"],
+    updated: inlineCopy["Updated_3a5ecca1"],
+    heatmap: inlineCopy["Daily_Token_Heatmap_74c47f1d"],
+    heatmapHint: inlineCopy["Darker_cells_indicate_higher_daily_cc13cc77"],
+    trend: inlineCopy["Daily_Token_Trend_8872a4b1"],
+    breakdown: inlineCopy["Token_Type_Totals_f193fa02"],
+    providers: inlineCopy["Provider_Usage_Ranking_a39f94fb"],
+    models: inlineCopy["Model_Usage_Ranking_b9846d6d"],
+    accounts: inlineCopy["Account_Usage_Ranking_cc46050c"],
+    recent: interpolateCopy(inlineCopy["Rankings_use_the_latest_value1_43585b8f"], { value1: String(entries.length) }),
+    noData: inlineCopy["No_token_data_0f1ce9b3"],
   });
-  const proxyOnlyHint = (language === "ru" ? guiText("仅代理模式会统计 Token 消耗", {}, language) : language === "zh"
-    ? "仅代理模式会统计 Token 消耗"
-    : "Token usage is collected only in proxy mode");
-  const rangeLabel = (language === "ru" ? guiText("最近", {}, language) : language === "zh" ? "最近" : "Last");
-  const weeksUnit = (language === "ru" ? guiText("周", {}, language) : language === "zh" ? "周" : "weeks");
+  const proxyOnlyHint = (language !== "zh" && language !== "en" ? uiText("client.usage.tokenUsageIsRecordedOnlyInProxyMode", {}, language) : language === "zh"
+    ? inlineCopy["Token_dafd73d1"]
+    : inlineCopy["Token_usage_is_collected_only_dff91577"]);
+  const rangeLabel = (language !== "zh" && language !== "en" ? uiText("client.chat.recent", {}, language) : language === "zh" ? inlineCopy["text_997a5e6e"] : inlineCopy["Last_eb970eb0"]);
+  const weeksUnit = (language !== "zh" && language !== "en" ? uiText("client.chat.weeks", {}, language) : language === "zh" ? inlineCopy["text_5c553ec3"] : inlineCopy["weeks_eb0d2375"]);
   const palette = useMemo(() => chartPalette(themeColor, dark), [dark, themeColor]);
   const dateKeys = useMemo(() => calendarDateKeys(weeks), [dailyUsage, weeks]);
   const { heatmapOption, trendOption, breakdownOption } = useOverviewOptions({
@@ -129,7 +131,7 @@ export function TokenUsageDashboard({
   const modelData = useMemo(() => aggregateEntries(entries, (entry) => entry.model), [entries]);
   const accountData = useMemo(() => aggregateEntries(entries, (entry) => entry.accountEmail?.trim()
     || entry.accountId?.trim()
-    || ((language === "ru" ? guiText("未识别账户", {}, language) : language === "zh" ? "未识别账户" : "Unknown account"))), [entries, language]);
+    || ((language !== "zh" && language !== "en" ? uiText("client.usage.unidentifiedAccount", {}, language) : language === "zh" ? inlineCopy["text_04020ae6"] : inlineCopy["Unknown_account_0ac22ebf"]))), [entries, language]);
 
   return (
     <div className={`${styles.tokenDashboard}${embedded ? ` ${styles.embedded}` : ""}`}>
@@ -157,13 +159,13 @@ export function TokenUsageDashboard({
         </div>
       </header>
       {error ? <div className={styles.tokenUsageError} role="alert">
-        {(language === "ru" ? guiText("Token 数据刷新失败，请重试。", {}, language) : language === "zh" ? "Token 数据刷新失败，请重试。" : "Could not refresh token usage. Please retry.")}
+        {(language !== "zh" && language !== "en" ? uiText("client.usage.couldNotRefreshTokenDataPleaseTryAgain", {}, language) : language === "zh" ? inlineCopy["Token_e999b69f"] : inlineCopy["Could_not_refresh_token_usage_34377d98"])}
       </div> : null}
       <OfficialAccountUsage language={language} refreshSeconds={refreshSeconds}
         startTs={startTs} refreshKey={officialRefreshKey} />
       <AccountQuotaChart history={quotaHistory} startTs={startTs} endTs={endTs}
         language={language} dark={dark} themeColor={themeColor} loading={loading}
-        error={quotaError ? ((language === "ru" ? guiText("额度记录刷新失败，请重试。", {}, language) : language === "zh" ? "额度记录刷新失败，请重试。" : "Could not refresh quota history.")) : undefined} />
+        error={quotaError ? ((language !== "zh" && language !== "en" ? uiText("client.usage.couldNotRefreshQuotaHistoryPleaseTryAgain", {}, language) : language === "zh" ? inlineCopy["text_760eab7b"] : inlineCopy["Could_not_refresh_quota_history_19d0ef0f"])) : undefined} />
       <ConsumptionCharts daily={breakdown} dateKeys={dateKeys} language={language} palette={palette}
         thresholdTokens={thresholdTokens} loading={loading} error={analyticsError} />
       <div className={`${styles.tokenDashboardGrid} ${styles.tokenDashboardGridTop}`}>

@@ -1,6 +1,7 @@
-import { t, useLanguage } from '../i18n';
+import { SheetGestureScrollView as ScrollView } from '../components/SheetScrollGesture';
+import { displayError, t, useLanguage } from '../i18n';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { BottomSheet } from '../components/BottomSheet';
 import { fetchUserProfile } from '../api/client';
 import type { AuthSession } from '../types';
@@ -30,13 +31,13 @@ export function DesktopVersionContent({ update, onClose }: {
     update.install(confirmation.version);
     setConfirmation(null);
   };
-  return <BottomSheet visible title={confirmation ? t("安装电脑端更新") : t("电脑端版本")} onClose={onClose}
-    dragFromHeaderOnly actions={confirmation ? [
-      { label: t("暂不安装"), onPress: () => setConfirmation(null) },
-      { label: t("安装并重启"), tone: 'primary', disabled: !canConfirm, onPress: install },
+  return <BottomSheet visible title={confirmation ? t("client.settings.installDesktopUpdate") : t("client.settings.desktopVersion")} onClose={onClose}
+    actions={confirmation ? [
+      { label: t("client.settings.notNow"), onPress: () => setConfirmation(null) },
+      { label: t("client.settings.installAndRestart"), tone: 'primary', disabled: !canConfirm, onPress: install },
     ] : [
-      { label: t("检查更新"), onPress: update.check, disabled: !update.canCheck },
-      { label: t("安装更新"), tone: 'primary', disabled: !update.canInstall,
+      { label: t("client.settings.checkForUpdates"), onPress: update.check, disabled: !update.canCheck },
+      { label: t("client.settings.installUpdate"), tone: 'primary', disabled: !update.canInstall,
         onPress: () => {
           if (status?.latestVersion) setConfirmation({ deviceId: update.selectedId, version: status.latestVersion });
         } },
@@ -44,32 +45,32 @@ export function DesktopVersionContent({ update, onClose }: {
     <ScrollView><View style={styles.sheetBody}>
       {confirmation ? <>
         <Text style={styles.detailLabel}>{update.device?.name} · v{confirmation.version}</Text>
-        <Text style={styles.hint}>{t("安装后电脑端会重启，正在进行的连接和任务可能中断。请先保存工作。")}</Text>
+        <Text style={styles.hint}>{t("client.settings.theDesktopAppWillRestartActiveConnectionsAndTasksMay")}</Text>
       </> : <>
-        <Text style={styles.detailLabel}>{t("选择电脑")}</Text>
-        {!update.connected && <Text style={styles.hint}>{t("正在连接…")}</Text>}
+        <Text style={styles.detailLabel}>{t("client.settings.chooseAComputer")}</Text>
+        {!update.connected && <Text style={styles.hint}>{t("client.settings.connecting")}</Text>}
         {update.connected && !update.devices.length && <Text style={styles.hint}>
-          {t("暂无电脑，请先在电脑端登录同一账号。")}</Text>}
+          {t("client.settings.noComputersYetSignInToTheDesktopAppWith")}</Text>}
         {update.devices.map((device) => <Pressable key={device.deviceId} accessibilityRole="radio"
           accessibilityState={{ checked: device.deviceId === update.selectedId }}
           onPress={() => update.select(device.deviceId)} style={styles.input}>
           <Text style={styles.detailLabel}>{device.deviceId === update.selectedId ? '● ' : '○ '}{device.name}</Text>
-          <Text style={styles.hint}>{device.platform} · {device.online ? t("在线") : t("离线")}</Text>
+          <Text style={styles.hint}>{device.platform} · {device.online ? t("client.chat.online") : t("client.chat.offline")}</Text>
         </Pressable>)}
         {update.device && <>
-          <Text style={styles.detailLabel}>{t("当前版本")}</Text>
+          <Text style={styles.detailLabel}>{t("client.settings.version")}</Text>
           <Text selectable style={styles.detailValue}>
-            {status?.currentVersion || update.device.appVersion || t("暂未读取到版本")}</Text>
+            {status?.currentVersion || update.device.appVersion || t("client.settings.versionUnavailable")}</Text>
           {(!status || !update.connected || !update.device.online) && update.device.appVersion
-            && <Text style={styles.hint}>{t("上次连接时的版本")}</Text>}
-          {status?.latestVersion && <Text style={styles.detailLabel}>{t("可用版本 · v")}{status.latestVersion}</Text>}
-          <Text accessibilityLiveRegion="polite" style={styles.hint}>{update.message}</Text>
+            && <Text style={styles.hint}>{t("client.settings.versionFromTheLastConnection")}</Text>}
+          {status?.latestVersion && <Text style={styles.detailLabel}>{t("client.mobile.availableVersionV")}{status.latestVersion}</Text>}
+          <Text accessibilityLiveRegion="polite" style={styles.hint}>{displayError(update.message)}</Text>
           {status?.phase === 'downloading' && status.progress !== null
             && <Text style={styles.detailValue}>{status.progress}%</Text>}
           {status?.notes && <Text selectable style={styles.hint}>{status.notes}</Text>}
         </>}
       </>}
-      {!!update.error && <Text accessibilityRole="alert" style={styles.error}>{update.error}</Text>}
+      {!!update.error && <Text accessibilityRole="alert" style={styles.error}>{displayError(update.error)}</Text>}
     </View></ScrollView>
   </BottomSheet>;
 }

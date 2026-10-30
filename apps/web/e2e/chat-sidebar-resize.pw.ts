@@ -31,7 +31,7 @@ test('web sidebar resizes, remembers its width and restores it after narrow layo
   await page.screenshot({ path: info.outputPath('web-sidebar-resized.png') });
 });
 
-test('chat list has a slim scrollbar and scrolls independently of its footer', async ({ page, isMobile }, info) => {
+test('chat list has a slim scrollbar and scrolls independently of its controls', async ({ page, isMobile }, info) => {
   const data = Array.from({ length: 24 }, (_, index) => ({
     id: `chat-${index}`, name: `聊天记录 ${index}`, cwd: `/project-${index}`, preview: '', updatedAt: 1,
   }));
@@ -45,13 +45,13 @@ test('chat list has a slim scrollbar and scrolls independently of its footer', a
     track: getComputedStyle(node, '::-webkit-scrollbar-track').backgroundColor,
   }));
   expect(scrollbar).toEqual({ width: '8px', buttons: 'none', track: 'rgba(0, 0, 0, 0)' });
-  const footer = page.locator('.chat-drawer-footer');
+  const controls = page.locator(isMobile ? '.chat-drawer-footer' : '.chat-sidebar-heading');
   // Finish the drawer's entrance animation before comparing its position.
-  await footer.getByRole('button', { name: '新聊天', exact: true }).click({ trial: true });
-  const before = await footer.boundingBox();
+  await controls.getByRole('button').click({ trial: true });
+  const before = await controls.boundingBox();
   await list.evaluate(node => { node.scrollTop = node.scrollHeight; });
   await expect(list.getByRole('button', { name: '聊天记录 23', exact: true })).toBeInViewport();
-  expect(await footer.boundingBox()).toEqual(before);
+  expect(await controls.boundingBox()).toEqual(before);
   await expect(page.getByRole('separator', { name: '调整聊天列表宽度' })).toHaveCount(isMobile ? 0 : 1);
   await page.screenshot({ path: info.outputPath('chat-list-scrollbar.png') });
 });

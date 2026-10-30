@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { guiApi } from "./api";
 import { conversation } from "./events";
 import { lastUserMessage } from '../../../../../shared/chat/latestUserMessage';
@@ -80,7 +80,7 @@ export class GuiMessageEditor {
       if (error) this.recoveredDrafts.set(edit.threadId,
         editedMessageDraft(state.conversations[edit.threadId], edit));
       this.applyResult(state.conversations[edit.threadId], result);
-      if (error) { this.host.report(guiText("未能确认发送结果。修改内容已放回输入框，请检查对话后重试。")); return false; }
+      if (error) { this.host.report(uiText("client.composer.couldNotConfirmWhetherTheMessageWasSentYourEdits")); return false; }
       return true;
     } catch (error) { this.host.report(error); return false; }
     finally { this.host.patch({ sending: false }); this.host.flushQueue(); }

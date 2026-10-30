@@ -1,7 +1,7 @@
 const { withAndroidManifest, withInfoPlist } = require('expo/config-plugins');
 
-// Base Info.plist copy; the en/ru/zh-Hans/zh-Hant prompts come from expo.locales (locales/*.json).
-const LOCAL_NETWORK_USAGE = '允许 Remote AI 连接同一网络中的电脑，用于聊天和远程桌面';
+// The base prompt uses the same generated resource as Expo's localized permission prompts.
+const LOCAL_NETWORK_USAGE = require('../locales/zh.json').ios.NSLocalNetworkUsageDescription;
 
 module.exports = function withChatTransport(config) {
   config = require('./withChatConnectivity.cjs')(config);

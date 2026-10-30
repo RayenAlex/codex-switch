@@ -1,5 +1,5 @@
-import { guiText } from "../../../i18n/guiText";
-import { backendText } from '../../../../../../shared/i18n/backend/translateBackendMessage';
+import { uiText } from "../../../i18n/uiText";
+import { remoteErrorText } from "../../../../../../shared/localization/errors";
 import { useState } from 'react';
 import { Alert, Button, Popover, Tooltip } from 'antd';
 import { PanelBottom, RefreshCw } from 'lucide-react';
@@ -8,39 +8,42 @@ import type { ChatController } from '../../../../../../shared/remote-chat/client
 import type { TerminalPanelState } from '../terminal/useTerminalPanel';
 import { Installer } from '../Installer';
 import { CliUpdateIcon } from '../CliUpdateIcon';
+import { GuiChatSettingsButton } from '../GuiChatSettingsButton';
 import type { useRemoteCliInstaller } from './useRemoteCliInstaller';
 
-export function RemoteGuiTools({ controller, state, installer, terminal }: {
+export function RemoteGuiTools({ controller, state, installer, terminal, active }: {
   controller: ChatController; state: ChatState; installer: ReturnType<typeof useRemoteCliInstaller>;
   terminal?: TerminalPanelState & { error?: string; busy?: boolean };
+  active: boolean;
 }) {
   const connected = state.mode === 'direct' || state.mode === 'relay';
   const [reconnecting, setReconnecting] = useState(false);
   const [error, setError] = useState('');
   const running = state.sending || Boolean(state.selected?.turns?.some(turn => turn.status === 'inProgress'));
-  const terminalLabel = terminal?.open ? guiText("收起远程终端") : guiText("打开远程终端");
+  const terminalLabel = terminal?.open ? uiText("client.chat.hideRemoteTerminal") : uiText("client.chat.openRemoteTerminal");
   const reconnect = async () => {
     if (reconnecting) return;
     if (!connected) { controller.connectNow(); return; }
     setReconnecting(true); setError('');
     try { await controller.guiTools.reconnect(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : guiText("未能重新连接远程 Codex，请稍后重试。")); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : uiText("client.workspaceActions.couldNotReconnectRemoteCodexPleaseTryAgainShortly")); }
     finally { setReconnecting(false); }
   };
   return <div className="gui-remote-tools">
-    <Tooltip title={guiText("重新连接远程 Codex")} styles={{ root: { maxWidth: 400 } }}>
+    <GuiChatSettingsButton active={active} />
+    <Tooltip title={uiText("client.workspaceActions.reconnectRemoteCodex")} styles={{ root: { maxWidth: 400 } }}>
       <Button type="text" className="gui-remote-secondary-tool"
-        icon={<RefreshCw size={16} />} aria-label={guiText("重新连接远程 Codex")}
+        icon={<RefreshCw size={16} />} aria-label={uiText("client.workspaceActions.reconnectRemoteCodex")}
         loading={reconnecting || state.connecting} disabled={running || installer.installing}
         onClick={() => { void reconnect(); }} />
     </Tooltip>
     <Popover trigger="click" placement="bottomRight" styles={{ root: { maxWidth: 400 } }} content={<>
       <Installer installer={installer} compact remote running={running} disabled={!connected} />
-      {installer.error && <Alert type="error" message={backendText(installer.error)} />}
+      {installer.error && <Alert type="error" message={remoteErrorText(installer.error)} />}
     </>}>
       <Button type="text" className="gui-remote-secondary-tool"
         icon={<CliUpdateIcon version={installer.version} release={installer.release} />}
-        aria-label={guiText("远程 Codex CLI 更新")} />
+        aria-label={uiText("client.workspaceActions.remoteCodexCliUpdates")} />
     </Popover>
     {terminal && <Tooltip title={terminalLabel} styles={{ root: { maxWidth: 400 } }}>
       <Button type="text" icon={<PanelBottom size={16} />} aria-label={terminalLabel}
@@ -48,9 +51,9 @@ export function RemoteGuiTools({ controller, state, installer, terminal }: {
         onClick={terminal.toggle} />
     </Tooltip>}
     {terminal?.error && !terminal.open && <span role="alert" style={{ maxWidth: 400 }}>
-      {backendText(terminal.error)}
+      {remoteErrorText(terminal.error)}
     </span>}
-    {error && <Popover open content={<Alert type="error" message={backendText(error)} closable onClose={() => setError('')} />}
+    {error && <Popover open content={<Alert type="error" message={remoteErrorText(error)} closable onClose={() => setError('')} />}
       placement="bottomRight" styles={{ root: { maxWidth: 400 } }}><span /></Popover>}
   </div>;
 }

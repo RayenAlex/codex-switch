@@ -1,7 +1,7 @@
 import { Table, Tooltip } from 'antd';
 import type { Language } from '../../i18n';
 import type { OfficialAccountTotal } from '../../../../../shared/officialUsage';
-import { officialUsageLabels } from '../../../../../shared/officialUsageLabels';
+import { officialUsageLabels } from '@remoteai/i18n/copy/client/officialUsageLabels';
 import { useOfficialUsage } from '../../hooks/useOfficialUsage';
 import { formatTokens } from './chartUtils';
 import { formatEstimatedCost, type TokenCostDisplaySettings } from '../../utils/tokenCost';

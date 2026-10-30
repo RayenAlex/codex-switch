@@ -253,7 +253,7 @@ pub(crate) fn model_catalog_for_provider_group_with_image_route(
         &data.image_input_models,
         image_input_route_enabled,
     );
-    model_catalog_for_models(
+    let mut catalog = model_catalog_for_models(
         &data.models,
         ModelCatalogOptions {
             image_input_models: &data.image_input_models,
@@ -263,7 +263,16 @@ pub(crate) fn model_catalog_for_provider_group_with_image_route(
             reasoning_profile: ReasoningEffortProfile::Standard,
             fast_mode_enabled: data.fast_mode_enabled,
         },
-    )
+    );
+    let names = group_display_names::display_names(providers);
+    if let Some(entries) = catalog["models"].as_array_mut() {
+        for entry in entries {
+            if let Some(name) = entry["slug"].as_str().and_then(|slug| names.get(slug)) {
+                entry["display_name"] = json!(name);
+            }
+        }
+    }
+    catalog
 }
 
 fn write_local_proxy_config(

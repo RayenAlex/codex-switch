@@ -33,16 +33,21 @@ services:
           - /telemetry
           - /device-switch
           - /device-chat
+          # A scoped ticket is sent inside the first WebSocket frame, never in the URL.
+          - /lounge/socket
           # Opaque device credential; authenticated by Go, not the account JWT plugin.
           - /desktop-service/revoke
           - /prompt-plugins
           - /skills
+          # Public browsing; writes require account authentication inside admin-go.
+          - /provider-market
           - /codex-home-presets
           - /chat/title-settings
         strip_path: false
       - name: codex-switch-protected
         paths:
           - /sync
+          - /lounge/ticket
           - /official-usage
           - /update-sharing/reports
           - /admin/api

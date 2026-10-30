@@ -14,6 +14,8 @@ const RESPONSE_TIMEOUT: Duration = Duration::from_secs(15);
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Snapshot {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub security: Option<super::security::Snapshot>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub resolutions: Vec<super::displays::Resolution>,
     pub displays: Vec<DisplayInfo>,
@@ -30,6 +32,10 @@ pub(super) struct Guardian {
 
 impl Guardian {
     pub fn prepare(runtime: &Path, original: String) -> Result<(Self, String)> {
+        Self::prepare_mode(runtime, original, false)
+    }
+
+    fn prepare_mode(runtime: &Path, original: String, hidden: bool) -> Result<(Self, String)> {
         let name = if cfg!(windows) {
             "desktop-privacy.exe"
         } else {
@@ -37,6 +43,9 @@ impl Guardian {
         };
         let executable = runtime.parent().ok_or(DesktopError::Privacy)?.join(name);
         let mut command = Command::new(executable);
+        if hidden {
+            command.env("CSW_PRIVACY_START_HIDDEN", "1");
+        }
         command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -108,6 +117,10 @@ impl Drop for Guardian {
 }
 
 pub(super) fn prepare(id: &str, runtime: &Path) -> Result<()> {
+    prepare_mode(id, runtime, false)
+}
+
+fn prepare_mode(id: &str, runtime: &Path, hidden: bool) -> Result<()> {
     let original = super::with_session(id, |session| {
         if !session.permissions.control {
             return Err(DesktopError::Denied);
@@ -123,13 +136,35 @@ pub(super) fn prepare(id: &str, runtime: &Path) -> Result<()> {
         Ok(session.display.info.id.clone())
     })?;
     // Installation and arrival can wait; never hold the session lock during helper startup.
-    let (guardian, display_id) = Guardian::prepare(runtime, original)?;
+    let (guardian, display_id) = if hidden {
+        Guardian::prepare_mode(runtime, original, true)?
+    } else {
+        Guardian::prepare(runtime, original)?
+    };
     let display = find_display(&display_id)?;
     super::with_session(id, |session| {
         session.privacy = Some(guardian);
         session.display = display;
         Ok(())
     })
+}
+
+/// Apply host-owned privacy before any capture or automatic unlock, never after viewer connection.
+#[cfg(windows)]
+pub(super) fn prepare_saved(id: &str, runtime: &Path) -> Result<Option<Snapshot>> {
+    let enabled =
+        super::with_lease(id, |session| {
+            Ok(session.permissions.control
+                && session.security.snapshot()?.privacy_screen == Some(true))
+        })?;
+    if !enabled {
+        return Ok(None);
+    }
+    super::privacy_setup::prepare(runtime)?;
+    prepare_mode(id, runtime, true)?;
+    let snapshot = commit(id)?;
+    super::auto_unlock::connect_saved();
+    Ok(Some(snapshot))
 }
 
 fn find_display(id: &str) -> Result<monitors::Monitor> {
@@ -177,6 +212,10 @@ pub(super) fn disable(id: &str) -> Result<Snapshot> {
 
 pub(super) fn snapshot(session: &super::Session) -> Result<Snapshot> {
     Ok(Snapshot {
+        #[cfg(windows)]
+        security: Some(session.security.snapshot()?),
+        #[cfg(not(windows))]
+        security: None,
         #[cfg(windows)]
         resolutions: if session.permissions.control {
             super::resolutions::list(&session.display.info.id)

@@ -74,7 +74,7 @@ it("keeps the list order through refresh so running chats return to their origin
   expect(controller.getSnapshot().threads.map((entry) => entry.id)).toEqual(["newer", "one"]);
   expect(threadGroups(controller.getSnapshot())[0].threads.map((entry) => entry.id)).toEqual(["one", "newer"]);
   receive({ method: "turn/completed", params: { threadId: thread.id,
-    turn: { id: "turn", status: "completed", items: [] } } });
+    turn: { id: "turn", status: "completed", items: [], completedAt: 1 } } });
   expect(threadGroups(controller.getSnapshot())[0].threads.map((entry) => entry.id)).toEqual(["newer", "one"]);
 });
 

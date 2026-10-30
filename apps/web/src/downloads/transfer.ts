@@ -16,15 +16,15 @@ const checkCancelled = (signal: AbortSignal) => { if (signal.aborted) throw new 
 /** Resume only when both size and revision match, so edits cannot mix old and new file contents. */
 export async function transferDownload({ task, client, signal, update, mode }: Options) {
   checkCancelled(signal);
-  const { scope, threadId, cwd, path, preview, gitCommit } = task.source;
-  const info = await client.open({ scope, threadId, cwd, path, preview, gitCommit, transferId: task.id }, {
+  const { scope, threadId, cwd, path, preview, gitCommit, attachment } = task.source;
+  const info = await client.open({ scope, threadId, cwd, path, preview, gitCommit, attachment, transferId: task.id }, {
     signal, progress: preparation => {
       task = { ...task, status: 'preparing', preparation, bytesPerSecond: undefined };
       update(task);
     },
   });
   try {
-    validateFileInfo(info, mode?.());
+    validateFileInfo(info, mode?.(), client.checkSize);
     checkCancelled(signal);
     task = { ...task, preparation: undefined };
     if (client.bulk?.available()) {
@@ -43,12 +43,10 @@ export async function transferDownload({ task, client, signal, update, mode }: O
       manifest: undefined, checkpoint: undefined, verified: false };
     if (!resume) await resetDownload(task);
     update(task);
-    const startedAt = performance.now();
-    const startingOffset = task.received;
     await transferFileChunks({ client, threadId: task.id, info, signal, offset: task.received, mode,
+      checkSize: client.checkSize,
       write: async (chunk, received) => {
-        const next = { ...task, received,
-          bytesPerSecond: (received - startingOffset) * 1000 / Math.max(1, performance.now() - startedAt) };
+        const next = { ...task, received };
         await storeChunk(next, chunk.offset, chunk.data);
         task = next;
         update(task);

@@ -71,7 +71,7 @@ export function subscribeSession(listener: (session: AuthSession | null) => void
 async function responseError(response: Response) {
   const payload = await response.json().catch(() => null) as { message?: string | string[] } | null;
   if (Array.isArray(payload?.message)) return payload.message.join("；");
-  return payload?.message || t('请求失败（HTTP {value1}）', { value1: response.status });
+  return payload?.message || t("client.app.requestFailedHttp", { value1: response.status });
 }
 
 export async function refreshSession() {
@@ -102,8 +102,9 @@ export async function refreshSession() {
   return refreshRequest;
 }
 
-async function authorizedFetch(path: string, init: RequestInit = {}) {
+export async function authorizedFetch(path: string, init: RequestInit = {}, guard?: (session: AuthSession) => void) {
   const request = async (session: AuthSession) => {
+    guard?.(session);
     const headers = new Headers(init.headers);
     headers.set("Authorization", `Bearer ${session.accessToken}`);
     if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
@@ -230,7 +231,7 @@ export async function fetchAccountDetails(accountId: string) {
 export async function updateAccountDetails(accountId: string, details: {
   note: string;
   expiresAt: string;
-  privateDetails: { password: string; phoneNumber: string; totpSecret: string };
+  privateDetails: { alias?: string; password: string; phoneNumber: string; totpSecret: string };
 }) {
   return apiJson<AccountSummary>(`/sync/accounts/${encodeURIComponent(accountId)}/details`, {
     method: 'PATCH',

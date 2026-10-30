@@ -19,7 +19,7 @@ export function StartupUpdatePrompt() {
 
   const ignore = () => {
     setError('');
-    void update.ignoreVersion().catch(() => setError(t("未能保存，请重试")));
+    void update.ignoreVersion().catch(() => setError(t("client.settings.couldNotSavePleaseTryAgain")));
   };
   const install = () => {
     update.dismiss();
@@ -30,15 +30,15 @@ export function StartupUpdatePrompt() {
     supportedOrientations={['portrait', 'landscape-left', 'landscape-right']}>
     <View style={styles.backdrop}>
       <View accessibilityViewIsModal style={styles.dialog}>
-        <Text accessibilityRole="header" style={styles.title}>{t("发现新版本")}</Text>
-        <Text style={styles.message}>Remote AI v{release.version}{' '}{t("已发布，是否立即更新？")}</Text>
+        <Text accessibilityRole="header" style={styles.title}>{t("client.settings.updateAvailable")}</Text>
+        <Text style={styles.message}>Remote AI v{release.version}{' '}{t("client.mobile.isAvailableUpdateNow")}</Text>
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
         <View style={styles.actions}>
           <Pressable accessibilityRole="button" onPress={ignore} style={styles.button}>
-            <Text style={styles.ignore}>{t("忽略本版本")}</Text>
+            <Text style={styles.ignore}>{t("client.settings.skipThisVersion")}</Text>
           </Pressable>
           <Pressable accessibilityRole="button" onPress={install} style={[styles.button, styles.primary]}>
-            <Text style={styles.install}>{t("立即更新")}</Text>
+            <Text style={styles.install}>{t("client.settings.updateNow")}</Text>
           </Pressable>
         </View>
       </View>

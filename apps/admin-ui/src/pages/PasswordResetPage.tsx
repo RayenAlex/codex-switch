@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { App as AntApp, Button, Card, Form, Input, Result, Segmented, Space } from "antd";
+import { App as AntApp, Button, Card, Form, Input, Result, Space } from "antd";
 import { Languages } from "lucide-react";
-import { LANGUAGE_OPTIONS, type Language } from "../i18n";
+import { LanguageSelect } from "../../../../shared/localization/LanguageSelect";
+import { LANGUAGE_OPTIONS } from "../i18n";
 import { useI18n } from "../i18n-context";
 
 interface PasswordResetValues {
@@ -87,11 +88,12 @@ export function PasswordResetPage() {
                 </div>
                 <div className="language-control" aria-label={t("language.label")}>
                   <Languages size={15} />
-                  <Segmented
+                  <LanguageSelect
                     size="small"
+                    label={t("language.label")}
                     value={language}
-                    options={[...LANGUAGE_OPTIONS]}
-                    onChange={(value) => setLanguage(value as Language)}
+                    options={LANGUAGE_OPTIONS}
+                    onChange={setLanguage}
                   />
                 </div>
               </div>

@@ -29,7 +29,7 @@ export async function readWorkerLogs(connection, options) {
     if (options.source !== 'worker') await chrome.debugger.sendCommand(target, 'Log.enable');
     await runtime.flush();
     await guard();
-    if (runtime.contextChanged()) throw new Error(t('workerChanged', '这个 Worker 已变化，请重新读取日志。'));
+    if (runtime.contextChanged()) throw new Error(t('workerChanged'));
   } finally {
     dispose();
     // Retained connections need a fresh replay on the next read. A cleanup failure propagates

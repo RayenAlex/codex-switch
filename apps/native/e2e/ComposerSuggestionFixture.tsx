@@ -3,7 +3,7 @@ import { registerRootComponent } from 'expo';
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { setInterfaceLanguage } from '../../../shared/i18n/interfaceLanguage';
+import { setInterfaceLanguage } from "../../../shared/localization/interfaceLanguage";
 import { ComposerSuggestion } from '../src/chat/ComposerSuggestion';
 import { useStyles } from '../src/chat/styles';
 import suggestions from '../../../shared/chat/promptSuggestionFixture.json';

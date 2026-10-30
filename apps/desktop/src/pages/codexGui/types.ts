@@ -213,7 +213,7 @@ export type Request =
   | import("../../../../../shared/remote-chat/fileDownload").FileRequest
   | { operation: "textPreview"; threadId: string; path: string; maxBytes?: number }
   | ({ operation: "projectFiles" } & import('../../../../../shared/remote-chat/projectFiles').ProjectFilesRequest)
-  | { operation: "projectDirectories"; directory: string }
+  | { operation: "projectDirectories"; directory: string; includeFiles?: boolean }
     | ({ operation: 'downloadOpen'; maxBytes?: number }
       & import('../../../../../shared/remote-chat/downloads').DownloadOpen)
     | ({ operation: 'previewOpen' } & import('../../../../../shared/remote-chat/downloads').PreviewOpen)
@@ -233,7 +233,7 @@ export type Request =
       skills: SkillReference[]; attachments?: AttachmentReference[]; transferMode?: 'direct' | 'relay' }
   | { operation: "skills"; cwd?: string }
   | { operation: "models"; cursor?: string; cacheOnly?: boolean }
-  | { operation: "list"; cursor?: string; archived: boolean; search?: string; limit?: number }
+  | { operation: "list"; cursor?: string; archived: boolean; search?: string; limit?: number; force?: boolean }
   | { operation: "start"; cwd?: string; model?: string; access: AccessMode }
   | { operation: "fork"; threadId: string; turnId: string; access: AccessMode; cwd?: string }
   | { operation: "resume"; threadId: string; access: AccessMode; cwd?: string }

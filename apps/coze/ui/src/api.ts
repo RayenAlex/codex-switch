@@ -26,7 +26,7 @@ export async function api<T>(method: string, params?: unknown): Promise<T> {
   });
   const value: unknown = await response.json();
   if (!response.ok) {
-    const error = value && typeof value === "object" && "error" in value ? String(value.error) : msg("操作未完成，请重试。");
+    const error = value && typeof value === "object" && "error" in value ? String(value.error) : msg("coze.core.couldnTCompleteTheActionTryAgain");
     throw new ApiError(error, response.status);
   }
   return value as T;
@@ -34,13 +34,13 @@ export async function api<T>(method: string, params?: unknown): Promise<T> {
 
 /** Returns the untranslated message; translate it where it is displayed. */
 export function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : msg("操作未完成，请重试。");
+  return error instanceof Error ? error.message : msg("coze.core.couldnTCompleteTheActionTryAgain");
 }
 
 export function fileBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error(msg("文件未能读取，请重新选择。")));
+    reader.onerror = () => reject(new Error(msg("coze.core.couldnTReadTheFileChooseItAgain")));
     reader.onload = () => resolve(String(reader.result).split(",")[1]);
     reader.readAsDataURL(file);
   });

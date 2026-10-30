@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import { useEffect, useState } from "react";
 import { Alert, Button, Input, InputNumber, Select, Slider, Space } from "antd";
 import { api, errorText } from "../api";
@@ -16,39 +17,39 @@ export function AgentSettings({ resources, draft, onChange }: Props) {
   const update = (key: string, value: Draft[string]) => onChange({ ...draft, [key]: value });
   const toolIds = (draft.toolIds ?? []) as string[];
   const available = resources.filter((item) => ["workflow", "plugin", "knowledge", "table"].includes(item.kind));
-  return <section className="panel"><h2>{t("角色与能力")}</h2>
-    {error && <Alert type="error" message={t(error)} closable onClose={() => setError("")} />}
-    <label>{t("模型")}</label><Space.Compact block>
+  return <section className="panel"><h2>{t("coze.agents.roleAndCapabilities")}</h2>
+    {error && <Alert type="error" message={displayError(error)} closable onClose={() => setError("")} />}
+    <label>{t("coze.agents.model")}</label><Space.Compact block>
       <Select className="grow" showSearch value={String(draft.model || "") || undefined}
-        placeholder={t("选择 Remote AI 的模型")} options={models.map((model) => ({ value: model.id, label: model.name }))}
+        placeholder={t("coze.agents.chooseARemoteAiModel")} options={models.map((model) => ({ value: model.id, label: model.name }))}
         onChange={(value) => update("model", value)} />
-      <Button onClick={() => void refresh()}>{t("刷新")}</Button>
+      <Button onClick={() => void refresh()}>{t("coze.agents.refresh")}</Button>
     </Space.Compact>
-    <label>{t("角色提示词")}</label><Input.TextArea rows={9} value={String(draft.prompt ?? "")}
-      onChange={(event) => update("prompt", event.target.value)} placeholder={t("描述它的角色、任务和回答方式…")} />
-    <Select className="full" placeholder={t("从提示词库插入")} value={undefined}
+    <label>{t("coze.agents.systemPrompt")}</label><Input.TextArea rows={9} value={String(draft.prompt ?? "")}
+      onChange={(event) => update("prompt", event.target.value)} placeholder={t("coze.agents.describeItsRoleTasksAndHowItShouldAnswer")} />
+    <Select className="full" placeholder={t("coze.agents.insertFromPrompts")} value={undefined}
       options={resources.filter((item) => item.kind === "prompt").map((item) => ({ value: item.id, label: item.name }))}
       onChange={(id) => update("prompt", `${String(draft.prompt ?? "")}\n${String(
         resources.find((item) => item.id === id)?.draft.text ?? "")}`)} />
-    <label>{t("回答前参考的知识库")}</label><Select mode="multiple" className="full" placeholder={t("选择知识库")}
+    <label>{t("coze.agents.knowledgeBasesToCheckBeforeAnswering")}</label><Select mode="multiple" className="full" placeholder={t("coze.agents.chooseKnowledgeBases")}
       value={(draft.knowledgeIds ?? []) as string[]} onChange={(value) => update("knowledgeIds", value)}
       options={resources.filter((item) => item.kind === "knowledge").map((item) => ({ value: item.id, label: item.name }))} />
-    <label>{t("可自主调用的工具")}</label><Select mode="multiple" className="full"
-      placeholder={t("选择已发布的工作流、工具或资料")}
+    <label>{t("coze.agents.toolsItCanCallOnItsOwn")}</label><Select mode="multiple" className="full"
+      placeholder={t("coze.agents.choosePublishedWorkflowsToolsOrData")}
       value={toolIds} onChange={(value: string[]) => onChange({ ...draft, toolIds: value,
         writableTableIds: ((draft.writableTableIds ?? []) as string[]).filter((id) => value.includes(id)) })}
       options={available.map((item) => ({
-        value: item.id, label: item.publishedRevision ? item.name : t("{name}（未发布）", { name: item.name }),
+        value: item.id, label: item.publishedRevision ? item.name : t("coze.agents.notPublished", { name: item.name }),
         disabled: !item.publishedRevision }))} />
-    <label>{t("允许修改的数据表")}</label><Select mode="multiple" className="full" placeholder={t("默认仅允许查询")}
+    <label>{t("coze.agents.tablesItCanChange")}</label><Select mode="multiple" className="full" placeholder={t("coze.agents.readOnlyByDefault")}
       value={(draft.writableTableIds ?? []) as string[]} onChange={(value) => update("writableTableIds", value)}
       options={available.filter((item) => item.kind === "table" && toolIds.includes(item.id))
         .map((item) => ({ value: item.id, label: item.name }))} />
-    <Space wrap><div><label>{t("最多调用轮数")}</label><InputNumber min={1} max={20} value={Number(draft.maxSteps ?? 8)}
+    <Space wrap><div><label>{t("coze.agents.maxToolCallRounds")}</label><InputNumber min={1} max={20} value={Number(draft.maxSteps ?? 8)}
       onChange={(value) => update("maxSteps", value ?? 8)} /></div>
-      <div><label>{t("记住最近对话轮数")}</label><InputNumber min={0} max={40} value={Number(draft.memoryTurns ?? 20)}
+      <div><label>{t("coze.agents.recentTurnsToRemember")}</label><InputNumber min={0} max={40} value={Number(draft.memoryTurns ?? 20)}
         onChange={(value) => update("memoryTurns", value ?? 20)} /></div></Space>
-    <label>{t("回答创造性")}</label><Slider min={0} max={2} step={0.1} value={Number(draft.temperature ?? 0.7)}
+    <label>{t("coze.agents.responseCreativity")}</label><Slider min={0} max={2} step={0.1} value={Number(draft.temperature ?? 0.7)}
       onChange={(value) => update("temperature", value)} />
   </section>;
 }

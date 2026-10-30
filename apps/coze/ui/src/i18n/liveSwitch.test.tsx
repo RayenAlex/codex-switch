@@ -5,6 +5,7 @@ import { App as AntApp, ConfigProvider } from "antd";
 import type { Locale } from "antd/es/locale";
 import enUS from "antd/locale/en_US";
 import ruRU from "antd/locale/ru_RU";
+import jaJP from "antd/locale/ja_JP";
 import zhCN from "antd/locale/zh_CN";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { COZE_DESKTOP_STATE } from "../../../../../shared/coze/desktopBridge";
@@ -12,7 +13,7 @@ import { Studio } from "../Studio";
 import type { Resource } from "../types";
 import { getLanguage, LANGUAGE_STORAGE_KEY, setLanguage, useLanguage, type Language } from "./index";
 
-const antdLocales: Record<Language, Locale> = { zh: zhCN, en: enUS, ru: ruRU };
+const antdLocales: Record<Language, Locale> = { zh: zhCN, en: enUS, ru: ruRU, ja: jaJP };
 const prompt: Resource = { id: "prompt", kind: "prompt", name: "周报提示", description: "", draft: { text: "" },
   revision: 1, publishedRevision: null, mcpEnabled: false, updatedAt: "" };
 
@@ -106,6 +107,16 @@ it("re-renders an open editor in the desktop language and keeps the unsaved draf
   expect(textarea.value).toBe("每周五总结本周进展");
   expect(name.value).toBe("周报提示 v2");
   expect(name.getAttribute("aria-label")).toBe("Название");
+  expect(requests.length).toBe(loaded);
+
+  await post({ type: COZE_DESKTOP_STATE, busy: false, language: "ja" });
+  expect(getLanguage()).toBe("ja");
+  expect(document.documentElement.lang).toBe("ja-JP");
+  expect(sessionStorage.getItem(LANGUAGE_STORAGE_KEY)).toBe("ja");
+  expect(buttonText(/^保存$/)?.disabled).toBe(false);
+  expect(document.querySelector(".resource-editor textarea")).toBe(textarea);
+  expect(textarea.value).toBe("每周五总结本周进展");
+  expect(name.value).toBe("周报提示 v2");
   expect(requests.length).toBe(loaded);
 
   await post({ type: COZE_DESKTOP_STATE, busy: false, language: "en" });

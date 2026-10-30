@@ -39,7 +39,7 @@ fn shared_group_includes_only_enabled_valid_accounts_from_the_same_group() {
     assert!(provider_for_group_model(&members, Some("outside-model")).is_err());
     let catalog = model_catalog_for_provider_group(&members);
     assert!(catalog["models"].as_array().unwrap().iter().any(|entry|
-        entry["slug"] == visible && entry["display_name"] == visible));
+        entry["slug"] == visible && entry["display_name"].as_str().unwrap().starts_with(&format!("{model} · included · "))));
     fs::remove_dir_all(paths.codex_home.parent().unwrap()).unwrap();
 }
 

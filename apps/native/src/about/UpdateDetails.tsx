@@ -14,24 +14,24 @@ function DownloadStatus({ update }: { update: UpdateState }) {
   if (state.status === 'idle') return null;
   if (state.status === 'downloading') return <View style={styles.status}>
     <View style={styles.statusHeading}>
-      <Text style={styles.statusTitle}>{t("正在下载 v")}{state.version}</Text>
+      <Text style={styles.statusTitle}>{t("client.mobile.downloadingV")}{state.version}</Text>
       <Pressable accessibilityRole="button" accessibilityState={{ disabled: Boolean(state.cancelling) }}
         disabled={Boolean(state.cancelling)} onPress={update.cancelDownload} style={styles.cancelButton}>
-        <Text style={styles.cancelText}>{state.cancelling ? t('正在取消…') : t('取消更新')}</Text>
+        <Text style={styles.cancelText}>{state.cancelling ? t("client.mobile.cancelling") : t("client.mobile.cancelUpdate")}</Text>
       </Pressable>
     </View>
     <UpdateDownloadProgress progress={state.progress} />
   </View>;
   if (state.status === 'cancelled') return <View style={styles.status}>
-    <Text style={styles.detail}>{t('下载已取消，可随时重新下载。')}</Text>
+    <Text style={styles.detail}>{t("client.mobile.downloadCancelledYouCanDownloadItAgainAtAnyTime")}</Text>
   </View>;
   if (state.status === 'failed') return <View style={styles.status}>
-    <Text style={[styles.statusTitle, styles.error]}>v{state.version}{' '}{t("下载失败")}</Text>
-    <Text style={styles.detail}>{t("下载未完成，请检查网络后点击“重新下载”。")}</Text>
+    <Text style={[styles.statusTitle, styles.error]}>v{state.version}{' '}{t("client.downloads.downloadFailed")}</Text>
+    <Text style={styles.detail}>{t("client.mobile.downloadIncompleteCheckYourConnectionAndTapDownloadAgain")}</Text>
   </View>;
   return <View style={styles.status}>
-    <Text style={styles.statusTitle}>v{state.version}{' '}{t("已下载")}</Text>
-    <Text style={styles.detail}>{t("更新已准备好，可以开始安装。")}</Text>
+    <Text style={styles.statusTitle}>v{state.version}{' '}{t("client.mobile.downloaded")}</Text>
+    <Text style={styles.detail}>{t("client.mobile.theUpdateIsReadyToInstall")}</Text>
   </View>;
 }
 
@@ -43,11 +43,11 @@ function ReleaseDetails({ update }: { update: UpdateState }) {
   const { release, updateAvailable } = result;
   return <View style={styles.status}>
     <View style={styles.statusHeading}>
-      <Text style={styles.statusTitle}>{t("最新版本 v")}{release.version}</Text>
-      <Text style={styles.statusLabel}>{updateAvailable ? t("可更新") : t("已是最新")}</Text>
+      <Text style={styles.statusTitle}>{t("client.mobile.latestVersionV")}{release.version}</Text>
+      <Text style={styles.statusLabel}>{updateAvailable ? t("client.mobile.updateAvailable") : t("client.mobile.upToDate")}</Text>
     </View>
     {release.publishedAt ? <Text style={styles.detail}>
-      {t("发布于")}{' '}{new Date(release.publishedAt).toLocaleDateString(getLocale())}
+      {t("client.mobile.releasedOn")}{' '}{new Date(release.publishedAt).toLocaleDateString(getLocale())}
     </Text> : null}
     {updateAvailable ? <ReleaseNotes text={release.notes} /> : null}
   </View>;

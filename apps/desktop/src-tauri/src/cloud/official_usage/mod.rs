@@ -1,7 +1,9 @@
 //! Devices automatically report compact official-account records. Summaries are computed by the server.
 mod local;
+mod quota_cache;
 mod summary;
 mod tracking;
+pub(crate) use quota_cache::{cached_official_quota, EstimatedOfficialQuota};
 pub(crate) use summary::*;
 
 use super::*;

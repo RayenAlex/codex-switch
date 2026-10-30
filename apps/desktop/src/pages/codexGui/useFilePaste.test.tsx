@@ -51,7 +51,7 @@ it("pastes Explorer files without a paste event, shows removable pills and sends
   vi.mocked(invoke).mockResolvedValue([attachment, second]);
   await act(async () => keydown());
   expect(host.textContent).toContain(attachment.name);
-  const remove = host.querySelector<HTMLButtonElement>("button")!;
+  const remove = host.querySelector<HTMLButtonElement>(`button[aria-label="移除附件：${attachment.name}"]`)!;
   expect(remove.getAttribute("aria-label")).toBe("移除附件：" + attachment.name);
   expect(remove.parentElement?.querySelector("svg")).not.toBeNull();
   await act(async () => remove.click());
@@ -150,7 +150,7 @@ it("reports a failed DingTalk download without blocking subsequent paste attempt
   await act(async () => paste([], "说明", '<img src="https://static.dingtalk.com/media/photo.jpg">'));
   expect(editor.draft.images).toEqual([]);
   expect(editor.reading).toBe(false);
-  expect(controller.report).toHaveBeenCalledWith("部分图片未能粘贴，请单独复制图片，或保存后添加。");
+  expect(controller.report).toHaveBeenCalledWith("client.errors.someImagesCouldNotBePastedCopyThemSeparatelyOr");
   vi.mocked(invoke).mockResolvedValue([attachment]);
   await act(async () => keydown());
   expect(editor.draft.attachments).toEqual([attachment]);
@@ -166,7 +166,7 @@ it("preserves browser-only images when the native snapshot cannot represent the 
   expect(editor.draft.images).toHaveLength(1);
   expect(readClipboardImages).not.toHaveBeenCalled();
   expect(editor.reading).toBe(false);
-  expect(controller.report).toHaveBeenCalledWith("部分图片未能粘贴，请单独复制图片，或保存后添加。");
+  expect(controller.report).toHaveBeenCalledWith("client.errors.someImagesCouldNotBePastedCopyThemSeparatelyOr");
 });
 
 it("allows typing and switching conversations while a DingTalk image downloads", async () => {
@@ -190,7 +190,7 @@ it("allows typing and switching conversations while a DingTalk image downloads",
 
 it("does not silently lose QQ images when neither native nor browser can read them", async () => {
   await act(async () => paste([], "图片说明", '<img src="file:///C:/QQ/missing.png">'));
-  expect(controller.report).toHaveBeenCalledWith("部分图片未能粘贴，请单独复制图片，或保存后添加。");
+  expect(controller.report).toHaveBeenCalledWith("client.errors.someImagesCouldNotBePastedCopyThemSeparatelyOr");
 });
 
 it("prefers native file paths over duplicate browser image representations", async () => {

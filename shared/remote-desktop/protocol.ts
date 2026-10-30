@@ -1,6 +1,6 @@
 import type { IceServer } from '../remote-chat/protocol';
-import { getInterfaceLanguage } from '../i18n/interfaceLanguage';
-import { translateText } from '../i18n/translate';
+import { getInterfaceLanguage } from "../localization/interfaceLanguage";
+import { translateMessage } from "../localization/messages";
 import type { DesktopSecurity, DesktopSecurityChange } from './security';
 
 export const DESKTOP_OPERATION = 'remoteDesktop';
@@ -79,7 +79,7 @@ export interface DesktopClient {
   permissionStatus?(): Promise<DesktopPermissionStatus>;
   nativeMedia?: import('./nativeMedia').NativeMediaFactory;
   diagnostic?: import('../remote-chat/diagnostics').ConnectionDiagnostic;
-  open(id: string, settings: DesktopSettings): Promise<DesktopOffer>;
+  open(id: string, settings: DesktopSettings, takeover?: string): Promise<DesktopOffer>;
   signal(id: string, signal: DesktopSignal): Promise<DesktopSignalReply>;
   settings(id: string, settings: DesktopSettings): Promise<void>;
   privacy?(id: string, enabled: boolean): Promise<DesktopDisplays>;
@@ -97,7 +97,9 @@ export function desktopClient(request: <T>(body: object) => Promise<T>,
     security: (id, change) => call('security', { id, change }),
     inputFocus: id => call('inputFocus', { id }),
     permissionStatus: () => call('permissions', {}),
-    open: (id, settings) => call('open', { id, settings }),
+    open: (id, settings, takeover) => call('open', {
+      id, settings, takeoverSupported: true, ...(takeover ? { takeover } : {}),
+    }),
     signal: (id, signal) => call('signal', { id, ...signal }),
     settings: (id, settings) => call('settings', { id, settings }),
     privacy: (id, enabled) => call('privacy', { id, enabled }),
@@ -122,7 +124,7 @@ export function validateSettings(value: unknown): DesktopSettings {
     throw new Error('请选择有效的画质。');
   }
   if (input.fps !== 'auto' && (!Number.isInteger(input.fps) || Number(input.fps) < 1 || Number(input.fps) > MAX_FPS)) {
-    throw new Error(translateText(getInterfaceLanguage(), '帧率应为 1–{value1} 的整数。', { value1: MAX_FPS }));
+    throw new Error(translateMessage(getInterfaceLanguage(), "client.runtimeErrors.frameRateMustBeAWholeNumberFrom1To", { value1: MAX_FPS }));
   }
   if (input.displayId !== undefined && (typeof input.displayId !== 'string'
     || !input.displayId.length || input.displayId.length > 128)) {

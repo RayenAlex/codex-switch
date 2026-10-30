@@ -10,10 +10,14 @@ export type EntryRequest = ProjectFileTarget & EntryAction;
 export interface EntryChange { path: string; directory: boolean }
 
 export interface BrowserHost {
+  /** Omitted for hosts that support every tree mutation. */
+  entryActions?: readonly EntryAction['action'][];
+  downloadDirectory?: boolean;
   copyPath: (path: string) => Promise<void>;
   reference?: (entry: ProjectFile) => Promise<void>;
   quoteSelection?: (selection: FileSelection) => Promise<void>;
-  open?: (entry: ProjectFile, application: 'explorer' | 'terminal') => Promise<void>;
+  open?: (entry: ProjectFile) => Promise<void>;
+  openTerminal?: (entry: ProjectFile) => void;
   download?: (target: ProjectFileTarget) => Promise<string>;
 }
 
@@ -30,6 +34,6 @@ export const parentPath = (path: string) => {
 
 export function entryNameError(name: string) {
   if (!name || name === '.' || name === '..' || /[\\/:*?"<>|\x00-\x1f]/.test(name)
-    || /[. ]$/.test(name) || name.length > 255) return '名称无效，请勿使用路径分隔符或特殊字符。';
+    || /[. ]$/.test(name) || name.length > 255) return "client.projectBrowser.enterAValidNameWithoutPathSeparatorsOrSpecialCharacters";
   return '';
 }

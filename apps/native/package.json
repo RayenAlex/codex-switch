@@ -1,10 +1,10 @@
 {
   "name": "@codex-switch/native",
-  "version": "2.0.17",
+  "version": "2.1.10",
   "private": true,
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
-    "postinstall": "node ./scripts/patch-drawer-taps.cjs && node ./scripts/patch-list-render-range.cjs && node ./scripts/patch-webrtc-ice.cjs && node ./scripts/patch-tcp-punch.cjs && node ./scripts/patch-udp.cjs && node ./scripts/patch-webview-permissions.cjs",
+    "postinstall": "node ./scripts/patch-drawer-taps.cjs && node ./scripts/patch-list-render-range.cjs && node ./scripts/patch-webrtc-ice.cjs && node ./scripts/patch-tcp-punch.cjs && node ./scripts/patch-udp.cjs && node ./scripts/patch-webview-permissions.cjs && node ./scripts/patch-document-picker.cjs",
     "start": "node ./scripts/expo.cjs start",
     "android": "node ./scripts/expo.cjs start --android",
     "ios": "node ./scripts/expo.cjs start --ios",
@@ -13,7 +13,7 @@
     "prebuild:android": "node ./scripts/expo.cjs prebuild --platform android --clean --no-install",
     "build:apk": "node ./scripts/build-apk.cjs",
     "prebuild:ios": "node ./scripts/expo.cjs prebuild --platform ios --clean --no-install",
-    "check": "node ./scripts/build-project-browser.cjs --check && node ./scripts/build-terminal-document.cjs --check && node ./scripts/build-math-css.cjs --check && node ./scripts/build-desktop-ime.cjs --check && node ./scripts/build-text-selection.cjs --check && tsc --noEmit",
+    "check": "node ./scripts/build-project-browser.cjs --check && node ./scripts/build-terminal-document.cjs --check && node ./scripts/build-math-css.cjs --check && node ./scripts/build-desktop-ime.cjs --check && node ./scripts/build-text-selection.cjs --check && node ./scripts/build-lounge-document.cjs --check && tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
@@ -57,7 +57,9 @@
     "react-native-tcp-socket": "^6.4.3",
     "react-native-udp": "4.1.7",
     "react-native-webrtc": "124.0.8",
-    "react-native-webview": "13.13.5"
+    "react-native-webview": "13.13.5",
+    "@remoteai/i18n": "0.1.0",
+    "zmodem.js": "^0.1.10"
   },
   "devDependencies": {
     "@types/hast": "^3.0.5",

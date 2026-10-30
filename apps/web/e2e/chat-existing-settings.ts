@@ -10,7 +10,8 @@ export async function existingChatSettings({ page, request, info }: {
   await request.post(`${fixtureUrl}/test/settings-delay`, { data: { milliseconds: 5000 } });
   await openChatSettings(page);
   await choose(page, '推理强度', '极高');
-  if (!isDesktop(page)) await expect(page.getByText('正在同步设置…', { exact: true })).toBeVisible();
+  // Connected saves stay quiet while the optimistic selection is awaiting acknowledgement.
+  if (!isDesktop(page)) await expect(page.getByText('正在同步设置…', { exact: true })).toHaveCount(0);
   await choose(page, '模型', '第二模型');
   await choose(page, '推理强度', '极高');
   await choose(page, '访问权限', '请求批准');

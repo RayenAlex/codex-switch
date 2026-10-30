@@ -1,6 +1,6 @@
 import { t, useLanguage } from '../i18n';
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
-import { Button, Dialog, Input, SpinLoading, Toast } from 'antd-mobile';
+import { Button, Dialog, SpinLoading, Toast } from 'antd-mobile';
 import { ClipboardPaste, FileInput, KeyRound, Link2 } from 'lucide-react';
 import { importPersonalAccounts, pollAccountOAuth, startAccountOAuth } from '../api';
 import type { AccountImportResult } from '../types';
@@ -23,8 +23,8 @@ const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 
 function resultMessage(result: AccountImportResult) {
   return result.skippedCount
-    ? t("已导入 {value1} 个账号，跳过 {value2} 个", { value1: result.importedCount, value2: result.skippedCount })
-    : t("已导入 {value1} 个账号", { value1: result.importedCount });
+    ? t("client.app.importedAccountsSkipped", { value1: result.importedCount, value2: result.skippedCount })
+    : t("client.app.importedAccounts", { value1: result.importedCount });
 }
 
 export function AddAccountSheet({ open, onClose, onAdded }: AddAccountSheetProps) {
@@ -47,16 +47,16 @@ export function AddAccountSheet({ open, onClose, onAdded }: AddAccountSheetProps
       try {
         const result = await pollAccountOAuth(oauth.sessionId);
         if (result.status === 'complete') {
-          Toast.show({ icon: 'success', content: t("账号已添加") });
+          Toast.show({ icon: 'success', content: t("client.app.accountAdded") });
           setOauth(null);
           onClose();
           await onAdded();
         } else if (result.status === 'failed') {
-          Toast.show({ icon: 'fail', content: result.message || t("授权失败，请重试") });
+          Toast.show({ icon: 'fail', content: result.message || t("client.app.authorizationFailedPleaseTryAgain") });
           setOauth(null);
         }
       } catch (error) {
-        Toast.show({ icon: 'fail', content: error instanceof Error ? error.message : t("授权检查失败") });
+        Toast.show({ icon: 'fail', content: error instanceof Error ? error.message : t("client.app.couldNotCheckAuthorization") });
       } finally {
         running = false;
       }
@@ -67,19 +67,19 @@ export function AddAccountSheet({ open, onClose, onAdded }: AddAccountSheetProps
   }, [oauth, onAdded, onClose]);
 
   const importContent = async (content: string) => {
-    if (!content.trim()) throw new Error(t("没有读取到 JSON 内容"));
-    if (new Blob([content]).size > MAX_IMPORT_BYTES) throw new Error(t("导入文件不能超过 5 MB"));
+    if (!content.trim()) throw new Error(t("client.app.noJsonContentFound"));
+    if (new Blob([content]).size > MAX_IMPORT_BYTES) throw new Error(t("client.app.importFilesMustBeUnder5Mb"));
     setImporting(true);
     try {
       const result = await importPersonalAccounts(content);
       Toast.show({ icon: 'success', content: resultMessage(result) });
       if (result.skipped.length) {
-        await Dialog.alert({ title: t("部分账号未导入"), content: result.skipped.slice(0, 3).join('\n'), confirmText: t("知道了") });
+        await Dialog.alert({ title: t("client.app.someAccountsWereNotImported"), content: result.skipped.slice(0, 3).join('\n'), confirmText: t("client.app.gotIt") });
       }
       onClose();
       await onAdded();
     } catch (error) {
-      Toast.show({ icon: 'fail', content: error instanceof Error ? error.message : t("导入失败，请检查 JSON 内容") });
+      Toast.show({ icon: 'fail', content: error instanceof Error ? error.message : t("client.app.importFailedCheckTheJsonContent") });
     } finally {
       setImporting(false);
     }
@@ -95,30 +95,30 @@ export function AddAccountSheet({ open, onClose, onAdded }: AddAccountSheetProps
 
   const pasteClipboard = async () => {
     try { await importContent(await navigator.clipboard.readText()); }
-    catch (error) { Toast.show({ icon: 'fail', content: error instanceof Error ? error.message : t("无法读取剪贴板") }); }
+    catch (error) { Toast.show({ icon: 'fail', content: error instanceof Error ? error.message : t("client.app.couldNotReadTheClipboard") }); }
   };
 
   const beginOAuth = async () => {
     setBusy(true);
     try { setOauth(await startAccountOAuth()); }
-    catch (error) { Toast.show({ icon: 'fail', content: error instanceof Error ? error.message : t("无法开始授权") }); }
+    catch (error) { Toast.show({ icon: 'fail', content: error instanceof Error ? error.message : t("client.app.couldNotStartAuthorization") }); }
     finally { setBusy(false); }
   };
 
-  return <AdaptiveSheet open={open} title={t("添加账户")} subtitle={t("选择一种安全的导入方式")} onClose={onClose}>
+  return <AdaptiveSheet open={open} title={t("client.accounts.addAccount")} subtitle={t("client.app.chooseASecureImportMethod")} onClose={onClose}>
     {oauth ? <div className="oauth-import-panel">
       <div className="oauth-import-icon"><KeyRound size={22} /></div>
-      <h3>{t("在 ChatGPT 中完成授权")}</h3>
-      <p>{t("打开授权页面，输入下方一次性验证码。完成后本页面会自动更新。")}</p>
-      <a className="oauth-link" href={oauth.verificationUrl} target="_blank" rel="noreferrer"><Link2 size={15} />{t("打开授权页面")}</a>
+      <h3>{t("client.app.authorizeWithChatgpt")}</h3>
+      <p>{t("client.app.openTheAuthorizationPageAndEnterTheOneTimeCode")}</p>
+      <a className="oauth-link" href={oauth.verificationUrl} target="_blank" rel="noreferrer"><Link2 size={15} />{t("client.app.openAuthorizationPage")}</a>
       <div className="oauth-code-value">{oauth.userCode}</div>
-      <Button block onClick={() => void navigator.clipboard.writeText(oauth.userCode)}>{t("复制验证码")}</Button>
-      <div className="sheet-loading"><SpinLoading color="primary" /><span>{t("等待授权完成…")}</span></div>
+      <Button block onClick={() => void navigator.clipboard.writeText(oauth.userCode)}>{t("client.app.copyCode")}</Button>
+      <div className="sheet-loading"><SpinLoading color="primary" /><span>{t("client.app.waitingForAuthorization")}</span></div>
     </div> : <>
       <div className="add-account-options">
-        <button type="button" disabled={busy || importing} onClick={() => void beginOAuth()}><KeyRound size={20} /><span><strong>{t("ChatGPT 授权")}</strong><small>{t("使用浏览器完成安全登录")}</small></span></button>
-        <button type="button" disabled={busy || importing} onClick={chooseFile}><FileInput size={20} /><span><strong>{t("导入 JSON 文件")}</strong><small>{t("支持 auth.json 和兼容导出格式")}</small></span></button>
-        <button type="button" disabled={busy || importing} onClick={() => void pasteClipboard()}><ClipboardPaste size={20} /><span><strong>{t("从剪贴板导入")}</strong><small>{t("粘贴账号 JSON 内容即可")}</small></span></button>
+        <button type="button" disabled={busy || importing} onClick={() => void beginOAuth()}><KeyRound size={20} /><span><strong>{t("client.app.chatgptAuthorization")}</strong><small>{t("client.app.signInSecurelyWithYourBrowser")}</small></span></button>
+        <button type="button" disabled={busy || importing} onClick={chooseFile}><FileInput size={20} /><span><strong>{t("client.app.importJsonFile")}</strong><small>{t("client.app.supportsAuthJsonAndCompatibleExports")}</small></span></button>
+        <button type="button" disabled={busy || importing} onClick={() => void pasteClipboard()}><ClipboardPaste size={20} /><span><strong>{t("client.app.importFromClipboard")}</strong><small>{t("client.app.pasteYourAccountJsonContent")}</small></span></button>
       </div>
       <input ref={fileRef} hidden type="file" accept=".json,application/json,text/plain" onChange={(event) => void handleFile(event)} />
     </>}

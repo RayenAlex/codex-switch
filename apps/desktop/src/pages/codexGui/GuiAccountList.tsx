@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useState, type ReactNode } from 'react';
 import { Input, Spin } from 'antd';
 import { Search } from 'lucide-react';
@@ -28,7 +28,7 @@ export function GuiAccountList(props: Props) {
     <div className={styles.footer}>
       <div className={styles.searchRow}>
         <Input className={styles.search} prefix={<Search size={14} />}
-          placeholder={guiText("搜索账户")} aria-label={guiText("搜索账号或 Provider")}
+          placeholder={uiText("client.chat.searchAccounts")} aria-label={uiText("client.workspaceSettings.searchAccountsOrProviders")}
           value={query} allowClear onChange={(event) => setQuery(event.target.value)} />
         {props.loading && <Spin size="small" />}
         {props.devicePicker}

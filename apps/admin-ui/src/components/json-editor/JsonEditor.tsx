@@ -1,3 +1,4 @@
+import inlineCopy from '@remoteai/i18n/copy/inline/admin/components/json-editor/JsonEditor';
 import { useEffect, useRef } from "react";
 import { Button, Space, theme } from "antd";
 import { EditorState } from "@codemirror/state";
@@ -63,10 +64,10 @@ export function JsonEditor({ value, onChange, readOnly, zh, label }: Props) {
     borderColor: token.colorBorder, borderRadius: token.borderRadius }}>
     <Space wrap className="json-editor-toolbar" style={{ borderColor: token.colorBorderSecondary }}>
       <Button size="small" onClick={collapse}>
-        {zh ? "全部折叠" : "Collapse all"}</Button>
+        {zh ? inlineCopy["text_79f3c095"] : inlineCopy["Collapse_all_25f7b372"]}</Button>
       <Button size="small" onClick={() => { if (view.current) unfoldAll(view.current); }}>
-        {zh ? "全部展开" : "Expand all"}</Button>
-      <Button size="small" disabled={readOnly} onClick={format}>{zh ? "格式化" : "Format"}</Button>
+        {zh ? inlineCopy["text_19673b33"] : inlineCopy["Expand_all_a3e586be"]}</Button>
+      <Button size="small" disabled={readOnly} onClick={format}>{zh ? inlineCopy["text_f69273db"] : inlineCopy["Format_2f343666"]}</Button>
     </Space>
     <div ref={host} />
   </div>;

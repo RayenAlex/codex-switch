@@ -43,22 +43,22 @@ function OverviewActions(props: AccountOverviewProps) {
   const refreshDisabled = props.refreshBusy || props.accountCount === 0;
   const consumeDisabled = props.refreshBusy || !props.canConsumeQuota;
   return <View style={styles.actions}>
-    <Pressable accessibilityRole="button" accessibilityLabel={t("消耗额度")} disabled={consumeDisabled}
+    <Pressable accessibilityRole="button" accessibilityLabel={t("client.mobile.consumeQuota")} disabled={consumeDisabled}
       onPress={props.onConsumeQuota}
       style={({ pressed }) => [styles.action, styles.consume,
         pressed && styles.pressed, consumeDisabled && styles.disabled]}>
       {props.consumingQuota ? <ActivityIndicator color={color(colors.green, 'accent')} size="small" /> : <>
         <Ionicons name="flash" size={24} color={color("#ffc400", 'warning')} />
-        <Text style={styles.consumeText}>{t("消耗额度")}</Text>
+        <Text style={styles.consumeText}>{t("client.mobile.consumeQuota")}</Text>
       </>}
     </Pressable>
-    <Pressable accessibilityRole="button" accessibilityLabel={t("批量刷新用量")} disabled={refreshDisabled}
+    <Pressable accessibilityRole="button" accessibilityLabel={t("client.accounts.refreshAllUsage")} disabled={refreshDisabled}
       onPress={props.onRefreshUsage}
       style={({ pressed }) => [styles.action, styles.refresh,
         pressed && styles.pressed, refreshDisabled && styles.disabled]}>
       {props.refreshingUsage ? <ActivityIndicator color="#fff" size="small" /> : <>
         <Ionicons name="sync-outline" size={18} color="#fff" />
-        <Text style={styles.refreshText}>{t("批量刷新用量")}</Text>
+        <Text style={styles.refreshText}>{t("client.accounts.refreshAllUsage")}</Text>
       </>}
     </Pressable>
   </View>;
@@ -70,16 +70,16 @@ export function AccountOverview(props: AccountOverviewProps) {
   useLanguage();
   return <View style={styles.overview}>
     <View style={styles.headingRow}>
-      <Text style={styles.heading}>{t("账户管理")}</Text>
+      <Text style={styles.heading}>{t("client.accounts.accounts")}</Text>
       <Pressable accessibilityRole="button" onPress={props.onTogglePrivacy}
-        accessibilityLabel={props.privateMode ? t("显示账号邮箱") : t("隐藏账号邮箱")}
+        accessibilityLabel={props.privateMode ? t("client.accounts.showAccountEmails") : t("client.accounts.hideAccountEmails")}
         style={({ pressed }) => [styles.privacyButton, pressed && styles.pressed]}>
         <Ionicons name={props.privateMode ? 'eye-off-outline' : 'eye-outline'} size={18} color={color(colors.muted, 'muted')} />
       </Pressable>
     </View>
     <View style={styles.overviewRow}>
-      <OverviewStat value={props.accountCount} label={t("个账号")} icon="people" />
-      <OverviewStat value={props.onlineDeviceCount} label={t("在线设备")} icon="laptop-outline" />
+      <OverviewStat value={props.accountCount} label={t("client.accounts.accounts.5088a9")} icon="people" />
+      <OverviewStat value={props.onlineDeviceCount} label={t("client.accounts.onlineDevices")} icon="laptop-outline" />
       <OverviewActions {...props} />
     </View>
   </View>;
@@ -92,12 +92,12 @@ export function AccountToolbar({ updatedAt, onAddAccount }: { updatedAt: string;
   return <View style={styles.toolbar}>
     <View style={styles.updated}>
       <Ionicons name="time-outline" size={16} color={color(colors.muted, 'muted')} />
-      <Text style={styles.updatedText}>{t("用量更新：")}{updatedAt}</Text>
+      <Text style={styles.updatedText}>{t("client.accounts.usageUpdated")}{updatedAt}</Text>
     </View>
     <Pressable accessibilityRole="button" onPress={onAddAccount}
       style={({ pressed }) => [styles.add, pressed && styles.pressed]}>
       <Ionicons name="add" size={22} color={color(colors.green, 'accent')} />
-      <Text style={styles.addText}>{t("添加账户")}</Text>
+      <Text style={styles.addText}>{t("client.accounts.addAccount")}</Text>
     </Pressable>
   </View>;
 }

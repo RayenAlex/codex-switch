@@ -9,7 +9,7 @@ import {
   saveCodexThreadPackage,
 } from "../../api/backend";
 import type { CodexThreadBundlePreview } from "../../types";
-import type { ThreadCopy } from "./copy";
+import type { ThreadCopy } from "@remoteai/i18n/copy/desktop/threads";
 
 interface TransferOptions {
   selected: Set<string>;

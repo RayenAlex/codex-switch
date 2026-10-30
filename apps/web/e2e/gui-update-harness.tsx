@@ -49,7 +49,7 @@ function Harness() {
     <button onClick={() => setRunning(value => !value)}>切换任务</button>
     <output data-testid="operations" hidden>{JSON.stringify(operations)}</output>
     <ChatProfileMenu client={accounts} guiTools={tools} ready={connected} running={running}
-      deviceName="我的电脑" email="test@example.test" chooseDevice={() => {}} openTokenSummary={() => {}} />
+      deviceName="我的电脑" email="test@example.test" chooseDevice={() => {}} />
   </main>;
 }
 createRoot(document.getElementById('root')!).render(<Harness />);

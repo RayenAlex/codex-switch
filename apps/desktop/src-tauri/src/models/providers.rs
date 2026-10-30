@@ -1,6 +1,9 @@
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ProviderProfile {
+    /// Display-only metadata for official group members; never persisted as a Provider or used for routing.
+    #[serde(skip)]
+    pub(crate) account_alias: Option<String>,
     pub(crate) id: String,
     #[serde(default)]
     pub(crate) kind: ProviderKind,
@@ -33,6 +36,10 @@ pub(crate) struct ProviderProfile {
     pub(crate) api_format: ProviderApiFormat,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) request_options: Option<ProviderRequestOptions>,
+    #[serde(default)]
+    pub(crate) balance_script: Option<ProviderBalanceScript>,
+    #[serde(default)]
+    pub(crate) market_source: Option<ProviderMarketSource>,
     #[serde(default)]
     pub(crate) balance_platform: Option<ProviderBalancePlatform>,
     #[serde(default)]
@@ -70,6 +77,9 @@ pub(crate) struct ProviderSummary {
     pub(crate) websocket_enabled: bool,
     pub(crate) api_format: ProviderApiFormat,
     pub(crate) request_options: Option<ProviderRequestOptions>,
+    pub(crate) balance_script: Option<ProviderBalanceScript>,
+    #[serde(default)]
+    pub(crate) market_source: Option<ProviderMarketSource>,
     pub(crate) active: bool,
     pub(crate) auto_switch_enabled: bool,
     pub(crate) has_api_key: bool,
@@ -185,9 +195,11 @@ pub(crate) struct ProxySessionRequestSummary {
     pub(crate) cached_tokens: Option<u64>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ProxySessionLatencySummary {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) estimated_cost_usd: Option<f64>,
     pub(crate) total_first_token_time_ms: u64,
     pub(crate) first_token_request_count: u64,
     pub(crate) total_first_response_time_ms: u64,

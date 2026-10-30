@@ -46,28 +46,28 @@ function EntryList({ manager, entries, codes, now, onEdit }: {
   const totpStyles = useTotpStyles();
   useLanguage();
   const confirmDelete = (entry: TotpEntry) => {
-    Alert.alert(t("删除 2FA 密钥"), t("确定删除“{value1}”的密钥吗？", { value1: entry.issuer }), [
-      { text: t("取消"), style: 'cancel' },
-      { text: t("删除"), style: 'destructive', onPress: () => manager.deleteEntry(entry.id) },
+    Alert.alert(t("client.mobile.delete2faKey"), t("client.app.deleteTheKeyFor", { value1: entry.issuer }), [
+      { text: t("client.accounts.cancel"), style: 'cancel' },
+      { text: t("client.projectBrowser.deleted"), style: 'destructive', onPress: () => manager.deleteEntry(entry.id) },
     ]);
   };
 
   if (!manager.initialized) return <ActivityIndicator color={color("#18af8c", 'accent')} />;
   if (!manager.entries.length) return <View style={totpStyles.empty}>
     <Text style={totpStyles.emptyIcon}>2FA</Text>
-    <Text style={totpStyles.emptyTitle}>{t("还没有 2FA 密钥")}</Text>
-    <Text style={totpStyles.emptyText}>{t("扫描二维码或手动输入密钥，即可生成动态验证码。")}</Text>
+    <Text style={totpStyles.emptyTitle}>{t("client.app.no2faKeysYet")}</Text>
+    <Text style={totpStyles.emptyText}>{t("client.app.scanAQrCodeOrEnterAKeyToGenerate")}</Text>
   </View>;
   if (!entries.length) return <View style={totpStyles.empty}>
-    <Text style={totpStyles.emptyTitle}>{t("没有找到匹配的账号")}</Text>
-    <Text style={totpStyles.emptyText}>{t("试试其他服务名称或账号，或清空搜索查看全部。")}</Text>
+    <Text style={totpStyles.emptyTitle}>{t("client.app.noMatchingAccounts")}</Text>
+    <Text style={totpStyles.emptyText}>{t("client.app.tryAnotherServiceOrAccountOrClearTheSearchTo")}</Text>
   </View>;
   return <>{entries.map((entry) => <TotpCodeCard
     key={entry.id}
     entry={entry}
     code={codes[entry.id] ?? ''}
     now={now}
-    onCopied={() => Toast.success(t("验证码已复制"))}
+    onCopied={() => Toast.success(t("client.mobile.codeCopied"))}
     onDelete={() => confirmDelete(entry)}
     onEdit={() => onEdit(entry)}
   />)}</>;
@@ -96,11 +96,11 @@ export function TotpPage({ manager }: { manager: TotpManagerState }) {
     if (!manager.initialized || manager.syncing) return;
     try {
       const result = await manager.refreshCloud();
-      if (result === 'updated') Toast.success(t("已获取云端 2FA 密钥"));
-      if (result === 'current') Toast.success(t("本机 2FA 已是最新"));
-      if (result === 'empty') Toast.fail(t("云端暂无 2FA 密钥"));
+      if (result === 'updated') Toast.success(t("client.app.cloud2faKeysRetrieved"));
+      if (result === 'current') Toast.success(t("client.mobile.local2faKeysAreUpToDate"));
+      if (result === 'empty') Toast.fail(t("client.app.no2faKeysInTheCloud"));
     } catch {
-      Toast.fail(t("获取云端 2FA 密钥失败"));
+      Toast.fail(t("client.mobile.couldNotFetchCloud2faKeys"));
     }
   };
 
@@ -114,10 +114,10 @@ export function TotpPage({ manager }: { manager: TotpManagerState }) {
         sorted={sort !== 'default'} />
       <EntryList manager={manager} entries={entries} codes={codes} now={now} onEdit={openForm} />
     </ScrollView>
-    <TotpOptionsMenu title={t("验证码排序")} visible={sortOpen} onClose={() => setSortOpen(false)} options={[
-      { label: t("默认顺序"), icon: 'list-outline', selected: sort === 'default', onPress: () => setSort('default') },
-      { label: t("按服务名称"), icon: 'text-outline', selected: sort === 'name', onPress: () => setSort('name') },
-      { label: t("最近添加优先"), icon: 'time-outline', selected: sort === 'newest', onPress: () => setSort('newest') },
+    <TotpOptionsMenu title={t("client.app.sortCodes")} visible={sortOpen} onClose={() => setSortOpen(false)} options={[
+      { label: t("client.app.defaultOrder"), icon: 'list-outline', selected: sort === 'default', onPress: () => setSort('default') },
+      { label: t("client.app.byServiceName"), icon: 'text-outline', selected: sort === 'name', onPress: () => setSort('name') },
+      { label: t("client.app.recentlyAddedFirst"), icon: 'time-outline', selected: sort === 'newest', onPress: () => setSort('newest') },
     ]} />
     <TotpFormSheet
       visible={formOpen}

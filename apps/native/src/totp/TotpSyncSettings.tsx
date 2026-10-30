@@ -16,30 +16,30 @@ export function TotpSyncSettings({ manager }: { manager: TotpManagerState }) {
     setFeedback(null);
     try {
       await manager.setCloudSyncEnabled(enabled);
-      setFeedback({ message: enabled ? t("已开启 2FA 云同步") : t("已关闭 2FA 云同步"), error: false });
+      setFeedback({ message: enabled ? t("client.mobile.2faCloudSyncEnabled") : t("client.mobile.2faCloudSyncDisabled"), error: false });
     } catch {
-      setFeedback({ message: enabled ? t("同步未完成，请稍后重试") : t("关闭 2FA 云同步失败，请重试"), error: true });
+      setFeedback({ message: enabled ? t("client.mobile.syncIncompleteTryAgainLater") : t("client.mobile.couldNotDisable2faCloudSyncTryAgain"), error: true });
     } finally {
       setChanging(false);
     }
   };
   const disabled = changing || manager.syncing || !manager.initialized;
   return <>
-    <Text style={styles.sectionLabel}>{t("2FA 密钥")}</Text>
+    <Text style={styles.sectionLabel}>{t("client.app.2faKeys")}</Text>
     <View style={styles.card}>
       <View style={styles.row}>
         <View style={styles.copy}>
-          <Text style={styles.title}>{t("自动云同步")}</Text>
-          <Text style={styles.description}>{t("开启后自动同步变更；关闭时仍可在 2FA 页面下拉获取云端密钥。")}</Text>
+          <Text style={styles.title}>{t("client.mobile.automaticCloudSync")}</Text>
+          <Text style={styles.description}>{t("client.mobile.syncChangesAutomaticallyWhenOffPullDownOnThe2fa")}</Text>
         </View>
         {disabled ? <ActivityIndicator color={color("#18af8c", 'accent')} size="small" /> : <Switch
-          accessibilityLabel={t("同步 2FA 密钥至云端")} value={manager.cloudSyncEnabled}
+          accessibilityLabel={t("client.mobile.sync2faKeysToTheCloud")} value={manager.cloudSyncEnabled}
           onValueChange={(enabled) => void change(enabled)}
           trackColor={{ false: '#c8d6cd', true: '#87d9cb' }}
           thumbColor={manager.cloudSyncEnabled ? '#18af8c' : '#fff'} />}
       </View>
       <Text style={styles.warning}>
-        {t("默认关闭。开启后，手机上的敏感密钥会上传并保存到你的云端服务器。")}</Text>
+        {t("client.mobile.offByDefaultWhenEnabledYourPhoneSSecretKeys")}</Text>
       {feedback ? <Text accessibilityRole="alert" style={[styles.feedback, feedback.error && styles.error]}>
         {feedback.message}
       </Text> : null}

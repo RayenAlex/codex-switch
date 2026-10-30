@@ -36,8 +36,8 @@ it('uses Mac shortcuts and modifier labels only for a Mac host', () => {
   expect(desktopModifiers('windows')).toBe(MODIFIERS);
   expect(desktopModifiers('macos').map(key => key.label)).toEqual(['Ctrl', 'Shift', 'Option', 'Cmd']);
   const shortcuts = desktopShortcuts('macos');
-  expect(shortcuts.find(item => item.description === '复制')?.codes).toEqual(['MetaLeft', 'KeyC']);
-  expect(shortcuts.find(item => item.description === '锁定屏幕')?.codes)
+  expect(shortcuts.find(item => item.description === "client.projectBrowser.copied")?.codes).toEqual(['MetaLeft', 'KeyC']);
+  expect(shortcuts.find(item => item.description === "client.remoteDesktop.lockScreen")?.codes)
     .toEqual(['ControlLeft', 'MetaLeft', 'KeyQ']);
   expect(shortcuts.flatMap(item => item.codes).every(desktopKeyCode)).toBe(true);
 });

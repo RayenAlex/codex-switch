@@ -43,6 +43,7 @@ fn official_profile(paths: &Paths, id: &str, name: String) -> ProviderProfile {
         })
         .collect();
     ProviderProfile {
+        account_alias: None,
         id: id.to_string(),
         kind: ProviderKind::OpenAi,
         name,
@@ -62,6 +63,8 @@ fn official_profile(paths: &Paths, id: &str, name: String) -> ProviderProfile {
         websocket_enabled: false,
         api_format: ProviderApiFormat::OpenaiResponses,
         request_options: None,
+        balance_script: None,
+        market_source: None,
         balance_platform: None,
         balance_query_url: None,
         balance_query_token: None,

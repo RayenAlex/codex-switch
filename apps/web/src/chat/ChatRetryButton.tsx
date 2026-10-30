@@ -8,6 +8,6 @@ export function ChatRetryButton({ turnId }: { turnId: string }) {
   if (!action) return null;
   return <button type="button" className="chat-turn-retry" disabled={action.disabled}
     onClick={() => { void action.retry(); }}>
-    <RotateCcw size={14} aria-hidden="true" />{action.pending ? t('正在重试…') : t('重试')}
+    <RotateCcw size={14} aria-hidden="true" />{action.pending ? t("client.chat.retrying") : t("client.terminal.retry")}
   </button>;
 }

@@ -91,6 +91,7 @@ fn interactive_shell_streams_unicode_resizes_and_closes_independently() {
         .state
         .open(
             OpenTerminal {
+                npm_script: None,
                 cwd: Some(fixture.directory.to_string_lossy().into_owned()),
                 size: TerminalSize {
                     cols: 100,

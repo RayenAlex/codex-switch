@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useContext, useEffect, useState } from "react";
 import { MessageEditContext } from './messageEditContext';
 import { guiApi } from "./api";
@@ -22,10 +22,10 @@ export function useComposerSkills({ cwd, active, connected }: {
         .map((skill) => [skill.path, skill])).values()]
         .sort((left, right) => skillLabel(left).localeCompare(skillLabel(right)));
       const error = response.data.some((entry) => entry.errors.length)
-        ? guiText("部分技能未能加载，请重新打开菜单重试。") : "";
+        ? uiText("client.workspaceActions.someSkillsCouldNotLoadReopenTheMenuToRetry") : "";
       setResult({ cwd, skills, loading: false, error });
     }).catch(() => {
-      if (!cancelled) setResult({ cwd, skills: [], loading: false, error: guiText("技能加载失败，请重新打开菜单重试。") });
+      if (!cancelled) setResult({ cwd, skills: [], loading: false, error: uiText("client.workspaceActions.couldNotLoadSkillsReopenTheMenuToRetry") });
     });
     return () => { cancelled = true; };
   }, [cwd, active, connected, loadSkills]);

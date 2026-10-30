@@ -37,4 +37,5 @@ export async function sidebarJourney({ page, request, info }: {
   await click(drawer.getByRole('button', { name: '新聊天', exact: true }));
   await expect(page.getByRole('heading', { name: '新聊天', exact: true })).toBeVisible();
   await expect(page.getByRole('textbox', { name: '聊天消息' })).toBeEmpty();
+  if (page.viewportSize()!.width <= 860) await expect(drawer).toBeHidden();
 }

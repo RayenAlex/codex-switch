@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { type ReactNode, type RefObject } from 'react';
 import { Popover, Spin } from 'antd';
 import type { GuiComputerNavigation } from './remote/types';
@@ -29,7 +29,7 @@ export function GuiAccountMenu(props: Props) {
     styles={{ root: { width, maxWidth: MAX_ACCOUNT_PICKER_WIDTH } }} onOpenChange={props.onOpenChange}>
     <button ref={props.trigger} type="button" className={styles.trigger} aria-expanded={visible}
       aria-busy={Boolean(props.busy)}
-      aria-label={guiText("切换 GUI 账户：{value1}", { value1: props.name })}>
+      aria-label={uiText("client.workspaceSettings.switchGuiAccount", { value1: props.name })}>
       {props.busy && <Spin size="small" />}
       <span className={styles.triggerBody}>{props.summary}</span>
     </button>

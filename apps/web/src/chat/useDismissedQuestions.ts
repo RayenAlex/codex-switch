@@ -20,7 +20,7 @@ export function useDismissedQuestions(scope: string) {
     try {
       localStorage.setItem(key, JSON.stringify([...next]));
       setDismissed(next); setError('');
-    } catch { setError(t("暂时无法删除，请重试。")); }
+    } catch { setError(t("client.chat.couldNotDeletePleaseTryAgain")); }
   };
   return { dismissed, dismiss, error };
 }

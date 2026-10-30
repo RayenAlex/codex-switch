@@ -17,7 +17,7 @@ const rustTests = env.CODEX_RUST_TEST_RUNNER === "nextest"
         "--test-threads", "1", "--no-fail-fast"]],
       ["cargo", ["test", "--manifest-path", "src-tauri/Cargo.toml", "--doc"]],
     ]
-  : [["cargo", ["test", "--manifest-path", "src-tauri/Cargo.toml"]]];
+  : [["cargo", ["test", "--manifest-path", "src-tauri/Cargo.toml", "--", "--test-threads=1"]]];
 const checks = [
   [process.execPath, [fileURLToPath(new URL("./build-desktop-unlock.mjs", import.meta.url))]],
   ["cargo", ["fmt", "--manifest-path", "src-tauri/Cargo.toml", "--", "--check"]],

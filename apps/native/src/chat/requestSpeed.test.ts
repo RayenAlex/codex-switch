@@ -12,8 +12,8 @@ it('validates speed choices and hides unsupported controls for older hosts', () 
   const selection = { ...DEFAULT_COMPOSER, speed: 'normal' as const };
   expect(visibleSettingsFields(selection).some(({ field }) => field === 'speed')).toBe(true);
   expect(settingOptions('speed', [], selection).map(({ label }) => label))
-    .toEqual(['普通模式', '快速模式', 'Ultrafast 模式']);
-  expect(settingValue('speed', [], selection)).toBe('普通模式');
+    .toEqual(["client.chat.standardMode", "client.chat.fastMode.6e02d1", "client.chat.ultrafastMode"]);
+  expect(settingValue('speed', [], selection)).toBe("client.chat.standardMode");
 });
 
 it('cycles through all three speeds with matching lightning indicators', () => {

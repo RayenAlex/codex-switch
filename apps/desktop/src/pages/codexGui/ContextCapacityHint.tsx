@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useEffect, useState } from "react";
 import { invoke } from "../../api/backend";
 import type { ContextSettings } from "../../../../../shared/remote-chat/contextSettings";
@@ -18,7 +18,7 @@ export function ContextCapacityHint({ threadId, open }: { threadId?: string | nu
   }, [threadId, open]);
   if (settings?.capacity == null) return null;
   return <div className={styles.hint}>
-    <div>{guiText("对话设置：")}{formatCompactTokenCount(settings.capacity, "zh")} Token</div>
-    <div>{guiText("上方用量来自最近一次回复；可用容量会扣除预留空间。")}</div>
+    <div>{uiText("client.composer.conversationSettings")}{formatCompactTokenCount(settings.capacity, "zh")} Token</div>
+    <div>{uiText("client.chat.usageIsFromTheLatestReplyAvailableCapacityExcludesReserved")}</div>
   </div>;
 }

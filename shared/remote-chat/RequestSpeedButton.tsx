@@ -1,18 +1,20 @@
+import { defaultText } from '../localization/messages';
+import { remoteErrorText } from '../localization/errors';
 import { Tooltip } from 'antd';
 import type { RequestSpeed } from './composer';
 import { nextRequestSpeed, requestSpeedLabel, speedBoltCount } from './requestSpeed';
 import './requestSpeedButton.css';
 
-export function RequestSpeedButton({ speed, disabled, busy, onChange, translate = (text) => text,
+export function RequestSpeedButton({ speed, disabled, busy, onChange, translate = defaultText,
   error, available = true }: {
   speed?: RequestSpeed; disabled?: boolean; busy?: boolean; error?: string; available?: boolean;
   onChange: (speed: RequestSpeed) => void; translate?: (text: string) => string;
 }) {
   const current = speed ?? 'normal';
-  const label = !available && current === 'normal' ? translate('当前账户暂不支持加速模式')
+  const label = !available && current === 'normal' ? translate("client.chat.fasterModesAreUnavailableForThisAccount")
     : requestSpeedLabel(current, translate, available);
   const bolts = speedBoltCount(current);
-  return <Tooltip title={error ? translate(error) : label} trigger={['hover', 'focus']}
+  return <Tooltip title={error ? remoteErrorText(error) : label} trigger={['hover', 'focus']}
     styles={{ root: { maxWidth: 400 } }}>
     <button type="button" className="request-speed-button" data-speed={current}
       disabled={disabled || busy || speed === undefined || (!available && current === 'normal')}

@@ -1,11 +1,13 @@
+import { displayText } from '../i18n/index';
 import { useRef, useState, type KeyboardEvent } from 'react';
 import { Popover } from 'antd';
 import { Check, Hand, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { ACCESS_OPTIONS } from '../../../../shared/remote-chat/composer';
 import { t, useLanguage } from '../i18n';
-import { ChatUsage } from './ChatUsage';
+import { UsageAmounts } from '../../../../shared/chat/UsageAmounts';
 import { ComposerContext } from './ComposerContext';
 import type { ComposerProps } from './composerProps';
+import type { ConversationMetrics } from '../../../../shared/remote-chat/conversationMetrics';
 
 const ACCESS_ICONS = { 'read-only': Hand, 'workspace-write': ShieldCheck, 'danger-full-access': ShieldAlert };
 
@@ -31,8 +33,8 @@ export function ComposerAccess({ selection, settingsBusy, updateSettings, before
   const content = <div className="chat-composer-access-menu" onKeyDown={event => {
     if (event.key === 'Escape') { event.stopPropagation(); close(); }
   }}>
-    <div className="chat-composer-access-heading">{t('应如何批准操作？')}</div>
-    <div role="menu" aria-label={t('访问权限')} onKeyDown={moveAccessFocus}>
+    <div className="chat-composer-access-heading">{t("client.chat.howShouldActionsBeApproved")}</div>
+    <div role="menu" aria-label={t("client.shared.access")} onKeyDown={moveAccessFocus}>
       {ACCESS_OPTIONS.map(option => {
         const OptionIcon = ACCESS_ICONS[option.value];
         return <button type="button" role="menuitemradio" key={option.value}
@@ -40,7 +42,7 @@ export function ComposerAccess({ selection, settingsBusy, updateSettings, before
           className={option.value === 'danger-full-access' ? 'is-full-access' : undefined}
           onClick={() => { void updateSettings({ access: option.value }); close(); }}>
           <OptionIcon size={16} aria-hidden="true" />
-          <span><span>{t(option.label)}</span><small>{t(option.description)}</small></span>
+          <span><span>{displayText(option.label)}</span><small>{displayText(option.description)}</small></span>
           {selection.access === option.value && <Check size={16} aria-hidden="true" />}
         </button>;
       })}
@@ -51,20 +53,24 @@ export function ComposerAccess({ selection, settingsBusy, updateSettings, before
     styles={{ root: { maxWidth: 400 }, body: { padding: 0, borderRadius: 12, overflow: 'hidden' } }}>
     <button ref={trigger} type="button" className={`chat-composer-access${selected.value === 'danger-full-access'
       ? ' is-full-access' : ''}`} disabled={settingsBusy} aria-haspopup="menu" aria-expanded={open}
-      aria-label={t('访问权限：{value1}', { value1: t(selected.label) })}
+      aria-label={t("client.chat.access", { value1: displayText(selected.label) })}
       onKeyDown={event => { if (event.key === 'Escape') setOpen(false); }}>
-      <Icon size={16} aria-hidden="true" /><span>{t(selected.label)}</span>
+      <Icon size={16} aria-hidden="true" /><span>{displayText(selected.label)}</span>
     </button>
   </Popover>;
 }
 
-export function ComposerDesktopStatus({ props, beforeOpen }: {
+export function ComposerDesktopStatus({ props, beforeOpen, metrics }: {
   props: ComposerProps; beforeOpen: () => void;
+  metrics: ConversationMetrics | null;
 }) {
   useLanguage();
   return <div className="chat-composer-status">
-    <ChatUsage read={props.readUsage} active={props.active} ready={props.ready} inline
-      contextControl={<ComposerContext tokenUsage={props.tokenUsage} threadId={props.threadId}
-        contextSettings={props.contextSettings} ready={props.ready} beforeOpen={beforeOpen} />} />
+    <div className="chat-composer-usage" role="group" aria-label={t('client.chatQuota.currentUsage')}>
+      <ComposerContext tokenUsage={props.tokenUsage} threadId={props.threadId}
+        contextSettings={props.contextSettings} ready={props.ready} beforeOpen={beforeOpen} />
+      <UsageAmounts tokens={props.tokenUsage?.total.totalTokens} cost={metrics?.estimatedCostUsd}
+        scope="current" translate={t} />
+    </div>
   </div>;
 }

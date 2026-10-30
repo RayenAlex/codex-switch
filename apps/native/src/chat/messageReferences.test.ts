@@ -20,7 +20,7 @@ it('shows live mentions and legacy envelopes without exposing their context in t
     user([`继续这个任务\n${envelope}`]), { ...user([]), text: `继续这个任务\n${envelope}` }]) {
     expect(messageContent(item)).toBe('继续这个任务');
     expect(messageReferences(item)).toEqual([{ kind: 'conversation', path: mention.path,
-      name: mention.name, label: '引用对话' }]);
+      name: mention.name, label: "client.workspaceActions.referenceAConversation" }]);
   }
 });
 
@@ -52,5 +52,5 @@ it('hides malformed reserved context while retaining ordinary messages and other
   expect(messageReferences(user(['<codex_gui_conversation_context>{broken']))).toEqual([]);
   expect(messageReferences(user([{ type: 'mention', name: 'GitHub', path: 'plugin://github@openai' },
     { type: 'mention', name: 'notes.md', path: 'C:/project/notes.md' }])).map(reference => reference.label))
-    .toEqual(['插件', '附件']);
+    .toEqual(["client.chat.plugins", "client.mobile.attachments"]);
 });

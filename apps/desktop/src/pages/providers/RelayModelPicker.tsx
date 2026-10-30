@@ -3,6 +3,7 @@ import { Button, Select } from "antd";
 import { RefreshCw } from "lucide-react";
 import { fetchRelayModels } from "../../api/backend";
 import type { Translate } from "../../i18n";
+import { sortRelayModels } from "./sortRelayModels";
 import { ModelReasoningEditor } from "./ModelReasoningEditor";
 import {
   modelOptions,
@@ -66,8 +67,10 @@ export function RelayModelPicker({
     setLoading(true);
     setError("");
     try {
-      const latest = await (discoveryOptions ? fetchRelayModels(baseUrl, apiKey, providerId, discoveryOptions)
+      const fetched = await (discoveryOptions
+        ? fetchRelayModels(baseUrl, apiKey, providerId, discoveryOptions)
         : fetchRelayModels(baseUrl, apiKey, providerId));
+      const latest = sortRelayModels(fetched);
       if (currentRequestId !== requestId.current) return;
       const { modelConfigs, activeModel } = selection.current;
       onModelConfigsChange(modelReasoningConfigs(latest, {

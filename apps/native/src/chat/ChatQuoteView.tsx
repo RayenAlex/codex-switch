@@ -21,7 +21,7 @@ export function QuoteChip({ label, onOpen, remove }: {
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onOpen}
       style={[quoteStyles.preview, !remove && quoteStyles.readonly]}>
       <MaterialCommunityIcons name="comment-quote-outline" size={17} color={color(palette.ink, 'ink')} />
-      <Text style={quoteStyles.label}>{t("1 条引用")}</Text>
+      <Text style={quoteStyles.label}>{t("client.mobile.1Reference")}</Text>
     </Pressable>
     {remove && <Pressable accessibilityRole="button" accessibilityLabel={remove.label}
       disabled={remove.disabled} onPress={remove.onPress} style={quoteStyles.remove}>
@@ -35,13 +35,13 @@ export function QuoteDetails({ text, onClose }: { text: string; onClose: () => v
   const styles = useStyles();
   useLanguage();
   const source = useContext(QuoteSourceContext);
-  return <BottomSheet fullWidthContent visible title={t("引用详情")} onClose={onClose} dragFromHeaderOnly>
+  return <BottomSheet fullWidthContent visible title={t("client.mobile.quoteDetails")} onClose={onClose}>
     <SheetScrollView contentContainerStyle={quoteStyles.details}>
       <QuoteSourceContext.Provider value={source ? { ...source, onQuote: () => {
         onClose(); source.onQuote?.();
       } } : null}>
         <SelectableChatText style={[styles.messageText, quoteStyles.blockquote]}
-          copy={{ text, label: t("复制引用") }}>{text}</SelectableChatText>
+          copy={{ text, label: t("client.mobile.copyQuote") }}>{text}</SelectableChatText>
       </QuoteSourceContext.Provider>
     </SheetScrollView>
   </BottomSheet>;

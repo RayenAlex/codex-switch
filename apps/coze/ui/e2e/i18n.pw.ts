@@ -231,6 +231,19 @@ test("follows a live language switch from the desktop without losing an unsaved 
   await popconfirm.getByRole("button", { name: "Отмена" }).click();
   await expect(draft).toHaveValue("Черновик, который нельзя потерять");
 
+  await post("ja");
+  await expect(frame.locator("html")).toHaveAttribute("lang", "ja-JP");
+  await expect(frame.getByRole("button", { name: "保存", exact: true })).toBeEnabled();
+  await expect(draft).toHaveValue("Черновик, который нельзя потерять");
+  expect(await editor.evaluate(() => sessionStorage.getItem("coze-language"))).toBe("ja");
+  await frame.getByRole("button", { name: "戻る", exact: true }).click();
+  await expect(popconfirm).toContainText("未保存の変更を破棄しますか？");
+  await expect(popconfirm.locator(".ant-popconfirm-buttons button")).toHaveText(["キャンセル", "OK"]);
+  await popconfirm.getByRole("button", { name: "キャンセル", exact: true }).click();
+  await expect(popconfirm).toBeHidden();
+  await expect(draft).toHaveValue("Черновик, который нельзя потерять");
+  await post("ru");
+
   // Only the parent window may switch the language, and only to a supported one. The busy state
   // without a language arrives after the ignored messages, so its Russian label proves they were handled.
   await editor.evaluate(() => window.postMessage({ type: "remoteai:coze:state", busy: false, language: "en" }, "*"));

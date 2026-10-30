@@ -4,6 +4,8 @@
 mod addresses;
 #[cfg(target_os = "android")]
 mod android;
+#[cfg(target_os = "android")]
+mod android_packet_codec;
 mod bulk;
 mod config;
 mod connection;
@@ -14,6 +16,7 @@ mod framing;
 mod lease;
 mod media;
 mod network;
+pub mod packet_codec;
 mod route;
 #[cfg(test)]
 mod tests;

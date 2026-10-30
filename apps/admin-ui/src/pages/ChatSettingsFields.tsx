@@ -1,3 +1,5 @@
+import inlineCopy from '@remoteai/i18n/copy/inline/admin/pages/ChatSettingsFields';
+import { interpolate as interpolateCopy } from '@remoteai/i18n';
 import { Card, Form, InputNumber, Switch, Typography } from 'antd';
 import { CHAT_POLICY_FIELDS } from '../../../../shared/remote-chat/policy';
 import { POLICY_SECTIONS, type PolicyField } from './chatPolicyFields';
@@ -8,10 +10,10 @@ function SettingField({ field, language }: { field: PolicyField; language: 0 | 1
   const unlimited = min === -1;
   const toggle = field.key === 'fileBulkEnabled';
   const numericMessage = max === undefined
-    ? (language === 0 ? `请输入不小于 ${min} 的整数` : `Enter a whole number of at least ${min}`)
-    : (language === 0 ? `请输入 ${min}–${max} 之间的整数` : `Enter a whole number from ${min} to ${max}`);
+    ? (language === 0 ? interpolateCopy(inlineCopy["value1_ec362808"], { value1: String(min) }) : interpolateCopy(inlineCopy["Enter_a_whole_number_of_e9226f3c"], { value1: String(min) }))
+    : (language === 0 ? interpolateCopy(inlineCopy["value1value2_ebe594d5"], { value1: String(min), value2: String(max) }) : interpolateCopy(inlineCopy["Enter_a_whole_number_from_c2f31bd1"], { value1: String(min), value2: String(max) }));
   const unlimitedMessage = language === 0
-    ? '请输入 -1（不限）或正整数' : 'Enter -1 (unlimited) or a positive whole number';
+    ? inlineCopy["1_648f0a4f"] : inlineCopy["Enter_1_unlimited_or_a_d175cf5a"];
   const message = unlimited ? unlimitedMessage : numericMessage;
   return <div className="chat-policy-field">
     <div className="chat-policy-field-copy">

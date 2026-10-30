@@ -22,7 +22,7 @@ Notifications.setNotificationHandler({
 async function prepareChannel() {
   if (Platform.OS !== 'android') return;
   await Notifications.setNotificationChannelAsync(COMPLETION_CHANNEL, {
-    name: t("聊天回复完成"), description: t("电脑上的 Codex 回复完成后提醒你"),
+    name: t("client.mobile.chatReplyCompleted"), description: t("client.mobile.notifyWhenCodexFinishesReplyingOnYourComputer"),
     importance: Notifications.AndroidImportance.HIGH, sound: 'default',
     vibrationPattern: [0, 200, 100, 200], lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
   });
@@ -59,8 +59,8 @@ export async function notifyChatActivity(target: ChatNotificationTarget, title: 
     if (!permission.granted && permission.ios?.status !== Notifications.IosAuthorizationStatus.PROVISIONAL) return;
     await Notifications.scheduleNotificationAsync({
       identifier,
-      content: { title: kind === 'attention' ? t("Codex 需要你确认") : kind === 'failed' ? t("Codex 回复未完成") : t("Codex 回复完成"),
-        body: title.slice(0, 100) || t("点击查看对话"), data: { ...target }, sound: 'default',
+      content: { title: kind === 'attention' ? t("client.mobile.codexNeedsYourApproval") : kind === 'failed' ? t("client.mobile.codexCouldNotFinishReplying") : t("client.mobile.codexFinishedReplying"),
+        body: title.slice(0, 100) || t("client.mobile.tapToOpenConversation"), data: { ...target }, sound: 'default',
         autoDismiss: true, priority: Notifications.AndroidNotificationPriority.HIGH },
       trigger: Platform.OS === 'android' ? { channelId: COMPLETION_CHANNEL } : null,
     });

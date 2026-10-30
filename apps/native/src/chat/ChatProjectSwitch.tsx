@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import Feather from '@expo/vector-icons/Feather';
 import { ActivityIndicator, Keyboard, Pressable, Text, View } from 'react-native';
 import { t, useLanguage } from '../i18n';
@@ -14,27 +15,27 @@ export function ChatProjectSwitch(props: ProjectSwitchProps) {
   const color = useThemeColor();
   const picker = useProjectSwitch(props);
   return <View style={styles.bar}>
-    <Pressable accessibilityRole="button" accessibilityLabel={t('选择项目')} disabled={picker.disabled}
+    <Pressable accessibilityRole="button" accessibilityLabel={t("client.chat.chooseProject")} disabled={picker.disabled}
       accessibilityState={{ disabled: picker.disabled, expanded: !!picker.screen }}
       style={[styles.trigger, picker.disabled && styles.disabled]}
       onPress={() => { Keyboard.dismiss(); picker.open(); }}>
       <Feather name="folder" size={16} color={color('#6f8177', 'muted')} />
-      <Text numberOfLines={1} ellipsizeMode="tail" style={styles.label}>{picker.label || t('未选择项目')}</Text>
+      <Text numberOfLines={1} ellipsizeMode="tail" style={styles.label}>{picker.label || t("client.chat.noProjectSelected")}</Text>
       <Feather name="chevron-down" size={14} color={color('#6f8177', 'muted')} />
     </Pressable>
     {picker.screen === 'projects' && !picker.disabled && <BottomSheet visible fullWidthContent
-      title={t('选择项目')} onClose={picker.close} dragFromHeaderOnly
-      actions={[{ label: t('新建项目'), tone: 'primary', onPress: picker.create }]}>
+      title={t("client.chat.chooseProject")} onClose={picker.close}
+      actions={[{ label: t("client.conversation.newProject"), tone: 'primary', onPress: picker.create }]}>
       <SheetInset style={styles.readable}>
-        {picker.loading && <ActivityIndicator accessibilityLabel={t('正在加载…')} />}
-        {!!picker.error && <View><Text accessibilityRole="alert" style={styles.message}>{t(picker.error)}</Text>
-          <Pressable accessibilityRole="button" onPress={picker.retry}><Text style={styles.message}>{t('重试')}</Text>
+        {picker.loading && <ActivityIndicator accessibilityLabel={t("client.projectBrowser.loading")} />}
+        {!!picker.error && <View><Text accessibilityRole="alert" style={styles.message}>{displayError(picker.error)}</Text>
+          <Pressable accessibilityRole="button" onPress={picker.retry}><Text style={styles.message}>{t("client.terminal.retry")}</Text>
           </Pressable></View>}
       </SheetInset>
       <SheetFlatList data={picker.projects} keyExtractor={project => project.cwd} style={styles.list}
         contentContainerStyle={styles.readable} keyboardShouldPersistTaps="handled" nestedScrollEnabled
         ListEmptyComponent={!picker.loading && !picker.error
-          ? <Text style={styles.message}>{t('还没有项目')}</Text> : null}
+          ? <Text style={styles.message}>{t("client.conversation.noProjectsYet")}</Text> : null}
         renderItem={({ item }) => <Pressable accessibilityRole="button" accessibilityLabel={item.label}
           accessibilityState={{ selected: item.cwd === picker.cwd }} onPress={() => picker.choose(item)}
           style={[styles.option, item.cwd === picker.cwd && styles.selected]}>
@@ -45,7 +46,7 @@ export function ChatProjectSwitch(props: ProjectSwitchProps) {
         </Pressable>} />
     </BottomSheet>}
     {picker.screen === 'create' && !picker.disabled && <ChatProjectPicker cwd={picker.cwd}
-      title={t('新建项目')} load={props.controller.loadProjectDirectories} close={picker.close} choose={picker.choose} />}
+      title={t("client.conversation.newProject")} load={props.controller.loadProjectDirectories} close={picker.close} choose={picker.choose} />}
   </View>;
 }
 

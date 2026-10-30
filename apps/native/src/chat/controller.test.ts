@@ -12,6 +12,7 @@ vi.mock('react-native', () => ({ Platform: { OS: 'android' }, NativeModules: {} 
 vi.mock('../downloads/previews', () => ({ createPreviewDownloads: () => ({ dispose: vi.fn() }) }));
 vi.mock('../downloads/iosPreviews', () => ({ createIosPreviewDownloads: vi.fn() }));
 vi.mock('../downloads/manager', () => ({ downloadOwner: () => 'test-owner' }));
+vi.mock('../api/client', () => ({ authorizedRequest: vi.fn() }));
 vi.mock('./connection', () => ({ MobileChatConnection: class {
   constructor(events: ConnectionEvents) { mocks.events = events; }
   start() { mocks.events!.mode('relay'); mocks.events!.ready(); }
@@ -118,7 +119,7 @@ describe('mobile chat actions', () => {
     mocks.request.mockResolvedValueOnce({ data: [thread], nextCursor: 'sidebar-next' });
     await controller.list();
     const sidebar = controller.snapshot();
-    const result = { data: [{ ...thread, id: 'match' }], nextCursor: 'search-next' };
+    const result = { data: [{ ...thread, id: 'match', turns: undefined }], nextCursor: 'search-next' };
     mocks.request.mockResolvedValueOnce(result);
     expect(await controller.searchThreads({ search: 'match', archived: true, cursor: 'search-page' })).toEqual(result);
     expect(mocks.request).toHaveBeenLastCalledWith('request', {

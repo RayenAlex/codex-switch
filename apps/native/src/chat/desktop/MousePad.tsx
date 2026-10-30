@@ -48,7 +48,7 @@ function MouseIcon({ pointer, viewport, panel }: Props) {
   const s = useS();
   useLanguage();
   const drag = useTrackpad({ pointer, viewport, panel, id: 'icon', onTap: panel.expand });
-  return <View {...drag.panHandlers} accessible accessibilityRole="button" accessibilityLabel={t("展开鼠标面板")}
+  return <View {...drag.panHandlers} accessible accessibilityRole="button" accessibilityLabel={t("client.remoteDesktop.expandMouseControls")}
     onAccessibilityTap={panel.expand} accessibilityActions={[{ name: 'activate' }]}
     onAccessibilityAction={event => { if (event.nativeEvent.actionName === 'activate') panel.expand(); }}
     style={s.mouseIcon}>
@@ -69,26 +69,26 @@ function MousePad({ pointer, viewport, panel, scroll }: MousePadProps) {
   const clickLeft = () => { panel.activity(); buttons.down('left'); buttons.up('left'); };
   return <View style={s.mouse}>
     <View style={s.mouseTop}>
-      <View {...left.panHandlers} accessible accessibilityRole="button" accessibilityLabel={t("鼠标左键")}
+      <View {...left.panHandlers} accessible accessibilityRole="button" accessibilityLabel={t("client.remoteDesktop.leftMouseButton")}
         accessibilityState={{ selected: buttons.dragging }}
         onAccessibilityTap={clickLeft} accessibilityActions={[{ name: 'activate' }]}
         onAccessibilityAction={event => { if (event.nativeEvent.actionName === 'activate') clickLeft(); }}
         style={[s.mouseButton, (left.pressed || buttons.dragging) && s.pressed]}>
-        <Text style={s.mouseText}>{buttons.dragging ? t("拖拽中") : t("左键")}</Text>
+        <Text style={s.mouseText}>{buttons.dragging ? t("client.remoteDesktop.dragging") : t("client.remoteDesktop.left")}</Text>
       </View>
-      <Pressable accessibilityRole="button" accessibilityLabel={t("鼠标右键")}
+      <Pressable accessibilityRole="button" accessibilityLabel={t("client.remoteDesktop.rightMouseButton")}
         onPressIn={() => { panel.hold('right', true); buttons.down('right'); }}
         onPressOut={() => { buttons.up('right'); panel.hold('right', false); }}
         style={({ pressed }) => [s.mouseButton, s.mouseRight, pressed && s.pressed]}>
-        <Text style={s.mouseText}>{t("右键")}</Text>
+        <Text style={s.mouseText}>{t("client.remoteDesktop.right")}</Text>
       </Pressable></View>
-    <View {...pad.panHandlers} style={[s.pad, pad.pressed && s.pressed]} accessibilityLabel={t("滑动移动鼠标，轻点单击")}>
-      <Text style={s.mouseText}>{t("滑动移动")}</Text></View>
-    <View accessible accessibilityRole="button" accessibilityLabel={t("按住并拖动以滚动")}
+    <View {...pad.panHandlers} style={[s.pad, pad.pressed && s.pressed]} accessibilityLabel={t("client.mobile.swipeToMoveThePointerTapToClick")}>
+      <Text style={s.mouseText}>{t("client.remoteDesktop.swipeToMove")}</Text></View>
+    <View accessible accessibilityRole="button" accessibilityLabel={t("client.remoteDesktop.holdAndDragToScroll")}
       {...wheel.panHandlers} style={s.wheel}>
       <Ionicons name="chevron-up" size={18} color={color("#526684", 'info')} />
       <Ionicons name="chevron-down" size={18} color={color("#526684", 'info')} /></View>
-    <View {...grip.panHandlers} style={[s.grip, grip.pressed && s.pressed]} accessibilityLabel={t("拖动鼠标面板")}>
+    <View {...grip.panHandlers} style={[s.grip, grip.pressed && s.pressed]} accessibilityLabel={t("client.remoteDesktop.moveMousePanel")}>
       <Ionicons name="reorder-two" size={22} color={color("#526684", 'info')} /></View>
   </View>;
 }

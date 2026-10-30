@@ -10,6 +10,6 @@ export interface ThreadGoal {
 }
 
 export const GOAL_STATUS: Record<ThreadGoal["status"], string> = {
-  active: "进行中", paused: "已暂停", blocked: "需要协助", usageLimited: "用量已达上限",
-  budgetLimited: "预算已用完", complete: "已完成",
+  active: "client.chat.inProgress", paused: "client.downloads.paused", blocked: "client.chat.needsHelp", usageLimited: "client.chat.usageLimitReached",
+  budgetLimited: "client.chat.budgetExhausted", complete: "client.chat.completed",
 };

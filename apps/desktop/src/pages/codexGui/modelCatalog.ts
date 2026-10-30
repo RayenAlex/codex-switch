@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { guiApi } from "./api";
 import type { ListResponse, Model } from "./types";
 import { withModelCatalogTimeout } from "./modelCatalogTimeout";
@@ -40,7 +40,7 @@ export class GuiModelCatalog {
   async ready() {
     // A refresh of the same source must not hide an already usable catalog.
     if (this.pending && (this.invalid || !this.fingerprint)) await this.pending;
-    if (this.invalid || this.switching) throw new Error(guiText("模型正在同步，请稍后重试。"));
+    if (this.invalid || this.switching) throw new Error(uiText("client.conversation.modelsAreSyncingPleaseTryAgainShortly"));
   }
 
   /** Remote reads can recover a failed host without reconnecting or invalidating a usable catalog. */
@@ -51,7 +51,7 @@ export class GuiModelCatalog {
 
   /** Block sends before changing routing, including before its change event reaches the UI. */
   async switchSource<T>(switchAccount: () => Promise<T>): Promise<T> {
-    if (this.switching) throw new Error(guiText("正在切换账户，请稍后重试。"));
+    if (this.switching) throw new Error(uiText("client.conversation.switchingAccountsPleaseTryAgainShortly"));
     this.switching++; this.generation++; this.markInvalid();
     try { return await switchAccount(); }
     finally {
@@ -122,7 +122,7 @@ export class GuiModelCatalog {
         if (!this.active) return;
         if (generation !== this.generation) continue;
         // The CLI can return an empty list after discovery times out; it is not a catalog update.
-        if (!models.length && !cacheOnly) throw new Error(guiText(MODEL_CATALOG_ERROR));
+        if (!models.length && !cacheOnly) throw new Error(uiText(MODEL_CATALOG_ERROR));
         const fingerprint = JSON.stringify(models);
         if (!this.invalid && fingerprint === this.fingerprint) return retry;
         generation = ++this.generation;
@@ -140,7 +140,7 @@ export class GuiModelCatalog {
           await withModelCatalogTimeout(Promise.resolve(this.host.accept([])), attempt.signal);
           if (!current()) continue;
         }
-        this.host.failed?.(guiText("模型列表暂时无法更新，请稍后重试。"));
+        this.host.failed?.(uiText("client.conversation.couldNotUpdateTheModelListPleaseTryAgainShortly"));
         throw error;
       } finally { attempt.abort(); if (this.attempt === attempt) this.attempt = undefined; }
     }
@@ -168,7 +168,7 @@ export class GuiModelCatalog {
       models.push(...response.data);
       cursor = response.nextCursor || undefined;
       if (cursor && (cursors.has(cursor) || ++pages >= MAX_CATALOG_PAGES)) {
-        throw new Error(guiText("模型列表暂时无法更新，请稍后重试。"));
+        throw new Error(uiText("client.conversation.couldNotUpdateTheModelListPleaseTryAgainShortly"));
       }
       if (cursor) cursors.add(cursor);
     } while (cursor);

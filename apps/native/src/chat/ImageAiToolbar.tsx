@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { IMAGE_AI_TOOLS } from '../../../../shared/chat/imageAiEdit';
@@ -20,21 +21,21 @@ export function ImageAiToolbar({ load, close, originalAction }: Props) {
       <TextInput accessibilityLabel={t(selected.hint)} value={editor.detail} onChangeText={editor.setDetail}
         editable={!editor.busy} multiline maxLength={2000} style={[styles.input, styles.detail]} />
       {editor.tool === 'resize' && <View style={styles.dimensions}>
-        <View style={styles.dimension}><Text style={styles.text}>{t('宽度（像素）')}</Text>
-          <TextInput accessibilityLabel={t('宽度（像素）')} keyboardType="number-pad" value={editor.width}
+        <View style={styles.dimension}><Text style={styles.text}>{t("client.imageAi.widthPixels")}</Text>
+          <TextInput accessibilityLabel={t("client.imageAi.widthPixels")} keyboardType="number-pad" value={editor.width}
             editable={!editor.busy} onChangeText={editor.setWidth} style={styles.input} /></View>
-        <View style={styles.dimension}><Text style={styles.text}>{t('高度（像素）')}</Text>
-          <TextInput accessibilityLabel={t('高度（像素）')} keyboardType="number-pad" value={editor.height}
+        <View style={styles.dimension}><Text style={styles.text}>{t("client.imageAi.heightPixels")}</Text>
+          <TextInput accessibilityLabel={t("client.imageAi.heightPixels")} keyboardType="number-pad" value={editor.height}
             editable={!editor.busy} onChangeText={editor.setHeight} style={styles.input} /></View>
       </View>}
-      <Text style={styles.text}>{t('编辑结果将在当前对话中返回。')}</Text>
-      {!!editor.error && <Text accessibilityRole="alert" style={styles.text}>{t(editor.error)}</Text>}
+      <Text style={styles.text}>{t("client.imageAi.theEditedImageWillAppearInThisConversation")}</Text>
+      {!!editor.error && <Text accessibilityRole="alert" style={styles.text}>{displayError(editor.error)}</Text>}
       <View style={styles.actions}>
         <Pressable accessibilityRole="button" disabled={editor.busy} style={styles.button}
-          onPress={() => editor.select(null)}><Text style={styles.text}>{t('取消')}</Text></Pressable>
+          onPress={() => editor.select(null)}><Text style={styles.text}>{t("client.accounts.cancel")}</Text></Pressable>
         <Pressable accessibilityRole="button" disabled={editor.busy || !editor.enabled} style={styles.button}
           onPress={() => void editor.submit()}><Text style={styles.text}>
-          {t(editor.busy ? '正在提交…' : '交给 AI 编辑')}</Text></Pressable>
+          {t(editor.busy ? "client.imageAi.submitting" : "client.imageAi.editWithAi")}</Text></Pressable>
       </View>
     </ScrollView>}
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.toolbar}

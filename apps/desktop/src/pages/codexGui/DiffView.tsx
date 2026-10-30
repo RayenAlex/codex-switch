@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useGuiLanguage } from '../../i18n/useGuiLanguage';
 import { memo, useId, useMemo, type ReactNode } from "react";
 import { DiffDocument, type DiffDocumentProps } from "./DiffDocument";
@@ -8,7 +8,7 @@ import { useDetailsEntry } from "./detailsContext";
 
 export { DiffDocument } from "./DiffDocument";
 
-export const DiffView = memo(function DiffView({ files, title = guiText("文件修改"), status, undo }:
+export const DiffView = memo(function DiffView({ files, title = uiText("client.shared.fileChanges"), status, undo }:
   DiffDocumentProps & { undo?: ReactNode }) {
   useGuiLanguage();
   const id = useId();

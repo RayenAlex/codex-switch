@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { guiText } from '../../../i18n/guiText';
+import { uiText } from "../../../i18n/uiText";
 import { ChatProjectPicker } from '../../../../../web/src/chat/ChatProjectPicker';
 import type { ChatProject, ChatState } from '../../../../../../shared/remote-chat/client/types';
 import type { ChatController } from '../../../../../../shared/remote-chat/client/controller';
@@ -28,7 +28,7 @@ export function RemoteProjectPicker({ state, controller, active }: {
       const result = await controller.guiTools.projects.list();
       if (mounted.current) setProjects(result);
     } catch {
-      if (mounted.current) setError(guiText('项目列表未能加载，请重新打开重试。'));
+      if (mounted.current) setError(uiText("client.workspaceActions.couldNotLoadProjectsReopenTheMenuToRetry"));
     } finally {
       pending.current = false;
       if (mounted.current) setLoading(false);
@@ -39,12 +39,14 @@ export function RemoteProjectPicker({ state, controller, active }: {
   const known = [...projects, ...state.threads.filter(thread => thread.cwd).map(thread => directoryProject(thread.cwd))];
   return <>
     <ProjectFolderPicker value={cwd} disabled={disabled} triggerRef={trigger}
-      ariaLabel={guiText('选择远程项目')} projects={known.map(project => ({ path: project.cwd, name: project.label }))}
+      ariaLabel={uiText("client.workspaceActions.chooseARemoteProject")} projects={known.map(project => ({ path: project.cwd, name: project.label }))}
       loading={loading} error={error} onOpen={() => void load()}
+      onBrowse={() => setPicking(true)}
       onChange={path => choose(directoryProject(path))} onAdd={() => setPicking(true)}
-      addLabel={guiText('选择其他文件夹…')}
+      addLabel={uiText("client.workspaceActions.chooseAnotherFolder")}
       onClear={state.selected ? undefined : () => { void controller.selectProject(null); }} />
     {picking && !disabled && <ChatProjectPicker cwd={cwd} load={controller.loadProjectDirectories}
+      mutate={controller.guiTools.projectBrowser.mutate} projects={known}
       close={close} choose={choose} />}
   </>;
 }

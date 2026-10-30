@@ -32,6 +32,7 @@ mod tests {
                 note: "plain-secret-note".to_string(),
                 expires_at: "2026-12-31".to_string(),
                 private_details: AccountPrivateDetails {
+                    alias: None,
                     password: "plain-secret-password".to_string(),
                     phone_number: "+65 6123 4567".to_string(),
                     totp_secret: "JBSWY3DPEHPK3PXP".to_string(),
@@ -66,6 +67,8 @@ mod tests {
                 fast_mode_enabled: false,
                 websocket_enabled: false,
                 api_format: ProviderApiFormat::OpenaiResponses,
+                balance_script: None,
+                market_source: None,
                 balance_platform: None,
                 balance_query_url: None,
                 balance_query_token: None,

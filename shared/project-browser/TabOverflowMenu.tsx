@@ -16,10 +16,10 @@ function OverflowItem({ tab, choose, closeTab, blocked, t }: {
   return <div className="pf-tab-overflow-item" role="none">
     <button type="button" role="menuitem" className="pf-tab-overflow-select" aria-label={name} onClick={choose}>
       <span className="pf-tab-overflow-label">{name}</span>
-      {isDirty(tab) && <span className="pf-dirty-dot" aria-label={t('未保存')} />}
+      {isDirty(tab) && <span className="pf-dirty-dot" aria-label={t("client.projectBrowser.unsaved")} />}
     </button>
     <button type="button" role="menuitem" className="pf-tab-overflow-close"
-      aria-label={`${t('关闭文件')} ${name}`} disabled={tab.saving || blocked} onClick={closeTab}>
+      aria-label={`${t("client.projectBrowser.closeFile")} ${name}`} disabled={tab.saving || blocked} onClick={closeTab}>
       <X size={14} aria-hidden="true" />
     </button>
   </div>;
@@ -56,7 +56,7 @@ export function TabOverflowMenu({ tabs, anchor, choose, close, closeTab, blocked
   return <div className="pf-menu-backdrop" onClick={event => {
     if (event.target === event.currentTarget) { event.stopPropagation(); close(); }
   }} onContextMenu={event => { event.preventDefault(); close(); }}>
-    <div ref={menu} className="pf-tree-menu pf-tab-overflow-menu" role="menu" aria-label={t('隐藏的标签页')}
+    <div ref={menu} className="pf-tree-menu pf-tab-overflow-menu" role="menu" aria-label={t("client.projectBrowser.hiddenTabs")}
       style={position} onKeyDown={moveMenuFocus}>
       {tabs.map(tab => <OverflowItem key={tab.path} tab={tab} blocked={blocked} t={t}
         choose={() => { selected.current = true; close(); choose(tab.path); }}

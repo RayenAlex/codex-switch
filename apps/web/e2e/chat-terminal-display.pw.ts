@@ -20,7 +20,8 @@ test.beforeEach(async ({ page }, info) => {
   });
   await page.route('**/native-terminal.html', route => route.fulfill({ contentType: 'text/html', body: html }));
   await page.goto('native-terminal.html');
-  await expect.poll(() => page.evaluate(() => terminal.cols)).toBeLessThan(50);
+  // Font metrics differ by platform; verify the fitted screen instead of an assumed column count.
+  await expect(page.locator('.xterm-screen')).toBeInViewport({ ratio: 1 });
 });
 
 async function output(page: Page, data: string) {
@@ -30,7 +31,7 @@ async function output(page: Page, data: string) {
 }
 async function wrap(page: Page, enabled: boolean) {
   await page.evaluate(value => (window as unknown as TerminalHost).remoteTerminal({ type: 'display', wrap: value }), enabled);
-  if (enabled) await expect.poll(() => page.evaluate(() => terminal.cols)).toBeLessThan(50);
+  if (enabled) await expect(page.locator('.xterm-screen')).toBeInViewport({ ratio: 1 });
   else await expect.poll(() => page.evaluate(() => terminal.cols)).toBe(500);
 }
 async function swipe(page: Page, delta: { x: number; y: number }) {

@@ -135,7 +135,10 @@ fn aggregate_failure_decision(
         return (outcome, false);
     }
     match result {
-        Ok(payload) if policy.retry_status_codes.contains(&payload.status) => {
+        Ok(payload)
+            if policy.retry_status_codes.contains(&payload.status)
+                || aggregate_capacity::is_capacity_rejection(payload) =>
+        {
             let retry_after = policy
                 .respect_retry_after
                 .then(|| {

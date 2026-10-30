@@ -1,5 +1,5 @@
-import { guiText } from "../../../i18n/guiText";
-import { backendText } from '../../../../../../shared/i18n/backend/translateBackendMessage';
+import { uiText } from "../../../i18n/uiText";
+import { remoteErrorText } from "../../../../../../shared/localization/errors";
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { RefreshCw } from 'lucide-react';
 import type { GuiAccountsClient, SelectableGuiAccount } from '../../../../../../shared/remote-chat/guiAccounts';
@@ -22,7 +22,7 @@ export function RemoteAccountPicker({ active, ready, client, computers, privacyM
   const selection = accounts.snapshot?.selection;
   const current = accounts.snapshot?.choices.find((choice) => choice.kind === selection?.kind && choice.id === selection.id);
   const name = current ? privacyMode && current.kind === 'account' ? maskAccountEmail(current.name) : current.name
-    : guiText("选择 GUI 账户");
+    : uiText("client.conversation.chooseGuiAccount");
   const disabled = !ready || accounts.loading || Boolean(accounts.saving) || !accounts.snapshot?.running;
   useEffect(() => { if (!active) setOpen(false); }, [active]);
   const select = async (kind: SelectableGuiAccount['kind'], id: string) => {
@@ -40,13 +40,13 @@ export function RemoteAccountPicker({ active, ready, client, computers, privacyM
     onSelectAccount={(id) => { void select('account', id); }}
     onSelectAggregate={(id) => { void select('aggregate', id); }}
     onSelectProvider={(id) => { void select('provider', id); }} footer={<>
-      {!ready && <p className={styles.hint}>{guiText("连接电脑后即可切换账户。")}</p>}
+      {!ready && <p className={styles.hint}>{uiText("client.chat.connectToYourComputerToSwitchAccounts")}</p>}
       {ready && accounts.snapshot && !accounts.snapshot.running
-        && <p className={styles.hint}>{guiText("请先在这台电脑上开启本地代理。")}</p>}
-      {accounts.error && <p className={styles.error} role="alert">{backendText(accounts.error)}</p>}
-      <button type="button" className={styles.settings} aria-label={guiText("刷新账户列表")}
+        && <p className={styles.hint}>{uiText("client.workspaceActions.startTheLocalProxyOnThisComputerFirst")}</p>}
+      {accounts.error && <p className={styles.error} role="alert">{remoteErrorText(accounts.error)}</p>}
+      <button type="button" className={styles.settings} aria-label={uiText("client.workspaceActions.refreshAccountList")}
         disabled={!ready || accounts.loading || Boolean(accounts.saving)} onClick={accounts.refresh}>
-        <RefreshCw size={17} />{guiText("刷新账户")}</button>
+        <RefreshCw size={17} />{uiText("client.workspaceActions.refreshAccounts")}</button>
     </>} />;
   return <GuiAccountMenu active={active} open={open} trigger={trigger} name={name} computers={computers}
     busy={Boolean(accounts.saving)} accounts={panel}

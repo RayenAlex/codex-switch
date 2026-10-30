@@ -242,6 +242,7 @@ fn update_account_details_blocking<R: Runtime>(
     touch_account_field(&paths, &id, AccountSyncField::Note)?;
     touch_account_field(&paths, &id, AccountSyncField::ExpiresAt)?;
     touch_account_field(&paths, &id, AccountSyncField::PrivateDetails)?;
+    crate::providers::refresh_group_account_labels(&app, &id)?;
     app.emit("accounts-changed", ())
         .map_err(|error| error.to_string())?;
     Ok(())

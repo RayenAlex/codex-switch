@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useDesktopClipboard } from '../../../web/src/chat/desktop/useDesktopClipboard';
@@ -94,7 +94,7 @@ it.each(['too many files', 'corrupt image'])(
 
 it('stops an incomplete image paste instead of silently pasting remote content', async () => {
   await act(async () => state.paste(pasteData([], '', '<img src="data:image/png;base64,invalid!">')));
-  expect(state.status).toContain('部分图片未能粘贴');
+  expect(state.status).toBe("client.errors.someImagesCouldNotBePastedCopyThemSeparatelyOr");
   expect(clipboard.paste).not.toHaveBeenCalled();
   expect(clipboard.write).not.toHaveBeenCalled();
 });

@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ChatComposer } from '../../../web/src/chat/ChatComposer';
+import { testModels } from '../pages/codexGui/testModels';
 import type { ComposerProps } from '../../../web/src/chat/composerProps';
 import type { Thread } from '../../../../shared/remote-chat/client/types';
 
@@ -25,7 +26,8 @@ beforeEach(async () => {
   host = document.createElement('div'); document.body.append(host); root = createRoot(host);
   props = { connection: { deviceName: '远程电脑', chooseDevice: vi.fn(), client: {
     read: vi.fn(), select: vi.fn(), subscribe: vi.fn(() => vi.fn()),
-  } }, models: [], selection: { model: 'astra', effort: 'high', access: 'workspace-write' },
+  } }, models: [{ ...testModels[0], id: 'astra', model: 'astra' }],
+    selection: { model: 'astra', effort: 'high', access: 'workspace-write' },
     contextSettings: { read: vi.fn(), write: vi.fn() }, readUsage: vi.fn(),
     readConversationMetrics: vi.fn(),
     goals: { load: vi.fn(), clear: vi.fn() }, goalBusy: false,

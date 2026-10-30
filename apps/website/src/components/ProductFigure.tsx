@@ -1,9 +1,9 @@
 import { Check, Command, Laptop, Monitor, MousePointer2, Smartphone, Terminal } from 'lucide-react';
-import { copy } from '../content/copy';
-import { featureImageAlt } from '../content/features';
-import type { Feature, Language } from '../content/types';
+import { copy } from '@remoteai/i18n/website-content/copy';
+import { featureImageAlt } from '@remoteai/i18n/website-content/features';
+import type { Feature, Language } from '@remoteai/i18n/website-content/types';
 import { asset } from '../lib/site';
-import { ui } from '../lib/ui-text';
+import { ui } from '@remoteai/i18n/website-content/ui-text';
 
 const dimensions: Record<string, [number, number]> = {
   'codex-gui': [1700, 925],

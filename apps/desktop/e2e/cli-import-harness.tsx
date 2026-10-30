@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Button, ConfigProvider, Popover } from "antd";
 import { mockIPC } from "@tauri-apps/api/mocks";
-import { guiText, setGuiLanguage } from "../src/i18n/guiText";
+import { uiText, setGuiLanguage } from "../src/i18n/uiText";
 import type { CliSnapshot } from "../src/pages/codexGui/cliManualDownloadApi";
 import "antd/dist/reset.css";
 
@@ -12,7 +12,7 @@ setGuiLanguage(language === "en" || language === "ru" ? language : "zh");
 mockIPC(async (command, args) => {
   const options = args as { options?: { title?: string } };
   if (command === "plugin:dialog|open") {
-    return options.options?.title === guiText("选择完整安装包")
+    return options.options?.title === uiText("client.cliImport.selectTheCompletePackage")
       ? "C:\\Downloads\\codex-package-x86_64-pc-windows-msvc.tar.gz" : "C:\\Downloads\\rust-v0.161.0";
   }
   if (command === "codex_gui_cli_manual_download") return {

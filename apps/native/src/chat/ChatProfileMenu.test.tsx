@@ -28,7 +28,7 @@ function nodes(tree: ReactNode): ReactElement<NodeProps>[] {
     ? [child, ...nodes(child.props.children)] : []);
 }
 const props = { client: {} as GuiAccountsClient, guiTools: {} as GuiToolsClient, email: 'test@example.test',
-  active: true, ready: false, running: true, chooseDevice: vi.fn(), openTokenSummary: vi.fn() };
+  active: true, ready: false, running: true, chooseDevice: vi.fn() };
 beforeEach(() => { state.panel = 'profile'; state.snapshot = null; vi.stubGlobal('React', React); });
 afterEach(() => vi.unstubAllGlobals());
 

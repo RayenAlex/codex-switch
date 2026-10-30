@@ -9,7 +9,9 @@ import { shareBrowserDownload } from './shareDownload';
 import type { AuthSession } from '../types';
 import { deleteDownload, listDownloads, storeDownload } from './storage';
 import { transferDownload } from './transfer';
+import { monitorDownloadSpeed } from './downloadSpeed';
 import type { DownloadConnection, DownloadSource, DownloadTask } from './types';
+import { sshDownloadClient } from '../../../../shared/terminal/sshDownloadClient';
 
 const MAX_ACTIVE_DOWNLOADS = 2;
 const MAX_DOWNLOAD_RECORDS = 500;
@@ -21,6 +23,7 @@ export class WebDownloadManager {
   private listeners = new Set<() => void>();
   private current?: DownloadConnection;
   private connections = new Map<DownloadConnection['files'], DownloadConnection>();
+  private loungeConnections = new Map<string, Omit<DownloadConnection, 'files'>>();
   private initialization?: Promise<void>;
   private failure = '';
   private flights = new Map<string, { controller: AbortController; done: Promise<void> }>();
@@ -34,10 +37,25 @@ export class WebDownloadManager {
     [...this.connections.values()].find(connection => connection.projectBrowser === client);
   connectionForGit = (git: NonNullable<DownloadConnection['git']>) =>
     [...this.connections.values()].find(connection => connection.git === git);
+  connectionForSsh = (ssh: NonNullable<DownloadConnection['ssh']>) =>
+    [...this.connections.values()].find(connection => connection.ssh === ssh);
   connectionForSource = (source: Pick<DownloadSource, 'owner' | 'deviceId'>) =>
-    [...this.connections.values()].find(connection => connection.owner === source.owner
+    [...this.connections.values(), ...this.loungeConnections.values()].find(connection => connection.owner === source.owner
       && connection.deviceId === source.deviceId);
+  registerLounge(connection: Omit<DownloadConnection, 'files'>) {
+    const previous = this.loungeConnections.get(connection.owner);
+    if (previous?.ready === connection.ready && previous.client === connection.client
+      && previous.deviceName === connection.deviceName) return;
+    this.loungeConnections.set(connection.owner, connection);
+    // Subscribers derive each task's action availability from its connection.
+    this.tasks = [...this.tasks];
+    this.pauseDisconnected(); this.emit(); this.schedule();
+  }
+  unbindLounge(owner: string) {
+    this.loungeConnections.delete(owner); this.tasks = [...this.tasks]; this.pauseDisconnected(); this.emit();
+  }
   error = () => this.failure;
+  retryAttempt = (id: string) => this.retryTimers.has(id) ? this.retries.attempt(id) : 0;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   private emit = () => { this.listeners.forEach(listener => listener()); };
   private update = (task: DownloadTask) => {
@@ -92,6 +110,8 @@ export class WebDownloadManager {
       && task.source.cwd === source.cwd
       && task.source.preview === source.preview
       && task.source.gitCommit === source.gitCommit
+      && task.source.sshSessionId === source.sshSessionId
+      && task.source.attachment?.id === source.attachment?.id
       && ['queued', 'preparing', 'downloading', 'verifying', 'saving', 'paused'].includes(task.status));
     if (existing) { await this.resume(existing.id); return existing.id; }
     if (this.tasks.length >= MAX_DOWNLOAD_RECORDS) throw new Error('下载记录已满，请删除不再需要的记录后重试。');
@@ -136,7 +156,8 @@ export class WebDownloadManager {
     if (!task || !['completed', 'ready'].includes(task.status)) return;
     // Invoke the picker in the click stack before an IndexedDB await consumes user activation.
     const saving = saveDownload(task, () => undefined);
-    this.update({ ...task, status: 'saving', exported: true });
+    this.update({ ...task, status: 'saving', exported: true,
+      message: task.status === 'completed' ? '' : task.message });
     try {
       const confirmed = await saving;
       await this.persist({ ...task, exported: true, status: confirmed ? 'completed' : 'ready',
@@ -179,15 +200,23 @@ export class WebDownloadManager {
       this.flights.set(task.id, { controller, done });
     }
   }
-  private async run(task: DownloadTask, connection: DownloadConnection, signal: AbortSignal) {
+  private async run(task: DownloadTask, connection: Omit<DownloadConnection, 'files'>, signal: AbortSignal) {
+    const speed = monitorDownloadSpeed(value => { task = value; this.update(value); });
     try {
-      await this.persist({ ...task, status: 'preparing', preparation: undefined });
-      await transferDownload({ task, client: connection.client, signal,
+      task = { ...task, status: 'preparing', preparation: undefined, completedAt: undefined };
+      await this.persist(task);
+      const client = task.source.sshSessionId ? connection.ssh
+        && sshDownloadClient(connection.ssh, task.source.sshSessionId) : connection.client;
+      if (!client) throw new Error('client.ssh.closed');
+      await transferDownload({ task, client, signal,
         mode: () => this.connectionForSource(task.source)?.mode ?? 'offline',
-        update: value => { task = value; this.update(value); } });
+        update: speed.update });
+      speed.stop();
       this.clearRetry(task.id);
-      await this.persist({ ...task, status: 'ready', bytesPerSecond: undefined });
+      await this.persist({ ...task, status: 'ready', bytesPerSecond: undefined,
+        completedAt: Date.now() });
     } catch (error) {
+      speed.stop();
       error = normalizeFileError(error);
       const paused = signal.aborted || error instanceof DownloadCancelled
         || (error instanceof BulkError && error.code === 'CANCELLED');
@@ -201,6 +230,8 @@ export class WebDownloadManager {
       await storeDownload(task).catch(() => {
         this.clearRetry(task.id); this.update({ ...task, status: 'failed' }); this.storageFailed();
       });
+    } finally {
+      speed.stop();
     }
   }
   private deferRetry(task: DownloadTask) {

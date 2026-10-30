@@ -1,3 +1,4 @@
+import { displayError } from './i18n/index';
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Input, List, Pagination, Popconfirm, Space, Tabs, Upload } from "antd";
 import { api, errorText, fileBase64 } from "./api";
@@ -34,11 +35,11 @@ export function TableEditor({ resource }: { resource: Resource }) {
     try {
       await api("save_table_row", { table_id: resource.id, id: editing, value: JSON.parse(text) as Json });
       setEditing(undefined); await refresh();
-    } catch (error) { setError(error instanceof SyntaxError ? msg("请填写有效的 JSON 对象。") : errorText(error)); }
+    } catch (error) { setError(error instanceof SyntaxError ? msg("coze.index.enterAValidJsonObject") : errorText(error)); }
     finally { setBusy(false); }
   };
   const upload = async (file: File) => {
-    if (file.size > 32 * 1024 * 1024) { setError(msg("请选择不超过 32 MB 的表格。")); return; }
+    if (file.size > 32 * 1024 * 1024) { setError(msg("coze.index.chooseASpreadsheetFileOf32MbOrLess")); return; }
     setBusy(true); setError(""); setImported(0);
     try {
       const result = await api<{ inserted: number }>("import_table_rows", { tableId: resource.id,
@@ -47,24 +48,24 @@ export function TableEditor({ resource }: { resource: Resource }) {
     } catch (error) { setError(errorText(error)); } finally { setBusy(false); }
   };
   return <section className="panel"><Tabs items={[
-    { key: "rows", label: t("数据记录"), children: <>
-    {error && <Alert type="error" message={t(error)} />}
-    {imported > 0 && <Alert type="success" message={t("已导入 {imported} 条记录。", { imported })} />}
-    <Input.TextArea aria-label={t("记录内容")} rows={4} value={text} onChange={(event) => setText(event.target.value)} />
-    <Space><Button onClick={() => void save()} loading={busy}>{editing ? t("保存记录") : t("新增记录")}</Button>
+    { key: "rows", label: t("coze.index.records"), children: <>
+    {error && <Alert type="error" message={displayError(error)} />}
+    {imported > 0 && <Alert type="success" message={t("coze.index.recordsImported", { imported })} />}
+    <Input.TextArea aria-label={t("coze.index.recordContent")} rows={4} value={text} onChange={(event) => setText(event.target.value)} />
+    <Space><Button onClick={() => void save()} loading={busy}>{editing ? t("coze.index.saveRecord") : t("coze.index.addRecord")}</Button>
       <Upload accept=".csv,.tsv,.xlsx" showUploadList={false} disabled={busy}
-        beforeUpload={(file) => { void upload(file); return false; }}><Button disabled={busy}>{t("导入表格")}</Button></Upload>
-    </Space><p>{t("表格首行作为字段名称，Excel 导入第一个工作表，每次最多 10,000 条记录。")}</p>
+        beforeUpload={(file) => { void upload(file); return false; }}><Button disabled={busy}>{t("coze.index.importSpreadsheet")}</Button></Upload>
+    </Space><p>{t("coze.index.theFirstRowIsUsedAsFieldNamesFromExcel")}</p>
     <List dataSource={rows} renderItem={(row) => <List.Item actions={[
-      <Button key="edit" onClick={() => { setEditing(row.id); setText(JSON.stringify(row.value, null, 2)); }}>{t("编辑")}</Button>,
-      <Popconfirm key="delete" title={t("确定删除这条记录？")} overlayStyle={{ maxWidth: 400 }} onConfirm={async () => {
+      <Button key="edit" onClick={() => { setEditing(row.id); setText(JSON.stringify(row.value, null, 2)); }}>{t("coze.index.edit")}</Button>,
+      <Popconfirm key="delete" title={t("coze.index.deleteThisRecord")} overlayStyle={{ maxWidth: 400 }} onConfirm={async () => {
         try { await api("delete_table_row", { table_id: resource.id, id: row.id }); await refresh(); }
         catch (error) { setError(errorText(error)); }
-      }}><Button danger>{t("删除")}</Button></Popconfirm>,
+      }}><Button danger>{t("coze.core.delete")}</Button></Popconfirm>,
     ]}><pre>{JSON.stringify(row.value, null, 2)}</pre></List.Item>} />
     <Pagination current={page} pageSize={20} total={total} showSizeChanger={false} onChange={setPage}
-      showTotal={(count) => t("共 {count} 条记录", { count })} />
-    </> }, { key: "schema", label: t("字段设置"), children: <TableSchemaEditor tableId={resource.id} /> },
-    { key: "sql", label: t("查询与分析"), children: <TableSqlPanel resource={resource} /> },
+      showTotal={(count) => t("coze.index.totalRecords", { count })} />
+    </> }, { key: "schema", label: t("coze.index.fieldSettings"), children: <TableSchemaEditor tableId={resource.id} /> },
+    { key: "sql", label: t("coze.index.queriesAndAnalysis"), children: <TableSqlPanel resource={resource} /> },
   ]} /></section>;
 }

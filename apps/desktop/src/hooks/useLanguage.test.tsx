@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { LANGUAGE_STORAGE_KEY, type Language } from '../i18n';
-import { guiText } from '../i18n/guiText';
+import { uiText } from "../i18n/uiText";
 import { useLanguage } from './useLanguage';
 
 vi.mock('../api/backend', () => ({
@@ -18,7 +18,7 @@ let chooseLanguage: (language: Language) => void;
 function LanguageView() {
   const { language, setLanguage, t } = useLanguage();
   chooseLanguage = setLanguage;
-  return <div data-language={language}>{t('autoReset.cancel')} / {guiText('取消')}</div>;
+  return <div data-language={language}>{t('autoReset.cancel')} / {uiText("client.accounts.cancel")}</div>;
 }
 
 beforeEach(() => {
@@ -49,7 +49,7 @@ it.each([
   expect(localStorage.getItem(LANGUAGE_STORAGE_KEY)).toBe(language);
 });
 
-it.each(['zh', 'en', 'ru'] as const)('preserves the saved %s choice over the system language', async language => {
+it.each(['zh', 'en', 'ru', 'ja'] as const)('preserves the saved %s choice over the system language', async language => {
   vi.spyOn(navigator, 'language', 'get').mockReturnValue('fr-FR');
   localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
   await act(async () => root.render(<LanguageView />));

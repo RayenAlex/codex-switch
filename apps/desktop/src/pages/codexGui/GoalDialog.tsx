@@ -1,5 +1,6 @@
-import { guiText } from "../../i18n/guiText";
-import { backendText } from "../../../../../shared/i18n/backend/translateBackendMessage";
+import { displayText } from '../../i18n/uiText';
+import { uiText } from "../../i18n/uiText";
+import { remoteErrorText } from "../../../../../shared/localization/errors";
 import { useEffect, useState } from "react";
 import { Alert, Button, Input, Modal } from "antd";
 import { GOAL_STATUS } from "./goalTypes";
@@ -28,25 +29,25 @@ export function GoalDialog({ state, controller, onClose }: {
     if (await controller.goals.set({ threadId: id, status: "paused" })) onClose();
   };
   const error = id ? state.goalErrors?.[id] : undefined;
-  return <Modal open centered title={goal ? guiText("管理目标") : guiText("设置目标")} width={400}
+  return <Modal open centered title={goal ? uiText("client.composer.manageGoal") : uiText("client.composer.setGoal")} width={400}
     onCancel={onClose} closable={!busy} maskClosable={!busy} keyboard={!busy}
     footer={<div className={styles.goalActions}>
       {goal && <Button danger type="text" disabled={unavailable || running}
-        onClick={async () => { if (id && await controller.goals.clear(id)) onClose(); }}>{guiText("移除目标")}</Button>}
-      <Button disabled={busy} onClick={onClose}>{guiText("取消")}</Button>
-      {goal?.status === "active" && <Button disabled={unavailable} onClick={() => void pause()}>{guiText("暂停目标")}</Button>}
+        onClick={async () => { if (id && await controller.goals.clear(id)) onClose(); }}>{uiText("client.mobile.removeGoal")}</Button>}
+      <Button disabled={busy} onClick={onClose}>{uiText("client.accounts.cancel")}</Button>
+      {goal?.status === "active" && <Button disabled={unavailable} onClick={() => void pause()}>{uiText("client.composer.pauseGoal")}</Button>}
       <Button type="primary" loading={busy} disabled={unavailable || blocked || !objective.trim()}
-        onClick={() => void save()}>{goal ? guiText("保存并继续") : guiText("开始目标")}</Button>
+        onClick={() => void save()}>{goal ? uiText("client.composer.saveAndContinue") : uiText("client.composer.startGoal")}</Button>
     </div>}>
-    <p className={styles.copy}>{guiText("描述想完成的结果。Codex 会持续推进，直到完成目标或需要你的协助。")}</p>
-    {goal && <div className={styles.goalStatus}>{guiText(GOAL_STATUS[goal.status])}
-      <span>{guiText("已用")} {goal.tokensUsed.toLocaleString()} tokens · {Math.floor(goal.timeUsedSeconds / 60)}  {guiText("分钟")}</span>
+    <p className={styles.copy}>{uiText("client.composer.describeTheResultYouWantCodexWillKeepWorkingUntil")}</p>
+    {goal && <div className={styles.goalStatus}>{displayText(GOAL_STATUS[goal.status])}
+      <span>{uiText("client.composer.used")} {goal.tokensUsed.toLocaleString()} tokens · {Math.floor(goal.timeUsedSeconds / 60)}  {uiText("client.composer.minutes")}</span>
     </div>}
-    <Input.TextArea autoFocus aria-label={guiText("目标")} placeholder={guiText("例如：完成登录页面，并验证登录和退出流程")}
+    <Input.TextArea autoFocus aria-label={uiText("client.chat.goal")} placeholder={uiText("client.composer.forExampleFinishTheLoginPageAndVerifySigningIn")}
       value={objective} maxLength={4000} autoSize={{ minRows: 4, maxRows: 8 }} disabled={unavailable || running}
       onChange={(event) => { setObjective(event.target.value); setEdited(true); }} />
-    {blocked && <p className={styles.copy}>{guiText("请先等待当前任务结束，并处理待发送消息或确认请求，再开始或修改目标。")}</p>}
-    {error && <Alert type="warning" className={styles.goalError} message={backendText(error)}
-      action={<Button size="small" onClick={() => { if (id) void controller.goals.load(id); }}>{guiText("重试")}</Button>} />}
+    {blocked && <p className={styles.copy}>{uiText("client.composer.waitForTheCurrentTaskToFinishAndResolveQueued")}</p>}
+    {error && <Alert type="warning" className={styles.goalError} message={remoteErrorText(error)}
+      action={<Button size="small" onClick={() => { if (id) void controller.goals.load(id); }}>{uiText("client.terminal.retry")}</Button>} />}
   </Modal>;
 }

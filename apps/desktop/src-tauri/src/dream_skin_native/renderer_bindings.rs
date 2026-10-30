@@ -53,7 +53,7 @@ fn renderer_binding_call(value: &Value) -> Option<RendererBindingCall> {
     }
     let params = value.get("params")?;
     let name = params.get("name")?.as_str()?;
-    if !matches!(name, SERVICE_TIER_BINDING | USAGE_SUMMARY_BINDING) {
+    if !matches!(name, SERVICE_TIER_BINDING | USAGE_SUMMARY_BINDING | CONVERSATION_METRICS_BINDING) {
         return None;
     }
     Some(RendererBindingCall {
@@ -119,6 +119,10 @@ fn complete_usage_request(target: &CdpTarget, port: u16) {
 }
 
 fn handle_renderer_binding(call: RendererBindingCall, target: &CdpTarget, port: u16) {
+    if call.name == CONVERSATION_METRICS_BINDING {
+        publish_conversation_metrics(&call.payload, target, port);
+        return;
+    }
     if call.name == USAGE_SUMMARY_BINDING {
         publish_usage_summary(target, port);
         return;
@@ -171,6 +175,7 @@ fn install_renderer_bindings(target: &CdpTarget, port: u16) -> Result<(), String
     session.enable()?;
     session.add_binding(SERVICE_TIER_BINDING)?;
     session.add_binding(USAGE_SUMMARY_BINDING)?;
+    session.add_binding(CONVERSATION_METRICS_BINDING)?;
     restore_composer(&mut session)?;
     session.evaluate(
         "setTimeout(() => { \

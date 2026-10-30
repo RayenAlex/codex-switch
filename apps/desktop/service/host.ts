@@ -6,6 +6,7 @@ import { parseMessage, type IceServer, type Signal } from '../../../shared/remot
 import { invoke } from './rpc';
 import { ServiceOperations } from './operations';
 import { createServiceNativePath } from './nativePath';
+import { createServicePacketCompression } from './packetCompression';
 
 interface Configuration { baseUrl: string; credential: string; deviceId: string; name: string; version: string }
 interface Session { link: ChatLink; resumeToken: string; lease: ReturnType<typeof setTimeout> }
@@ -46,6 +47,7 @@ async function open(id: string, message: Record<string, unknown>) {
     diagnosticsEnabled: () => diagnosticsEnabled,
     nativeTraversal: message.nativeTraversal as import('../../../shared/remote-chat/nativePath').NativeTraversalConfig,
     createNativePath: createServiceNativePath,
+    createPacketCompression: createServicePacketCompression,
     createPeer: () => ({ offer: async () => {}, accept: async () => {}, close: () => {} }),
     signal: send, mode: mode => { if (mode === 'offline') release(id); }, error: () => release(id),
     message: request => {

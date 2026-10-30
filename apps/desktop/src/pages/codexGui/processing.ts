@@ -1,13 +1,13 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import type { Conversation, GuiEvent, Item, Turn } from "./types";
 import { SECOND_MS } from "./turnTiming";
 
 export const PROCESSING_LABELS = {
-  get sending() { return guiText("正在发送请求"); }, get request() { return guiText("等待响应"); }, get reasoning() { return guiText("正在思考"); }, get response() { return guiText("正在生成回复"); },
-  get command() { return guiText("正在执行命令"); }, get files() { return guiText("正在修改文件"); }, get tool() { return guiText("正在调用工具"); }, get search() { return guiText("正在搜索网页"); },
-  get image() { return guiText("正在生成图片"); }, get collaboration() { return guiText("正在等待协作任务"); }, get compact() { return guiText("正在整理上下文"); },
-  get approval() { return guiText("等待你的确认"); }, get input() { return guiText("等待你的补充"); }, get retry() { return guiText("正在重试"); }, get wait() { return guiText("正在等待"); },
-  get processing() { return guiText("Codex 正在处理"); },
+  get sending() { return uiText("client.shared.sendingRequest"); }, get request() { return uiText("client.shared.waitingForResponse"); }, get reasoning() { return uiText("client.shared.thinking"); }, get response() { return uiText("client.shared.generatingReply"); },
+  get command() { return uiText("client.shared.runningCommand"); }, get files() { return uiText("client.shared.editingFiles"); }, get tool() { return uiText("client.shared.usingTool"); }, get search() { return uiText("client.shared.searchingTheWeb"); },
+  get image() { return uiText("client.shared.generatingImage"); }, get collaboration() { return uiText("client.shared.waitingForCollaboration"); }, get compact() { return uiText("client.shared.compactingContext"); },
+  get approval() { return uiText("client.chatReliability.awaitingYourApproval"); }, get input() { return uiText("client.shared.waitingForYourInput"); }, get retry() { return uiText("client.shared.retrying"); }, get wait() { return uiText("client.shared.waiting"); },
+  get processing() { return uiText("client.shared.codexIsWorking"); },
 };
 export type ProcessingPhase = keyof typeof PROCESSING_LABELS;
 interface Activity { id: string; phase: ProcessingPhase }

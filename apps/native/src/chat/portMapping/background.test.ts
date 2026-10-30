@@ -4,7 +4,7 @@ const native = vi.hoisted(() => ({ start: vi.fn(async () => true), stop: vi.fn(a
   setPortMappingEnabled: vi.fn(async (_enabled: boolean) => true) }));
 vi.mock('react-native', () => ({ Platform: { OS: 'android' }, NativeModules: { ChatBackground: native },
   AppRegistry: { registerHeadlessTask: vi.fn() }, DeviceEventEmitter: { addListener: vi.fn() } }));
-vi.mock('../../i18n', () => ({ t: (value: string) => value }));
+vi.mock('../../i18n', async () => ({ ...await vi.importActual<typeof import('../../i18n')>('../../i18n'),  }));
 beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); });
 
 it('retains the foreground service until the last mapping and chat have released it', async () => {

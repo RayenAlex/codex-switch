@@ -21,6 +21,7 @@ export async function groupPreviewJourney({ page, request, info }: {
   await screenshot(page, info, '10-folded-project-groups');
   await click(project.getByRole('button', { name: '展开显示：演示项目' }));
   await click(project.getByRole('button', { name: '移动端聊天体验', exact: true }));
+  if (!isDesktop(page)) await expect(drawer).toBeHidden();
   await openChatList(page);
   const visibleCount = page.viewportSize()!.width > 860 ? 7 : 5;
   await expect(project.locator('.chat-thread')).toHaveCount(visibleCount);

@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useRef, useState } from "react";
 import { Button, Input, Radio } from "antd";
 import { ShieldQuestion } from "lucide-react";
@@ -40,7 +40,7 @@ function Approval({ event, controller }: { event: GuiEvent; controller: Approval
   };
   return <div className={`${styles.approval} ${isQuestion ? styles.questionCard : ""}`}
     onKeyDown={isQuestion ? (event) => submitQuestionOnEnter(event, () => respond("accept")) : undefined}>
-    <strong><ShieldQuestion size={17} />{isQuestion ? guiText("需要你的补充") : guiText("需要你的确认")}</strong>
+    <strong><ShieldQuestion size={17} />{isQuestion ? uiText("client.chat.moreInformationNeeded") : uiText("client.chat.yourApprovalIsNeeded")}</strong>
     {params.reason && <p>{params.reason}</p>}
     {method === "mcpServer/elicitation/request" && <div style={{ maxWidth: 400, overflowWrap: "anywhere" }}>
       <p>{confirmation.message}</p>
@@ -49,9 +49,9 @@ function Approval({ event, controller }: { event: GuiEvent; controller: Approval
     {params.command && <pre>{params.command}</pre>}
     {(params.cwd || params.grantRoot) && <p className={styles.muted}>{params.cwd || params.grantRoot}</p>}
     {isPermissions && <div>
-      {params.permissions?.network?.enabled && <p>{guiText("访问网络")}</p>}
-      {params.permissions?.fileSystem?.read?.map((path) => <p key={path}>{guiText("读取：")}{path}</p>)}
-      {params.permissions?.fileSystem?.write?.map((path) => <p key={path}>{guiText("编辑：")}{path}</p>)}
+      {params.permissions?.network?.enabled && <p>{uiText("client.chat.networkAccess")}</p>}
+      {params.permissions?.fileSystem?.read?.map((path) => <p key={path}>{uiText("client.chat.read")}{path}</p>)}
+      {params.permissions?.fileSystem?.write?.map((path) => <p key={path}>{uiText("client.chat.edit")}{path}</p>)}
       {params.permissions?.fileSystem?.entries &&
         <pre>{JSON.stringify(params.permissions.fileSystem.entries, null, 2)}</pre>}
     </div>}
@@ -64,12 +64,12 @@ function Approval({ event, controller }: { event: GuiEvent; controller: Approval
         </Radio>)}
       </Radio.Group>}
       <Input disabled={busy} type={question.isSecret ? "password" : "text"} value={answers[question.id] ?? ""}
-        placeholder={guiText("输入回答，按回车发送")} aria-label={question.question}
+        placeholder={uiText("client.composer.typeYourAnswerAndPressEnterToSend")} aria-label={question.question}
         onChange={(event) => setAnswers((values) => ({ ...values, [question.id]: event.target.value }))} />
     </div>)}
-    {isQuestion ? <p className={styles.muted}>{guiText("Enter 发送")}</p> : <div className={styles.approvalActions}>
-      {allowAccept && <Button type="primary" loading={busy} onClick={() => void respond("accept")}>{guiText("允许这一次")}</Button>}
-      <Button disabled={busy} onClick={() => void respond(allowDecline ? "decline" : "cancel")}>{guiText("拒绝")}</Button>
+    {isQuestion ? <p className={styles.muted}>{uiText("client.composer.enterToSend")}</p> : <div className={styles.approvalActions}>
+      {allowAccept && <Button type="primary" loading={busy} onClick={() => void respond("accept")}>{uiText("client.chat.allowOnce")}</Button>}
+      <Button disabled={busy} onClick={() => void respond(allowDecline ? "decline" : "cancel")}>{uiText("client.chat.deny")}</Button>
     </div>}
   </div>;
 }

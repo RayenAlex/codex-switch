@@ -3,6 +3,7 @@
 #include "windows_driver.hpp"
 #include "windows_desktop.hpp"
 #include "windows_restore.hpp"
+#include "windows_power.hpp"
 #include <wtsapi32.h>
 #include <algorithm>
 #include <cwctype>
@@ -57,6 +58,7 @@ void apply(Topology& value) {
         static_cast<UINT32>(value.modes.size()), value.modes.data(),
         SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_ALLOW_CHANGES);
     if (result) throw std::runtime_error("display configuration failed: " + std::to_string(result));
+    retain_screen_power();
 }
 void verify_restored_display() {
     const auto active = topology();
@@ -75,6 +77,7 @@ void restore_saved_configuration() {
     InputDesktopScope desktop;
     const auto result = SetDisplayConfig(0, nullptr, 0, nullptr, SDC_APPLY | SDC_USE_DATABASE_CURRENT);
     if (result) throw std::runtime_error("saved display restoration failed: " + std::to_string(result));
+    retain_screen_power();
 }
 DisplayRestoration restore_topology(Topology& original) {
     return restore_display_configuration(ordinary_display_available, [&](DisplayConfiguration configuration) {
@@ -139,12 +142,16 @@ class WindowsPrivacy final : public PrivacyPlatform {
                 selected = source_name(*found);
                 // Activate just the new path alongside the snapshot, without changing saved Windows defaults.
                 if (!(found->flags & DISPLAYCONFIG_PATH_ACTIVE)) {
-                    auto extended = original;
+                    // Remembered privacy switches directly to the virtual output, before capture.
+                    const bool hidden = start_hidden();
+                    auto extended = hidden ? Topology{} : original;
                     auto added = *found;
                     added.flags |= DISPLAYCONFIG_PATH_ACTIVE;
                     added.sourceInfo.modeInfoIdx = DISPLAYCONFIG_PATH_MODE_IDX_INVALID;
                     added.targetInfo.modeInfoIdx = DISPLAYCONFIG_PATH_MODE_IDX_INVALID;
-                    extended.paths.push_back(added); apply(extended);
+                    extended.paths.push_back(added);
+                    if (hidden) private_screen = true;
+                    apply(extended);
                 }
                 std::string name;
                 // GDI source names are ASCII identifiers (\\.\DISPLAYn).
@@ -173,6 +180,7 @@ public:
         set_privacy_device_enabled(true);
         const auto name = discover();
         size_private_display(selected, original);
+        if (start_hidden()) commit();
         return name;
     }
     void commit() override {

@@ -1,9 +1,10 @@
+import { displayText, displayError } from '../../i18n/index';
 import { Input, Modal } from 'antd';
 import { useState } from 'react';
 import type { RemoteGit } from '../../../../../shared/remote-chat/useRemoteGit';
 import { t } from '../../i18n';
 
-const ACTION_LABELS = { commit: '提交单个文件', rollback: '回退文件', delete: '删除文件' };
+const ACTION_LABELS = { commit: "client.git.commitThisFile", rollback: "client.git.rollBackFiles", delete: "client.git.deleteFile" };
 
 export function GitFileActionDialog({ panel, connected }: { panel: RemoteGit; connected: boolean }) {
   const [message, setMessage] = useState(panel.message);
@@ -11,25 +12,26 @@ export function GitFileActionDialog({ panel, connected }: { panel: RemoteGit; co
   if (!prompt) return null;
   const committing = prompt.action === 'commit';
   const multiple = prompt.files.length > 1;
-  const title = committing && multiple ? t('提交 {count} 个文件', { count: prompt.files.length })
-    : t(ACTION_LABELS[prompt.action]);
-  const confirmText = t(committing ? '提交' : prompt.action === 'rollback' ? '确认回退' : '确认删除');
+  const title = committing && multiple ? t("client.git.commitFiles", { count: prompt.files.length })
+    : displayText(ACTION_LABELS[prompt.action]);
+  const confirmText = t(committing ? "client.mobile.submit" : prompt.action === 'rollback' ? "client.git.rollBack" : "client.mobile.confirmDeletion");
   return <Modal open centered width={400} title={title}
     className="git-file-action-dialog" onCancel={panel.cancelFileAction} closable={!panel.busy}
-    maskClosable={!panel.busy} keyboard={!panel.busy} cancelText={t('取消')}
-    cancelButtonProps={{ disabled: panel.busy, 'aria-label': t('取消') }} confirmLoading={panel.busy}
+    maskClosable={!panel.busy} keyboard={!panel.busy} cancelText={t("client.accounts.cancel")}
+    cancelButtonProps={{ disabled: panel.busy, 'aria-label': t("client.accounts.cancel") }} confirmLoading={panel.busy}
     okText={confirmText}
     okButtonProps={{ danger: !committing, disabled: !connected || (committing && !message.trim()),
       'aria-label': confirmText }}
     onOk={() => void panel.confirmFileAction(message)}>
     <ul className="git-action-file-list">{prompt.files.map(file => <li key={file.path}>{file.path}</li>)}</ul>
-    {committing ? <Input.TextArea autoFocus aria-label={t(multiple ? '提交说明' : '单文件提交说明')}
-      placeholder={t('填写提交说明')}
+    {committing ? <Input.TextArea autoFocus aria-label={t(multiple ? "client.git.commitMessage" : "client.git.commitMessageForThisFile")}
+      placeholder={t("client.git.writeACommitMessage")}
       maxLength={4000} rows={3} value={message} disabled={panel.busy}
       onChange={event => setMessage(event.target.value)} />
       : <p>{t(prompt.action === 'rollback'
-        ? '将放弃这些文件的全部未提交改动，新增文件会被删除。此操作无法撤销。'
-        : '将从项目中删除这些文件。此操作无法撤销。')}</p>}
-    {panel.error && <p role="alert">{t(panel.error)}</p>}
+        ? "client.git.discardAllUncommittedChangesInTheseFilesAndDeleteNewly"
+        : "client.git.deleteTheseFilesFromTheProjectThisCannotBeUndone")}</p>}
+    {panel.error && <p role="alert" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+      {displayError(panel.error)}</p>}
   </Modal>;
 }

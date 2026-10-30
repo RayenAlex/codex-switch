@@ -3,7 +3,7 @@ import { FolderInput, Search, Trash2, X } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
 import { CodexHomeSelect } from "../../../components/CodexHomeScope";
 import type { CodexThreadKind } from "../../../types";
-import type { ThreadCopy } from "../copy";
+import type { ThreadCopy } from "@remoteai/i18n/copy/desktop/threads";
 import styles from "./index.module.less";
 
 interface ThreadToolbarProps {

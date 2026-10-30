@@ -14,8 +14,8 @@ export function ChatListButton({ client, active, ready, expanded, onPress }: Pro
   useLanguage();
   const styles = useStyles();
   const { snapshot } = useGuiAccounts(client, active && ready);
-  const avatar = guiAccountAvatar(snapshot, t('我'));
-  return <Pressable accessibilityRole="button" accessibilityLabel={t('打开聊天列表')}
+  const avatar = guiAccountAvatar(snapshot, t("client.chat.me"));
+  return <Pressable accessibilityRole="button" accessibilityLabel={t("client.chat.openChatList")}
     accessibilityState={{ expanded }} onPress={onPress}
     style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
     <View style={styles.avatar} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">

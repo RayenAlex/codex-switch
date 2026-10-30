@@ -35,9 +35,9 @@ function baseUsageDescriptions() {
   return base;
 }
 
-it('localizes every iOS permission prompt for English, Russian and Chinese', () => {
+it('localizes every iOS permission prompt for English, Russian, Chinese and Japanese', () => {
   const base = baseUsageDescriptions();
-  expect(Object.keys(expo.locales).sort()).toEqual(['en', 'ru', 'zh-Hans', 'zh-Hant']);
+  expect(Object.keys(expo.locales).sort()).toEqual(['en', 'ja', 'ru', 'zh-Hans', 'zh-Hant']);
   for (const [language, path] of Object.entries(expo.locales)) {
     const locale = readJson(path) as { ios?: Record<string, string> };
     // Platform-neutral keys would also be written to Android string resources.
@@ -48,6 +48,7 @@ it('localizes every iOS permission prompt for English, Russian and Chinese', () 
       // Expo writes InfoPlist.strings without escaping.
       expect(value, `${language} ${key}`).not.toMatch(/["\\\n]/);
       if (language.startsWith('zh')) expect(value, key).toBe(base[key]);
+      else if (language === 'ja') expect(value, `${language} ${key}`).toMatch(/[\u3040-\u30ff]/);
       else expect(value, `${language} ${key}`).not.toMatch(/[㐀-鿿]/);
     }
   }

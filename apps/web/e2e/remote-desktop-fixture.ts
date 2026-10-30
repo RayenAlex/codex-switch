@@ -11,6 +11,7 @@ import { STANDBY_PONG } from '../../../shared/remote-desktop/standbyProtocol';
 import { fileStreamFixture, hostFileRequest, localFileRequest, promised } from './remote-desktop-file-stream-fixture';
 import type { Channel } from '@tauri-apps/api/core';
 import type { FileReadEvent } from '../../../shared/remote-desktop/fileClipboard';
+import { createTakeoverFixture } from './remote-desktop-takeover-fixture';
 
 declare global { interface Window { desktopRelayFixture?: {
   iceServers: IceServer[]; upgrade?: boolean; failDirectAttempts?: number; loseCommitReply?: boolean; directFirst?: boolean;
@@ -46,12 +47,14 @@ if (new URLSearchParams(location.search).has('three-displays')) {
 let selected = displays[0];
 const multiDisplay = new URLSearchParams(location.search).has('displays');
 export const desktopTest = { inputs: [] as DesktopInput[], settings: [] as DesktopSettings[],
-  security: { lockOnDisconnect: false, muteHost: false,
+  security: { lockOnDisconnect: false, muteHost: false, clipboardSync: true, privacyScreen: false,
     autoUnlock: new URLSearchParams(location.search).has('unlock') ? { enabled: false, status: 'disabled' } : undefined,
   } as DesktopSecurity,
-  securityChanges: [] as object[], securityFail: false,
+  securityChanges: [] as object[], securityFail: false, securityNoop: false,
   inputFocus: null as DesktopInputFocus | null, inputFocusReads: 0,
   privacyChanges: [] as boolean[],
+  accessError: new URLSearchParams(location.search).get('access-error') ?? '',
+  privacyRequiresUnattended: new URLSearchParams(location.search).has('privacy-unattended'),
   resolutionChanges: [] as DesktopResolution[],
   privacyInstallationRequired: new URLSearchParams(location.search).has('privacy-install'),
   permissionRequired: (new URLSearchParams(location.search).has('permissions')
@@ -73,6 +76,7 @@ export const desktopTest = { inputs: [] as DesktopInput[], settings: [] as Deskt
   frames: 0, captures: 0, closed: 0, concurrent: 0, maxConcurrent: 0, errors: [] as string[] };
 
 async function frame(id: string, width: number) {
+  if (desktopTest.accessError) throw new Error(desktopTest.accessError);
   const capture = captures.get(id);
   if (!capture) throw new Error('Capture closed');
   const { canvas, display } = capture;
@@ -149,6 +153,7 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', { value: {
     }
     if (command === 'remote_desktop_open') {
       desktopTest.captureAttempts += 1;
+      if (desktopTest.accessError) throw desktopTest.accessError;
       if (desktopTest.permissionRequired) {
         const permission = desktopTest.permissionRequired === 'screenRecording' ? '屏幕录制' : '辅助功能';
         throw new Error(`请在 Mac 的远程设置中开启${permission}权限，然后重新连接。`);
@@ -165,6 +170,7 @@ Object.defineProperty(window, '__TAURI_INTERNALS__', { value: {
     }
     if (command === 'remote_desktop_frame') return frame(args.id!, args.width!);
     if (command === 'remote_desktop_input') {
+      if (desktopTest.accessError) throw desktopTest.accessError;
       desktopTest.inputs.push(args.input!); desktopTest.inputDisplays.push(captures.get(args.id!)!.display.id); return;
     }
     if (command === 'remote_desktop_close') { captures.delete(args.id!); desktopTest.closed += 1; return; }
@@ -230,6 +236,7 @@ const host = new RemoteDesktopHost(privacyFixture || resolutionFixture || securi
     security: async change => {
       if (desktopTest.securityFail) throw new Error('安全选项未能保存，请重试。');
       desktopTest.securityChanges.push(change);
+      if (desktopTest.securityNoop) return { ...desktopTest.security };
       const { autoUnlock, ...settings } = change;
       desktopTest.security = { ...desktopTest.security, ...settings,
         ...(autoUnlock ? { autoUnlock: { enabled: autoUnlock.enabled, status: autoUnlock.enabled ? 'ready' : 'disabled' } }
@@ -237,13 +244,18 @@ const host = new RemoteDesktopHost(privacyFixture || resolutionFixture || securi
       return { ...desktopTest.security };
     },
     privacy: async enabled => {
+      if (enabled && desktopTest.privacyRequiresUnattended) {
+        throw new Error('client.remoteDesktop.privacyRequiresUnattended');
+      }
       if (enabled && desktopTest.privacyInstallationRequired) {
         throw new Error('请在电脑上确认安装，完成后再点一次隐私屏。');
       }
       desktopTest.privacyChanges.push(enabled);
+      desktopTest.security.privacyScreen = enabled;
       selected = enabled ? { ...displays[0], id: 'private', name: 'Privacy' } : displays[0];
       for (const capture of captures.values()) capture.display = selected;
-      return { displays: enabled ? [selected] : displays, displayId: selected.id, privacyScreen: enabled, resolutions };
+      return { displays: enabled ? [selected] : displays, displayId: selected.id, privacyScreen: enabled, resolutions,
+        ...(securityFixture ? { security: { ...desktopTest.security } } : {}) };
     },
     resolution: async size => {
       desktopTest.resolutionChanges.push(size);
@@ -285,4 +297,5 @@ export async function desktopRequest<T>(body: object): Promise<T> {
 }
 export const client = createGuiToolsClient(desktopRequest);
 Object.assign(window, { desktopTest });
+window.desktopTakeoverTest = createTakeoverFixture(host);
 window.addEventListener('beforeunload', () => host.release());

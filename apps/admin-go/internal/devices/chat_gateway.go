@@ -146,6 +146,12 @@ func (g *ChatGateway) receive(client *peer, state *chatConnection, message platf
 		if message["type"] == "renew-auth" {
 			return g.renewAuthentication(client, state, message)
 		}
+		if state.identity.role == "lounge" && message["type"] == "history-generations" {
+			return g.loungeGenerations(client, *state.identity, message)
+		}
+		if state.identity.role == "lounge" && message["type"] == "attachment-connect" {
+			return g.connectAttachment(client, *state.identity, message)
+		}
 		return g.sessions.route(client, message)
 	}
 	identity, err := g.authenticate(message)
@@ -186,6 +192,9 @@ func (g *ChatGateway) authenticate(message platform.JSON) (chatIdentity, error) 
 		return identity, errors.New("invalid authentication")
 	}
 	role, _ := message["role"].(string)
+	if role == "lounge" {
+		return g.authenticateLounge(token, message)
+	}
 	if role != "desktop" && role != "mobile" {
 		return identity, errors.New("invalid role")
 	}
@@ -325,6 +334,7 @@ func sendChatPolicy(client *peer, policy map[string]interface{}) {
 }
 
 type Runtime struct {
+	stopLounge      func()
 	stopPush        func()
 	stopUpdateCache func()
 	control         *ControlGateway
@@ -332,6 +342,9 @@ type Runtime struct {
 }
 
 func (runtime *Runtime) Close() error {
+	if runtime.stopLounge != nil {
+		runtime.stopLounge()
+	}
 	if runtime.stopUpdateCache != nil {
 		runtime.stopUpdateCache()
 	}

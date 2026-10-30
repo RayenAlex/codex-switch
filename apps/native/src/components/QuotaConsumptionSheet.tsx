@@ -25,21 +25,21 @@ function maskEmail(email: string) {
 
 function remainingLabel(account: AccountSummary) {
   const remaining = account.usage.primary?.remainingPercent;
-  return typeof remaining === 'number' ? t("主额度剩余 {value1}%", { value1: Math.round(remaining) }) : t("主额度暂不可用");
+  return typeof remaining === 'number' ? t("client.mobile.primaryQuotaRemaining", { value1: Math.round(remaining) }) : t("client.mobile.primaryQuotaUnavailable");
 }
 
 function resetLabel(account: AccountSummary, now: number) {
   const timestamp = account.usage.primary?.resetsAt;
-  if (!timestamp) return t("主额度重置时间暂不可用");
+  if (!timestamp) return t("client.mobile.primaryQuotaResetTimeUnavailable");
   const resetAt = new Date(timestamp * 1000);
-  if (Number.isNaN(resetAt.getTime())) return t("主额度重置时间暂不可用");
+  if (Number.isNaN(resetAt.getTime())) return t("client.mobile.primaryQuotaResetTimeUnavailable");
   const milliseconds = resetAt.getTime() - now;
-  if (milliseconds <= 0) return t("主额度即将重置");
+  if (milliseconds <= 0) return t("client.mobile.primaryQuotaResetsSoon");
   const totalMinutes = Math.floor(milliseconds / 60_000);
   const days = Math.floor(totalMinutes / (60 * 24));
   const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
   const minutes = totalMinutes % 60;
-  return t("主额度约 {value1}{value2} 小时 {value3} 分后重置", { value1: days ? t("{days} 天 ", { days }) : '', value2: hours, value3: minutes });
+  return t("client.mobile.primaryQuotaResetsInAboutHrMin", { value1: days ? t("client.shared.d", { days }) : '', value2: hours, value3: minutes });
 }
 
 export function QuotaConsumptionSheet({
@@ -95,14 +95,14 @@ export function QuotaConsumptionSheet({
   return <BottomSheet fullWidthContent
     visible={visible}
     tall
-    title={t("选择消耗额度的账号")}
-    subtitle={t("已选择 {value1} / {value2} 个账号", { value1: selectedCount, value2: accounts.length })}
+    title={t("client.mobile.chooseAccountsToConsumeQuota")}
+    subtitle={t("client.mobile.selectedAccounts", { value1: selectedCount, value2: accounts.length })}
     onClose={onClose}
     dismissible={!busy}
     actions={[
-      { label: t("取消"), onPress: onClose, disabled: busy },
+      { label: t("client.accounts.cancel"), onPress: onClose, disabled: busy },
       {
-        label: selectedCount ? t("消耗所选 {value1} 个账号", { value1: selectedCount }) : t("请先选择账号"),
+        label: selectedCount ? t("client.mobile.consumeQuotaForSelectedAccounts", { value1: selectedCount }) : t("client.mobile.selectAnAccountFirst"),
         tone: 'danger',
         onPress: confirm,
         loading: busy,
@@ -112,8 +112,8 @@ export function QuotaConsumptionSheet({
   >
     <SheetInset>
       <View style={styles.warning}>
-        <Text style={styles.warningTitle}>{t("此操作会产生真实用量")}</Text>
-        <Text style={styles.warningText}>{t("手机将直接向所选账号发送“今天天气如何？”，完成后自动刷新用量。")}</Text>
+        <Text style={styles.warningTitle}>{t("client.mobile.thisActionUsesRealQuota")}</Text>
+        <Text style={styles.warningText}>{t("client.mobile.yourPhoneSendsAShortWeatherQuestionThroughTheSelected")}</Text>
       </View>
       <Pressable
         accessibilityRole="checkbox"
@@ -122,7 +122,7 @@ export function QuotaConsumptionSheet({
         onPress={() => setSelectedIds(allSelected ? [] : accountIds)}
         style={({ pressed }) => [styles.selectAllRow, pressed && styles.pressed]}
       >
-        <Text style={styles.selectAllText}>{allSelected ? t("取消全选") : t("全选可用账号")}</Text>
+        <Text style={styles.selectAllText}>{allSelected ? t("client.mobile.deselectAll") : t("client.mobile.selectAllAvailableAccounts")}</Text>
         <View style={[styles.checkbox, allSelected && styles.checkboxChecked]}>
           <Text style={styles.checkboxText}>{allSelected ? '✓' : ''}</Text>
         </View>

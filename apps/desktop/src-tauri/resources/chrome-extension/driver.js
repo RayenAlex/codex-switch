@@ -19,7 +19,7 @@ async function run(context, args, operation, { prepareInput = true, trackNewTabs
   const owner = connectionOwner(context);
   const connection = await acquireConnection(target, context.signal, owner).catch(() => {
     assertRunning(context.signal);
-    throw new Error(t('tabConnectFailed', '无法连接这个标签页。请关闭其开发者工具或其他浏览器控制工具后重试。'));
+    throw new Error(t('tabConnectFailed'));
   });
   // Detaching also releases commands held open by a page dialog when the user cancels.
   const abort = () => { void finishConnection(target, owner); };
@@ -75,7 +75,7 @@ export async function pageCall(driver, ref, functionDeclaration, args = []) {
   try {
     const response = await driver.send('Runtime.callFunctionOn', { objectId, functionDeclaration,
       arguments: args.map((value) => ({ value })), returnByValue: true, awaitPromise: true }, ref.frameId);
-    if (response.exceptionDetails) throw new Error(t('elementActionFailed', '页面内容已变化，或该元素不能完成此操作。请重新读取页面。'));
+    if (response.exceptionDetails) throw new Error(t('elementActionFailed'));
     return response.result.value;
   } finally {
     await driver.send('Runtime.releaseObject', { objectId }, ref.frameId).catch(() => {});

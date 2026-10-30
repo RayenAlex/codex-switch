@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { getCurrentWebview, type DragDropEvent } from '@tauri-apps/api/webview';
 import { isDesktopApp } from '../../api/backend';
-import { guiText } from '../../i18n/guiText';
+import { uiText } from "../../i18n/uiText";
 import { guiApi } from './api';
 import { droppedReferences } from './fileDrop';
 
@@ -51,7 +51,7 @@ export function useProjectFolderDrop(options: Options) {
           if (!paths.length) return;
         }
         if (paths.length !== 1 || !paths[0]?.trim()) {
-          callbacks.current.onError(new Error(guiText('请一次拖入一个文件夹。')));
+          callbacks.current.onError(new Error(uiText("client.composer.pleaseDropOneFolderAtATime")));
           return;
         }
         // Reuse the host's asynchronous directory validation; regular files are rejected.
@@ -61,7 +61,7 @@ export function useProjectFolderDrop(options: Options) {
         if (!disposed && callbacks.current.enabled) callbacks.current.onFolder(result.directory);
       } catch {
         if (!disposed && callbacks.current.enabled) callbacks.current.onError(
-          new Error(guiText('无法使用此文件夹，请选择可访问的文件夹。')));
+          new Error(uiText("client.composer.thisFolderIsUnavailablePleaseChooseAnAccessibleFolder")));
       } finally {
         pending = false;
         if (!disposed) setReading(false);
@@ -79,7 +79,7 @@ export function useProjectFolderDrop(options: Options) {
       if (disposed) cleanup();
       else unlisten = cleanup;
     }).catch(() => {
-      if (!disposed) callbacks.current.onError(new Error(guiText('拖放暂不可用，请点击选择文件夹。')));
+      if (!disposed) callbacks.current.onError(new Error(uiText("client.composer.dragAndDropIsUnavailableClickToChooseAFolder")));
     });
     return () => { disposed = true; unlisten?.(); };
   }, [enabled, target]);

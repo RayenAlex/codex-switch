@@ -13,7 +13,7 @@ export function ModelRefreshButton({ ready, refreshModels, compact = false }: {
     setRefreshing(true);
     try { await refreshModels(); } finally { setRefreshing(false); }
   };
-  const label = t(refreshing ? '正在刷新模型…' : '刷新模型');
+  const label = t(refreshing ? "client.mobile.refreshingModels" : "client.mobile.refreshModels");
   return <Tooltip title={label} styles={{ root: { maxWidth: 400 } }}>
     {compact ? <Button type="text" size="small" className="model-refresh-button-compact"
       icon={<RefreshCw size={14} aria-hidden="true" />} loading={refreshing} disabled={!ready || refreshing}

@@ -66,7 +66,9 @@ it('isolates concurrent P2P and Relay previews on the same host', async () => {
 });
 
 it.each(['send', 'steer'])('uses the host connection for %s upload limits and ignores forged provenance', async (operation) => {
-  vi.mocked(guiApi.request).mockResolvedValue({});
+  vi.mocked(guiApi.request).mockImplementation(async request => request.operation === 'send'
+    ? { turn: { id: 'turn', status: 'inProgress', items: [] } }
+    : { thread: { id: 'chat', cwd: '', preview: '', updatedAt: 1, turns: [] } });
   const body = { operation, threadId: 'chat', turnId: 'turn', text: '', images: [], transferMode: 'direct',
     attachments: [{ kind: 'file', name: 'large.txt', path: '', data: Buffer.alloc(4 * MIB).toString('base64') }] };
   const operations = new ChatOperations();

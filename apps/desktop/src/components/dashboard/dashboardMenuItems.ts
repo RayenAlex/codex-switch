@@ -1,6 +1,7 @@
 import type { MenuProps } from "antd";
 import type { Translate } from "../../i18n";
 import type { MenuSearchItem } from "../MenuSearchModal";
+import { displayText } from "../../../../../shared/localization/messages";
 
 export interface DashboardMenuItems {
   cloud: MenuProps["items"];
@@ -27,7 +28,7 @@ function fileItems(t: Translate, desktopApp: boolean): MenuProps["items"] {
   ];
 }
 
-function navigateItems(t: Translate): MenuProps["items"] {
+function navigateItems(t: Translate, authenticated: boolean): MenuProps["items"] {
   return [
     { key: "codex-gui", label: t("nav.codexGui") },
     { key: "account-management", label: t("nav.accounts"), children: [
@@ -41,6 +42,7 @@ function navigateItems(t: Translate): MenuProps["items"] {
     { key: "skills", label: t("nav.skills") },
     { key: "coze", label: "Coze" },
     { key: "sessions", label: t("nav.sessions") },
+    ...(authenticated ? [{ key: "lounge", label: displayText("client.lounge.title") }] : []),
     { key: "downloads", label: t("downloads.title") },
     { key: "log-diagnostics", label: t("logDiagnostics.title") },
     { key: "totp", label: t("totp.action") },
@@ -118,6 +120,7 @@ function searchItems(t: Translate, authenticated: boolean, desktopApp: boolean):
     item("skills", t("nav.skills"), t("windowMenu.navigate")),
     item("coze", "Coze", t("windowMenu.navigate")),
     item("sessions", t("nav.sessions"), t("windowMenu.navigate")),
+    ...(authenticated ? [item("lounge", displayText("client.lounge.title"), t("windowMenu.navigate"))] : []),
     item("downloads", t("downloads.title"), t("windowMenu.navigate")),
     item("log-diagnostics", t("logDiagnostics.title"), t("windowMenu.navigate")),
     item("totp", t("totp.action"), t("windowMenu.navigate")),
@@ -148,7 +151,7 @@ export function buildDashboardMenuItems(t: Translate, authenticated: boolean, de
     cloud: cloudItems(t, authenticated),
     file: fileItems(t, desktopApp),
     help: helpItems(t),
-    navigate: navigateItems(t),
+    navigate: navigateItems(t, authenticated),
     search: searchItems(t, authenticated, desktopApp),
     tools: toolItems(t),
     view: viewItems(t),

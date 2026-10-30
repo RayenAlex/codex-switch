@@ -47,7 +47,7 @@ it('hit-tests scaled native coordinates and only accepts drops inside the compos
   await act(async () => listener({ type: 'drop', paths: ['outside'], position: { x: 10, y: 10 } }));
   expect(drop.dragging).toBe(false); expect(addPaths).not.toHaveBeenCalled();
   await act(async () => nativeDrop());
-  expect(addPaths).toHaveBeenCalledWith(['C:\\notes.txt'], expect.any(Function));
+  expect(addPaths).toHaveBeenCalledWith(['C:\\notes.txt'], expect.any(Function), host.firstElementChild);
   expect(drop.reading).toBe(false);
 });
 
@@ -76,7 +76,7 @@ it('accepts browser files once and prevents the browser from navigating to them'
   await act(async () => root.render(<Fixture native={false} />));
   const file = new File(['document'], 'notes.txt');
   await act(async () => expect(browserEvent('drop', [file]).defaultPrevented).toBe(true));
-  expect(addFiles).toHaveBeenCalledWith([file]);
+  expect(addFiles).toHaveBeenCalledWith([file], host.querySelector('span'));
   expect(stop).toHaveBeenCalledOnce();
 });
 

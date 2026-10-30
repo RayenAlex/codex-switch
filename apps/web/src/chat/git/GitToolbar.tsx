@@ -1,87 +1,77 @@
+import { displayText } from '../../i18n/index';
 import { useState } from 'react';
-import { Tooltip } from 'antd';
-import { GitBranch, ChevronDown, RefreshCw, X, Download, ArrowDown, ArrowUp, ArrowDownUp, Undo2 } from 'lucide-react';
+import { Popover, Tooltip, type PopoverProps } from 'antd';
+import { GitBranch, ChevronDown, RefreshCw, Download, ArrowDown, ArrowUp, ArrowDownUp, Undo2 } from 'lucide-react';
 import type { RemoteGit } from '../../../../../shared/remote-chat/useRemoteGit';
 import { GIT_ACTIONS, gitSyncCounts } from '../../../../../shared/remote-chat/gitActions';
 import type { GitAction } from '../../../../../shared/remote-chat/gitTypes';
+import { GitBranchMenu, GitSyncMenu } from './GitToolbarMenu';
 import { t } from '../../i18n';
 
 const ACTION_ICONS = { fetch: Download, pull: ArrowDown, update: ArrowDownUp, push: ArrowUp };
+const MENU_POPOVER_PROPS: PopoverProps = {
+  trigger: 'click', arrow: false, destroyOnHidden: true,
+  // Edge-aligned popovers must also shift when neither side fits inside a narrow drawer.
+  align: { offset: [0, 4], overflow: { adjustX: true, adjustY: true, shiftX: true } },
+  rootClassName: 'git-toolbar-popover',
+  // Keep the popup within the Git drawer so it inherits the workspace theme and visibility.
+  getPopupContainer: trigger => trigger.closest<HTMLElement>('.git-toolbar-container') ?? trigger,
+  styles: { body: { padding: 0, background: 'transparent', boxShadow: 'none' } },
+};
+type ToolbarMenu = 'branches' | Exclude<GitAction, 'switch'>;
 
 export function GitToolbar({ panel, connected }: { panel: RemoteGit; connected: boolean }) {
-  const [menu, setMenu] = useState<'branches' | 'actions' | null>(null);
+  const [menu, setMenu] = useState<ToolbarMenu | null>(null);
   const [query, setQuery] = useState('');
-  const [action, setAction] = useState<Exclude<GitAction, 'switch'>>('update');
   const disabled = panel.busy || !connected || !panel.changes;
-  const repository = panel.repository;
-  const counts = gitSyncCounts(repository);
-  const branch = panel.changes?.branch ?? t('分离的 HEAD');
-  const selection = repository?.upstream ? `${branch} → ${repository.upstream}` : branch;
-  const run = () => { setMenu(null); void panel.action(action); };
-  return <div className="git-toolbar-container">
+  const counts = gitSyncCounts(panel.repository);
+  const close = () => setMenu(null);
+  const changeMenu = (target: ToolbarMenu, open: boolean) => {
+    setMenu(current => open ? target : current === target ? null : current);
+  };
+  return <div className="git-toolbar-container" onKeyDown={event => {
+    if (event.key === 'Escape' && menu) { event.stopPropagation(); close(); }
+  }}>
     <div className="git-toolbar">
-      <button className="git-branch" type="button" aria-label={t('切换分支')} disabled={disabled}
-        aria-expanded={menu === 'branches'} onClick={() => setMenu(menu === 'branches' ? null : 'branches')}>
-        <GitBranch size={16} /><span>{branch}</span><ChevronDown size={14} />
-      </button>
+      <div className="git-branch-slot">
+        <Popover {...MENU_POPOVER_PROPS} placement="bottomLeft" open={menu === 'branches'}
+          onOpenChange={open => changeMenu('branches', open)}
+          content={<GitBranchMenu panel={panel} disabled={disabled} onClose={close}
+            query={query} onQueryChange={setQuery} />}>
+          <button className="git-branch" type="button" aria-label={t('client.git.switchBranch')} disabled={disabled}
+            aria-expanded={menu === 'branches'}>
+            <GitBranch size={16} /><span>{panel.changes?.branch ?? t('client.git.detachedHead')}</span>
+            <ChevronDown size={14} />
+          </button>
+        </Popover>
+      </div>
       <div className="git-toolbar-actions">
         {GIT_ACTIONS.map(item => {
           const Icon = ACTION_ICONS[item.action];
           const count = counts[item.action];
-          return <Tooltip key={item.action} title={t(item.label)} styles={{ root: { maxWidth: 400 } }}>
-            <button type="button" aria-label={t(item.label)} disabled={disabled}
-              className={count !== undefined ? 'git-counted-action' : undefined}
-              aria-description={count !== undefined ? t('待同步 {count} 个提交', { count }) : undefined}
-              aria-expanded={menu === 'actions' && action === item.action}
-              onClick={() => {
-                setAction(item.action); setMenu(menu === 'actions' && action === item.action ? null : 'actions');
-              }}><Icon size={18} />
-              {count !== undefined && <span className="git-action-count" aria-hidden="true">{count}</span>}</button>
-          </Tooltip>;
+          const open = menu === item.action;
+          return <Popover key={item.action} {...MENU_POPOVER_PROPS} placement="bottomRight" open={open}
+            onOpenChange={value => changeMenu(item.action, value)}
+            content={<GitSyncMenu panel={panel} disabled={disabled} onClose={close} action={item.action} />}>
+            <Tooltip title={open ? null : displayText(item.label)} styles={{ root: { maxWidth: 400 } }}>
+              <button type="button" aria-label={displayText(item.label)} disabled={disabled}
+                className={count !== undefined ? 'git-counted-action' : undefined}
+                aria-description={count !== undefined ? t('client.git.commitsToSync', { count }) : undefined}
+                aria-expanded={open}><Icon size={18} />
+                {count !== undefined && <span className="git-action-count" aria-hidden="true">{count}</span>}</button>
+            </Tooltip>
+          </Popover>;
         })}
-        <Tooltip title={t('回退所选文件')} styles={{ root: { maxWidth: 400 } }}>
-          <button type="button" aria-label={t('回退所选文件')}
+        <Tooltip title={t('client.git.rollBackSelectedFiles')} styles={{ root: { maxWidth: 400 } }}>
+          <button type="button" aria-label={t('client.git.rollBackSelectedFiles')}
             disabled={disabled || !Object.keys(panel.selected).length || panel.changes?.files.some(file => file.conflict)}
-            onClick={() => { setMenu(null); panel.requestFileAction('rollback'); }}><Undo2 size={18} /></button>
+            onClick={() => { close(); panel.requestFileAction('rollback'); }}><Undo2 size={18} /></button>
         </Tooltip>
-        <Tooltip title={t('刷新 Git')} styles={{ root: { maxWidth: 400 } }}>
-          <button type="button" aria-label={t('刷新 Git')} disabled={disabled}
+        <Tooltip title={t('client.git.refreshGit')} styles={{ root: { maxWidth: 400 } }}>
+          <button type="button" aria-label={t('client.git.refreshGit')} disabled={disabled}
             onClick={() => { panel.setDetail(null); void panel.refresh(); }}><RefreshCw size={18} /></button>
         </Tooltip>
       </div>
     </div>
-    {menu && <div className="git-menu" role="region" aria-label={t(menu === 'branches' ? '切换分支' : '同步项目')}>
-      <div className="git-menu-heading"><strong>{t(menu === 'branches' ? '切换分支' : '同步项目')}</strong>
-        <button type="button" aria-label={t('关闭菜单')} onClick={() => setMenu(null)}><X size={16} /></button></div>
-      {menu === 'branches' ? <>
-        <input aria-label={t('搜索分支')} placeholder={t('搜索分支')} value={query}
-          onChange={event => setQuery(event.target.value)} />
-        <div className="git-branch-list">{repository?.branches.filter(branch => branch.name.includes(query))
-          .map(branch => <button key={branch.ref} type="button"
-            disabled={disabled || branch.occupied || (!branch.remote && branch.name === panel.changes?.branch)}
-            onClick={() => { setMenu(null); void panel.action('switch', branch.ref); }}>
-            <span>{branch.name}</span><small>{t(branch.occupied ? '其他工作树使用中' : branch.remote ? '远程' : '本地')}
-              {!branch.remote && branch.name === panel.changes?.branch ? ' ✓' : ''}</small></button>)}</div>
-        <p className="git-current-branch">{t('当前选择：{branch}', { branch: selection })}</p>
-      </> : <>
-        <strong>{t(GIT_ACTIONS.find(item => item.action === action)!.label)}</strong>
-        <p>{t(GIT_ACTIONS.find(item => item.action === action)!.hint)}</p>
-        <p>{t('当前分支')}：{panel.changes?.branch ?? 'HEAD'}<br />
-          {t('跟踪分支')}：{repository?.upstream ?? t('未设置')}</p>
-        {action === 'pull' && <>
-          <label className="git-strategy">{t('整合方式')}<select aria-label={t('整合方式')} value={panel.strategy}
-            onChange={event => panel.setStrategy(event.target.value === 'rebase' ? 'rebase' : 'merge')}>
-            <option value="merge">{t('合并 Merge')}</option><option value="rebase">{t('变基 Rebase')}</option>
-          </select></label>
-        </>}
-        {(action === 'pull' || action === 'update') && !!panel.changes?.files.length
-          && <p>{t('请先提交本地改动，再拉取或更新项目。')}</p>}
-        {!repository?.remotes.length && <p>{t('项目还没有远程仓库，请先在电脑上添加。')}</p>}
-        <button type="button" className="git-submit" disabled={disabled || !repository?.remotes.length
-          || (action !== 'fetch' && !repository.upstream)
-          || ((action === 'pull' || action === 'update') && !!panel.changes?.files.length)} onClick={run}>
-          {t('执行 {action}', { action: t(GIT_ACTIONS.find(item => item.action === action)!.label) })}</button>
-      </>}
-    </div>}
   </div>;
 }

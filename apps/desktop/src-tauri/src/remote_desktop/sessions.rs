@@ -7,6 +7,18 @@ use std::{
 };
 
 const LEASE: Duration = Duration::from_secs(15);
+pub(super) struct Options {
+    pub expires_at: Option<u64>,
+    pub capture_group: Option<String>,
+    #[cfg_attr(
+        not(windows),
+        expect(
+            dead_code,
+            reason = "Security settings are currently supported on Windows hosts."
+        )
+    )]
+    pub settings_root: std::path::PathBuf,
+}
 pub(super) static SESSIONS: OnceLock<Mutex<HashMap<String, Session>>> = OnceLock::new();
 
 // Heartbeats must remain independent of input desktop availability during lock transitions.
@@ -47,10 +59,10 @@ fn may_join(sessions: &HashMap<String, Session>, group: Option<&str>, display: &
 pub(super) fn begin_session(
     display: super::monitors::Monitor,
     permissions: super::permissions::Permissions,
-    expires_at: Option<u64>,
-    capture_group: Option<String>,
+    options: Options,
 ) -> Result<String> {
-    let deadline = super::lease::deadline(expires_at)?;
+    let deadline = super::lease::deadline(options.expires_at)?;
+    let capture_group = options.capture_group;
     let mut guard = SESSIONS
         .get_or_init(Default::default)
         .lock()
@@ -71,8 +83,8 @@ pub(super) fn begin_session(
     let security = guard
         .values()
         .find(|session| capture_group.is_some() && session.capture_group == capture_group)
-        .map(|session| session.security.clone())
-        .unwrap_or_default();
+        .map(|session| Ok(session.security.clone()))
+        .unwrap_or_else(|| super::security::Guard::load(&options.settings_root))?;
     guard.insert(
         id.clone(),
         Session {

@@ -1,5 +1,6 @@
 import { guiApi } from './api';
-import { conversation, reduceEvent } from './events';
+import { reduceEvent } from './events';
+import { conversationSnapshot as conversation } from './conversationSnapshot';
 import { trackProcessingApproval } from './processingApprovals';
 import type { GuiEvent, GuiState, Thread } from './types';
 

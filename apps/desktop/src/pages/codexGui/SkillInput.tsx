@@ -1,4 +1,4 @@
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { useGuiLanguage } from "../../i18n/useGuiLanguage";
 import { forwardRef, useId, useImperativeHandle, useLayoutEffect, useRef, useState,
   type ClipboardEvent, type KeyboardEvent } from "react";
@@ -68,16 +68,16 @@ export const SkillInput = forwardRef<SkillInputHandle, {
   const cozeOptions: ComposerOption[] = coze.items
     .filter((item) => `${item.name} ${item.description}`.toLocaleLowerCase().includes(query))
     .map((item) => ({ kind: "coze", key: item.id, label: item.name,
-      description: item.description || guiText("已发布的 Coze 内容"), enabled: true,
+      description: item.description || uiText("client.desktopComposerExtras.publishedInCoze"), enabled: true,
       command: { enabled: true, run: () => onCoze?.({ kind: "coze", name: item.name, path: `coze://${item.id}` }) } }));
   let options: ComposerOption[] = composerOptions(catalog.skills, query, compact, goal);
   if (isConversation) options = conversationCandidates({ remote: candidates.threads,
     known: conversations?.threads ?? [], conversations: conversations?.conversations ?? {},
     currentId: conversations?.selected ?? null, query }).map((thread) => ({ kind: "conversation", key: thread.id,
       label: conversationReference(thread).name, enabled: true,
-      description: guiText("{value1} · {value2}", {
-        value1: thread.status?.type === "active" ? guiText("运行中") : guiText("空闲"),
-        value2: thread.cwd || guiText("未选择项目") }),
+      description: uiText("client.interface.message.7c639b", {
+        value1: thread.status?.type === "active" ? uiText("client.taskReview.running") : uiText("client.chat.idle"),
+        value2: thread.cwd || uiText("client.chat.noProjectSelected") }),
       command: { enabled: true, run: () => onConversation?.(conversationReference(thread)) },
     }));
   if (isCoze) options = cozeOptions;
@@ -176,10 +176,10 @@ export const SkillInput = forwardRef<SkillInputHandle, {
     {ghost.text && <div className={styles.suggestion} data-testid="next-prompt-suggestion">
       <span>{ghost.text}</span>
       <button className={styles.suggestionKey} type="button"
-        aria-label={guiText('填入建议')} aria-keyshortcuts="Tab" tabIndex={-1}
+        aria-label={uiText("client.chat.useSuggestion")} aria-keyshortcuts="Tab" tabIndex={-1}
         onPointerDown={event => event.preventDefault()} onClick={ghost.accept}><kbd>Tab</kbd></button>
     </div>}
-    <div ref={editor} role="textbox" aria-label={editing ? guiText("编辑消息内容") : guiText("消息")}
+    <div ref={editor} role="textbox" aria-label={editing ? uiText("client.conversation.editMessage") : uiText("client.conversation.message")}
       aria-multiline="true" aria-disabled={disabled}
       aria-autocomplete="list" aria-controls={open ? listId : undefined}
       aria-activedescendant={open && options.length ? `${listId}-${selectedIndex}` : undefined}

@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { ArrowLeft, ChevronRight, Download, Folder } from 'lucide-react';
 import type { DownloadBrowse } from '../../../../shared/remote-chat/downloads';
@@ -45,24 +46,24 @@ export function DownloadBrowser({ connection, scope, back }: {
   const goBack = () => directories.length > 1 ? setDirectories(current => current.slice(0, -1)) : back();
   return <section className="downloads-page">
     <header className="downloads-header">
-      <button type="button" className="download-icon-button" aria-label={t('返回上一级')} onClick={goBack}>
-        <ArrowLeft size={22} /></button><h2>{t(scope === 'computer' ? '此电脑' : '当前项目')}</h2>
-      <button type="button" className="download-button" onClick={back}>{t('下载列表')}</button>
+      <button type="button" className="download-icon-button" aria-label={t("client.downloads.goBack")} onClick={goBack}>
+        <ArrowLeft size={22} /></button><h2>{t(scope === 'computer' ? "client.downloads.thisComputer" : "client.downloads.currentProject")}</h2>
+      <button type="button" className="download-button" onClick={back}>{t("client.downloads.downloadList")}</button>
     </header>
     <div className="download-card">
       <p className="download-path">{result?.directory || directory || connection.deviceName}</p>
-      {!ready && <p role="status">{t('请连接这台电脑后浏览文件。')}</p>}
-      {notice && <p role="status" className="download-notice">{t(notice)}</p>}
-      {error && <p role="alert" className="download-notice">{t(error)}{' '}
-        <button type="button" onClick={() => setRevision(value => value + 1)}>{t('重试')}</button></p>}
-      {loading && <p role="status">{t('正在读取文件夹…')}</p>}
-      {!loading && ready && !error && result?.entries.length === 0 && <p>{t('此文件夹没有文件。')}</p>}
+      {!ready && <p role="status">{t("client.downloads.connectToThisComputerToBrowseItsFiles")}</p>}
+      {notice && <p role="status" className="download-notice">{displayError(notice)}</p>}
+      {error && <p role="alert" className="download-notice">{displayError(error)}{' '}
+        <button type="button" onClick={() => setRevision(value => value + 1)}>{t("client.terminal.retry")}</button></p>}
+      {loading && <p role="status">{t("client.downloads.readingFolder")}</p>}
+      {!loading && ready && !error && result?.entries.length === 0 && <p>{t("client.downloads.thisFolderIsEmpty")}</p>}
       {result?.entries.map(file => <button type="button" className="download-file" key={file.path}
         disabled={!ready} onClick={event => { void choose(file, event); }}
-        aria-label={t(file.directory ? '打开文件夹：{name}' : '下载：{name}', { name: file.name })}>
+        aria-label={t(file.directory ? "client.downloads.openFolder" : "client.downloads.download", { name: file.name })}>
         {file.directory ? <Folder size={21} /> : <Download size={21} />}<span>{file.name}</span>
         <ChevronRight size={17} /></button>)}
-      {result?.truncated && <p>{t('文件较多，仅显示前 500 项。')}</p>}
+      {result?.truncated && <p>{t("client.downloads.onlyTheFirst500EntriesAreShown")}</p>}
     </div>
   </section>;
 }

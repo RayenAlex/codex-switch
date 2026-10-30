@@ -1,4 +1,5 @@
 import { createThemedStyles } from '../../theme/styles';
+import { textMetrics } from '../../theme/text';
 import { Platform,  } from 'react-native';
 import { palette } from '../styles';
 import { GRAPH_ROW_HEIGHT } from '../../../../../shared/remote-chat/gitGraph';
@@ -17,7 +18,8 @@ export const useGitStyles = createThemedStyles((color) => ({
   modeButton: { paddingHorizontal: 9, minHeight: 30, justifyContent: 'center', borderRadius: 6 },
   activeMode: { backgroundColor: color('#dcefe6', 'elevated') },
   activeViewMode: { backgroundColor: color('#fff', 'surface') },
-  areaTitle: { fontSize: 12, fontWeight: '700', color: color(palette.ink, 'ink'), paddingVertical: 8 },
+  areaTitle: { ...textMetrics(12, 18), flexShrink: 1,
+    fontWeight: '700', color: color(palette.ink, 'ink'), paddingVertical: 8 },
   areaRow: { marginTop: 4, backgroundColor: color('#f8faf9', 'canvas') },
   areaHeading: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   areaDot: { width: 5, height: 5, borderRadius: 3 },
@@ -39,7 +41,7 @@ export const useGitStyles = createThemedStyles((color) => ({
   notice: { maxWidth: 400, marginHorizontal: 16, marginVertical: 8,
     fontSize: 12, lineHeight: 18, color: color(palette.muted, 'muted') },
   error: { maxWidth: 400, marginHorizontal: 16, marginVertical: 8,
-    fontSize: 12, lineHeight: 18, color: color(palette.danger, 'danger') },
+    ...textMetrics(12, 18), color: color(palette.danger, 'danger') },
   tabs: { flexDirection: 'row', marginHorizontal: 16, padding: 3, gap: 4,
     backgroundColor: color('#f2f5f3', 'canvas'), borderRadius: 10 },
   tab: { flex: 1, minHeight: 38, justifyContent: 'center', alignItems: 'center', borderRadius: 8 },
@@ -82,7 +84,7 @@ export const useGitStyles = createThemedStyles((color) => ({
   commitHeading: { paddingHorizontal: 16, paddingVertical: 12, gap: 6 },
   commitFile: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 58,
     paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: color('#eef2ef', 'border') },
-  commitStatus: { fontSize: 10, lineHeight: 16, paddingHorizontal: 6, paddingVertical: 2,
+  commitStatus: { ...textMetrics(10, 16), paddingHorizontal: 6,
     borderRadius: 5, overflow: 'hidden' },
   diff: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 11, lineHeight: 18,
     color: color(palette.ink, 'ink'), padding: 12 },

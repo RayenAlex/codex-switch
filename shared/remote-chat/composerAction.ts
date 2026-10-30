@@ -8,5 +8,5 @@ export function composerAction(state: { running: boolean; interrupted: boolean; 
 }
 
 export const COMPOSER_ACTION_LABELS: Record<ComposerAction, string> = {
-  send: '发送消息', pause: '暂停生成', continue: '继续生成',
+  send: "client.shared.sendMessage", pause: "client.shared.pauseGeneration", continue: "client.shared.continueGeneration",
 };

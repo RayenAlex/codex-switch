@@ -15,7 +15,7 @@
 .file-download-detail {
   margin: 0; color: var(--muted, #718079); font-size: 12px; line-height: 1.6; font-variant-numeric: tabular-nums;
 }
-.file-download-actions { display: flex; justify-content: flex-end; }
+.file-download-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 .file-download-action {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px;
   padding: 8px 16px; border: 1px solid transparent; border-radius: 9px;

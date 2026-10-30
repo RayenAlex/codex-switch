@@ -1,4 +1,4 @@
-import { features } from '../content/features';
+import { features } from '@remoteai/i18n/website-content/features';
 import { languages, pagePath } from './site';
 
 export const paths = [

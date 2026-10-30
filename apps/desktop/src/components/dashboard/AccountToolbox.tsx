@@ -7,7 +7,8 @@ import styles from "./AccountToolbox.module.less";
 
 interface AccountToolboxProps {
   children?: ReactNode;
-  navigation?: { page: DashboardPage; onPageChange: (page: DashboardPage) => void; downloadOwner?: string };
+  navigation?: { page: DashboardPage; onPageChange: (page: DashboardPage) => void;
+    downloadOwner?: string; loungeUnread?: number; loungeAvailable?: boolean };
   onSystemPrompts?: () => void;
   t: Translate;
 }
@@ -20,8 +21,8 @@ export function AccountToolbox({ children, navigation, onSystemPrompts, t }: Acc
 
   return (
     <Popover open={open} onOpenChange={setOpen} placement="bottomRight" arrow={false}
-      trigger={["hover", "click"]} mouseLeaveDelay={0.2}
-      styles={{ root: { maxWidth: 400 }, body: { padding: 0, borderRadius: 0 } }}
+      trigger="click"
+      styles={{ root: { maxWidth: 400 }, body: { padding: 0, overflow: "hidden" } }}
       content={(
         <div id={panelId} className={styles.actions} role="group" aria-label={t("actions.toolbox")}
           onKeyDown={(event) => {
@@ -32,6 +33,8 @@ export function AccountToolbox({ children, navigation, onSystemPrompts, t }: Acc
           }}>
           {navigation && <DashboardNavigation page={navigation.page} t={t} variant="toolbox"
             downloadOwner={navigation.downloadOwner}
+            loungeUnread={navigation.loungeUnread}
+            loungeAvailable={navigation.loungeAvailable}
             onPageChange={(page) => {
               navigation.onPageChange(page);
               setOpen(false);

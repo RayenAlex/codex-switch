@@ -8,6 +8,7 @@ import { gitErrorText, useGitRequests } from './useGitRequests';
 import { readGitSnapshot, refreshGitHistory } from './gitSnapshot';
 import { useGitRevisionActions } from './useGitRevisionActions';
 import { useGitCommit } from './useGitCommit';
+import { useGitConflicts } from './useGitConflicts';
 
 export type GitDetail = { kind: 'files'; commit: GitCommit }
   | { kind: 'diff'; path: string; commit?: GitCommit; title: string };
@@ -39,12 +40,14 @@ export function useRemoteGit({ client, cwd, active, connected, refreshInterval }
     setSelected(previous => Object.fromEntries(next.files.filter(file =>
       !file.conflict && previous[file.path] === file.version).map(file => [file.path, file.version])));
   }, [client, cwd, scope]);
-  const { busy, error, notice, setNotice, run, refresh } = useGitRequests({
+  const { busy, error, notice, setNotice, run, refresh, clearActionError } = useGitRequests({
     scope, enabled: active && connected && !!cwd, load, refreshInterval,
   });
   const submission = useGitCommit({ client, cwd, scope, changes, repository, selected,
     enabled: active && connected, busy, run, load, setNotice, isCurrent: () => current.current === scope,
     onCommitted: () => { setSelected({}); setDetail(null); } });
+  const conflicts = useGitConflicts({ client, cwd, scope, changes, busy, run, load, setNotice,
+    enabled: active && connected, isCurrent: () => current.current === scope });
   const revisions = useGitRevisionActions({ client, cwd, scope, changes, connected, busy, run, load, setNotice,
     isCurrent: () => current.current === scope, onDone: () => {
       setDetail(null); setSelected({}); setHistory({ commits: [], hasMore: false });
@@ -65,7 +68,7 @@ export function useRemoteGit({ client, cwd, active, connected, refreshInterval }
     if (!changes || busy || !connected || changes.files.some(item => item.conflict)) return;
     const targets = target ?? Object.entries(selected).map(([path, version]) => ({ path, version }));
     const files = (Array.isArray(targets) ? targets : [targets]).map(({ path, version }) => ({ path, version }));
-    if (files.length) setFileAction({ action, head: changes.head, files });
+    if (files.length) { clearActionError(); setFileAction({ action, head: changes.head, files }); }
   };
   const confirmFileAction = (commitMessage = '') => run(async () => {
     if (!fileAction || (fileAction.action === 'commit' && !commitMessage.trim())) return;
@@ -109,11 +112,11 @@ export function useRemoteGit({ client, cwd, active, connected, refreshInterval }
     hasMore: page.hasMore }));
   });
   const loading = active && connected && !!cwd && !changes && !error;
-  return { ...revisions, ...submission, busy, loading, error: error || submission.settingsError,
+  return { ...conflicts, ...revisions, ...submission, busy, loading, error: error || submission.settingsError,
     notice, changes, commits, hasMore, selected, tab, setTab,
     detail, setDetail, backDetail: () => setDetail(parentGitDetail), refresh, toggle, selectAll, selectFiles, more,
     repository, action, strategy, setStrategy, fileList, fileAction, requestFileAction, confirmFileAction,
-    cancelFileAction: () => { if (!busy) setFileAction(null); },
+    cancelFileAction: () => { if (!busy) { setFileAction(null); clearActionError(); } },
   };
 }
 

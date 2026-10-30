@@ -8,7 +8,7 @@ import { checkFileUploadSize, UploadPolicyError } from '../../../../shared/remot
 
 /** Validators may localize their copy when thrown, so trust it by type rather than by wording. */
 export function attachmentErrorMessage(cause: unknown) {
-  return cause instanceof UploadPolicyError ? cause.message : t("文件添加失败，请重新选择。");
+  return cause instanceof UploadPolicyError ? cause.message : t("client.chat.couldNotAddTheFilePleaseChooseItAgain");
 }
 
 export function useComposerAttachments({ threadId, sending }: { threadId: string | null; sending: boolean }) {
@@ -53,7 +53,7 @@ export function useComposerAttachments({ threadId, sending }: { threadId: string
     try {
       setItems(remoteAttachments([...items.filter((entry) => entry.path !== item.path), item])); setError('');
       return true;
-    } catch { setError(t("每条消息最多添加 8 个附件或对话引用。")); return false; }
+    } catch { setError(t("client.chat.eachMessageCanHaveUpTo8AttachmentsOrConversation")); return false; }
   };
   return { items, busy, error, pick, add,
     addPlugin: (plugin: ComposerPlugin) => add({ kind: 'plugin', name: plugin.interface?.displayName || plugin.name,

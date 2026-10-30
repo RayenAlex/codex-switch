@@ -1,16 +1,31 @@
-//! Session-scoped security survives viewer loss and is released with the last retained display.
+//! Host preferences persist; temporary audio and lock ownership follow the last retained display.
 use super::{DesktopError, Result};
 use serde::{Deserialize, Serialize};
 
 #[cfg(windows)]
+mod guard;
+#[cfg(windows)]
 #[path = "security/windows.rs"]
 mod platform;
+#[cfg(any(windows, test))]
+mod preferences;
+#[cfg(windows)]
+pub(super) use guard::Guard;
+
+#[cfg(windows)]
+pub(crate) fn reset_preferences(root: &std::path::Path) -> Result<()> {
+    preferences::Store::new(root).save(&Default::default())
+}
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Snapshot {
     pub lock_on_disconnect: bool,
     pub mute_host: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clipboard_sync: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub privacy_screen: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub auto_unlock: Option<super::auto_unlock::Snapshot>,
 }
@@ -20,87 +35,8 @@ pub(crate) struct Snapshot {
 pub(crate) struct Change {
     lock_on_disconnect: Option<bool>,
     mute_host: Option<bool>,
+    clipboard_sync: Option<bool>,
     auto_unlock: Option<super::auto_unlock::Change>,
-}
-
-#[cfg(windows)]
-#[derive(Default)]
-struct State {
-    snapshot: Snapshot,
-    muted: Option<platform::MutedEndpoint>,
-    connected: bool,
-}
-
-/// All captures in a viewer group share one cleanup owner; switching monitors never locks the PC.
-#[cfg(windows)]
-#[derive(Clone, Default)]
-pub(super) struct Guard(std::sync::Arc<std::sync::Mutex<State>>);
-
-#[cfg(windows)]
-impl Guard {
-    pub(super) fn snapshot(&self) -> Result<Snapshot> {
-        let mut snapshot = self
-            .0
-            .lock()
-            .map_err(|_| DesktopError::Platform)?
-            .snapshot
-            .clone();
-        snapshot.auto_unlock = super::auto_unlock::snapshot();
-        Ok(snapshot)
-    }
-
-    pub(super) fn connect(&self, control: bool) -> Result<()> {
-        let mut state = self.0.lock().map_err(|_| DesktopError::Platform)?;
-        if state.connected || !control {
-            return Ok(());
-        }
-        state.connected = true;
-        // Unlock failure must leave screen sharing available for manual sign-in and credential correction.
-        if let Err(error) = super::auto_unlock::connect() {
-            eprintln!("automatic unlock could not start: {error}");
-        }
-        Ok(())
-    }
-
-    fn apply(&self, change: Change) -> Result<Snapshot> {
-        if let Some(unlock) = change.auto_unlock {
-            super::auto_unlock::apply(unlock)?;
-        }
-        let mut state = self.0.lock().map_err(|_| DesktopError::Platform)?;
-        if let Some(mute) = change.mute_host {
-            if mute && state.muted.is_none() {
-                state.muted = Some(platform::MutedEndpoint::acquire()?);
-            } else if !mute {
-                if let Some(endpoint) = state.muted.as_ref() {
-                    endpoint.restore()?;
-                }
-                state.muted = None;
-            }
-            state.snapshot.mute_host = mute;
-        }
-        if let Some(lock) = change.lock_on_disconnect {
-            state.snapshot.lock_on_disconnect = lock;
-        }
-        drop(state);
-        self.snapshot()
-    }
-}
-
-#[cfg(windows)]
-impl Drop for State {
-    fn drop(&mut self) {
-        super::auto_unlock::cancel();
-        if let Some(endpoint) = self.muted.take() {
-            if let Err(error) = endpoint.restore() {
-                eprintln!("desktop security audio cleanup: {error}");
-            }
-        }
-        if self.snapshot.lock_on_disconnect {
-            if let Err(error) = platform::lock() {
-                eprintln!("desktop security lock cleanup: {error}");
-            }
-        }
-    }
 }
 
 fn apply(id: &str, change: Change) -> Result<Snapshot> {
@@ -157,12 +93,14 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn retained_displays_share_security_without_resetting_it() {
-        let first = Guard::default();
+        let root = tempfile::tempdir().unwrap();
+        let first = Guard::load(root.path()).unwrap();
         let second = first.clone();
         let enabled = Change {
             lock_on_disconnect: Some(true),
             mute_host: None,
             auto_unlock: None,
+            clipboard_sync: None,
         };
         assert!(first.apply(enabled).unwrap().lock_on_disconnect);
         drop(first);
@@ -173,7 +111,58 @@ mod tests {
                 lock_on_disconnect: Some(false),
                 mute_host: None,
                 auto_unlock: None,
+                clipboard_sync: None,
             })
             .unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_new_capture_loads_host_preferences_without_a_viewer_cache() {
+        let root = tempfile::tempdir().unwrap();
+        let first = Guard::load(root.path()).unwrap();
+        first
+            .apply(Change {
+                lock_on_disconnect: Some(true),
+                clipboard_sync: Some(false),
+                ..Default::default()
+            })
+            .unwrap();
+        first.remember_privacy(true).unwrap();
+        // No live connection was started, so dropping this test guard cannot lock the workstation.
+        drop(first);
+        let next = Guard::load(root.path()).unwrap();
+        let snapshot = next.snapshot().unwrap();
+        assert!(snapshot.lock_on_disconnect);
+        assert_eq!(snapshot.clipboard_sync, Some(false));
+        assert_eq!(snapshot.privacy_screen, Some(true));
+        next.apply(Change {
+            lock_on_disconnect: Some(false),
+            ..Default::default()
+        })
+        .unwrap();
+        drop(next);
+        assert!(
+            !Guard::load(root.path())
+                .unwrap()
+                .snapshot()
+                .unwrap()
+                .lock_on_disconnect
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn rejected_writes_do_not_report_new_settings_as_saved() {
+        let root = tempfile::tempdir().unwrap();
+        let guard = Guard::load(root.path()).unwrap();
+        std::fs::create_dir(root.path().join("remote-desktop-security.json")).unwrap();
+        assert!(guard
+            .apply(Change {
+                lock_on_disconnect: Some(true),
+                ..Default::default()
+            })
+            .is_err());
+        assert!(!guard.snapshot().unwrap().lock_on_disconnect);
     }
 }

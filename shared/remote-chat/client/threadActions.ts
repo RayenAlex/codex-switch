@@ -9,18 +9,20 @@ export const THREAD_NAME_LIMIT = 120;
 export const THREAD_LONG_PRESS_MS = 500;
 
 export function threadActionReason(state: ChatState, thread: Thread, action: ThreadAction): string {
-  if (!state.ready) return '连接电脑后即可管理对话。';
-  if (state.threadActionBusy || state.sending) return '请等待当前操作完成。';
+  if (!state.ready) return "client.threadActions.connectToYourComputerToManageChats";
+  if (state.threadActionBusy || state.projectActionBusy || state.sending) {
+    return "client.threadActions.waitForTheCurrentActionToFinish";
+  }
   if (action === 'pin' || action === 'unpin') return '';
   const current = state.selected?.id === thread.id ? state.selected
     : state.threads.find(item => item.id === thread.id) ?? thread;
   if (state.compacting === thread.id || state.sidebar.threads[thread.id]?.running
     || current.status?.type === 'active' || current.turns?.some(turn => turn.status === 'inProgress')
     || state.approvals.some(event => event.params.threadId === thread.id)) {
-    return '请等待回复结束后再操作。';
+    return "client.threadActions.waitForTheReplyToFinishBeforeContinuing";
   }
   if (action !== 'rename' && state.queue.threads[thread.id]?.length) {
-    return '请先发送或删除待发送消息。';
+    return "client.threadActions.sendOrRemoveQueuedMessagesFirst";
   }
   return '';
 }

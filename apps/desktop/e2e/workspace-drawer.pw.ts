@@ -6,7 +6,7 @@ const switchTab = (page: Page, name: string) => tabs(page).getByRole('tab', { na
 const close = (page: Page) => drawer(page).getByRole('button', { name: '关闭详情抽屉', exact: true }).click();
 
 for (const mode of ['local', 'web', 'remote']) {
-  test(`${mode}: all right drawers share tabs and retain drafts, previews and terminal sessions`, async ({ page }) => {
+  test(`${mode}: drawer tabs retain drafts and previews alongside a bottom terminal`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 960 });
     await page.goto(`/e2e/workspace-drawer-harness.html?mode=${mode}&dark`);
     await page.getByRole('button', { name: '打开预览', exact: true }).click();
@@ -31,7 +31,7 @@ for (const mode of ['local', 'web', 'remote']) {
     await expect(page.locator('.xterm')).toBeVisible();
     await page.getByRole('button', { name: '打开任务验收', exact: true }).click();
     await page.getByRole('textbox', { name: '验收草稿' }).fill('保留验收意见');
-    await expect(tabs(page).getByRole('tab')).toHaveCount(6);
+    await expect(tabs(page).getByRole('tab')).toHaveCount(5);
     await close(page);
     await expect(drawer(page)).toBeHidden();
     const reads = await page.locator('body').getAttribute('data-git-reads');
@@ -39,7 +39,7 @@ for (const mode of ['local', 'web', 'remote']) {
     await expect(page.locator('body')).toHaveAttribute('data-git-reads', reads!);
     await page.getByRole('button', { name: '打开任务验收', exact: true }).click();
     await expect(page.getByRole('textbox', { name: '验收草稿' })).toHaveValue('保留验收意见');
-    await switchTab(page, '远程终端');
+    await expect(page.getByRole('region', { name: '终端', exact: true })).toBeVisible();
     await expect(page.locator('.xterm')).toBeVisible();
     await expect(page.locator('body')).toHaveAttribute('data-terminal-opens', '1');
     await switchTab(page, '文件浏览');
@@ -50,7 +50,7 @@ for (const mode of ['local', 'web', 'remote']) {
     await page.screenshot({ path: `../../.codex-tmp/workspace-drawer-${mode}.png` });
     await close(page);
     await page.getByRole('button', { name: '文件浏览', exact: true }).click();
-    await expect(tabs(page).getByRole('tab')).toHaveCount(6);
+    await expect(tabs(page).getByRole('tab')).toHaveCount(5);
     await expect(drawer(page)).toHaveCount(1);
   });
 }

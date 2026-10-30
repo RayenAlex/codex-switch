@@ -34,6 +34,9 @@ impl WorkspaceActivity {
                 | "thread/goal/updated"
                 | "thread/goal/cleared"
                 | "thread/status/changed"
+                | "thread/name/updated"
+                | "item/started"
+                | "item/completed"
         ) {
             return;
         }
@@ -70,6 +73,16 @@ impl Session {
             pending.goal_revision = 0;
         }
         let thread = self.threads.entry(id.to_owned()).or_default();
+        thread.name = result["thread"]["name"]
+            .as_str()
+            .map(str::to_owned)
+            .or(pending.name.take())
+            .or_else(|| thread.name.take());
+        thread.cwd = result["thread"]["cwd"]
+            .as_str()
+            .map(str::to_owned)
+            .or(pending.cwd.take())
+            .or_else(|| thread.cwd.take());
         if let Some(workspace) = workspace.or_else(|| pending.workspace.clone()) {
             thread.workspace = Some(workspace);
         }
@@ -79,7 +92,7 @@ impl Session {
         }
         if thread.goal_revision == pending.goal_revision {
             if let Some(goal) = result.get("goal") {
-                thread.goal_active = goal["status"] == "active";
+                thread.set_goal(goal["status"] == "active");
             }
         }
     }
@@ -89,13 +102,24 @@ impl Session {
             self.complete_turn(id, &params["turn"]);
             return;
         }
-        let starting_workspace = self
+        let starting = self
             .requests
             .iter()
             .filter(|(_, request)| request.blocks && request.thread_id.as_deref() == Some(id))
             .max_by_key(|(id, _)| *id)
-            .and_then(|(_, request)| request.workspace.clone());
+            .map(|(_, request)| request);
+        let starting_workspace = starting.and_then(|request| request.workspace.clone());
         let thread = self.threads.entry(id.to_owned()).or_default();
+        if let Some(cwd) = params["thread"]["cwd"].as_str() {
+            thread.cwd = Some(cwd.to_owned());
+        } else if method == "turn/started" {
+            if let Some(cwd) = starting.and_then(|request| request.cwd.clone()) {
+                thread.cwd = Some(cwd);
+            }
+        }
+        if let Some(name) = params["thread"]["name"].as_str() {
+            thread.name = Some(name.to_owned());
+        }
         if workspace.is_some() {
             thread.workspace = workspace;
         }
@@ -106,16 +130,19 @@ impl Session {
         let thread = self.threads.entry(id.to_owned()).or_default();
         thread.turn_revision += 1;
         thread.active_snapshot = false;
-        let Some(turn) = turn["id"].as_str() else {
+        let Some(turn_id) = turn["id"].as_str() else {
             return;
         };
-        thread.turns.remove(turn);
+        for item in turn["items"].as_array().into_iter().flatten() {
+            thread.observe_files(turn_id, item);
+        }
+        thread.turns.remove(turn_id);
         for request in self
             .requests
             .values_mut()
             .filter(|request| request.thread_id.as_deref() == Some(id))
         {
-            request.completed.insert(turn.to_owned());
+            request.completed.insert(turn_id.to_owned());
         }
     }
 }
@@ -132,7 +159,7 @@ impl Thread {
             }
             "thread/goal/updated" | "thread/goal/cleared" => {
                 self.goal_revision += 1;
-                self.goal_active = params["goal"]["status"] == "active";
+                self.set_goal(params["goal"]["status"] == "active");
                 if self.goal_active && starting_workspace.is_some() {
                     self.workspace = starting_workspace;
                 }
@@ -143,12 +170,33 @@ impl Thread {
                     self.active_snapshot = status == "active";
                 }
             }
+            "thread/name/updated" => {
+                self.name = params["threadName"].as_str().map(str::to_owned);
+            }
+            "item/started" | "item/completed" => {
+                if let Some(turn_id) = params["turnId"].as_str() {
+                    self.observe_files(turn_id, &params["item"]);
+                }
+            }
             _ => {}
         }
     }
 }
 
 impl Thread {
+    fn set_goal(&mut self, active: bool) {
+        self.goal_active = active;
+        if active {
+            self.goal_files.extend(
+                self.turns
+                    .values()
+                    .flat_map(|turn| turn.files.iter().cloned()),
+            );
+        } else {
+            self.goal_files.clear();
+        }
+    }
+
     fn accept_turn(
         &mut self,
         turn: &Value,
@@ -159,8 +207,11 @@ impl Thread {
             return;
         };
         if turn["status"] == "inProgress" && !completed.contains(id) {
-            self.turns
-                .insert(id.to_owned(), workspace.or_else(|| self.workspace.clone()));
+            self.turns.entry(id.to_owned()).or_default().workspace =
+                workspace.or_else(|| self.workspace.clone());
+            for item in turn["items"].as_array().into_iter().flatten() {
+                self.observe_files(id, item);
+            }
         }
     }
 

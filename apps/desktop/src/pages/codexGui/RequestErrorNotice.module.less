@@ -54,12 +54,14 @@
   min-height: 52px;
   margin: 0;
   padding: 10px 16px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line, var(--chat-border));
   border-radius: 18px;
-  color: var(--ink);
+  color: var(--ink, var(--chat-ink));
   box-sizing: border-box;
-  .retryButton { flex-shrink: 0; margin-top: 0; padding: 4px 9px; }
+  .retryButton, .capacityAction button { flex-shrink: 0; margin-top: 0; padding: 4px 9px; }
 }
+
+.capacityAction:empty { display: none; }
 
 .capacityContent {
   display: flex;

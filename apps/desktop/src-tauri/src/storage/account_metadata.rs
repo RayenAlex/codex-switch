@@ -31,6 +31,11 @@ pub(crate) fn save_account_private_details(
     path: &Path,
     details: &AccountPrivateDetails,
 ) -> Result<(), String> {
+    let mut details = details.clone().normalized()?;
+    // Older clients omit the alias when saving other details; only an explicit empty value clears it.
+    if details.alias.is_none() {
+        details.alias = load_account_private_details(path).alias;
+    }
     let value = serde_json::to_value(details).map_err(|error| error.to_string())?;
     write_json_atomic(path, &value)
 }

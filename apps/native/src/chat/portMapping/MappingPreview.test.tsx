@@ -20,7 +20,7 @@ vi.mock('react-native-safe-area-context', () => ({ SafeAreaProvider: 'Provider',
 vi.mock('react-native-webview', () => ({ WebView: 'WebView' }));
 vi.mock('./MappingPreviewActivity', () => ({ MappingPreviewActivity: 'Activity' }));
 vi.mock('../styles', () => ({ useStyles: () => ({}) }));
-vi.mock('../../i18n', () => ({ t: (value: string) => value }));
+vi.mock('../../i18n', async () => ({ ...await vi.importActual<typeof import('../../i18n')>('../../i18n'),  }));
 
 type Props = WebViewProps & { children?: React.ReactNode; active?: boolean; onPress?: () => void };
 function elements(node: React.ReactNode): React.ReactElement<Props>[] {

@@ -1,14 +1,2 @@
-.status { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 10px; font-size: 12px; min-width: 0; }
-.usage { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--ink); }
-.value { cursor: help;
-  &:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; border-radius: 2px; } }
-.tokens { color: #0a8469; }
-.cost { color: #b45d00; }
-.quota { color: #16874e; }
-.low { color: #be2d2d; }
-:global(:root[data-theme="dark"]) {
-  .tokens { color: #54d6b1; }
-  .cost { color: #f5b141; }
-  .quota { color: #60d394; }
-  .low { color: #ff7171; }
-}
+.status { display: flex; align-items: center; font-size: 12px; min-width: 0; flex-shrink: 0; }
+.usage { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); white-space: nowrap; }

@@ -7,6 +7,7 @@ import { GuiController } from "./controller";
 import { guiApi } from "./api";
 import { testModels } from "./testModels";
 import type { GuiEvent, Thread } from "./types";
+import { saveMessageQueueEnabled } from "../../../../../shared/chat/messageQueueSettings";
 
 vi.mock("./api", () => ({ guiApi: { connect: vi.fn(), request: vi.fn(), subscribe: vi.fn() } }));
 vi.mock("./UsageStatus", () => ({ UsageStatus: () => null }));
@@ -57,6 +58,26 @@ afterEach(async () => {
   host.remove();
   controller.dispose();
   vi.unstubAllGlobals();
+  localStorage.clear();
+});
+
+it("switches the send button immediately and preserves the draft after an immediate send fails", async () => {
+  await act(async () => {
+    editor().textContent = "直接追加";
+    editor().dispatchEvent(new InputEvent("input", { bubbles: true }));
+  });
+  expect(host.querySelector('[aria-label="加入待发送"]')).not.toBeNull();
+  await act(async () => { saveMessageQueueEnabled(false); });
+  expect(host.querySelector('[aria-label="加入待发送"]')).toBeNull();
+  const button = host.querySelector<HTMLButtonElement>('[aria-label="发送消息"]')!;
+  expect(button).not.toBeNull();
+  vi.mocked(guiApi.request).mockRejectedValueOnce(new Error("send failed"));
+  await act(async () => button.click());
+  expect(editor().textContent).toBe("直接追加");
+  expect(queued().map(message => message.text)).toEqual(["待修改的消息"]);
+  await act(async () => button.click());
+  expect(editor().textContent).toBe("");
+  expect(guiApi.request).toHaveBeenCalledWith(expect.objectContaining({ operation: "steer", text: "直接追加" }));
 });
 
 it("reorders pending messages with separate arrow buttons and disables queue boundaries", async () => {

@@ -1,6 +1,9 @@
 import { getLocale, t, useLanguage } from '../i18n';
 import { Dropdown } from 'antd';
-import { Clock, ExternalLink, KeyRound, Laptop, MoreVertical, Server, Trash2, UserRound } from 'lucide-react';
+import { Clock, ExternalLink, KeyRound, Laptop, Monitor, MoreVertical, Server, Sun, Trash2, UserRound } from 'lucide-react';
+import { supportsScreenControl } from '../../../../shared/remote-desktop/screenControl';
+import { useState } from 'react';
+import { DeviceScreenSheet } from './DeviceScreenSheet';
 import type { AccountSummary, RemoteDevice, RemoteProviderSummary } from '../types';
 import { remoteModelOptions, type RemoteModelTarget } from '../../../../shared/remote-chat/modelTarget';
 
@@ -15,6 +18,7 @@ interface DeviceCardProps {
   onSelectAuthAccount: (deviceId: string) => void;
   onDelete: (device: RemoteDevice) => void;
   onRevokeService: (device: RemoteDevice) => void;
+  onScreenControl: (device: RemoteDevice, enabled: boolean) => void;
 }
 
 function platformLabel(platform: string) {
@@ -23,7 +27,7 @@ function platformLabel(platform: string) {
     case 'darwin':
     case 'macos': return 'macOS';
     case 'linux': return 'Linux';
-    default: return platform || t("未知平台");
+    default: return platform || t("client.app.unknownPlatform");
   }
 }
 
@@ -32,16 +36,16 @@ function modelLabel(device: RemoteDevice, accounts: AccountSummary[], providers:
   const selection = remoteModelOptions(device, target);
   const account = accounts.find(item => item.id === selection.accountId);
   const provider = providers.find(item => item.id === selection.providerId);
-  if (selection.group) return t("分组 · {value1}", { value1: selection.group });
-  if (!selection.providerId) return account ? t("官方 · {value1}", { value1: account.email }) : t("未选择");
-  if (!provider) return t("模型信息暂不可用");
+  if (selection.group) return t("client.app.group", { value1: selection.group });
+  if (!selection.providerId) return account ? t("client.app.official", { value1: account.email }) : t("client.app.notSelected");
+  if (!provider) return t("client.app.modelInformationUnavailable");
   return `${provider.name}${provider.model ? ` · ${provider.model}` : ''}`;
 }
 
 function lastSeenLabel(device: RemoteDevice) {
-  if (device.online) return t("当前在线");
+  if (device.online) return t("client.app.onlineNow");
   const date = new Date(device.lastSeenAt);
-  if (Number.isNaN(date.getTime())) return t("时间未知");
+  if (Number.isNaN(date.getTime())) return t("client.app.unknownTime");
   return new Intl.DateTimeFormat(getLocale(), {
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
   }).format(date);
@@ -60,14 +64,14 @@ function DeviceDetails({ device, accounts, providers }: Pick<DeviceCardProps, 'd
   const account = accounts.find((item) => item.id === device.activeAccountId);
   const authAccount = accounts.find((item) => item.id === device.openaiAuthAccountId);
   const details = [
-    { icon: UserRound, label: t("代理接口"), value: modelLabel(device, accounts, providers, 'proxy') },
+    { icon: UserRound, label: t("client.app.proxyApi"), value: modelLabel(device, accounts, providers, 'proxy') },
     ...(device.capabilities.includes('gui-model-switch')
       ? [{ icon: Laptop, label: 'Codex GUI', value: modelLabel(device, accounts, providers, 'gui') }] : []),
-    { icon: Server, label: t("设备账号"),
-      value: account?.email ?? (device.activeAccountId ? t("账号信息暂不可用") : t("未选择")) },
-    { icon: KeyRound, label: t("代理登录态"),
-      value: authAccount?.email ?? (device.openaiAuthAccountId ? t("账号信息暂不可用") : t("未设置")) },
-    { icon: Clock, label: t("最后在线"), value: lastSeenLabel(device) },
+    { icon: Server, label: t("client.app.deviceAccount"),
+      value: account?.email ?? (device.activeAccountId ? t("client.app.accountInformationUnavailable") : t("client.app.notSelected")) },
+    { icon: KeyRound, label: t("client.app.proxySignIn"),
+      value: authAccount?.email ?? (device.openaiAuthAccountId ? t("client.app.accountInformationUnavailable") : t("client.accounts.notSet")) },
+    { icon: Clock, label: t("client.app.lastOnline"), value: lastSeenLabel(device) },
   ];
   return <span className="device-details">{details.map(({ icon: Icon, label, value }) =>
     <span className="device-detail" key={label}>
@@ -77,33 +81,47 @@ function DeviceDetails({ device, accounts, providers }: Pick<DeviceCardProps, 'd
 
 export function DeviceCard(props: DeviceCardProps) {
   useLanguage();
+  const [confirmScreen, setConfirmScreen] = useState(false);
   const { device, deletingDeviceId, switchingModelDeviceId, switchingAuthDeviceId } = props;
   const busy = switchingModelDeviceId === device.deviceId || deletingDeviceId === device.deviceId;
   const items = [
-    { key: 'auth', icon: <ExternalLink size={18} />, label: t("代理登录态账号"),
+    ...(supportsScreenControl(device) ? [
+      { key: 'screen-off', icon: <Monitor size={18} />, label: t('client.deviceScreen.turnOff'),
+        disabled: !device.online, onClick: () => setConfirmScreen(true) },
+      { key: 'screen-restore', icon: <Sun size={18} />, label: t('client.deviceScreen.restore'),
+        disabled: !device.online, onClick: () => props.onScreenControl(device, false) },
+    ] : []),
+    { key: 'auth', icon: <ExternalLink size={18} />, label: t("client.app.proxySignInAccount"),
       disabled: !device.online || Boolean(switchingAuthDeviceId),
       onClick: () => props.onSelectAuthAccount(device.deviceId) },
     ...(device.platform.toLowerCase() === 'windows' ? [{ key: 'revoke-service', icon: <KeyRound size={18} />,
-      label: '撤销无人值守授权', danger: true, onClick: () => props.onRevokeService(device) }] : []),
-    { key: 'delete', icon: <Trash2 size={18} />, label: device.online ? t("在线不可删除") : t("删除设备"),
+      label: t("client.mobile.revokeUnattendedAccess"), danger: true, onClick: () => props.onRevokeService(device) }] : []),
+    { key: 'delete', icon: <Trash2 size={18} />, label: device.online ? t("client.app.cannotRemoveWhileOnline") : t("client.app.removeDevice"),
       danger: true, disabled: device.online || Boolean(deletingDeviceId), onClick: () => props.onDelete(device) },
   ];
-  return <article className={`device-card ${device.online ? 'online' : 'offline'}`}>
+  return <><article className={`device-card ${device.online ? 'online' : 'offline'}`}>
     <button type="button" className="device-card-main" disabled={!device.online || busy} aria-busy={busy}
-      aria-label={`${device.name}，${device.online ? t("点击切换模型") : t("离线")}`}
+      aria-label={`${device.name}，${device.online ? t("client.app.selectToSwitchModel") : t("client.chat.offline")}`}
       onClick={() => props.onSwitchModel(device.deviceId)}>
       <span className="device-card-header">
         <span className="device-platform"><PlatformIcon platform={device.platform} /></span>
         <span className="device-identity"><strong>{device.name}</strong>
           <span>{platformLabel(device.platform)}{device.appVersion ? ` · v${device.appVersion}` : ''}</span></span>
-        <span className="device-status"><i />{busy ? t("处理中") : device.online ? t("在线") : t("离线")}</span>
+        <span className="device-status"><i />{busy ? t("client.app.working") : device.online ? t("client.chat.online") : t("client.chat.offline")}</span>
       </span>
       <DeviceDetails device={device} accounts={props.accounts} providers={props.providers} />
     </button>
     <Dropdown trigger={['click']} placement="bottomRight" menu={{ items }} overlayClassName="device-options-menu">
-      <button type="button" className="device-menu-trigger" aria-label={t("{value1} 的更多操作", { value1: device.name })}>
+      <button type="button" className="device-menu-trigger" aria-label={t("client.app.moreActionsFor", { value1: device.name })}>
         <MoreVertical size={20} aria-hidden />
       </button>
     </Dropdown>
-  </article>;
+  </article>
+    <DeviceScreenSheet device={device} open={confirmScreen} onClose={() => setConfirmScreen(false)}
+      onConfirm={() => {
+        if (!confirmScreen || !device.online) return;
+        setConfirmScreen(false);
+        props.onScreenControl(device, true);
+      }} />
+  </>;
 }

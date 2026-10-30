@@ -12,6 +12,8 @@ export async function modelPickerJourney(page: Page, request: APIRequestContext,
   await expect(panel).toBeVisible();
   expect((await panel.boundingBox())!.width).toBeLessThanOrEqual(226);
   await expect(page.getByRole('dialog', { name: '聊天设置', exact: true })).toHaveCount(0);
+  await expect(page.locator('.chat-composer-status .chat-context-progress')).toHaveCount(0);
+  await expect(page.locator('.chat-composer-status .chat-composer-usage')).toBeVisible();
   const slider = page.getByRole('slider', { name: '推理强度', exact: true });
   await slider.press('End');
   await expect(slider).toHaveAttribute('aria-valuetext', '极高');
@@ -52,7 +54,7 @@ export async function modelPickerJourney(page: Page, request: APIRequestContext,
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(panel).toHaveCount(0);
   await page.getByRole('button', { name: /聊天设置/ }).click();
-  await expect(page.getByRole('button', { name: '设置推理强度' })).toBeVisible();
+  await expect(page.getByRole('radiogroup', { name: '推理强度' })).toBeVisible();
   await expect(slider).toHaveCount(0);
   await screenshot(page, info, 'mobile-settings-unchanged');
   await page.setViewportSize({ width: 1280, height: 900 });

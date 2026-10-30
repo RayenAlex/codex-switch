@@ -1,3 +1,4 @@
+import { displayError } from '../i18n/index';
 import { apiJson, deviceStatusWebSocketUrl, getActiveSession } from '../api';
 import { t } from '../i18n';
 import type { AccountSummary, AuthSession, RemoteDevice, UsageSummary } from '../types';
@@ -17,7 +18,7 @@ export function usageOwner() {
 }
 
 export function assertUsageOwner(owner: string | null) {
-  if (!owner || owner !== usageOwner()) throw new Error(t('登录状态已改变，请重新连接'));
+  if (!owner || owner !== usageOwner()) throw new Error(t("client.runtimeErrors.yourSessionChangedReconnectToContinue"));
 }
 
 export function selectUsageDevice(devices: RemoteDevice[], selectedId: string | null) {
@@ -28,10 +29,10 @@ export function selectUsageDevice(devices: RemoteDevice[], selectedId: string | 
 export function usageDevice(devices: RemoteDevice[], selectedId: string | null) {
   const device = selectUsageDevice(devices, selectedId);
   if (!device?.online) {
-    throw new Error(t('暂无在线电脑，请先在电脑上打开 Remote AI。'));
+    throw new Error(t("client.accountUsage.noComputersAreOnlineOpenRemoteAiOnYourComputer"));
   }
   if (!device.capabilities.includes('account-usage')) {
-    throw new Error(t('请先更新电脑上的 Remote AI，再操作账号用量。'));
+    throw new Error(t("client.accountUsage.updateRemoteAiOnYourComputerToManageAccountUsage"));
   }
   return device;
 }
@@ -47,7 +48,7 @@ class UsageConnection {
     this.socket = new WebSocket(deviceStatusWebSocketUrl(session.baseUrl));
     this.ready = new Promise((resolve, reject) => {
       const timeout = window.setTimeout(() => {
-        reject(new Error(t('连接电脑超时，请稍后重试。')));
+        reject(new Error(t("client.accountUsage.connectingToTheComputerTimedOutPleaseTryAgainLater")));
         this.close();
       }, CONNECT_TIMEOUT_MS);
       this.socket.onopen = () => this.socket.send(JSON.stringify({
@@ -65,7 +66,7 @@ class UsageConnection {
       this.socket.onerror = () => this.socket.close();
       this.socket.onclose = () => {
         window.clearTimeout(timeout);
-        const error = new Error(t('连接已断开，请先刷新用量，避免重复消耗。'));
+        const error = new Error(t("client.accountUsage.disconnectedRefreshUsageBeforeConsumingAgainToAvoidADuplicate"));
         reject(error);
         for (const pending of this.pending.values()) {
           window.clearTimeout(pending.timer);
@@ -82,20 +83,20 @@ class UsageConnection {
     if (!pending) return;
     this.pending.delete(id);
     window.clearTimeout(pending.timer);
-    if (typeof message.error === 'string' && message.error) pending.reject(new Error(t(message.error)));
+    if (typeof message.error === 'string' && message.error) pending.reject(new Error(displayError(message.error)));
     else if (message.data && typeof message.data === 'object') pending.resolve(message.data as UsageResult);
-    else pending.reject(new Error(t('电脑返回的用量无效，请稍后刷新。')));
+    else pending.reject(new Error(t("client.accountUsage.theComputerReturnedInvalidUsagePleaseRefreshAgainLater")));
   }
 
   async request(deviceId: string, accountId: string, action: UsageAction): Promise<UsageResult> {
     await this.ready;
     assertUsageOwner(this.owner);
-    if (this.socket.readyState !== WebSocket.OPEN) throw new Error(t('电脑连接已断开，请重新连接。'));
+    if (this.socket.readyState !== WebSocket.OPEN) throw new Error(t("client.accountUsage.theComputerDisconnectedPleaseReconnect"));
     const requestId = `usage-${++this.sequence}`;
     return new Promise((resolve, reject) => {
       const timer = window.setTimeout(() => {
         this.pending.delete(requestId);
-        reject(new Error(t('电脑暂未确认结果，请先刷新用量，避免重复消耗。')));
+        reject(new Error(t("client.accountUsage.theComputerHasNotConfirmedTheResultRefreshUsageBefore")));
       }, OPERATION_TIMEOUT_MS);
       this.pending.set(requestId, { resolve, reject, timer });
       this.socket.send(JSON.stringify({ type: 'account-usage', requestId, deviceId, accountId, action }));
@@ -109,13 +110,13 @@ async function updateAccount(connection: UsageConnection, account: AccountSummar
   target: { deviceId: string; action: UsageAction }) {
   try {
     const result = await connection.request(target.deviceId, account.id, target.action);
-    const error = result.error || result.usage?.error || (!result.usage ? t('用量刷新失败，请稍后重试。') : null);
+    const error = result.error || result.usage?.error || (!result.usage ? t("client.accountUsage.couldNotRefreshUsagePleaseTryAgainLater") : null);
     return { account: { ...account, plan: result.usage?.plan ?? account.plan,
       usage: { ...(result.usage ?? account.usage), error } },
       consumed: result.consumed === true, failed: Boolean(error) };
   } catch (error) {
     return { account: { ...account, usage: { ...account.usage,
-      error: error instanceof Error ? error.message : t('用量刷新失败，请稍后重试。') } }, consumed: false, failed: true };
+      error: error instanceof Error ? error.message : t("client.accountUsage.couldNotRefreshUsagePleaseTryAgainLater") } }, consumed: false, failed: true };
   }
 }
 
@@ -129,7 +130,7 @@ export async function runRemoteUsage(options: {
   await apiJson('/auth/me');
   assertUsageOwner(owner);
   const session = getActiveSession();
-  if (!session) throw new Error(t('请先登录'));
+  if (!session) throw new Error(t("client.app.pleaseSignInFirst"));
   const connection = new UsageConnection(session);
   const result: UsageBatchResult = { accounts: new Array(options.accounts.length), failed: 0, consumed: 0 };
   let cursor = 0;

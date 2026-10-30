@@ -13,6 +13,12 @@ pub(super) enum Backend {
 }
 
 impl Backend {
+    pub fn wakes_display(self) -> bool {
+        matches!(
+            self,
+            Self::DirtyGpu | Self::Nvenc | Self::MediaFoundation | Self::Software
+        )
+    }
     pub fn helper(self) -> Option<&'static str> {
         match self {
             Self::Dxgi => Some("dxgi"),
@@ -46,6 +52,25 @@ impl Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn powered_off_displays_keep_capture_paths_that_do_not_require_a_lit_screen() {
+        for backend in [
+            Backend::Dxgi,
+            Backend::DirtyGdiHardware,
+            Backend::DirtyGdi,
+            Backend::GdiSoftware,
+        ] {
+            assert!(!backend.wakes_display());
+        }
+        for backend in [
+            Backend::DirtyGpu,
+            Backend::Nvenc,
+            Backend::MediaFoundation,
+            Backend::Software,
+        ] {
+            assert!(backend.wakes_display());
+        }
+    }
     #[test]
     fn service_preserves_dxgi_and_gpu_encoding_with_a_compatible_software_fallback() {
         assert!(Backend::Dxgi.supports(VideoCodec::H265, true));

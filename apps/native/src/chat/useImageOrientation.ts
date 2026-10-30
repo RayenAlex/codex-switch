@@ -58,7 +58,7 @@ export function useImageOrientation() {
         candidate = next;
         if (samples >= STABLE_SAMPLES) setDevice(next);
       });
-    }).catch(() => { if (active) setError(t("暂时无法识别手机方向")); });
+    }).catch(() => { if (active) setError(t("client.mobile.cannotDetermineThePhoneSOrientation")); });
     return () => {
       active = false;
       mounted.current = false;
@@ -78,14 +78,14 @@ export function useImageOrientation() {
     pending.current = (async () => {
       try {
         if (!await ScreenOrientation.supportsOrientationLockAsync(LOCKS[target])) {
-          if (mounted.current) setError(t("此方向暂不支持，请换个方向试试"));
+          if (mounted.current) setError(t("client.mobile.thisOrientationIsUnavailableTryAnother"));
           return;
         }
         if (!mounted.current) return;
         await ScreenOrientation.lockAsync(LOCKS[target]);
         if (mounted.current) setDisplayed(target);
       } catch {
-        if (mounted.current) setError(t("旋转失败，请重试"));
+        if (mounted.current) setError(t("client.mobile.couldNotRotateTryAgain"));
       } finally {
         busy.current = false;
         if (mounted.current) setRotating(false);

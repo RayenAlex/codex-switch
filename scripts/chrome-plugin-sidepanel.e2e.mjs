@@ -5,6 +5,7 @@ import http from 'node:http';
 import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from '@playwright/test';
+import { testBrowserExecutable, testBrowserLaunchOptions } from './test-browser.mjs';
 
 const source = path.resolve('apps/desktop/src-tauri/resources/chrome-extension');
 const root = path.resolve('.codex-tmp', `chrome-sidepanel-${Date.now()}`);
@@ -194,11 +195,11 @@ async function verifyMobileChat(panel, chat, page, worker) {
 let context;
 try {
   await prepare();
-  context = await chromium.launchPersistentContext(path.join(root, 'profile'), {
-    executablePath: process.env.CSW_CHROME_TEST_BROWSER ?? chromium.executablePath(),
+  context = await chromium.launchPersistentContext(path.join(root, 'profile'), testBrowserLaunchOptions({
+    executablePath: testBrowserExecutable(process.env.CSW_CHROME_TEST_BROWSER, chromium.executablePath()),
     headless: false, viewport: null,
     args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`, '--window-size=1280,900'],
-  });
+  }));
   const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker');
   const page = context.pages()[0];
   await page.goto(fixtureUrl);

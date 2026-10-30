@@ -8,6 +8,7 @@ import { GuiAutoSwitchSettingsDialog } from "./GuiAutoSwitchSettingsDialog";
 import type { GuiAutoSwitchSettings } from "./autoSwitchSettings";
 import type { GuiSystemPromptSettings } from "./useGuiSystemPrompts";
 import { translate } from "../../i18n";
+import { isMessageQueueEnabled } from "../../../../../shared/chat/messageQueueSettings";
 
 vi.mock("../../api/backend", () => ({ invoke: vi.fn() }));
 vi.mock("../../hooks/useLanguage", () => ({ useLanguage: () => ({
@@ -64,6 +65,25 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   localStorage.clear();
+});
+
+it("saves the message queue preference immediately and restores it when settings reopen", async () => {
+  const messagesTab = () => [...document.querySelectorAll<HTMLElement>('[role="tab"]')]
+    .find(element => element.textContent === "消息发送")!;
+  const toggle = () => document.querySelector<HTMLButtonElement>('[role="switch"][aria-describedby]')!;
+  await render();
+  await click(messagesTab());
+  expect(toggle().getAttribute("aria-checked")).toBe("true");
+  await click(toggle());
+  expect(isMessageQueueEnabled()).toBe(false);
+  await act(async () => root.render(null));
+  await render();
+  await click(messagesTab());
+  expect(toggle().getAttribute("aria-checked")).toBe("false");
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("full"); });
+  await click(toggle());
+  expect(toggle().getAttribute("aria-checked")).toBe("false");
+  expect(document.querySelector('[role="alert"]')?.textContent).toBe("未能保存设置，请重试。");
 });
 
 it("edits GUI prompt rules in its own tab without changing account or proxy settings", async () => {

@@ -5,7 +5,7 @@ import { startAndroidUpdateDownload, type AppRelease } from './appUpdate';
 import { AndroidUpdateCancelled } from './androidUpdateAttempt';
 
 export function openReleasePage(url: string) {
-  void Linking.openURL(url).catch(() => Toast.fail(t("无法打开页面，请稍后重试")));
+  void Linking.openURL(url).catch(() => Toast.fail(t("client.mobile.couldNotOpenThePageTryAgainLater")));
 }
 
 export function beginAppUpdateDownload(release: AppRelease) {
@@ -13,8 +13,8 @@ export function beginAppUpdateDownload(release: AppRelease) {
     openReleasePage(release.releaseUrl);
     return;
   }
-  Toast.success(t("正在下载更新，可继续使用。"));
+  Toast.success(t("client.mobile.downloadingTheUpdateYouCanKeepUsingTheApp"));
   void startAndroidUpdateDownload(release).catch(error => {
-    if (!(error instanceof AndroidUpdateCancelled)) Toast.fail(t("下载失败，请稍后重试"));
+    if (!(error instanceof AndroidUpdateCancelled)) Toast.fail(t("client.mobile.downloadFailedTryAgainLater"));
   });
 }

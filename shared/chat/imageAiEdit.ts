@@ -1,9 +1,9 @@
 export const IMAGE_AI_TOOLS = [
-  { id: 'annotate', label: '标注', hint: '描述标注的位置、内容和样式' },
-  { id: 'comment', label: '添加评论', hint: '描述评论的位置和文字内容' },
-  { id: 'background', label: '移除背景', hint: '可补充需要保留的主体' },
-  { id: 'erase', label: '擦除', hint: '描述要擦除的物体或区域' },
-  { id: 'resize', label: '调整大小', hint: '可补充裁剪或留白要求' },
+  { id: 'annotate', label: "client.chat.annotate", hint: "client.imageAi.describeTheAnnotationLocationContentAndStyle" },
+  { id: 'comment', label: "client.imageAi.addComment", hint: "client.imageAi.describeWhereToAddTheCommentAndWhatItShould" },
+  { id: 'background', label: "client.imageAi.removeBackground", hint: "client.imageAi.optionallyDescribeTheSubjectToKeep" },
+  { id: 'erase', label: "client.imageAi.erase", hint: "client.imageAi.describeTheObjectOrAreaToErase" },
+  { id: 'resize', label: "client.imageAi.resize", hint: "client.imageAi.optionallyDescribeCroppingOrPadding" },
 ] as const;
 export type ImageAiTool = typeof IMAGE_AI_TOOLS[number]['id'];
 export interface ImageAiRequest { tool: ImageAiTool; detail: string; width: string; height: string }

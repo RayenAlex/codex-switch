@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { resolveModelSelection } from "./modelSelection";
+import { modelSelectionError, resolveModelSelection } from "./modelSelection";
 import type { Model } from "./types";
 
 const model: Model = { id: "kimi-k3", model: "kimi-k3", displayName: "Kimi K3", isDefault: true,
@@ -12,16 +12,23 @@ it("resolves an implicit choice to the default model even when it is not first",
     .toEqual({ model: "kimi-k3", effort: "high" });
 });
 
-it("preserves an explicitly selected supported effort and replaces an unsupported one", () => {
+it("preserves explicit efforts and reports unsupported choices without replacing them", () => {
   expect(resolveModelSelection([model], { model: "kimi-k3", effort: "max" }))
     .toEqual({ model: "kimi-k3", effort: "max" });
   expect(resolveModelSelection([model], { model: "kimi-k3", effort: "ultra" }))
-    .toEqual({ model: "kimi-k3", effort: "high" });
+    .toEqual({ model: "kimi-k3", effort: "ultra" });
+  expect(modelSelectionError([model], { model: "kimi-k3", effort: "ultra" }))
+    .toBe("client.chat.effortUnavailableForAccount");
+  expect(modelSelectionError([model], { model: "kimi-k3", effort: "max" })).toBeNull();
 });
 
-it("uses the new model's recommended effort when the previous model is unavailable", () => {
+it("preserves unavailable models and efforts, including when the catalog is empty", () => {
   expect(resolveModelSelection([model], { model: "other", effort: "max" }))
-    .toEqual({ model: "kimi-k3", effort: "high" });
+    .toEqual({ model: "other", effort: "max" });
+  expect(resolveModelSelection([], { model: "other", effort: "max" }))
+    .toEqual({ model: "other", effort: "max" });
+  expect(modelSelectionError([model], { model: "other", effort: "max" }))
+    .toBe("client.chat.modelUnavailableForAccount");
 });
 
 it("handles a model without reasoning and an unavailable catalog without inventing a model", () => {

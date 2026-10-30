@@ -130,7 +130,7 @@ export class RemoteComposerSettings {
       }
       this.receive(result.composer);
     } else {
-      const selection = resolveModelSelection(result.data, DEFAULT_COMPOSER);
+      const selection = resolveModelSelection(result.data, this.host.snapshot().settings);
       this.receive({ models: result.data, revision: 0,
         settings: { ...this.host.snapshot().settings, ...selection } });
     }

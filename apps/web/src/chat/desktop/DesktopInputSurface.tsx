@@ -29,9 +29,9 @@ export function DesktopInputSurface({ pointer, viewport, input, trackpad, hardwa
       onLostPointerCapture={route('onLostPointerCapture')}
       onWheel={event => { if (!active) return;
         if (hardware) mouse.onWheel(event); else wheel(event.deltaY > 0 ? -120 : 120); }}
-      aria-label={t('远程桌面触控区域')} />
+      aria-label={t("client.remoteDesktop.remoteDesktopTouchpad")} />
     {/* A read-only PC target disables local IME while retaining physical keys and trusted paste events. */}
     <textarea ref={capture} className="rd-key-capture" tabIndex={-1} inputMode="none" readOnly={hardware} spellCheck={false}
-      autoCapitalize="off" autoComplete="off" aria-label={t('远程桌面键盘输入')} {...keyboard.handlers} />
+      autoCapitalize="off" autoComplete="off" aria-label={t("client.remoteDesktop.remoteDesktopKeyboardInput")} {...keyboard.handlers} />
   </>;
 }

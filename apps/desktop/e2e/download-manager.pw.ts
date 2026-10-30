@@ -1,3 +1,4 @@
+import { clickDownloadAction } from '../../web/e2e/download-test-actions';
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import type {} from './download-manager-harness';
@@ -40,7 +41,7 @@ test('collapsed download icon counts active tasks and receives the download anim
   expect(points.at(-1)!.x).toBeCloseTo(destination.x + destination.width / 2, 0);
   expect(points.at(-1)!.y).toBeCloseTo(destination.y + destination.height / 2, 0);
   await expect(count).toHaveText('1');
-  await expect(count).toHaveCSS('color', 'rgb(53, 173, 167)');
+  await expect(count).toHaveCSS('color', 'rgb(255, 255, 255)');
   const badge = (await count.boundingBox())!;
   expect(badge.y).toBeLessThan(destination.y);
   expect(badge.x).toBeGreaterThan(destination.x);
@@ -50,14 +51,16 @@ test('collapsed download icon counts active tasks and receives the download anim
   await page.getByRole('button', { name: '切换电脑', exact: true }).click();
   await enqueue(page);
   await expect(count).toHaveText('2');
+  await page.evaluate(() => window.desktopDownloads.addLocal());
+  await expect(count).toHaveText('3');
   await page.getByRole('button', { name: '切换账号' }).click();
-  await expect(count).toHaveCount(0);
+  await expect(count).toHaveText('1');
   await page.getByRole('button', { name: '切换账号' }).click();
-  await expect(count).toHaveText('2');
+  await expect(count).toHaveText('3');
   await page.getByRole('navigation').getByRole('button', { name: '下载管理', exact: true }).click();
   const office = page.getByRole('article', { name: 'office.msi' });
-  await office.getByRole('button', { name: '暂停', exact: true }).click();
-  await expect(count).toHaveText('1');
+  await clickDownloadAction(page, office, '暂停');
+  await expect(count).toHaveText('2');
   await page.evaluate(() => { window.desktopDownloads.delay = 10; });
   await expect(page.getByRole('article', { name: 'home.msi' })).toContainText('文件已就绪', { timeout: 30_000 });
   await expect(count).toHaveCount(0);
@@ -94,13 +97,13 @@ test('desktop navigation exposes background downloads above diagnostics and save
   await expect(office).toContainText('办公电脑');
   await expect(home).toContainText('家里电脑');
   await expect.poll(() => office.getByRole('progressbar').getAttribute('value')).not.toBe('0');
-  await office.getByRole('button', { name: '暂停', exact: true }).click();
+  await clickDownloadAction(page, office, '暂停');
   await expect(office).toContainText('已暂停');
   await page.screenshot({ path: '../../.codex-tmp/desktop-download-manager.png' });
   await navigation.getByRole('button', { name: '日志诊断', exact: true }).click();
   await navigation.getByRole('button', { name: '下载管理', exact: true }).click();
   await expect(home).toContainText('文件已就绪', { timeout: 30_000 });
-  await office.getByRole('button', { name: '继续下载', exact: true }).click();
+  await office.getByRole('button', { name: /^(继续下载|重试)$/, exact: true }).click();
   await expect(office).toContainText('文件已就绪', { timeout: 30_000 });
   const saved = page.waitForEvent('download');
   await office.getByRole('button', { name: '保存到设备' }).click();
@@ -109,6 +112,34 @@ test('desktop navigation exposes background downloads above diagnostics and save
   await expect(page.getByRole('article')).toHaveCount(0);
   await page.getByRole('button', { name: '切换账号' }).click();
   await expect(page.getByRole('article')).toHaveCount(2);
+});
+
+test('local and remote download cards show completion timing and keep it stable after navigation', async ({ page }) => {
+  await page.goto('/e2e/download-manager-harness.html');
+  await page.evaluate(() => { window.desktopDownloads.delay = 50; });
+  await enqueue(page);
+  await page.evaluate(() => window.desktopDownloads.addLocal());
+  const navigation = page.getByRole('navigation');
+  await navigation.getByRole('button', { name: '下载管理', exact: true }).click();
+  const cards = ['office.msi', 'local.patch'].map(name => page.getByRole('article', { name, exact: true }));
+  for (const item of cards) {
+    await expect(item).toContainText('文件已就绪');
+    await expect(item.locator('.download-completion')).toContainText(' · 用时');
+    await expect(item.locator('.download-completion')).not.toContainText('未记录');
+  }
+  const before = await cards[0].locator('.download-completion').innerText();
+  await navigation.getByRole('button', { name: '日志诊断', exact: true }).click();
+  await navigation.getByRole('button', { name: '下载管理', exact: true }).click();
+  await expect(cards[0].locator('.download-completion')).toHaveText(before);
+  await page.screenshot({ path: '../../.codex-tmp/desktop-download-completion.png', fullPage: true });
+  await page.evaluate(() => document.documentElement.style.setProperty('--app-font-scale', '1.3'));
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(await cards[0].locator('.download-completion').evaluate(element => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    return range.getClientRects().length;
+  })).toBe(1);
+  await page.screenshot({ path: '../../.codex-tmp/desktop-download-completion-large-font.png', fullPage: true });
 });
 
 test('disconnecting one computer pauses only its download and allows removing the task', async ({ page }) => {
@@ -121,11 +152,56 @@ test('disconnecting one computer pauses only its download and allows removing th
   await page.getByRole('button', { name: '断开办公电脑' }).click();
   const office = page.getByRole('article', { name: 'office.msi' });
   await expect(office).toContainText('已暂停');
-  await expect(office.getByRole('button', { name: '继续下载' })).toBeDisabled();
+  await expect(office.getByRole('button', { name: /^(继续下载|重试)$/ })).toBeDisabled();
   await expect(page.getByRole('article', { name: 'home.msi' })).toContainText('文件已就绪', { timeout: 20_000 });
-  await office.getByRole('button', { name: '删除', exact: true }).click();
+  await clickDownloadAction(page, office, '删除');
   await page.getByRole('dialog').getByRole('button', { name: /^删\s*除$/ }).click();
   await expect(office).toHaveCount(0);
+});
+
+test('desktop selects download cards and batch deletes with one confirmation', async ({ page }) => {
+  await page.goto('/e2e/download-manager-harness.html');
+  await page.evaluate(() => window.desktopDownloads.addLocal());
+  await enqueue(page);
+  await page.getByRole('button', { name: '切换电脑', exact: true }).click();
+  await enqueue(page);
+  await page.getByRole('navigation').getByRole('button', { name: '下载管理', exact: true }).click();
+  await page.getByRole('button', { name: '批量管理', exact: true }).click();
+  const batch = page.getByRole('button', { name: /^批量删除/ });
+  await expect(batch).toBeDisabled();
+  await page.getByRole('button', { name: '全选', exact: true }).click();
+  await expect(batch).toHaveText('批量删除（3）');
+  await expect(page.getByRole('article').getByRole('checkbox', { checked: true })).toHaveCount(3);
+  await page.screenshot({ path: '../../.codex-tmp/desktop-download-select-all.png', fullPage: true });
+  await page.getByRole('button', { name: '取消全选', exact: true }).click();
+  await expect(page.getByRole('article').getByRole('checkbox', { checked: true })).toHaveCount(0);
+  const office = page.getByRole('article', { name: 'office.msi' });
+  const home = page.getByRole('article', { name: 'home.msi' });
+  await office.locator('strong').click();
+  await home.getByRole('checkbox').check();
+  await expect(batch).toHaveText('批量删除（2）');
+  await page.getByRole('button', { name: '切换账号', exact: true }).click();
+  await expect(batch).toBeDisabled();
+  await page.getByRole('button', { name: '切换账号', exact: true }).click();
+  await expect(batch).toBeDisabled();
+  await office.getByRole('checkbox').check();
+  await home.locator('strong').click();
+  await batch.click();
+  await expect(page.getByRole('dialog')).toContainText('删除这 2 项下载？');
+  await page.getByRole('dialog').getByRole('button', { name: /^保\s*留$/ }).click();
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await expect(office.getByRole('checkbox')).toBeChecked();
+  await page.screenshot({ path: '../../.codex-tmp/download-selection-pc.png' });
+  await batch.click();
+  await page.getByRole('dialog').getByRole('button', { name: /^删\s*除$/ }).click();
+  await expect(page.getByRole('article')).toHaveCount(1);
+  await expect(batch).toBeDisabled();
+  const local = page.getByRole('article', { name: 'local.patch' });
+  await expect(local).toContainText('此电脑');
+  await local.locator('strong').click();
+  await batch.click();
+  await page.getByRole('dialog').getByRole('button', { name: /^删\s*除$/ }).click();
+  await expect(page.getByRole('article')).toHaveCount(0);
 });
 
 test('PC relay downloads use raw binary IPC and stay responsive through pause, resume and navigation',
@@ -136,10 +212,10 @@ test('PC relay downloads use raw binary IPC and stay responsive through pause, r
     await navigation.getByRole('button', { name: '下载管理', exact: true }).click();
     const office = page.getByRole('article', { name: 'office.msi' });
     await expect.poll(() => page.evaluate(() => window.desktopDownloads.nativeBulkStats.batches)).toBeGreaterThan(4);
-    await office.getByRole('button', { name: '暂停', exact: true }).click();
+    await clickDownloadAction(page, office, '暂停');
     await expect(office).toContainText('已暂停');
     const before = await page.evaluate(() => window.desktopDownloads.nativeBulkStats.polls);
-    await office.getByRole('button', { name: '继续下载', exact: true }).click();
+    await office.getByRole('button', { name: /^(继续下载|重试)$/, exact: true }).click();
     await navigation.getByRole('button', { name: '日志诊断', exact: true }).click();
     await expect(page.locator('main')).toContainText('日志诊断');
     await navigation.getByRole('button', { name: '下载管理', exact: true }).click();
@@ -161,10 +237,10 @@ test('PC native P2P downloads receive 32 MiB through raw IPC and verify the save
     await navigation.getByRole('button', { name: '下载管理', exact: true }).click();
     const office = page.getByRole('article', { name: 'office.msi' });
     await expect.poll(() => office.getByRole('progressbar').getAttribute('value')).not.toBe('0');
-    await office.getByRole('button', { name: '暂停', exact: true }).click();
+    await clickDownloadAction(page, office, '暂停');
     await expect(office).toContainText('已暂停');
     const before = await page.evaluate(() => window.desktopDownloads.nativeDirectStats.polls);
-    await office.getByRole('button', { name: '继续下载', exact: true }).click();
+    await office.getByRole('button', { name: /^(继续下载|重试)$/, exact: true }).click();
     await navigation.getByRole('button', { name: '日志诊断', exact: true }).click();
     await expect(page.locator('main')).toContainText('日志诊断');
     await navigation.getByRole('button', { name: '下载管理', exact: true }).click();

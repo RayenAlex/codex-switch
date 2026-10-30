@@ -15,12 +15,12 @@ async function scanQrFile(file: File) {
       detect(source: ImageBitmap): Promise<Array<{ rawValue?: string }>>;
     };
   }).BarcodeDetector;
-  if (!detectorType) throw new Error(t("当前浏览器不支持二维码识别，请手动粘贴密钥"));
+  if (!detectorType) throw new Error(t("client.settings.thisBrowserCannotScanQrCodesPasteTheKeyManually"));
   const bitmap = await createImageBitmap(file);
   try {
     const values = await new detectorType({ formats: ['qr_code'] }).detect(bitmap);
     const value = values[0]?.rawValue;
-    if (!value) throw new Error(t("没有识别到有效的二维码"));
+    if (!value) throw new Error(t("client.settings.noValidQrCodeFound"));
     return parseOtpAuthUri(value);
   } finally { bitmap.close(); }
 }
@@ -37,12 +37,12 @@ export function TotpForm({ entry, scanFirst, onSave, onClose }: {
       const parsed = draft.secret.trim().toLowerCase().startsWith('otpauth://')
         ? parseOtpAuthUri(draft.secret) : { ...draft, issuer: draft.issuer.trim(),
           accountName: draft.accountName.trim(), secret: normalizeTotpSecret(draft.secret) };
-      if (!parsed.issuer) throw new Error(t("请输入服务名称"));
+      if (!parsed.issuer) throw new Error(t("client.settings.enterAServiceName"));
       onSave(parsed, entry?.id);
-      Toast.show({ icon: 'success', content: t("2FA 密钥已保存") });
+      Toast.show({ icon: 'success', content: t("client.settings.2faKeySaved") });
       onClose();
     } catch (error) {
-      Toast.show({ icon: 'fail', content: error instanceof Error ? error.message : t("2FA 密钥无效") });
+      Toast.show({ icon: 'fail', content: error instanceof Error ? error.message : t("client.settings.invalid2faKey") });
     }
   };
   const importQr = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -52,21 +52,21 @@ export function TotpForm({ entry, scanFirst, onSave, onClose }: {
     setScanning(true);
     try { setDraft(await scanQrFile(file)); }
     catch (error) {
-      Toast.show({ icon: 'fail', content: error instanceof Error ? error.message : t("二维码识别失败") });
+      Toast.show({ icon: 'fail', content: error instanceof Error ? error.message : t("client.settings.couldNotReadTheQrCode") });
     } finally { setScanning(false); }
   };
-  return <AdaptiveSheet open title={entry ? t("编辑 2FA 密钥") : t("添加 2FA 密钥")}
-    subtitle={t("输入服务名称与密钥，或选择二维码图片。")} onClose={onClose}>
-    {scanFirst && <p className="settings-hint">{t("选择相册中的二维码，也可以拍摄二维码图片。")}</p>}
-    <Button block loading={scanning} onClick={() => fileRef.current?.click()}><QrCode size={18} />{t("选择二维码图片")}</Button>
+  return <AdaptiveSheet open title={entry ? t("client.settings.edit2faKey") : t("client.settings.add2faKey")}
+    subtitle={t("client.settings.enterAServiceNameAndKeyOrChooseAQr")} onClose={onClose}>
+    {scanFirst && <p className="settings-hint">{t("client.settings.chooseAQrCodeFromYourPhotosOrTakeA")}</p>}
+    <Button block loading={scanning} onClick={() => fileRef.current?.click()}><QrCode size={18} />{t("client.settings.chooseQrCodeImage")}</Button>
     <input ref={fileRef} hidden type="file" accept="image/*" onChange={event => void importQr(event)} />
-    <Form layout="vertical" footer={<Button block color="primary" disabled={scanning} onClick={save}>{t("保存密钥")}</Button>}>
-      <Form.Item label={t("服务名称")}><Input aria-label={t("服务名称")} value={draft.issuer} placeholder={t("例如 OpenAI")}
+    <Form layout="vertical" footer={<Button block color="primary" disabled={scanning} onClick={save}>{t("client.settings.saveKey")}</Button>}>
+      <Form.Item label={t("client.settings.serviceName")}><Input aria-label={t("client.settings.serviceName")} value={draft.issuer} placeholder={t("client.settings.forExampleOpenai")}
         onChange={value => setDraft(current => ({ ...current, issuer: value }))} /></Form.Item>
-      <Form.Item label={t("账号名称")}><Input aria-label={t("账号名称")} value={draft.accountName} placeholder="name@example.com"
+      <Form.Item label={t("client.settings.accountName")}><Input aria-label={t("client.settings.accountName")} value={draft.accountName} placeholder="name@example.com"
         onChange={value => setDraft(current => ({ ...current, accountName: value }))} /></Form.Item>
-      <Form.Item label={t("2FA 密钥")}><Input aria-label={t("2FA 密钥")} value={draft.secret} autoComplete="off"
-        placeholder={t("粘贴密钥或验证码链接")} onChange={value => setDraft(current => ({ ...current, secret: value }))} />
+      <Form.Item label={t("client.app.2faKeys")}><Input aria-label={t("client.app.2faKeys")} value={draft.secret} autoComplete="off"
+        placeholder={t("client.settings.pasteAKeyOrVerificationLink")} onChange={value => setDraft(current => ({ ...current, secret: value }))} />
       </Form.Item>
     </Form>
   </AdaptiveSheet>;

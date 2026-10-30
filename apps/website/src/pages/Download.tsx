@@ -1,7 +1,7 @@
 import { Button } from 'antd';
 import { Apple, ArrowRight, ArrowUpRight, Download as DownloadIcon, Monitor, Terminal } from 'lucide-react';
-import { copy } from '../content/copy';
-import type { Language } from '../content/types';
+import { copy } from '@remoteai/i18n/website-content/copy';
+import type { Language } from '@remoteai/i18n/website-content/types';
 import { href, LINKS } from '../lib/site';
 import { ConnectionIllustration } from '../components/ProductFigure';
 

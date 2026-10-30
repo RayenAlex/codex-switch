@@ -1,3 +1,4 @@
+import { displayText } from '../i18n/index';
 import { createThemedStyles } from '../theme/styles';
 import {  Text, View } from 'react-native';
 import { taskIssue } from '../../../../shared/remote-chat/taskStatus';
@@ -12,11 +13,11 @@ export function ChatTaskStatus({ state }: { state: ChatState }) {
   if (!status && !state.notificationError) return null;
   return <View accessibilityLiveRegion="polite" style={css.content}>
     {status && <View style={css.row}>
-      <Text style={css.label}>{t(status.label)}</Text>
-      <Text style={css.detail}>{t(status.detail)}</Text>
+      <Text style={css.label}>{displayText(status.label)}</Text>
+      <Text style={css.detail}>{displayText(status.detail)}</Text>
     </View>}
     {state.notificationError && <Text accessibilityRole="alert" style={css.detail}>
-      {t('部分提醒未能保存，请检查电脑可用空间，并在聊天中核对任务进度。')}</Text>}
+      {t("client.chatReliability.someAlertsCouldNotBeSavedCheckFreeSpaceOn")}</Text>}
   </View>;
 }
 

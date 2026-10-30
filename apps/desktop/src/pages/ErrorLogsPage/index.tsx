@@ -1,5 +1,5 @@
 import { getLocale } from "../../i18n";
-import { translateBackendMessage } from "../../../../../shared/i18n/backend/translateBackendMessage";
+import { formatRemoteError } from "../../../../../shared/localization/errors";
 import { useState } from "react";
 import { Alert, Button, Popconfirm, Segmented, Table, Tag, type TableColumnsType } from "antd";
 import { RefreshCw, Trash2 } from "lucide-react";
@@ -36,7 +36,7 @@ function logColumns({ language, t }: ErrorLogsPageProps,
     },
     {
       title: t("errorLogs.message"), dataIndex: "message",
-      render: (message: string) => <div className={styles.message}>{translateBackendMessage(language, message)}</div>,
+      render: (message: string) => <div className={styles.message}>{formatRemoteError(language, message)}</div>,
     },
     {
       title: t("errorLogs.status"), dataIndex: "statusCode", width: 96,

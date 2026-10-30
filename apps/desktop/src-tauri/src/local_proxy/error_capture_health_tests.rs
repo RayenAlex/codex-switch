@@ -177,17 +177,48 @@ fn fragmented_valid_response_completion_is_healthy_with_or_without_done() {
 }
 
 #[test]
-fn oversized_terminal_capture_is_unknown_instead_of_successful_or_failed() {
+fn terminal_frames_above_health_limit_remain_unknown() {
     let value = json!({
-        "type": "response.completed", "response": {"id": "resp_test", "output": "x".repeat(MAX_CAPTURE_BYTES * 2)}
+        "type": "response.completed",
+        "response": {"id": "resp_test", "output": "x".repeat(MAX_COMPLETION_CAPTURE_BYTES + 1)}
     });
     for prefix in ["", "event: response.completed\n"] {
         let body = format!("{prefix}data: {value}\n\ndata: [DONE]\n\n");
         let mut capture = ErrorCapture::new_for_health(true, 200).for_endpoint("/v1/responses");
-        assert!(observe_chunks(&mut capture, body.as_bytes()).is_empty());
+        for chunk in body.as_bytes().chunks(4096) {
+            assert!(capture.observe(chunk).is_empty());
+        }
+        assert!(capture.finish().is_empty());
         assert!(!capture.terminal_seen());
         assert!(capture.completion_unverified());
         assert!(capture.diagnostic_summary().to_string().len() < 2000);
+    }
+}
+
+#[test]
+fn health_validates_large_terminal_suffixes_without_expanding_diagnostic_capture() {
+    let output = "x".repeat(MAX_CAPTURE_BYTES * 2);
+    for (suffix, healthy) in [
+        (r#"", "status":"completed", "error":null}}"#, true),
+        (
+            r#"", "status":"failed", "error":{"code":"server_error"}}}"#,
+            false,
+        ),
+        (r#"", "status":"completed"}BROKEN}"#, false),
+        (r#"", "status":"completed"}} trailing"#, false),
+    ] {
+        let body = format!(
+            "data: {{\"type\":\"response.completed\",\"response\":{{\"id\":\"resp\",\"output\":\"{output}{suffix}\n\n"
+        );
+        let mut capture = ErrorCapture::new_for_health(true, 200).for_endpoint("/v1/responses");
+        let errors = observe_chunks(&mut capture, body.as_bytes());
+        assert_eq!(capture.terminal_seen(), healthy, "{suffix}");
+        assert_eq!(errors.is_empty(), healthy, "{suffix}");
+        assert!(!capture.completion_unverified());
+        let mut diagnostics = ErrorCapture::new(true, 200).for_endpoint("/v1/responses");
+        assert!(observe_chunks(&mut diagnostics, body.as_bytes()).is_empty());
+        assert!(diagnostics.completion_unverified());
+        assert!(diagnostics.buffer.capacity() <= MAX_CAPTURE_BYTES);
     }
 }
 

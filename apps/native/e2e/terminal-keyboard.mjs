@@ -21,7 +21,7 @@ async function checkLayout(label) {
   const current = await nodes();
   const terminal = current.find(node => node.class === 'android.webkit.WebView');
   assert.ok(terminal, 'Terminal WebView must remain visible');
-  for (const control of ['自动换行', '关闭终端', '收起终端', '终端 1']) {
+  for (const control of ['自动换行', '关闭终端 1', '收起终端', '终端 1']) {
     const node = current.filter(node => node['content-desc'] === control || node.text === control).at(-1);
     assert.ok(node, `${control} must remain visible after resizing`);
     assert.ok(node.rect[1] >= 0 && node.rect[3] > node.rect[1], `${control} must stay on screen`);
@@ -122,7 +122,7 @@ try {
   await tap('打开远程终端');
   await waitText('Office · /project');
   await screenshot('restored-project');
-  await tap('关闭终端');
+  await tap('关闭终端 1');
   await waitText('Opened 2, closed 1');
   await tap('Switch project');
   await tap('打开远程终端');

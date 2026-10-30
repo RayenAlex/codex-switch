@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { setInterfaceLanguage } from '../../../../shared/i18n/interfaceLanguage';
+import { setInterfaceLanguage } from "../../../../shared/localization/interfaceLanguage";
 import { isMarkdownPath } from '../../../../shared/remote-chat/textPreview';
 import { ChatMarkdownPreview } from './ChatMarkdownPreview';
 
@@ -12,6 +12,7 @@ vi.mock('react', async importOriginal => ({
   useSyncExternalStore: (_subscribe: unknown, snapshot: () => unknown) => snapshot(),
 }));
 vi.mock('react-native', () => ({ Pressable: 'Button', Text: 'Text', View: 'View',
+  Platform: { OS: 'android' },
   StyleSheet: { create: <T,>(styles: T) => styles },
 }));
 vi.mock('../components/SheetScrollView', () => ({ SheetScrollView: 'ScrollView', SheetInset: 'Inset' }));

@@ -1,6 +1,13 @@
 use super::*;
 use serde_json::json;
 
+fn test_app() -> tauri::App<tauri::test::MockRuntime> {
+    let mut context = tauri::test::mock_context(tauri::test::noop_assets());
+    context.config_mut().identifier =
+        format!("com.codex-switch.metrics-test.{}", uuid::Uuid::new_v4());
+    tauri::test::mock_builder().build(context).unwrap()
+}
+
 fn request(output_tokens: Option<u64>, response_time_ms: Option<u64>) -> ProxySessionRequestState {
     serde_json::from_value(json!({
         "id": 1, "started_at": 1,
@@ -40,6 +47,35 @@ fn tps_uses_combined_output_time_without_first_response_wait() {
     assert_eq!(summary.total_output_tokens, 400);
     assert_eq!(summary.total_output_time_ms, 4_000);
     assert_eq!(summary.output_request_count, 2);
+}
+
+#[test]
+fn renderer_metrics_read_only_the_requested_thread() {
+    let id = "renderer-metrics-isolated-thread";
+    let other = "renderer-metrics-unrelated-thread";
+    {
+        let mut sessions = super::super::proxy_sessions().lock().unwrap();
+        sessions.insert(
+            id.to_string(),
+            session(1, vec![request(Some(100), Some(3_000))]),
+        );
+        sessions.insert(
+            other.to_string(),
+            session(2, vec![request(Some(90_000), Some(2_000))]),
+        );
+    }
+    let result = load_session_metrics(id).unwrap();
+    let missing = load_session_metrics("renderer-metrics-no-history").unwrap();
+    {
+        let mut sessions = super::super::proxy_sessions().lock().unwrap();
+        sessions.remove(id);
+        sessions.remove(other);
+    }
+    assert_eq!(result.total_output_tokens, 100);
+    assert_eq!(result.total_output_time_ms, 2_000);
+    assert_eq!(result.output_request_count, 1);
+    assert_eq!(missing.output_request_count, 0);
+    assert!(load_session_metrics("bad thread id").is_err());
 }
 
 #[test]
@@ -106,6 +142,7 @@ fn tps_keeps_known_zero_output_and_only_the_five_most_recent_sessions() {
 
 #[test]
 fn metrics_command_yields_while_active_requests_hold_the_registry_lock() {
+    let app = test_app();
     use std::{future::Future, sync::mpsc, task::Poll, thread, time::Duration};
 
     let (locked_sender, locked_receiver) = mpsc::channel();
@@ -125,7 +162,7 @@ fn metrics_command_yields_while_active_requests_hold_the_registry_lock() {
     let yielded = tauri::async_runtime::block_on(async {
         let mut command = std::pin::pin!(futures_util::future::try_join(
             super::super::get_recent_proxy_session_latency(),
-            get_proxy_session_metrics("responsive-conversation".into()),
+            get_proxy_session_metrics(app.handle().clone(), "responsive-conversation".into()),
         ));
         let first_poll = std::future::poll_fn(|cx| Poll::Ready(command.as_mut().poll(cx))).await;
         release_sender.send(()).unwrap();
@@ -148,20 +185,25 @@ fn metrics_command_yields_while_active_requests_hold_the_registry_lock() {
 
 #[test]
 fn conversation_metrics_are_isolated_even_when_other_conversations_are_more_recent() {
+    let app = test_app();
     let id = uuid::Uuid::new_v4().to_string();
     let other_id = uuid::Uuid::new_v4().to_string();
     let mut selected = session(1, vec![request(Some(200), Some(3_000))]);
     selected.requests[0].first_token_time_ms = Some(1_500);
     selected.id = id.clone();
+    selected.token_totals.estimated_cost_usd = Some(1.23);
     let mut other = session(10, vec![request(Some(90_000), Some(2_000))]);
     other.requests[0].first_token_time_ms = Some(50);
     other.id = other_id.clone();
+    other.token_totals.estimated_cost_usd = Some(99.0);
     {
         let mut sessions = super::super::proxy_sessions().lock().unwrap();
         sessions.insert(id.clone(), selected);
         sessions.insert(other_id.clone(), other);
     }
-    let summary = tauri::async_runtime::block_on(get_proxy_session_metrics(id.clone())).unwrap();
+    let summary =
+        tauri::async_runtime::block_on(get_proxy_session_metrics(app.handle().clone(), id.clone()))
+            .unwrap();
     let unknown = read_session_metrics(&uuid::Uuid::new_v4().to_string()).unwrap();
     {
         let mut sessions = super::super::proxy_sessions().lock().unwrap();
@@ -169,6 +211,7 @@ fn conversation_metrics_are_isolated_even_when_other_conversations_are_more_rece
         sessions.remove(&other_id);
     }
     assert_eq!(summary.total_output_tokens, 200);
+    assert_eq!(summary.estimated_cost_usd, Some(1.23));
     assert_eq!(summary.total_first_token_time_ms, 1_500);
     assert_eq!(summary.first_token_request_count, 1);
     assert_eq!(summary.total_output_time_ms, 2_000);
@@ -178,12 +221,17 @@ fn conversation_metrics_are_isolated_even_when_other_conversations_are_more_rece
 
 #[test]
 fn conversation_metrics_reject_invalid_identifiers() {
+    let app = test_app();
     for id in [
         "".to_owned(),
         " ".into(),
         "thread\nother".into(),
         "x".repeat(MAX_THREAD_ID_BYTES + 1),
     ] {
-        assert!(tauri::async_runtime::block_on(get_proxy_session_metrics(id)).is_err());
+        assert!(tauri::async_runtime::block_on(get_proxy_session_metrics(
+            app.handle().clone(),
+            id
+        ))
+        .is_err());
     }
 }

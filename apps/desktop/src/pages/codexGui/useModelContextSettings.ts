@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "../../api/backend";
-import { guiText } from "../../i18n/guiText";
+import { uiText } from "../../i18n/uiText";
 import { parseContextCapacity, TOKENS_PER_K } from "../../../../../shared/remote-chat/contextSettings";
 
 export interface ModelContextSettings {
@@ -31,7 +31,7 @@ export function useModelContextSettings() {
         setSettings(snapshot); setDraft(valuesK(snapshot.overrides));
       }
     } catch {
-      if (active.current && request === revision.current) setError(guiText("暂时无法读取模型上下文设置，请重试。"));
+      if (active.current && request === revision.current) setError(uiText("client.guiSettings.unableToLoadModelContextSettingsPleaseRetry"));
     } finally {
       if (active.current && request === revision.current) setLoading(false);
     }
@@ -45,7 +45,7 @@ export function useModelContextSettings() {
     if (!settings || loading || pending.current) return false;
     const capacity = parseContextCapacity(value);
     if (capacity === undefined) {
-      setError(guiText("请输入 1 至 100000 K 之间的上下文容量。")); return false;
+      setError(uiText("client.errors.enterAContextCapacityBetween1And100000K")); return false;
     }
     if ((settings.overrides[model] ?? null) === capacity) {
       setDraft((current) => ({ ...current, [model]: capacity === null ? "" : String(capacity / TOKENS_PER_K) }));
@@ -59,7 +59,7 @@ export function useModelContextSettings() {
       setDraft(valuesK(saved.overrides));
       return true;
     } catch {
-      if (active.current) setError(guiText("模型上下文设置未保存，请重试。"));
+      if (active.current) setError(uiText("client.guiSettings.modelContextSettingsWereNotSavedPleaseRetry"));
       return false;
     } finally {
       pending.current = false; if (active.current) setSaving(false);

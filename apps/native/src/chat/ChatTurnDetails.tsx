@@ -16,8 +16,8 @@ import type { Turn } from './types';
 import { TaskReviewPanel } from './review/TaskReviewPanel';
 
 interface Props { turn: Turn; panel: TurnPanel; onClose: () => void }
-const PANEL_TITLES: Record<TurnPanel, string> = { get plan() { return t("任务计划"); },
-  get changes() { return t("本轮修改"); }, get error() { return t("报错详情"); }, get result() { return t('任务验收'); } };
+const PANEL_TITLES: Record<TurnPanel, string> = { get plan() { return t("client.chat.taskPlan"); },
+  get changes() { return t("client.chat.changesThisTurn"); }, get error() { return t("client.chat.errorDetails"); }, get result() { return t("client.taskReview.taskReview"); } };
 
 function PlanDetails({ turn }: { turn: Turn }) {
   const resolveThemeColor = useThemeColor();
@@ -33,7 +33,7 @@ function PlanDetails({ turn }: { turn: Turn }) {
         <Ionicons name={completed ? 'checkmark-circle-outline' : running ? 'sync-outline' : 'ellipse-outline'}
           size={15} color={completed ? resolveThemeColor(palette.green, 'accent') : resolveThemeColor(palette.muted, 'muted')} />
         <Text style={[styles.messageText, styles.fill, running && detailStyles.activeStep]}>{step.step}</Text>
-        <Text style={styles.subtitle}>{completed ? t("已完成") : running ? t("进行中") : t("待开始")}</Text>
+        <Text style={styles.subtitle}>{completed ? t("client.chat.completed") : running ? t("client.chat.inProgress") : t("client.chat.pending")}</Text>
       </View>;
     })}
   </View>;
@@ -46,14 +46,14 @@ function ErrorDetails({ turn }: { turn: Turn }) {
   const error = turn.error ?? turn.retryError;
   const text = error ? requestErrorDetails(error) : turnErrorNotice(turn);
   return <View style={detailStyles.error}>
-    <SelectableChatText style={styles.messageText} copy={{ text, label: t("复制报错详情") }}>{text}</SelectableChatText>
+    <SelectableChatText style={styles.messageText} copy={{ text, label: t("client.chat.copyErrorDetails") }}>{text}</SelectableChatText>
   </View>;
 }
 
 export function ChatTurnDetails({ turn, panel, onClose }: Props) {
   const detailStyles = useDetailStyles();
   useLanguage();
-  return <BottomSheet fullWidthContent visible tall title={PANEL_TITLES[panel]} onClose={onClose} dragFromHeaderOnly>
+  return <BottomSheet fullWidthContent visible tall title={PANEL_TITLES[panel]} onClose={onClose}>
     <SheetScrollView style={detailStyles.scroll} contentContainerStyle={detailStyles.content}>
       {panel === 'result' && <TaskReviewPanel key={turn.id} turn={turn} />}
       {panel === 'plan' && <PlanDetails turn={turn} />}

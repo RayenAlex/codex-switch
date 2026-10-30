@@ -129,7 +129,7 @@ async function fetchLatestRelease(): Promise<GitHubRelease> {
       },
     });
     if (!response.ok) {
-      throw new Error(t("检查更新服务返回 HTTP {value1}", { value1: response.status }));
+      throw new Error(t("client.mobile.updateCheckReturnedHttp", { value1: response.status }));
     }
     return await response.json() as GitHubRelease;
   } finally { clearTimeout(timer); }
@@ -143,7 +143,7 @@ export async function checkForAppUpdate(): Promise<AppUpdateCheck> {
   const version = versionFromReleaseMetadata([tagName, payload.name, ...assetNames]);
   const releaseUrl = textValue(payload.html_url);
   if (!version || !releaseUrl) {
-    throw new Error(t("最新版本信息格式无效"));
+    throw new Error(t("client.mobile.invalidUpdateInformation"));
   }
 
   const release: AppRelease = {
@@ -180,7 +180,7 @@ async function blobUtil() {
   try {
     return (await import('react-native-blob-util')).default;
   } catch {
-    throw new Error(t("当前安装包不包含后台下载组件，请安装最新完整版本后重试"));
+    throw new Error(t("client.mobile.backgroundDownloadsAreUnavailableInThisBuildInstallTheLatest"));
   }
 }
 
@@ -263,8 +263,8 @@ async function prepareAndroidDownload(release: AppRelease, wifiOnly: boolean): P
 }
 
 export async function startAndroidUpdateDownload(release: AppRelease, options: { wifiOnly?: boolean } = {}) {
-  if (Platform.OS !== 'android') throw new Error(t("应用内安装目前仅支持 Android"));
-  if (!release.androidAsset) throw new Error(t("该版本没有可用的 Android 安装包"));
+  if (Platform.OS !== 'android') throw new Error(t("client.mobile.inAppInstallationIsCurrentlyAvailableOnlyOnAndroid"));
+  if (!release.androidAsset) throw new Error(t("client.mobile.noAndroidPackageAvailableForThisVersion"));
   await activeCancellation;
   if (activeDownload) return activeDownload;
   if (options.wifiOnly) await checkAutomaticDownloadAllowed(release.version);
@@ -308,7 +308,7 @@ async function runAndroidDownload({ release, attempt, wifiOnly }: {
     await attempt.control.checkActive();
     if (error instanceof AndroidUpdateCancelled) throw error;
     reporting.finish(false);
-    const message = t("下载未完成，请重新下载。");
+    const message = t("client.settings.theDownloadDidNotFinishPleaseDownloadItAgain");
     await SecureStore.deleteItemAsync(UPDATE_METADATA_KEY).catch(() => undefined);
     publishDownloadState({ status: 'failed', version: release.version, message });
     throw error;
@@ -328,7 +328,7 @@ async function finishAndroidDownload({ stored, control, reporting }: {
   } });
   reporting.verify();
   if (!await verifyAndroidPackage({ path: stored.path, size: stored.expectedSize, sha256: stored.sha256 })) {
-    throw new Error(t("下载未完成，请重新下载。"));
+    throw new Error(t("client.settings.theDownloadDidNotFinishPleaseDownloadItAgain"));
   }
   await control.checkActive();
   await SecureStore.setItemAsync(UPDATE_METADATA_KEY, JSON.stringify(stored));
@@ -348,12 +348,12 @@ async function downloadAndroidPackage(options: {
   const official = downloadOfficialAndroidUpdate(options);
   if (official) return official;
   // Older native binaries cannot enforce Wi-Fi on DownloadManager jobs: never auto-start those jobs.
-  if (options.wifiOnly) throw new Error(t("下载未完成，请重新下载。"));
+  if (options.wifiOnly) throw new Error(t("client.settings.theDownloadDidNotFinishPleaseDownloadItAgain"));
   const util = await blobUtil();
   await options.checkActive();
   const response = await util.config({ addAndroidDownloads: {
     useDownloadManager: true, notification: true, mediaScannable: true, path: options.path,
-    title: `Remote AI ${options.release.version}`, description: t("下载完成后可安装更新"), mime: APK_MIME_TYPE,
+    title: `Remote AI ${options.release.version}`, description: t("client.mobile.installTheUpdateWhenTheDownloadFinishes"), mime: APK_MIME_TYPE,
   } }).fetch('GET', options.release.androidAsset!.downloadUrl);
   return response.path() || options.path;
 }
@@ -388,12 +388,12 @@ export function cancelAndroidUpdateDownload(): Promise<void> {
 }
 
 export async function installDownloadedAndroidUpdate(path: string) {
-  if (Platform.OS !== 'android') throw new Error(t("应用内安装目前仅支持 Android"));
+  if (Platform.OS !== 'android') throw new Error(t("client.mobile.inAppInstallationIsCurrentlyAvailableOnlyOnAndroid"));
   const util = await blobUtil();
   const stored = await readStoredAndroidUpdate();
   if (!stored || stored.cancelled || stored.path !== path
     || !await verifyAndroidPackage({ path, size: stored.expectedSize, sha256: stored.sha256 })) {
-    throw new Error(t("下载未完成，请重新下载。"));
+    throw new Error(t("client.settings.theDownloadDidNotFinishPleaseDownloadItAgain"));
   }
   await util.android.actionViewIntent(path, APK_MIME_TYPE);
 }

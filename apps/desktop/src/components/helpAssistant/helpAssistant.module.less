@@ -10,8 +10,8 @@
   button:disabled { cursor: default; opacity: .5; }
 }
 .launcher {
-  width: 31px;
-  height: 31px;
+  width: 33px;
+  height: 33px;
   padding: 0;
   display: grid;
   place-items: center;
@@ -21,7 +21,9 @@
   box-shadow: 0 6px 24px #234e7e26;
   position: relative;
   margin-left: auto;
-  img { width: 30px; height: 30px; object-fit: cover; border-radius: 10.5px; transform: scale(1.05); }
+  user-select: none;
+  img { width: 32px; height: 32px; object-fit: cover; border-radius: 10.5px; transform: scale(1.05); }
+  &[data-dragging] { cursor: grabbing; }
   &:hover, &:focus-visible { box-shadow: 0 8px 28px #2776c43d; }
   &:hover .tooltip, &:focus-visible .tooltip { opacity: 1; }
 }
@@ -42,7 +44,8 @@
 }
 .tooltip {
   position: absolute;
-  right: 41px;
+  right: 43px;
+  &[data-side='right'] { left: 43px; right: auto; }
   width: max-content;
   max-width: min(240px, calc(100vw - 79px));
   padding: 6px 10px;
@@ -56,7 +59,7 @@
 }
 .panel {
   position: absolute;
-  bottom: 45px;
+  bottom: 47px;
   right: 0;
   width: min(392px, calc(100vw - 32px));
   max-width: 400px;

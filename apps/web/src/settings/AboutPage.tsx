@@ -8,20 +8,20 @@ export function AboutPage({ onBack }: { onBack: () => void }) {
   useLanguage();
   return <div className="page-body settings-page about-page">
     <header className="settings-navigation"><button type="button" className="icon-button"
-      aria-label={t("返回设置")} onClick={onBack}><ArrowLeft size={22} /></button><h1>{t("关于")}</h1></header>
+      aria-label={t("client.downloads.backToSettings")} onClick={onBack}><ArrowLeft size={22} /></button><h1>{t("client.settings.about")}</h1></header>
     <section className="settings-group about-identity">
       <BrandMark />
       <div><h2>Remote AI <small>Web</small></h2><p>v{version}</p></div>
-      <p>{t("管理账号用量，随时连接桌面设备。")}</p>
+      <p>{t("client.settings.manageAccountUsageAndConnectToYourComputersFromAnywhere")}</p>
     </section>
     <section className="settings-group">
-      <SettingsRow label={t("当前版本")} value={`v${version}`} icon={Box} tone="blue" />
-      <SettingsRow label={t("运行平台")} value={t("Web 浏览器")} icon={Globe} tone="blue" />
-      <SettingsRow label={t("开源许可")} value="Apache-2.0" icon={FileText} tone="orange" />
+      <SettingsRow label={t("client.settings.version")} value={`v${version}`} icon={Box} tone="blue" />
+      <SettingsRow label={t("client.settings.platform")} value={t("client.settings.webBrowser")} icon={Globe} tone="blue" />
+      <SettingsRow label={t("client.settings.license")} value="Apache-2.0" icon={FileText} tone="orange" />
     </section>
     <section className="settings-group"><a className="settings-link"
       href="https://github.com/piperhex/remoteai/releases"
-      target="_blank" rel="noreferrer"><Github size={21} /><span>{t("开源项目与历史版本")}</span></a></section>
-    <p className="settings-hint">{t("网页版由服务端更新，无需下载安装包。")}</p>
+      target="_blank" rel="noreferrer"><Github size={21} /><span>{t("client.settings.sourceCodeAndReleases")}</span></a></section>
+    <p className="settings-hint">{t("client.settings.theWebAppUpdatesAutomaticallyNoDownloadNeeded")}</p>
   </div>;
 }

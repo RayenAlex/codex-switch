@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { createThemedStyles } from '../../theme/styles';
 import { t, useLanguage } from '../../i18n';
+import { textMetrics } from '../../theme/text';
 
 export function GitActionDialog({ title, close, busy, children, confirm, label, disabled, danger }: {
   title: string; close: () => void; busy?: boolean; children: ReactNode; confirm?: () => void;
@@ -16,7 +17,7 @@ export function GitActionDialog({ title, close, busy, children, confirm, label, 
       <ScrollView keyboardShouldPersistTaps="handled" style={styles.content}>{children}</ScrollView>
       <View style={styles.buttons}>
         <Pressable accessibilityRole="button" disabled={busy} onPress={close} style={styles.button}>
-          <Text style={styles.label}>{t('取消')}</Text></Pressable>
+          <Text style={styles.label}>{t("client.accounts.cancel")}</Text></Pressable>
         {confirm && <Pressable accessibilityRole="button" accessibilityLabel={label}
           accessibilityState={{ disabled: disabled || busy, busy }} disabled={disabled || busy}
           onPress={confirm} style={[styles.button, (disabled || busy) && styles.disabled]}>
@@ -33,12 +34,12 @@ export const useGitActionStyles = createThemedStyles(color => ({
   card: { width: '100%', maxWidth: 400, maxHeight: '100%', padding: 16, borderRadius: 16,
     backgroundColor: color('#fff', 'surface') },
   content: { flexShrink: 1 },
-  title: { fontSize: 16, fontWeight: '700', color: color('#17211b', 'ink'), marginBottom: 12 },
-  text: { fontSize: 13, lineHeight: 20, color: color('#17211b', 'ink'), marginBottom: 10 },
-  hint: { fontSize: 12, lineHeight: 18, color: color('#708078', 'muted'), marginTop: 4 },
+  title: { ...textMetrics(16, 24), fontWeight: '700', color: color('#17211b', 'ink'), marginBottom: 12 },
+  text: { ...textMetrics(13, 20), color: color('#17211b', 'ink'), marginBottom: 10 },
+  hint: { ...textMetrics(12, 18), color: color('#708078', 'muted'), marginTop: 4 },
   item: { minHeight: 44, justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 8,
     borderRadius: 8 },
-  label: { fontSize: 14, lineHeight: 20, color: color('#0b8065', 'accent') },
+  label: { ...textMetrics(14, 20), color: color('#0b8065', 'accent') },
   selected: { backgroundColor: color('#e4f4ef', 'elevated') },
   buttons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12, paddingTop: 12 },
   button: { minHeight: 44, paddingHorizontal: 12, justifyContent: 'center', alignItems: 'center' },

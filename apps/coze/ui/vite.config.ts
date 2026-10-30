@@ -7,5 +7,5 @@ export default defineConfig({
   plugins: [react()],
   build: { outDir: "../dist/ui", emptyOutDir: true, target: "es2022" },
   // Unit tests assert Chinese copy: pin the zh-CN locale the desktop tests use.
-  test: { setupFiles: [fileURLToPath(new URL("../../../shared/i18n/testLocale.ts", import.meta.url))] },
+  test: { setupFiles: [fileURLToPath(new URL("../../../shared/localization/testLocale.ts", import.meta.url))] },
 });

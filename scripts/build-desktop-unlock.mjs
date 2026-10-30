@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveCmakeTool } from './resolve-cmake-tool.mjs';
+import { resolveVisualStudioGenerator } from './resolve-visual-studio-generator.mjs';
 
 export function buildDesktopUnlock() {
   if (process.platform !== 'win32' || process.arch !== 'x64') return;
@@ -10,7 +11,7 @@ export function buildDesktopUnlock() {
   const source = resolve(root, 'apps/desktop/src-tauri/desktop-unlock');
   const output = resolve(root, 'apps/desktop/src-tauri/resources/desktop-service');
   const cmake = resolveCmakeTool('cmake');
-  run(cmake, ['-S', source, '-B', directory, '-G', 'Visual Studio 17 2022', '-A', 'x64',
+  run(cmake, ['-S', source, '-B', directory, '-G', resolveVisualStudioGenerator(cmake), '-A', 'x64',
     '-DCMAKE_SYSTEM_VERSION=10.0.26100.0', `-DUNLOCK_OUTPUT=${output}`]);
   run(cmake, ['--build', directory, '--config', 'Release', '--parallel']);
   run(resolveCmakeTool('ctest'), ['--test-dir', directory, '-C', 'Release', '--output-on-failure']);

@@ -42,18 +42,33 @@ test('navigation, feature filters, language switch and FAQ work', async ({ page 
     .first()
     .click();
   await expect(page.locator('h1')).toContainText('电脑上的工作');
+  await page.locator('.language-switch summary').click();
+  await expect(page.locator('.language-options')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.language-options')).toBeHidden();
+  await page.locator('.language-switch summary').click();
+  await page.locator('h1').click();
+  await expect(page.locator('.language-options')).toBeHidden();
+  await page.locator('.language-switch summary').click();
   await page.getByRole('link', { name: 'EN', exact: true }).click();
   await expect(page).toHaveURL(/\/en\/features\/remote-workspace\/$/);
   await expect(page.locator('h1')).toContainText('Same computer');
   await page.getByText('Can tasks run after my computer shuts down?', { exact: true }).click();
   await expect(page.locator('details[open]')).toContainText('No. Tasks depend on the host computer.');
+  await page.locator('.language-switch summary').click();
   await page.getByRole('link', { name: 'RU', exact: true }).click();
   await expect(page).toHaveURL(/\/ru\/features\/remote-workspace\/$/);
   await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
-  await expect(page.getByRole('link', { name: 'EN', exact: true })).toHaveAttribute(
+  await expect(page.locator('.language-options a[hreflang="en"]')).toHaveAttribute(
     'href',
     `${basePath}en/features/remote-workspace/`,
   );
+  await page.locator('.language-switch summary').click();
+  await page.getByRole('link', { name: '日本語', exact: true }).click();
+  await expect(page).toHaveURL(/\/ja\/features\/remote-workspace\/$/);
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
+  await expect(page.locator('h1')).toContainText('いつものコンピューターを');
+  await page.locator('.language-switch summary').click();
   await page.getByRole('link', { name: '中文', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${basePath}features/remote-workspace/$`));
   await expect(page.locator('h1')).toContainText('电脑上的工作');
@@ -76,6 +91,9 @@ test('narrow screens keep navigation and long feature pages usable', async ({ pa
     'ru/',
     'ru/resources/',
     'ru/features/computer-use/',
+    'ja/',
+    'ja/resources/',
+    'ja/features/computer-use/',
   ]) {
     await page.goto(`${basePath}${path}`);
     await expect(page.locator('h1')).toBeVisible();
@@ -115,6 +133,11 @@ test('core content, FAQ and mobile navigation remain usable without JavaScript',
     .click();
   await expect(page).toHaveURL(/\/ru\/resources\/#learn$/);
   await expect(page.getByRole('heading', { name: 'Оценка моделей и обучение 4', exact: true })).toBeInViewport();
+  await page.goto('ja/');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
+  await expect(page.locator('h1')).toContainText('アイデアを');
+  await page.goto('ja/resources/');
+  await expect(page.locator('.resource-card')).toHaveCount(26);
   await context.close();
 });
 
@@ -140,18 +163,25 @@ test('capture desktop and mobile visual checkpoints', async ({ page }) => {
   await page.screenshot({ path: 'test-results/home-white-desktop.png', fullPage: true });
   await page.goto('features/remote-workspace/');
   await page.screenshot({ path: 'test-results/feature-white-desktop.png', fullPage: true });
+  await page.goto('ja/');
+  await loadImages(page);
+  await page.screenshot({ path: 'test-results/home-japanese-desktop.png' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: 'test-results/home-japanese-mobile.png' });
 });
 
 async function loadImages(page: Page) {
-  await page.locator('img').evaluateAll(async (images) => {
-    await Promise.all(
-      images.map(async (image) => {
-        if (!(image instanceof HTMLImageElement)) return;
-        image.loading = 'eager';
-        await image.decode();
-      }),
-    );
-  });
+  // Resizing can replace a srcset candidate while decode() is pending. Require a successful
+  // decode after the selected source settles; genuinely broken images still fail this check.
+  await expect.poll(() => page.locator('img').evaluateAll(async (images) => {
+    const failures = await Promise.all(images.map(async (image) => {
+      if (!(image instanceof HTMLImageElement)) return null;
+      image.loading = 'eager';
+      try { await image.decode(); return null; }
+      catch { return image.currentSrc || image.src; }
+    }));
+    return failures.filter(source => source !== null);
+  })).toEqual([]);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }

@@ -45,6 +45,7 @@ mod renderer_refresh;
 pub(crate) use renderer_refresh::refresh_after_launch;
 
 pub(crate) struct ModelRefreshRequest {
+    pub(crate) display_names: std::collections::BTreeMap<String, String>,
     pub(crate) models: Vec<String>,
     pub(crate) fast_mode_models: Vec<String>,
     pub(crate) image_input_models: Vec<String>,
@@ -232,6 +233,7 @@ fn upstream_model_refresh_reset(selected_model: String) -> ModelRefreshRequest {
     // An empty list removes a previous Provider picker override so Codex can retry the upstream.
     // Injecting the default model here would keep hiding every other model after recovery.
     ModelRefreshRequest {
+        display_names: Default::default(),
         models: Vec::new(),
         fast_mode_models: Vec::new(),
         image_input_models: Vec::new(),
@@ -387,6 +389,7 @@ impl OfficialCatalogBuilder {
             return Err("Official model catalog is empty".to_string());
         }
         Ok(ModelRefreshRequest {
+            display_names: Default::default(),
             models: self.models,
             fast_mode_models: self.fast_mode_models,
             image_input_models: self.image_input_models,

@@ -53,6 +53,7 @@ export class NativeDesktopSession {
       stage = 'stream-open';
       this.diagnostic?.('desktop-stage', { stage, state: 'connecting', ...this.captureDiagnostic() });
       const offer = await this.openStream();
+      if (offer.displayState) this.displays = { ...this.displays, ...offer.displayState };
       if (this.stopped) throw new Error('桌面连接已结束。');
       this.diagnostic?.('desktop-stage', { stage: 'ready', durationMs: performance.now() - started,
         ...this.captureDiagnostic() });
@@ -74,7 +75,7 @@ export class NativeDesktopSession {
   }
 
   private openStream() {
-    return invoke<{ sdp: string; directUpgrade?: boolean; relayStandby?: boolean }>(
+    return invoke<{ sdp: string; directUpgrade?: boolean; relayStandby?: boolean; displayState?: DesktopDisplays }>(
       'remote_desktop_stream_open', { request: {
         id: this.id, profile: profile(this.settings, this.displays), clipboardChannel: this.settings.clipboardChannel === true,
         relayStandby: this.settings.relayStandby === true,
@@ -113,7 +114,7 @@ export class NativeDesktopSession {
     if (!this.id || this.stopped) throw new Error('桌面连接已结束。');
     if (this.changingPrivacy) throw new Error('正在调整显示，请稍候。');
     const failure = change.resolution ? '分辨率未能切换，请选择其他分辨率后重试。'
-      : '隐私屏未能切换，请重新连接后重试。';
+      : 'client.remoteDesktop.privacyFailed';
     this.changingPrivacy = true;
     let accepted = false;
     try {
