@@ -1,0 +1,54 @@
+import { Download, ExternalLink, Pause, Play, Share2, Trash2 } from 'lucide-react';
+import { t } from '../i18n';
+import type { DownloadTask } from './types';
+import { archivePercent, archiveStatus } from '../../../../shared/remote-chat/archiveDownload';
+import { canShareDownload } from './shareDownload';
+
+export function formatBytes(value: number) {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+const STATUS = { queued: '等待下载', preparing: '准备并校验文件', downloading: '下载中', verifying: '正在校验',
+  ready: '文件已就绪', saving: '正在保存', paused: '已暂停', completed: '已完成', failed: '下载失败' };
+
+export function DownloadCard({ task, busy, connected, action, open, share, remove, text = t }: {
+  task: DownloadTask; busy: boolean; connected: boolean; action: () => void; remove: () => void;
+  open: () => void; share?: () => void; text?: typeof t;
+}) {
+  const running = ['downloading', 'queued', 'preparing', 'verifying'].includes(task.status);
+  const completed = ['completed', 'ready', 'saving'].includes(task.status);
+  const label = completed ? '保存到设备' : running ? '暂停' : '继续下载';
+  const Icon = completed ? Download : running ? Pause : Play;
+  const preparation = task.status === 'preparing' ? task.preparation : undefined;
+  const downloadPercent = task.size ? Math.round(task.received / task.size * 100) : 0;
+  const percent = preparation ? archivePercent(preparation) : completed ? 100 : downloadPercent;
+  const status = preparation ? archiveStatus(preparation) : STATUS[task.status];
+  const detail = preparation ? text('已压缩 {done} / {total} 个文件', {
+    done: preparation.completedFiles, total: preparation.totalFiles,
+  }) : `${formatBytes(task.received)} / ${formatBytes(task.size)}`;
+  return <article className="download-card" aria-label={task.name}>
+    <div className="download-task-heading"><strong>{task.name}</strong><span>{text(status)}
+      {preparation?.phase === 'compressing' && ` · ${percent}%`}</span></div>
+    <p className="download-path">{task.source.deviceName} · {task.source.path}</p>
+    <progress max={100} value={percent} aria-label={text(
+      preparation ? '压缩进度：{name}' : '下载进度：{name}', { name: task.name })} />
+    <div className="download-task-meta"><span>
+      {task.status === 'preparing' && preparation?.phase !== 'compressing' ? text(status) : detail}</span>
+      {task.status === 'downloading' && !!task.bytesPerSecond && <span>{formatBytes(task.bytesPerSecond)}/s</span>}
+    </div>
+    {task.message && <p role="status" className="download-notice">{text(task.message)}</p>}
+    {!connected && !completed && <p className="download-notice">{text('连接原来的电脑后可继续下载。')}</p>}
+    <div className="download-actions">
+      {completed && <button type="button" className="download-button" onClick={open}
+        disabled={busy || task.status === 'saving'}><ExternalLink size={17} />{text('打开')}</button>}
+      {completed && share && canShareDownload(task) && <button type="button" className="download-button"
+        onClick={share} disabled={busy || task.status === 'saving'}><Share2 size={17} />{text('分享')}</button>}
+      <button type="button" className="download-button" onClick={action}
+        disabled={busy || task.status === 'saving' || (!running && !completed && !connected)}>
+        <Icon size={17} />{text(label)}</button>
+      <button type="button" className="download-button download-danger" disabled={busy} onClick={remove}>
+        <Trash2 size={17} />{text('删除')}</button>
+    </div>
+  </article>;
+}

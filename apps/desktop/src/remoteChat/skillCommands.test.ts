@@ -8,9 +8,14 @@ import { guiApi } from '../pages/codexGui/api';
 import { ChatOperations } from './operations';
 import { remoteQueue } from './queue';
 
+vi.mock('../pages/codexGui/composerBridge', () => ({ guiComposer: {
+  validateSend: async () => ({ model: 'model', effort: 'high', access: 'workspace-write' }),
+} }));
 vi.mock('../pages/codexGui/api', () => ({ guiApi: { connect: vi.fn(), request: vi.fn(), respond: vi.fn() } }));
 const skill: Skill = { name: 'review', path: 'C:/skills/review/SKILL.md', description: '检查代码', enabled: true };
 const thread: Thread = { id: 'chat', preview: '', cwd: 'C:/project', updatedAt: 1, turns: [] };
+const models = [{ id: 'model', model: 'model', displayName: 'Model', isDefault: true,
+  defaultReasoningEffort: 'high', supportedReasoningEfforts: [{ reasoningEffort: 'high', description: '' }] }];
 let controller: ChatController;
 let handlers: ConnectionEvents;
 let remote: Thread;
@@ -31,7 +36,7 @@ beforeEach(async () => {
     handlers = events;
     return { start() { events.mode('relay'); events.ready(); }, stop() {},
       async request(method, body) {
-        if ((body as { operation?: string })?.operation === 'models') return { data: [], nextCursor: null };
+        if ((body as { operation?: string })?.operation === 'models') return { data: models, nextCursor: null };
         const response = await operations.execute({ kind: 'request', id: String(++serial), method, body });
         if (response.error) throw new Error(response.error);
         return response.data;
@@ -48,6 +53,16 @@ it('loads project skills through the PC allowlist without transferring large ico
   expect(result.data[0].skills).toMatchObject([skill]);
   expect(JSON.stringify(result).length).toBeLessThan(1000);
   expect(guiApi.request).toHaveBeenCalledWith({ operation: 'skills', cwd: thread.cwd });
+});
+
+it('loads published Coze metadata through the authenticated PC connection', async () => {
+  const entries = [{ id: 'f321c884-a198-4244-ad4f-53762b3d2aba', name: '库存', kind: 'workflow', description: '' }];
+  vi.mocked(guiApi.request).mockResolvedValueOnce(entries);
+  const result = await new ChatOperations().execute({ kind: 'request', id: 'coze-catalog', method: 'request',
+    body: { operation: 'cozeCatalog' } });
+  expect(result.data).toEqual(entries);
+  expect(result.error).toBeUndefined();
+  expect(guiApi.request).toHaveBeenCalledWith({ operation: 'cozeCatalog' });
 });
 
 it.each(['new', 'existing', 'running'])('delivers structured skill references to the PC in a %s chat', async (mode) => {

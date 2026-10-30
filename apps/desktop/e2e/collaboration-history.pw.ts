@@ -22,6 +22,9 @@ for (const width of [1280, 390]) {
     await page.route("**/history-fixture.json", (route) => route.fulfill({ json: fixture }));
     await page.goto("/e2e/tool-history-harness.html");
     await page.locator("summary[data-history-anchor]").click();
+    const group = page.locator('[data-activity-group="singapore-start"]');
+    await expect(group.locator(':scope > details > summary')).toHaveAccessibleName(/查看全部 6 项活动/);
+    await group.locator(':scope > details > summary').click();
     await expect(page.getByText("已启动协作任务 · singapore_weather", { exact: true })).toBeVisible();
     await expect(page.getByText("已启动协作任务 · hongkong_weather", { exact: true })).toBeVisible();
     const progress = page.locator('[data-message-id="hongkong-message"]');

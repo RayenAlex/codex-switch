@@ -5,6 +5,7 @@ import {
   Network, RefreshCw, Server,
 } from "lucide-react";
 import type { AccountDisplayMode } from "../hooks/useAccountDisplayMode";
+import { useAggregateRuntimeRefresh } from "../hooks/useAggregateRuntimeRefresh";
 import type { Language, Translate } from "../i18n";
 import type {
   Account, AggregateApi, AggregateApiInput, ImageModelTarget, ImageRouteKind, LocalProxyStatus,
@@ -28,8 +29,7 @@ import { ProviderGroupManager } from "./providers/ProviderGroupManager";
 import { AggregateApiManager } from "./providers/AggregateApiManager";
 import { AggregateApiOverview } from "./providers/AggregateApiOverview";
 import { useProviderTokenUsage } from "./providers/useProviderTokenUsage";
-
-const AGGREGATE_RUNTIME_REFRESH_MS = 2_000;
+import { useAggregateMembers } from "./providers/useAggregateMembers";
 
 interface ProvidersPageProps {
   providers: Provider[];
@@ -57,6 +57,7 @@ interface ProvidersPageProps {
   onGroupChange: (id: string, group: string) => void;
   onGroupChangeMany: (ids: string[], group: string) => Promise<string[]>;
   onProviderGroupsChange: (groups: string[]) => Promise<void>;
+  onChangeGroupMembers?: (group: string, nextGroup: string) => Promise<boolean>;
   onAutoSwitchChange: (id: string, enabled: boolean) => void;
   onDelete: (id: string) => void;
   onDeleteMany: (ids: string[]) => Promise<string[]>;
@@ -93,6 +94,7 @@ export function ProvidersPage({
   onGroupChange,
   onGroupChangeMany,
   onProviderGroupsChange,
+  onChangeGroupMembers,
   onAutoSwitchChange,
   onDelete,
   onDeleteMany,
@@ -112,19 +114,25 @@ export function ProvidersPage({
   const [showGrokModal, setShowGrokModal] = useState(false);
   const [showClaudeCodeModal, setShowClaudeCodeModal] = useState(false);
   const [showAggregateManager, setShowAggregateManager] = useState(false);
+  const aggregateMembers = useAggregateMembers({
+    providers, accounts, privacyMode, t, loadModels: showAggregateManager,
+  });
   const [catalogPresetId, setCatalogPresetId] = useState<ProviderPresetId | null>(null);
   const [selectedProviderIds, setSelectedProviderIds] = useState<string[]>([]);
   const [bulkDeleteBusy, setBulkDeleteBusy] = useState(false);
   const [topbarHost, setTopbarHost] = useState<HTMLElement | null>(null);
+  const [groupToolbarHost, setGroupToolbarHost] = useState<HTMLElement | null>(null);
   const proxyRunning = Boolean(localProxy?.running);
   const activeAggregateId = aggregateApis.find((aggregate) => aggregate.active)?.id;
   const groups = [...new Set([
     ...providerGroups,
+    ...accounts.map(account => account.group),
     ...providers.filter((provider) => provider.kind === "custom").map((provider) => provider.group),
   ].filter(Boolean))];
 
   useEffect(() => {
     setTopbarHost(active ? document.getElementById("provider-topbar-actions") : null);
+    setGroupToolbarHost(active ? document.getElementById("provider-topbar-groups") : null);
   }, [active]);
 
   useEffect(() => {
@@ -132,26 +140,12 @@ export function ProvidersPage({
     setSelectedProviderIds((current) => current.filter((id) => providerIds.has(id)));
   }, [providers]);
 
-  useEffect(() => {
-    if (!active || !activeAggregateId) return undefined;
-    let refreshRunning = false;
-    const refreshCounts = async () => {
-      if (refreshRunning) return;
-      refreshRunning = true;
-      try {
-        await onRefreshAggregateApis();
-      } catch {
-        // Runtime statistics are best-effort and the next interval retries automatically.
-      } finally {
-        refreshRunning = false;
-      }
-    };
-    void refreshCounts();
-    const timer = window.setInterval(() => void refreshCounts(), AGGREGATE_RUNTIME_REFRESH_MS);
-    return () => window.clearInterval(timer);
-  }, [active, activeAggregateId, onRefreshAggregateApis]);
+  useAggregateRuntimeRefresh({
+    active: active && (Boolean(activeAggregateId) || showAggregateManager),
+    refresh: onRefreshAggregateApis,
+  });
 
-  const usageForProvider = useProviderTokenUsage(tokenUsageRefreshSeconds, providers);
+  const usageForProvider = useProviderTokenUsage(tokenUsageRefreshSeconds, providers, active);
 
   const openCreate = () => {
     setEditingProvider(null);
@@ -241,24 +235,31 @@ export function ProvidersPage({
 
   return (
     <>
+      {groupToolbarHost && createPortal(
+        <>
+          <ProviderGroupToolbar providers={providers} accounts={accounts} busyProviderId={busyProviderId}
+            activeGroup={localProxy?.activeProviderGroup}
+            proxyRunning={proxyRunning} onSwitchGroup={onSwitchGroup} t={t} />
+          <ProviderGroupManager groups={groups} providers={providers} busy={Boolean(busyProviderId)}
+            additionalMembers={accounts} onChangeGroupMembers={onChangeGroupMembers}
+            onChangeMany={onGroupChangeMany} onGroupsChange={onProviderGroupsChange} t={t} />
+        </>,
+        groupToolbarHost,
+      )}
       {topbarHost && createPortal(
-        <Space size={6}>
+        <Space size={[8, 8]} wrap>
           <ProviderAddMenu onAddPreset={() => setShowPresetModal(true)} onAddOpenAi={openCreateOpenAi}
             onAddProvider={openCreate} t={t} />
           <Button className="provider-topbar-button" icon={<Network size={14} />}
             onClick={() => setShowAggregateManager(true)}>
             {t("providers.aggregate.manage")}
           </Button>
-          <ProviderGroupToolbar providers={providers} busyProviderId={busyProviderId}
-            proxyRunning={proxyRunning} onSwitchGroup={onSwitchGroup} t={t} />
-          <ProviderGroupManager groups={groups} providers={providers} busy={Boolean(busyProviderId)}
-            onChangeMany={onGroupChangeMany} onGroupsChange={onProviderGroupsChange} t={t} />
         </Space>,
         topbarHost,
       )}
       <div className={`provider-page${displayMode === "table" && providers.length ? " provider-table-page" : ""}`}>
 
-      <AggregateApiOverview aggregates={aggregateApis} providers={providers}
+      <AggregateApiOverview aggregates={aggregateApis} providers={aggregateMembers}
         busyId={busyProviderId} proxyRunning={proxyRunning}
         onManage={() => setShowAggregateManager(true)} onSwitch={onSwitchAggregateApi}
         onDeactivate={onDeactivate} t={t} />
@@ -301,7 +302,7 @@ export function ProvidersPage({
       {showClaudeCodeModal && <ClaudeCodeProviderModal provider={editingProvider} saving={saving}
         onClose={() => setShowClaudeCodeModal(false)} onSave={onSave} t={t} />}
       <AggregateApiManager open={showAggregateManager} aggregates={aggregateApis}
-        providers={providers} saving={saving} busyId={busyProviderId} proxyRunning={proxyRunning}
+        providers={aggregateMembers} saving={saving} busyId={busyProviderId} proxyRunning={proxyRunning}
         onClose={() => setShowAggregateManager(false)} onSave={onSaveAggregateApi}
         onSwitch={onSwitchAggregateApi} onDeactivate={onDeactivate}
         onDelete={onDeleteAggregateApi} t={t} />

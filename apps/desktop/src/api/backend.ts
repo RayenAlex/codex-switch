@@ -1,16 +1,23 @@
 import { copyText } from "../utils/clipboard";
+import type { ProxyServiceTier } from "../types";
+import type { MigrationModelProvider } from "../types/conversationMigration";
+import { cacheDisplayCurrencyRates } from "../utils/currencyDisplay";
 import { invoke as invokeTauri } from "@tauri-apps/api/core";
 import { hasDirectChatInput } from "../../../../shared/remote-chat/uploadMode";
 import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { exit as exitApp, relaunch } from "@tauri-apps/plugin-process";
-import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
+import type { Update } from "@tauri-apps/plugin-updater";
+import { checkAvailableAppUpdate } from "./appUpdateCheck";
+import { downloadWithAppUpdateProgress, type AppUpdateDownloadProgress,
+  type AppUpdateProgressListener } from "./appUpdateProgress";
 import { chooseBrowserAccountFile } from "./browserAccountImport";
 import { isAutoUpdateEnabled } from "./appUpdatePreferences";
 import type { CodexConnectionStatus, CodexConnectResult } from "./codexConnectionTypes";
 import { DEMO_ACCOUNTS, DEMO_INFO } from "../demo";
 import { BUILT_IN_DREAM_SKIN_THEMES } from "../dreamSkinBuiltIns";
 import { LANGUAGE_STORAGE_KEY, isLanguage, type Language } from "../i18n";
+import { guiText } from "../i18n/guiText";
 import {
   ANTIGRAVITY_FALLBACK_MODELS,
   isAntigravityProvider,
@@ -19,7 +26,11 @@ import { CLAUDE_CODE_FALLBACK_MODELS } from "../utils/claudeCodeProvider";
 import { GROK_FALLBACK_MODELS } from "../utils/grokProvider";
 import { findProviderPreset } from "../utils/providerCatalog";
 import { loadStoredModelTokenCosts, persistStoredModelTokenCosts } from "../pages/providers/providerUtils";
+import { retainedRequestOptions } from "../pages/providers/providerRequestOptions";
+import { copyFailoverPolicy, validFailoverPolicy } from "../pages/providers/AggregateApiManager/failoverPolicy";
+import { buildAggregateMembers } from "../utils/aggregateMembers";
 import { estimateTokenCost } from "../utils/tokenCost";
+import { summarizeProxyRequests } from "../utils/proxyConversationMetrics";
 import type { AccountQuotaHistory, DailyTokenUsageBreakdown } from "../types/tokenUsageAnalytics";
 import { previewAccountQuotaHistory, previewTokenBreakdown } from "./tokenUsagePreview";
 import { previewHasLocalProxyLanApiKey, previewSetLegacyLanApiKey } from "./localProxyLanKeysPreview";
@@ -200,7 +211,7 @@ export async function invoke<T = void>(command: string, args: Record<string, unk
   let response = await request(readHostedWebApiKey());
   if (response.status === 401) {
     if (hostedWebApiKeyRejected) {
-      throw new Error("The LAN access key was rejected. Check the key in Codex Switch and reload the page.");
+      throw new Error("The LAN access key was rejected. Check the key in Remote AI and reload the page.");
     }
     writeHostedWebApiKey("");
     const suppliedKey = (await requestHostedWebApiKey())?.trim() || "";
@@ -245,16 +256,18 @@ export const MAX_UPSTREAM_429_RETRY_TIMEOUT_SECONDS = 3_600;
 export const DEFAULT_GPT_5_6_SOL_CONTEXT_WINDOW = 272_000;
 export const MAX_GPT_5_6_SOL_CONTEXT_WINDOW = 1_050_000;
 export const MIN_GPT_5_6_SOL_CONTEXT_WINDOW = 1_000;
-const RELEASES_URL = "https://github.com/piperhex/codex-switch/releases/latest";
+const RELEASES_URL = "https://github.com/piperhex/remoteai/releases/latest";
 const PENDING_APP_UPDATE_VERSION_KEY = "codex-switch:pending-app-update-version";
 let pendingAppUpdate: Update | null = null;
 let appUpdateDownloaded = false;
 let updateDownloadPromise: Promise<void> | null = null;
+const updateProgressListeners = new Set<AppUpdateProgressListener>();
+let latestUpdateProgress: AppUpdateDownloadProgress | null = null;
 let updateInstallInProgress = false;
 let pendingUpdateInstallPromise: Promise<void> | null = null;
-const UPDATE_CHECK_RETRY_DELAYS_MS = [500, 1_500] as const;
 const LAUNCH_AT_STARTUP_PREVIEW_KEY = "codex-switch:launch-at-startup";
 const CLOSE_TO_TRAY_PREVIEW_KEY = "codex-switch:close-to-tray";
+const NON_PROXY_ENHANCEMENTS_PREVIEW_KEY = "codex-switch:non-proxy-enhancements";
 const FLOATING_BUBBLE_PREVIEW_KEY = "codex-switch:floating-bubble";
 const PRIVACY_MODE_PREVIEW_KEY = "codex-switch:privacy-mode";
 const HIDE_ACCOUNT_NOTES_PREVIEW_KEY = "codex-switch:hide-account-notes";
@@ -263,6 +276,19 @@ const BUBBLE_STYLE_PREVIEW_KEY = "codex-switch:bubble-style";
 const THEME_COLOR_PREVIEW_KEY = "codex-switch:theme-color";
 const PROVIDER_GROUPS_PREVIEW_KEY = "codex-switch:provider-groups";
 const ACCOUNT_GROUPS_PREVIEW_KEY = "codex-switch:account-groups";
+const ACCOUNT_GROUP_ASSIGNMENTS_KEY = "codex-switch:account-group-assignments";
+const ACTIVE_GROUP_PREVIEW_KEY = "codex-switch:active-group";
+
+function readPreviewAccounts(): Account[] {
+  let groups: Record<string, unknown> = {};
+  try {
+    groups = JSON.parse(window.localStorage.getItem(ACCOUNT_GROUP_ASSIGNMENTS_KEY) ?? "{}") ?? {};
+  } catch { /* Invalid preview metadata falls back to the demo accounts. */ }
+  return structuredClone(DEMO_ACCOUNTS).map(account => {
+    const group = groups[account.id];
+    return { ...account, group: typeof group === "string" ? group : account.group };
+  });
+}
 const CLAUDE_CODE_WRITE_TARGET_PREVIEW_KEY = "codex-switch:claude-code-write-target";
 const THIRD_PARTY_APP_WRITE_PREVIEW_KEY = "codex-switch:third-party-app-write";
 const CLOUD_BASE_URL_PREVIEW_KEY = "codex-switch:cloud-base-url";
@@ -275,6 +301,7 @@ const AGGREGATE_APIS_PREVIEW_KEY = "codex-switch:aggregate-apis";
 const DEFAULT_OPENAI_PROVIDER_MODEL = "gpt-6-astra";
 const LOCAL_PROXY_PREVIEW_KEY = "codex-switch:local-proxy-running";
 const LOCAL_PROXY_FAST_MODE_PREVIEW_KEY = "codex-switch:local-proxy-fast-mode";
+const LOCAL_PROXY_SERVICE_TIER_PREVIEW_KEY = "codex-switch:local-proxy-service-tier";
 const LOCAL_PROXY_AUTO_SWITCH_PREVIEW_KEY = "codex-switch:local-proxy-auto-switch";
 const LOCAL_PROXY_CONCURRENT_ROUTING_PREVIEW_KEY = "codex-switch:local-proxy-concurrent-routing";
 const LOCAL_PROXY_CONCURRENT_GROUP_PREVIEW_KEY = "codex-switch:local-proxy-concurrent-group";
@@ -427,7 +454,8 @@ function normalizeModelApiFormats(models: string[], value: unknown): Provider["m
   const normalized: Provider["modelApiFormats"] = {};
   for (const model of models) {
     const apiFormat = (value as Record<string, unknown>)[model];
-    if (apiFormat === "openaiResponses" || apiFormat === "openaiChat") {
+    if (apiFormat === "openaiResponses" || apiFormat === "openaiChat"
+      || apiFormat === "anthropicMessages" || apiFormat === "geminiGenerateContent") {
       normalized[model] = apiFormat;
     }
   }
@@ -503,11 +531,17 @@ function previewLocalProxyStatus(): LocalProxyStatus {
   const port = Number.isInteger(configuredPort) && configuredPort >= 1 && configuredPort <= 65_535
     ? configuredPort
     : 0;
+  const running = port > 0 && window.localStorage.getItem(LOCAL_PROXY_PREVIEW_KEY) === "true";
+  const storedTier = window.localStorage.getItem(LOCAL_PROXY_SERVICE_TIER_PREVIEW_KEY);
+  const savedTier = storedTier === "ultrafast" || storedTier === "priority" ? storedTier : "default";
+  const legacyTier = window.localStorage.getItem(LOCAL_PROXY_FAST_MODE_PREVIEW_KEY) === "true"
+    ? "priority" : "default";
+  const serviceTier = running ? (storedTier === null ? legacyTier : savedTier) : "default";
   return {
-    running: port > 0 && window.localStorage.getItem(LOCAL_PROXY_PREVIEW_KEY) === "true",
-    fastModeEnabled: port > 0
-      && window.localStorage.getItem(LOCAL_PROXY_PREVIEW_KEY) === "true"
-      && window.localStorage.getItem(LOCAL_PROXY_FAST_MODE_PREVIEW_KEY) === "true",
+    activeProviderGroup: window.localStorage.getItem(ACTIVE_GROUP_PREVIEW_KEY),
+    running,
+    serviceTier,
+    fastModeEnabled: serviceTier !== "default",
     fastModeAvailable: port > 0 && window.localStorage.getItem(LOCAL_PROXY_PREVIEW_KEY) === "true",
     address: window.localStorage.getItem(LOCAL_PROXY_LISTEN_ALL_INTERFACES_PREVIEW_KEY) === "true" ? "0.0.0.0" : "127.0.0.1",
     port,
@@ -555,7 +589,7 @@ function readPreviewImageModelTarget(key: string): LocalProxyStatus["imageInputT
 
 export async function loadDashboard(): Promise<{ accounts: Account[]; info: AppInfo }> {
   if (!hasLocalBackend) {
-    return { accounts: structuredClone(DEMO_ACCOUNTS), info: DEMO_INFO };
+    return { accounts: readPreviewAccounts(), info: DEMO_INFO };
   }
   const [accounts, info] = await Promise.all([
     invoke<Account[]>("list_accounts"),
@@ -617,6 +651,7 @@ export async function loadAppSettings(): Promise<AppSettings> {
       codexHomes: [],
       launchAtStartup: window.localStorage.getItem(LAUNCH_AT_STARTUP_PREVIEW_KEY) !== "false",
       closeToTray: window.localStorage.getItem(CLOSE_TO_TRAY_PREVIEW_KEY) !== "false",
+      nonProxyEnhancementsEnabled: window.localStorage.getItem(NON_PROXY_ENHANCEMENTS_PREVIEW_KEY) !== "false",
       floatingBubbleEnabled: previewFloatingBubbleEnabled(),
       privacyMode: window.localStorage.getItem(PRIVACY_MODE_PREVIEW_KEY) !== "false",
       hideAccountNotes: window.localStorage.getItem(HIDE_ACCOUNT_NOTES_PREVIEW_KEY) === "true",
@@ -625,7 +660,7 @@ export async function loadAppSettings(): Promise<AppSettings> {
       themeColor: normalizeThemeColor(window.localStorage.getItem(THEME_COLOR_PREVIEW_KEY) ?? DEFAULT_THEME_COLOR),
       cloudBaseUrl: window.localStorage.getItem(CLOUD_BASE_URL_PREVIEW_KEY) ?? DEFAULT_CLOUD_BASE_URL,
       showCustomCloudServer: false,
-      tokenUsageWeeks: Number(window.localStorage.getItem(TOKEN_USAGE_WEEKS_PREVIEW_KEY)) || 20,
+      tokenUsageWeeks: Number(window.localStorage.getItem(TOKEN_USAGE_WEEKS_PREVIEW_KEY)) || 10,
       tokenUsageRefreshSeconds: Number(window.localStorage.getItem(TOKEN_USAGE_REFRESH_PREVIEW_KEY)) || 60,
       codexUsageSummaryEnabled: window.localStorage.getItem(CODEX_USAGE_SUMMARY_PREVIEW_KEY) !== "false",
       autoDisableStatusCodes: previewAutoDisableStatusCodes(),
@@ -640,8 +675,8 @@ export async function loadAppSettings(): Promise<AppSettings> {
         proxyUrl: window.localStorage.getItem(NETWORK_PROXY_URL_PREVIEW_KEY) ?? "",
         proxyPort: Number(window.localStorage.getItem(NETWORK_PROXY_PORT_PREVIEW_KEY)) || null,
       },
-      providerGroups: previewProviderGroups(),
-      accountGroups: previewAccountGroups(),
+      providerGroups: [...new Set([...previewProviderGroups(), ...previewAccountGroups()])],
+      accountGroups: [...new Set([...previewProviderGroups(), ...previewAccountGroups()])],
       thirdPartyAppWrite: previewThirdPartyAppWriteSettings(),
       claudeCodeWriteTarget: previewClaudeCodeWriteTarget(),
     };
@@ -715,6 +750,7 @@ export async function updateCodexHomes(homes: CodexHomeEntry[]): Promise<AppSett
 
 export async function loadCodexHomePresets(baseUrl: string): Promise<CodexHomePreset[]> {
   const platform = navigator.platform.toLowerCase().includes("mac") ? "macos" : "windows";
+  if (hasLocalBackend) return invoke<CodexHomePreset[]>("fetch_cloud_home_presets", { baseUrl, platform });
   const response = await fetch(
     `${baseUrl.replace(/\/+$/, "")}/codex-home-presets?platform=${platform}`,
     { headers: { Accept: "application/json" }, cache: "no-store" },
@@ -787,7 +823,11 @@ function readPreviewAggregateApis(): AggregateApi[] {
       && "name" in aggregate
       && "model" in aggregate
       && "memberProviderIds" in aggregate,
-    ));
+    )).map((aggregate) => ({
+      ...aggregate,
+      failoverPolicy: copyFailoverPolicy(aggregate.failoverPolicy),
+      memberHealth: aggregate.memberHealth ?? {},
+    }));
   } catch {
     return [];
   }
@@ -805,22 +845,35 @@ export async function loadAggregateApis(): Promise<AggregateApi[]> {
 
 export async function saveAggregateApiProfile(input: AggregateApiInput): Promise<AggregateApi> {
   if (!hasLocalBackend) {
-    const providers = readPreviewProviders();
+    const providers = buildAggregateMembers({ providers: readPreviewProviders(), accounts: DEMO_ACCOUNTS,
+      officialModels: [], officialLabel: "Official", privacyMode: false });
     const memberIds = [...new Set(input.memberProviderIds)];
     if (memberIds.length < 2) throw new Error("Select at least two APIs for the aggregate");
     const members = memberIds.map((id) => providers.find((provider) => provider.id === id));
     if (members.some((provider) => !provider)) throw new Error("Provider does not exist");
-    if (members.some((provider) => !provider?.models.includes(input.model))) {
-      throw new Error("Every API in an aggregate must support the selected model");
-    }
     const aggregates = readPreviewAggregateApis();
     const index = input.id ? aggregates.findIndex((aggregate) => aggregate.id === input.id) : -1;
+    const previous = index >= 0 ? aggregates[index] : undefined;
+    const memberModels = Object.fromEntries(Object.entries(input.memberModels ?? previous?.memberModels ?? {})
+      .filter(([id]) => memberIds.includes(id)).map(([id, model]) => [id, model.trim()]));
+    if (members.some((provider) => {
+      if (!provider) return true;
+      const model = (memberModels[provider.id] ?? input.model).trim();
+      return !model || (!provider.accountId && ![provider.model, ...provider.models].includes(model));
+    })) {
+      throw new Error("Every API in an aggregate must support the selected model");
+    }
+    const failoverPolicy = copyFailoverPolicy(input.failoverPolicy ?? previous?.failoverPolicy);
+    if (!validFailoverPolicy(failoverPolicy)) throw new Error("Check the failover settings and try again");
     const aggregate: AggregateApi = {
       ...input,
       id: input.id ?? previewProviderId(),
       memberProviderIds: memberIds,
+      memberModels,
       active: index >= 0 && aggregates[index].active && input.enabled,
       memberConversationCounts: index >= 0 ? aggregates[index].memberConversationCounts ?? {} : {},
+      failoverPolicy,
+      memberHealth: previous?.memberHealth ?? {},
     };
     if (index >= 0) aggregates[index] = aggregate;
     else aggregates.push(aggregate);
@@ -841,6 +894,7 @@ export async function activateAggregateApi(id: string): Promise<void> {
     const selected = aggregates.find((aggregate) => aggregate.id === id);
     if (!selected) throw new Error("Aggregate API does not exist");
     if (!selected.enabled) throw new Error("Enable the aggregate API before using it");
+    window.localStorage.removeItem(ACTIVE_GROUP_PREVIEW_KEY);
     writePreviewProviders(readPreviewProviders().map((provider) => ({ ...provider, active: false })));
     writePreviewAggregateApis(aggregates.map((aggregate) => ({
       ...aggregate,
@@ -878,12 +932,13 @@ export async function saveProviderProfile(provider: ProviderInput): Promise<Prov
     const models = normalizeModels(selectedModel, provider.models);
     const model = selectedModel || (models[0] ?? "");
     const apiFormat = kind === "openai" ? "openaiResponses" : provider.apiFormat;
+    const requestOptions = retainedRequestOptions(existing, provider);
     const next: Provider = {
       id: existing?.id ?? provider.id ?? previewProviderId(),
       kind,
       name: provider.name.trim(),
       group: kind === "custom" ? provider.group?.trim() || existing?.group || "" : "",
-      baseUrl: provider.baseUrl.trim().replace(/\/+$/, ""),
+      baseUrl: requestOptions?.useFullUrl ? provider.baseUrl.trim() : provider.baseUrl.trim().replace(/\/+$/, ""),
       model,
       models,
       modelReasoningEfforts: normalizeModelReasoningEfforts(models, provider.modelReasoningEfforts),
@@ -901,6 +956,7 @@ export async function saveProviderProfile(provider: ProviderInput): Promise<Prov
       fastModeEnabled: kind === "openai" ? true : (provider.fastModeEnabled ?? true),
       websocketEnabled: apiFormat === "openaiResponses" && Boolean(provider.websocketEnabled),
       apiFormat,
+      requestOptions,
       active: existing?.active ?? false,
       autoSwitchEnabled: kind === "custom" && Boolean(existing?.autoSwitchEnabled),
       hasApiKey,
@@ -1026,6 +1082,7 @@ export async function fetchClaudeCodeModels(
 }
 
 export interface PresetModelQuery {
+  requestOptions?: import("../types").ProviderRequestOptions;
   presetId: string;
   baseUrl: string;
   apiKey?: string;
@@ -1040,6 +1097,7 @@ export async function fetchPresetModels(
   return invoke<string[]>("fetch_preset_models", {
     request: {
       presetId: request.presetId,
+      requestOptions: request.requestOptions ?? null,
       baseUrl: request.baseUrl,
       apiKey: request.apiKey?.trim() || null,
       providerId: request.providerId ?? null,
@@ -1047,19 +1105,19 @@ export async function fetchPresetModels(
   });
 }
 
-export async function fetchRelayModels(baseUrl: string, apiKey: string, providerId?: string): Promise<string[]> {
+export async function fetchRelayModels(baseUrl: string, apiKey: string, providerId?: string,
+  options?: { apiFormat?: import("../types").ProviderApiFormat;
+    requestOptions?: import("../types").ProviderRequestOptions }): Promise<string[]> {
   if (!hasLocalBackend) {
     return [DEFAULT_OPENAI_PROVIDER_MODEL, "gpt-5.6-sol", "gpt-5.4"];
   }
   return invoke<string[]>("fetch_relay_models", {
-    baseUrl,
-    apiKey: apiKey.trim(),
-    providerId: providerId ?? null,
+    request: { baseUrl, apiKey: apiKey.trim(), providerId: providerId ?? null, options: options ?? null },
   });
 }
 
 export async function testProviderConnectivity(id: string): Promise<void> {
-  if (!isDesktopApp) return;
+  if (!hasLocalBackend) return;
   await invoke("test_provider_connectivity", { id });
 }
 
@@ -1145,6 +1203,7 @@ export async function activateProvider(id: string): Promise<void> {
       throw new Error("Third-party Providers require the local proxy. Start the local proxy before switching Provider.");
     }
     window.localStorage.setItem(LOCAL_PROXY_CONCURRENT_ROUTING_PREVIEW_KEY, "false");
+    window.localStorage.removeItem(ACTIVE_GROUP_PREVIEW_KEY);
     writePreviewProviders(providers.map((provider) => ({ ...provider, active: provider.id === id })));
     writePreviewAggregateApis(readPreviewAggregateApis().map((aggregate) => ({
       ...aggregate,
@@ -1177,6 +1236,7 @@ export async function updateAccountGroups(groups: string[]): Promise<string[]> {
   const normalized = [...new Set(groups.map((group) => group.trim()).filter(Boolean))];
   if (!hasLocalBackend) {
     window.localStorage.setItem(ACCOUNT_GROUPS_PREVIEW_KEY, JSON.stringify(normalized));
+    window.localStorage.setItem(PROVIDER_GROUPS_PREVIEW_KEY, JSON.stringify(normalized));
     return normalized;
   }
   return invoke<string[]>("set_account_groups", { groups: normalized });
@@ -1186,6 +1246,7 @@ export async function updateProviderGroups(groups: string[]): Promise<string[]> 
   const normalized = [...new Set(groups.map((group) => group.trim()).filter(Boolean))];
   if (!hasLocalBackend) {
     window.localStorage.setItem(PROVIDER_GROUPS_PREVIEW_KEY, JSON.stringify(normalized));
+    window.localStorage.setItem(ACCOUNT_GROUPS_PREVIEW_KEY, JSON.stringify(normalized));
     return normalized;
   }
   return invoke<string[]>("set_provider_groups", { groups: normalized });
@@ -1196,7 +1257,10 @@ export async function activateProviderGroup(group: string): Promise<void> {
   if (!normalizedGroup) throw new Error("Select a Provider group");
   if (!hasLocalBackend) {
     const providers = readPreviewProviders();
-    if (!providers.some((provider) => provider.kind === "custom" && provider.group === normalizedGroup)) {
+    const hasOfficialMembers = readPreviewAccounts().some(account => account.autoSwitchEnabled
+      && account.localProxyCompatible && account.group === normalizedGroup);
+    if (!hasOfficialMembers && !providers.some(provider => provider.kind === "custom"
+      && provider.group === normalizedGroup)) {
       throw new Error("Provider group does not contain any available APIs");
     }
     if (!previewLocalProxyStatus().running) {
@@ -1204,6 +1268,9 @@ export async function activateProviderGroup(group: string): Promise<void> {
         "Third-party Providers require the local proxy. Start the local proxy before switching Provider.",
       );
     }
+    window.localStorage.setItem(ACTIVE_GROUP_PREVIEW_KEY, normalizedGroup);
+    window.localStorage.setItem(LOCAL_PROXY_CONCURRENT_ROUTING_PREVIEW_KEY, "false");
+    writePreviewAggregateApis(readPreviewAggregateApis().map(aggregate => ({ ...aggregate, active: false })));
     writePreviewProviders(providers.map((provider) => ({
       ...provider,
       active: provider.kind === "custom" && provider.group === normalizedGroup,
@@ -1279,6 +1346,7 @@ export async function setProviderAutoSwitchEnabled(id: string, enabled: boolean)
 
 export async function deactivateProvider(): Promise<void> {
   if (!hasLocalBackend) {
+    window.localStorage.removeItem(ACTIVE_GROUP_PREVIEW_KEY);
     writePreviewProviders(readPreviewProviders().map((provider) => ({ ...provider, active: false })));
     writePreviewAggregateApis(readPreviewAggregateApis().map((aggregate) => ({
       ...aggregate,
@@ -1314,16 +1382,16 @@ export async function loadLocalProxyStatus(): Promise<LocalProxyStatus> {
   return invoke<LocalProxyStatus>("get_local_proxy_status");
 }
 
-export async function setLocalProxyFastMode(enabled: boolean): Promise<LocalProxyStatus> {
+export async function setLocalProxyServiceTier(serviceTier: ProxyServiceTier): Promise<LocalProxyStatus> {
   if (!hasLocalBackend) {
     if (!previewLocalProxyStatus().running) {
       throw new Error("Start the local proxy before changing request speed");
     }
-    window.localStorage.setItem(LOCAL_PROXY_FAST_MODE_PREVIEW_KEY, String(enabled));
+    window.localStorage.setItem(LOCAL_PROXY_SERVICE_TIER_PREVIEW_KEY, serviceTier);
     window.dispatchEvent(new CustomEvent(PROVIDERS_EVENT));
     return previewLocalProxyStatus();
   }
-  return invoke<LocalProxyStatus>("set_local_proxy_fast_mode", { enabled });
+  return invoke<LocalProxyStatus>("set_local_proxy_service_tier", { serviceTier });
 }
 
 export async function loadProxySessions(): Promise<ProxySession[]> {
@@ -1463,12 +1531,7 @@ export async function loadRecentProxySessionLatency(): Promise<ProxySessionLaten
       .sort((left, right) => right.lastSeenAt - left.lastSeenAt)
       .slice(0, 5);
     const requests = await Promise.all(sessions.map((session) => loadProxySessionRequests(session.id)));
-    return requests.flat().reduce<ProxySessionLatencySummary>((summary, request) => {
-      if (request.firstResponseTimeMs == null) return summary;
-      summary.totalFirstResponseTimeMs += request.firstResponseTimeMs;
-      summary.requestCount += 1;
-      return summary;
-    }, { totalFirstResponseTimeMs: 0, requestCount: 0 });
+    return summarizeProxyRequests(requests.flat());
   }
   return invoke<ProxySessionLatencySummary>("get_recent_proxy_session_latency");
 }
@@ -1519,48 +1582,33 @@ export async function loadAccountTokenUsage(
   providers: Provider[] = [],
 ): Promise<AccountTokenUsageTotals[]> {
   const entries = await loadTokenUsageEntries(startTs);
-  const costs = new Map<string, number>();
-  entries.filter((entry) => entry.ts >= startTs && (entry.accountId || entry.accountEmail)).forEach((entry) => {
-    const key = entry.accountId
-      ? `id:${entry.accountId}`
-      : `email:${entry.accountEmail?.trim().toLowerCase()}`;
-    costs.set(key, (costs.get(key) ?? 0) + estimateTokenCost(entry, providers));
-  });
-  if (!hasLocalBackend) {
-    const totals = new Map<string, AccountTokenUsageTotals>();
-    for (const entry of entries) {
-      if (entry.ts < startTs || (!entry.accountId && !entry.accountEmail)) continue;
-      const key = entry.accountId
-        ? `id:${entry.accountId}`
-        : `email:${entry.accountEmail?.trim().toLowerCase()}`;
-      const current = totals.get(key) ?? {
-        accountId: entry.accountId,
-        accountEmail: entry.accountEmail,
-        totalTokens: 0,
-        inputTokens: 0,
-        outputTokens: 0,
-        reasoningTokens: 0,
-        cachedTokens: 0,
-        estimatedCost: 0,
-      };
-      current.totalTokens += entry.totalTokens
-        ?? (entry.inputTokens ?? 0) + (entry.outputTokens ?? 0);
-      current.inputTokens += entry.inputTokens ?? 0;
-      current.outputTokens += entry.outputTokens ?? 0;
-      current.reasoningTokens += entry.reasoningTokens ?? 0;
-      current.cachedTokens += entry.cachedTokens ?? 0;
-      current.estimatedCost += estimateTokenCost(entry, providers);
-      totals.set(key, current);
-    }
-    return [...totals.values()];
+  // Use one snapshot for counts and cost, including older rows with missing account metadata.
+  const totals = new Map<string, AccountTokenUsageTotals>();
+  for (const entry of entries) {
+    if (entry.ts < startTs || (!entry.accountId && !entry.accountEmail)) continue;
+    const key = JSON.stringify([
+      entry.accountId?.trim() || null,
+      entry.accountEmail?.trim().toLowerCase() || null,
+    ]);
+    const current = totals.get(key) ?? {
+      accountId: entry.accountId,
+      accountEmail: entry.accountEmail,
+      totalTokens: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      reasoningTokens: 0,
+      cachedTokens: 0,
+      estimatedCost: 0,
+    };
+    current.totalTokens += entry.totalTokens ?? (entry.inputTokens ?? 0) + (entry.outputTokens ?? 0);
+    current.inputTokens += entry.inputTokens ?? 0;
+    current.outputTokens += entry.outputTokens ?? 0;
+    current.reasoningTokens += entry.reasoningTokens ?? 0;
+    current.cachedTokens += entry.cachedTokens ?? 0;
+    current.estimatedCost += estimateTokenCost(entry, providers);
+    totals.set(key, current);
   }
-  const totals = await invoke<AccountTokenUsageTotals[]>("list_account_token_usage", { startTs });
-  return totals.map((total) => ({
-    ...total,
-    estimatedCost: costs.get(total.accountId
-      ? `id:${total.accountId}`
-      : `email:${total.accountEmail?.trim().toLowerCase()}`) ?? 0,
-  }));
+  return [...totals.values()];
 }
 
 export async function loadProviderTokenUsage(
@@ -1659,7 +1707,7 @@ export async function showTokenUsageWindow(): Promise<void> {
 }
 
 export async function loadAccounts(): Promise<Account[]> {
-  if (!hasLocalBackend) return structuredClone(DEMO_ACCOUNTS);
+  if (!hasLocalBackend) return readPreviewAccounts();
   return invoke<Account[]>("list_accounts");
 }
 
@@ -1675,14 +1723,6 @@ export async function loadAutoResetSettings(): Promise<AutoResetSettings> {
 export async function saveAutoResetSettings(settings: AutoResetSettings): Promise<void> {
   if (hasLocalBackend) return invoke("set_auto_reset_settings", { settings });
   window.localStorage.setItem(AUTO_RESET_PREVIEW_KEY, JSON.stringify(settings));
-}
-
-export async function showTotpWindow(): Promise<void> {
-  if (!isDesktopApp) {
-    window.open(`${window.location.pathname}?cache=${Date.now()}#totp`, "_blank", "noopener,noreferrer");
-    return;
-  }
-  await invoke("show_totp_window");
 }
 
 export async function startLocalProxy(): Promise<LocalProxyStatus> {
@@ -1797,7 +1837,7 @@ export async function saveCodexThreadPackage(
   sessionIds: string[], homeId?: string,
 ): Promise<CodexThreadBundleResult | null> {
   const exportPath = await save({
-    title: "导出 Codex 会话",
+    title: guiText("导出 Codex 会话"),
     defaultPath: `codex-sessions-${new Date().toISOString().slice(0, 10)}.zip`,
     filters: [{ name: "Codex session package", extensions: ["zip"] }],
   });
@@ -1807,7 +1847,7 @@ export async function saveCodexThreadPackage(
 
 export async function chooseCodexThreadPackage(): Promise<string | null> {
   const selected = await open({
-    title: "导入 Codex 会话",
+    title: guiText("导入 Codex 会话"),
     multiple: false,
     directory: false,
     filters: [{ name: "Codex session package", extensions: ["zip"] }],
@@ -1837,12 +1877,13 @@ export function migrateCodexThreadsToHome(request: {
   homeId: string;
   targetHomeId: string;
   sessionIds: string[];
+  modelProvider?: MigrationModelProvider;
 }): Promise<CodexThreadMigrationReport> {
   return invoke<CodexThreadMigrationReport>("migrate_codex_threads_to_home", { request });
 }
 
 export async function migrateCodexThreads(sessionIds: string[], homeId?: string): Promise<CodexThreadMigrationReport> {
-  if (!hasLocalBackend) throw new Error("会话迁移需要桌面版 Codex Switch");
+  if (!hasLocalBackend) throw new Error(guiText("会话迁移需要桌面版 Remote AI"));
   return invoke<CodexThreadMigrationReport>("migrate_codex_threads", { homeId, sessionIds });
 }
 
@@ -2033,6 +2074,14 @@ export async function updateCloseToTray(enabled: boolean): Promise<AppSettings> 
     return loadAppSettings();
   }
   return invoke<AppSettings>("set_close_to_tray", { enabled });
+}
+
+export async function updateNonProxyEnhancements(enabled: boolean): Promise<AppSettings> {
+  if (!hasLocalBackend) {
+    window.localStorage.setItem(NON_PROXY_ENHANCEMENTS_PREVIEW_KEY, String(enabled));
+    return loadAppSettings();
+  }
+  return invoke<AppSettings>("set_non_proxy_enhancements", { enabled });
 }
 
 export async function updateFloatingBubble(enabled: boolean): Promise<AppSettings> {
@@ -2529,21 +2578,21 @@ export async function setPromptPluginEnabled(pluginId: string, enabled: boolean)
 
 export async function installOfficialPlugin(pluginId: string, homeId: string): Promise<void> {
   if (!hasLocalBackend) {
-    throw new Error("Official plugins are available when Codex Switch is running locally");
+    throw new Error("Official plugins are available when Remote AI is running locally");
   }
   await invoke("install_official_plugin", { pluginId, homeId });
 }
 
 export async function removeOfficialPlugin(pluginId: string, homeId: string): Promise<void> {
   if (!hasLocalBackend) {
-    throw new Error("Official plugins are available when Codex Switch is running locally");
+    throw new Error("Official plugins are available when Remote AI is running locally");
   }
   await invoke("remove_official_plugin", { pluginId, homeId });
 }
 
 export async function setOfficialPluginEnabled(pluginId: string, enabled: boolean, homeId: string): Promise<void> {
   if (!hasLocalBackend) {
-    throw new Error("Official plugins are available when Codex Switch is running locally");
+    throw new Error("Official plugins are available when Remote AI is running locally");
   }
   await invoke("set_official_plugin_enabled", { pluginId, enabled, homeId });
 }
@@ -2789,7 +2838,7 @@ export async function chooseAndExportAccountArchive(): Promise<ExportAccountArch
   if (!isDesktopApp) return { status: "preview" };
   const selected = await save({
     defaultPath: `codex-switch-backup-${new Date().toISOString().slice(0, 10)}.cs`,
-    filters: [{ name: "Codex Switch backup", extensions: ["cs"] }],
+    filters: [{ name: "Remote AI backup", extensions: ["cs"] }],
   });
   if (!selected) return { status: "cancelled" };
   const path = await invoke<string>("export_accounts_archive", { path: selected });
@@ -2800,7 +2849,7 @@ export async function chooseAndImportAccountArchive(): Promise<ImportAccountArch
   if (!isDesktopApp) return { status: "preview" };
   const selected = await open({
     multiple: false,
-    filters: [{ name: "Codex Switch backup", extensions: ["cs"] }],
+    filters: [{ name: "Remote AI backup", extensions: ["cs"] }],
   });
   if (!selected) return { status: "cancelled" };
   const result = await invoke<AccountArchiveImportResult>("import_accounts_archive", { path: selected });
@@ -2811,7 +2860,7 @@ export async function chooseAndExportDiagnosticLogs(): Promise<ExportDiagnosticL
   if (!isDesktopApp) return { status: "preview" };
   const selected = await save({
     defaultPath: `codex-switch-diagnostics-${new Date().toISOString().slice(0, 10)}.jsonl`,
-    filters: [{ name: "Codex Switch diagnostics", extensions: ["jsonl"] }],
+    filters: [{ name: "Remote AI diagnostics", extensions: ["jsonl"] }],
   });
   if (!selected) return { status: "cancelled" };
   const path = await invoke<string>("export_diagnostic_logs", { path: selected });
@@ -2820,6 +2869,7 @@ export async function chooseAndExportDiagnosticLogs(): Promise<ExportDiagnosticL
 
 export async function activateAccount(id: string): Promise<void> {
   if (!hasLocalBackend) {
+    window.localStorage.removeItem(ACTIVE_GROUP_PREVIEW_KEY);
     writePreviewProviders(readPreviewProviders().map((provider) => ({ ...provider, active: false })));
     return;
   }
@@ -2846,7 +2896,12 @@ export async function setAccountAutoSwitchPriority(id: string, priority: number)
 
 export async function setAccountGroup(id: string, group: string): Promise<string> {
   const normalized = group.trim();
-  if (!hasLocalBackend) return normalized;
+  if (!hasLocalBackend) {
+    const assignments = Object.fromEntries(readPreviewAccounts().map(account => [account.id, account.group]));
+    assignments[id] = normalized;
+    window.localStorage.setItem(ACCOUNT_GROUP_ASSIGNMENTS_KEY, JSON.stringify(assignments));
+    return normalized;
+  }
   return invoke<string>("set_account_group", { id, group: normalized });
 }
 
@@ -2866,13 +2921,15 @@ export async function fetchCloudCurrencyRates(): Promise<CloudCurrencyRates> {
 }
 
 function includeBaseCurrency(rates: CloudCurrencyRates): CloudCurrencyRates {
-  return {
+  const result = {
     ...rates,
     currencies: [
       BASE_CURRENCY_RATE,
       ...rates.currencies.filter((currency) => currency.code !== BASE_CURRENCY_RATE.code),
     ],
   };
+  cacheDisplayCurrencyRates(result.currencies);
+  return result;
 }
 
 export async function setAccountAutoSwitchThreshold(id: string, threshold: number): Promise<void> {
@@ -2949,12 +3006,16 @@ export async function restartOpenCode(): Promise<void> {
   if (hasLocalBackend) await invoke("restart_open_code");
 }
 
-export async function openManagedFolder(target: "codexHome" | "accountStore"): Promise<void> {
+export async function openManagedFolder(target: "codexHome" | "remoteAiHome" | "accountStore"): Promise<void> {
   if (hasLocalBackend) await invoke("open_managed_folder", { target });
 }
 
 export async function loadDreamSkinStatus(): Promise<DreamSkinStatus> {
-  if (!hasLocalBackend) return previewDreamSkinStatus();
+  if (!hasLocalBackend) return {
+    ...previewDreamSkinStatus(),
+    available: previewLocalProxyStatus().running
+      || window.localStorage.getItem(NON_PROXY_ENHANCEMENTS_PREVIEW_KEY) !== "false",
+  };
   return invoke<DreamSkinStatus>("get_dream_skin_status");
 }
 
@@ -3187,37 +3248,11 @@ async function getAvailableAppUpdate(): Promise<UpdateInfo | null> {
   return toUpdateInfo(update);
 }
 
-function isRetryableUpdateCheckError(error: unknown): boolean {
-  const message = String(error).toLowerCase();
-  return [
-    "error sending request",
-    "network",
-    "timed out",
-    "timeout",
-    "connection",
-    "dns",
-    "tcp",
-    "tls",
-  ].some((fragment) => message.includes(fragment));
-}
-
-async function checkAvailableAppUpdate(): Promise<Update | null> {
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      return await check();
-    } catch (error) {
-      const retryDelay = UPDATE_CHECK_RETRY_DELAYS_MS[attempt];
-      if (retryDelay === undefined || !isRetryableUpdateCheckError(error)) throw error;
-      await new Promise<void>((resolve) => window.setTimeout(resolve, retryDelay));
-    }
-  }
-}
-
 function toUpdateInfo(update: Update): UpdateInfo {
   return {
     currentVersion: update.currentVersion,
     latestVersion: update.version,
-    releaseName: `Codex Switch v${update.version}`,
+    releaseName: `Remote AI v${update.version}`,
     releaseNotes: update.body ?? null,
     releaseUrl: RELEASES_URL,
   };
@@ -3281,54 +3316,49 @@ function isVersionNewer(candidate: string, current: string): boolean {
   return false;
 }
 
-export async function downloadAvailableUpdate(onProgress?: (progress: number | null) => void): Promise<void> {
+export async function downloadAvailableUpdate(onProgress?: AppUpdateProgressListener): Promise<void> {
   if (!isDesktopApp) return;
   if (appUpdateDownloaded) return;
-  if (updateDownloadPromise) return updateDownloadPromise;
-
-  const download = async () => {
-    const info = pendingAppUpdate ? toUpdateInfo(pendingAppUpdate) : await getAvailableAppUpdate();
-    const update = pendingAppUpdate;
-    if (!info || !update) return;
-
-    let downloadedBytes = 0;
-    let totalBytes: number | undefined;
-    const reportProgress = (event: DownloadEvent) => {
-      if (event.event === "Started") {
-        totalBytes = event.data.contentLength;
-        onProgress?.(totalBytes ? 0 : null);
-      } else if (event.event === "Progress") {
-        downloadedBytes += event.data.chunkLength;
-        onProgress?.(totalBytes ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)) : null);
-      } else if (event.event === "Finished") {
-        onProgress?.(100);
-      }
-    };
-
-    try {
-      await update.download(reportProgress);
-      appUpdateDownloaded = true;
-      rememberPendingAppUpdate(update.version);
-    } catch (error) {
-      await update.close();
-      if (pendingAppUpdate === update) pendingAppUpdate = null;
-      throw error;
-    }
-  };
-
-  const request = download();
-  updateDownloadPromise = request;
+  if (!updateDownloadPromise) latestUpdateProgress = null;
+  if (onProgress) updateProgressListeners.add(onProgress);
+  let request = updateDownloadPromise;
   try {
+    if (latestUpdateProgress) onProgress?.(latestUpdateProgress.percent, latestUpdateProgress);
+    if (!request) {
+      request = downloadPendingAppUpdate();
+      updateDownloadPromise = request;
+    }
     await request;
   } finally {
+    if (onProgress) updateProgressListeners.delete(onProgress);
     if (updateDownloadPromise === request) updateDownloadPromise = null;
   }
 }
 
-export async function installDownloadedUpdate(): Promise<void> {
+async function downloadPendingAppUpdate(): Promise<void> {
+  const info = pendingAppUpdate ? toUpdateInfo(pendingAppUpdate) : await getAvailableAppUpdate();
+  const update = pendingAppUpdate;
+  if (!info || !update) return;
+  try {
+    await downloadWithAppUpdateProgress(update, (percent, details) => {
+      latestUpdateProgress = details;
+      updateProgressListeners.forEach((listener) => listener(percent, details));
+    });
+    appUpdateDownloaded = true;
+    rememberPendingAppUpdate(update.version);
+  } catch (error) {
+    await update.close();
+    if (pendingAppUpdate === update) pendingAppUpdate = null;
+    throw error;
+  }
+}
+
+export async function installDownloadedUpdate(expectedVersion?: string): Promise<void> {
   if (!isDesktopApp) return;
+  if (updateInstallInProgress) return;
   const update = pendingAppUpdate;
   if (!update || !appUpdateDownloaded) throw new Error("The update has not finished downloading");
+  if (expectedVersion && update.version !== expectedVersion) throw new Error("The available update has changed");
 
   updateInstallInProgress = true;
   forgetPendingAppUpdate();
@@ -3726,13 +3756,22 @@ export function subscribeToLocalProxyStartProgress(
   return () => void subscription.then((unlisten) => unlisten());
 }
 
+let languageSave = Promise.resolve();
+let languageRevision = 0;
+
 export async function publishLanguageChange(language: Language): Promise<void> {
-  window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+  const revision = ++languageRevision;
+  try { window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language); }
+  catch { /* A blocked browser store must not prevent the other windows from updating. */ }
   if (!hasLocalBackend) {
     window.dispatchEvent(new CustomEvent<Language>(LANGUAGE_EVENT, { detail: language }));
     return;
   }
-  await invoke("set_app_language", { language });
+  // Preserve tap order across asynchronous storage workers and suppress obsolete broadcasts.
+  const saved = languageSave.then(() => invoke<void>("set_app_language", { language }));
+  languageSave = saved.catch(() => undefined);
+  await saved;
+  if (revision !== languageRevision) return;
   if (isDesktopApp) await emit(LANGUAGE_EVENT, language);
   else window.dispatchEvent(new CustomEvent<Language>(LANGUAGE_EVENT, { detail: language }));
 }

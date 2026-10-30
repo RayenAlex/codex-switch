@@ -13,9 +13,7 @@ import {
   chooseAndImportAccountArchive,
   hasLocalBackend,
   isDesktopApp,
-  loadDashboard,
   refreshAccountUsage,
-  refreshOfficialModelCatalog,
   removeAccount,
   setAccountAutoSwitchEnabled,
   setAccountGroup,
@@ -26,8 +24,9 @@ import {
   updateAccountNote,
 } from "../api/backend";
 import type { Translate } from "../i18n";
-import type { Account, AccountDetailsDraft, AppInfo } from "../types";
+import type { Account, AccountDetailsDraft } from "../types";
 import { runSwitchFollowUp } from "./switchFollowUp";
+import { useAccountDashboard } from "./useAccountDashboard";
 
 interface RefreshAllOptions {
   quiet?: boolean;
@@ -48,9 +47,7 @@ export function useAccountManager(
   t: Translate,
   cloudSync?: AccountCloudSync,
 ) {
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [info, setInfo] = useState<AppInfo | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { accounts, setAccounts, info, loading, read: readDashboard, reload: load } = useAccountDashboard(notify);
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null);
   const [autoSwitchBusyAccountId, setAutoSwitchBusyAccountId] = useState<string | null>(null);
   const [autoSwitchPriorityBusyAccountId, setAutoSwitchPriorityBusyAccountId] = useState<string | null>(null);
@@ -58,18 +55,6 @@ export function useAccountManager(
   const [refreshingAll, setRefreshingAll] = useState(false);
   const [archiveOperation, setArchiveOperation] = useState<"import" | "export" | null>(null);
   const refreshingAllRef = useRef(false);
-
-  const load = useCallback(async () => {
-    try {
-      const dashboard = await loadDashboard();
-      setAccounts(dashboard.accounts);
-      setInfo(dashboard.info);
-    } catch (error) {
-      notify(String(error));
-    } finally {
-      setLoading(false);
-    }
-  }, [notify]);
 
   const syncAddedAccount = useCallback((id: string) => {
     const syncAccount = cloudSync?.restoreAndPushAccount ?? cloudSync?.pushAccount;
@@ -188,10 +173,11 @@ export function useAccountManager(
         notify(t("toast.archiveImported", {
           accounts: result.result.imported,
           providers: result.result.providersImported,
+          aggregates: result.result.aggregatesImported ?? 0,
         }));
         await load();
         await Promise.allSettled(result.result.accountIds.map(syncAddedAccount));
-        if (result.result.providerIds.length) await cloudSync?.pushAll?.();
+        if (result.result.providerIds.length || result.result.aggregatesImported) await cloudSync?.pushAll?.();
       }
     } catch (error) {
       notify(String(error));
@@ -284,7 +270,6 @@ export function useAccountManager(
     if (showSpinner) setRefreshingAll(true);
     try {
       await Promise.allSettled(targetAccounts.map((account) => refreshAccountUsage(account.id)));
-      await refreshOfficialModelCatalog().catch(() => undefined);
       if (hasLocalBackend) await load();
       else {
         const fetchedAt = new Date().toISOString();
@@ -466,16 +451,9 @@ export function useAccountManager(
     } catch (error) {
       notify(String(error));
     }
-    try {
-      const dashboard = await loadDashboard();
-      setAccounts(dashboard.accounts);
-      setInfo(dashboard.info);
-      return dashboard.accounts.find((account) => account.id === id) ?? null;
-    } catch (error) {
-      notify(String(error));
-      return null;
-    }
-  }, [cloudSync, notify]);
+    const dashboard = await readDashboard();
+    return dashboard?.accounts.find((account) => account.id === id) ?? null;
+  }, [cloudSync, notify, readDashboard]);
 
   const setAutoSwitchPriority = useCallback(async (id: string, priority: number) => {
     setAutoSwitchPriorityBusyAccountId(id);

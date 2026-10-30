@@ -15,7 +15,7 @@ export async function historyJourney({ page, request, info, relay }: {
   await request.post(`${fixtureUrl}/test/sidebar`, { data: { action: 'history-pages' } });
   await request.post(`${fixtureUrl}/test/history-delay`, { data: { milliseconds: 600 } });
   await openChatList(page);
-  await page.getByRole('button', { name: /移动端聊天体验/ }).click();
+  await page.getByRole('button', { name: '移动端聊天体验', exact: true }).click();
   const items = page.locator('[data-message-id]');
   await expect(items).toHaveCount(10);
   await expect(items.first()).toHaveAttribute('data-message-id', 'history-26');
@@ -23,11 +23,14 @@ export async function historyJourney({ page, request, info, relay }: {
     const first = items.first();
     const id = await first.getAttribute('data-message-id');
     await page.locator('.chat-messages').evaluate((node) => { node.scrollTop = 0; });
-    await expect(page.getByRole('status').filter({ hasText: '正在加载聊天记录' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '加载中…', exact: true })).toBeDisabled();
+    await expect(page.getByText('正在加载聊天记录…')).toHaveCount(0);
     const top = (await first.boundingBox())!.y;
     await expect(items).toHaveCount(count);
+    await expect(page.getByText(/已加载 \d+ 条历史记录/)).toHaveCount(0);
     const preserved = page.locator(`[data-message-id="${id}"]`);
     await expect.poll(async () => Math.abs((await preserved.boundingBox())!.y - top)).toBeLessThan(3);
+    if (count === 35) await screenshot(page, info, 'history-loaded');
   }
   await expect(page.getByRole('button', { name: '加载更早的消息' })).toHaveCount(0);
   await request.post(`${fixtureUrl}/test/history-delay`, { data: { milliseconds: 0 } });

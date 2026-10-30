@@ -65,6 +65,7 @@ jobs:
           RESOURCE_TAG: ${{ steps.package.outputs.tag }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          retries: 3
           script: |
             const { owner, repo } = context.repo;
             const tag = process.env.RESOURCE_TAG;
@@ -86,7 +87,7 @@ jobs:
               "",
               `Version and archive MD5: \`${process.env.RESOURCE_VERSION}\``,
               "",
-              "Codex Switch downloads this pack silently after startup; it is not included in the application installer.",
+              "Remote AI downloads this pack silently after startup; it is not included in the application installer.",
             ].join("\n");
             const releases = await github.paginate(github.rest.repos.listReleases, {
               owner,
@@ -205,6 +206,7 @@ jobs:
           RESOURCE_RELEASE_ID: ${{ steps.resource_release.outputs.release_id }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          retries: 3
           script: |
             const { owner, repo } = context.repo;
             await github.rest.repos.updateRelease({

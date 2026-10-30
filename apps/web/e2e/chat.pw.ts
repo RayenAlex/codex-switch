@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { openChatList, connect, navigate, send, settled, screenshot, state, fixtureUrl, openChatSettings } from './chat-helpers';
+import { openChatList, connect, navigate, send, settled, screenshot, state, fixtureUrl,
+  openChatSettings, operationCount } from './chat-helpers';
 import { chatJourney } from './chat-journey';
+import { reliabilityJourney } from './chat-reliability';
 import { historyJourney } from './chat-history';
 import { attachmentJourney } from './chat-attachments';
 import { imageEditorJourney } from './chat-image-editor';
@@ -8,7 +10,9 @@ import { composerLayout, desktopComposer } from './chat-composer';
 import { projectPickerJourney } from './chat-project-picker';
 import { clipboardJourney } from './chat-clipboard';
 import { backgroundJourney } from './chat-background';
+import { sessionRecoveryJourney } from './chat-session-recovery';
 import { modelPickerJourney } from './chat-model-picker';
+import { chooseSetting, closeChatSettings, isDesktop } from './chat-settings';
 
 test.beforeEach(async ({ page, request }, info) => {
   // Login can open chat immediately; install the network fault before any peer is created.
@@ -25,6 +29,7 @@ test.beforeEach(async ({ page, request }, info) => {
   await page.getByPlaceholder('name@example.com').fill('mobile-test@example.test');
   await page.getByPlaceholder('输入登录密码').fill('local-test');
   await page.getByRole('button', { name: '登录并查看' }).click();
+  await page.getByRole('button', { name: '同意并登录' }).click();
   await expect(page.locator('.app-shell')).toBeVisible();
   // The shell appears before sign-in finishes loading dashboard data; reloading then cancels login.
   await expect(page.getByText('欢迎回来', { exact: true })).toBeVisible();
@@ -32,9 +37,105 @@ test.beforeEach(async ({ page, request }, info) => {
 
 
 test('keeps composer icons below single and multiline drafts', async ({ page }) => composerLayout(page));
+test('shows only task issues and connection health over relay', async ({ page, request }, info) => {
+  await reliabilityJourney(page, request, info);
+});
+test('shows only task issues and connection health over direct', async ({ page, request }, info) => {
+  await reliabilityJourney(page, request, info);
+});
+test('connects independently over WebRTC without advertising native TCP', async ({ page }) => {
+  const capabilities: boolean[] = [];
+  page.on('websocket', socket => {
+    if (!socket.url().endsWith('/device-chat')) return;
+    socket.on('framesent', ({ payload }) => {
+      if (typeof payload !== 'string') return;
+      const frame = JSON.parse(payload) as { type?: string; tcpPunch?: boolean };
+      if (frame.type === 'authenticate') capabilities.push(frame.tcpPunch === true);
+    });
+  });
+  await page.reload();
+  await connect(page);
+  await expect(page.getByRole('status').filter({ hasText: 'P2P' })).toBeVisible({ timeout: 15_000 });
+  expect(capabilities.length).toBeGreaterThan(0);
+  expect(capabilities.every(enabled => !enabled)).toBe(true);
+});
 test('uses the PC model picker and keeps the mobile settings unchanged', async ({ page, request }, info) => {
   test.skip(info.project.name !== 'desktop', 'Desktop model picker interaction');
   await modelPickerJourney(page, request, info);
+});
+
+test('refreshes an empty model catalog explicitly on mobile and desktop over relay',
+  async ({ page, request }, info) => {
+  await connect(page);
+  const input = page.getByRole('textbox', { name: '聊天消息' });
+  await input.fill('刷新后继续发送');
+  await expect(page.getByRole('button', { name: '发送消息', exact: true })).toBeEnabled({ timeout: 20_000 });
+  await request.post(`${fixtureUrl}/test/composer`, { data: { models: [] } });
+  await expect(page.getByRole('button', { name: '发送消息', exact: true })).toBeDisabled();
+  if (!isDesktop(page)) {
+    await openChatSettings(page);
+    await expect(page.getByRole('button', { name: '刷新模型', exact: true })).toHaveCount(0);
+    await screenshot(page, info, 'settings-without-model-refresh');
+    await page.getByRole('button', { name: '设置模型', exact: true }).click();
+    await expect(page.locator('.sheet-title-row').getByRole('button', { name: '刷新模型' })).toBeVisible();
+  }
+  const refresh = page.getByRole('button', { name: '刷新模型', exact: true });
+  await expect(refresh).toBeEnabled();
+  expect(await operationCount(request, 'modelsRefresh')).toBe(0);
+  await screenshot(page, info, 'empty-model-refresh');
+  await refresh.click();
+  await expect.poll(() => operationCount(request, 'modelsRefresh')).toBe(1);
+  if (!isDesktop(page)) {
+    await expect(page.getByRole('radio', { name: '测试模型', exact: true })).toBeVisible();
+    await screenshot(page, info, 'model-list-refresh');
+    await page.getByRole('button', { name: '返回上一层', exact: true }).click();
+    await closeChatSettings(page);
+  }
+  await expect(page.getByRole('button', { name: '发送消息', exact: true })).toBeEnabled();
+  await expect(input).toHaveValue('刷新后继续发送');
+  if (isDesktop(page)) {
+    await page.getByRole('button', { name: /^模型与推理强度：/ }).click();
+    const panel = page.getByRole('dialog', { name: '模型与推理强度', exact: true });
+    await expect(panel.getByRole('button', { name: '刷新模型', exact: true })).toHaveCount(0);
+    await panel.getByRole('button', { name: '选择模型', exact: true }).click();
+    const refreshIcon = panel.locator('.composer-model-list-header').getByRole('button', { name: '刷新模型' });
+    await expect(refreshIcon).toBeEnabled();
+    await refreshIcon.click();
+    await expect.poll(() => operationCount(request, 'modelsRefresh')).toBe(2);
+    await expect(page.getByRole('menuitemradio', { name: '测试模型', exact: true })).toBeVisible();
+    expect((await panel.boundingBox())!.width).toBeLessThanOrEqual(400);
+    await screenshot(page, info, 'recovered-model-picker');
+  }
+});
+
+test('automatically replaces an unavailable resumed session over relay', async ({ page, request }) => {
+  await sessionRecoveryJourney(page, request);
+});
+
+test('waits for the new relay model before enabling send', async ({ page, request }, info) => {
+  await connect(page);
+  const input = page.getByRole('textbox', { name: '聊天消息' });
+  const submit = page.getByRole('button', { name: '发送消息', exact: true });
+  await input.fill('切换完成后再发送');
+  await expect(submit).toBeEnabled();
+  await request.post(`${fixtureUrl}/test/composer`, { data: { syncing: true } });
+  await expect(submit).toBeDisabled();
+  await input.press('Enter');
+  expect(await operationCount(request, 'send')).toBe(0);
+  const second = (await state(request)).composer.models[1];
+  await request.post(`${fixtureUrl}/test/composer`, {
+    data: { syncing: false, models: [second], model: second.model },
+  });
+  await expect(submit).toBeEnabled();
+  await expect(input).toHaveValue(isDesktop(page) ? '切换完成后再发送' : '切换完成后再发送\n');
+  if (isDesktop(page)) {
+    await expect(page.getByRole('button', { name: /^模型与推理强度：/ })).toHaveAccessibleName(/第二模型/);
+  } else {
+    await openChatSettings(page);
+    await expect(page.getByRole('button', { name: '设置模型', exact: true })).toContainText('第二模型');
+    await closeChatSettings(page);
+  }
+  await screenshot(page, info, 'model-source-synchronized');
 });
 test('uses desktop composer controls and Enter shortcuts while streaming', async ({ page, request }, info) => {
   test.skip(info.project.name !== 'desktop', 'Desktop composer interaction');
@@ -68,45 +169,99 @@ for (const [code, message] of [[4004, '电脑的聊天连接尚未就绪。'], [
   });
 }
 
-test('syncs request speed with the PC and shows a lightning indicator only in fast mode', async ({ page, request }) => {
+test('keeps speed controls in settings and syncs speed while responding', async ({ page, request }, info) => {
   await connect(page);
   await expect(page.getByRole('status').filter({ hasText: /P2P|Relay/ })).toBeVisible({ timeout: 16_000 });
-  if (page.viewportSize()!.width > 860) {
-    const speed = page.getByRole('switch', { name: '快速模式' });
-    await speed.click();
-    await expect.poll(async () => (await state(request)).composer.settings.speed).toBe('fast');
-    await expect(speed).toBeChecked();
-    await request.post(`${fixtureUrl}/test/composer`, { data: { speed: 'normal' } });
-    await expect(speed).not.toBeChecked();
-    return;
+  await openChatList(page);
+  await page.getByRole('button', { name: '移动端聊天体验', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '移动端聊天体验', exact: true })).toBeVisible();
+  const desktop = isDesktop(page);
+  const speed = page.locator('.request-speed-button');
+  await expect(speed).toHaveCount(0);
+  if (desktop) await page.getByRole('button', { name: /^模型与推理强度：/ }).click();
+  else await openChatSettings(page);
+  for (const [mode, label] of [['fast', '快速模式'], ['ultrafast', 'Ultrafast 模式'], ['normal', '普通模式']] as const) {
+    if (desktop) await speed.click();
+    else await chooseSetting(page, '速度模式', label);
+    await expect.poll(async () => (await state(request)).composer.settings.speed, { timeout: 15_000 }).toBe(mode);
+    if (desktop) {
+      await expect(speed).toHaveAttribute('data-speed', mode);
+      await expect(speed.locator('.is-lit')).toHaveCount({ normal: 0, fast: 1, ultrafast: 2 }[mode]);
+    } else {
+      await expect(page.getByRole('button', { name: '设置速度模式' })).toContainText(label);
+      await expect(speed).toHaveCount(0);
+    }
+    await screenshot(page, info, 'speed-' + mode);
   }
-  await openChatSettings(page);
-  await page.getByRole('button', { name: '设置速度模式', exact: true }).click();
-  await page.getByRole('radio', { name: '快速模式', exact: true }).click();
-  await expect.poll(async () => (await state(request)).composer.settings.speed).toBe('fast');
-  await page.getByRole('button', { name: '关闭', exact: true }).last().click();
-  await page.getByRole('textbox', { name: '聊天消息' }).focus();
-  await page.evaluate(() => {
-    // This web composer shows its model control while the keyboard is open.
-    if (!window.visualViewport) throw new Error('Visual viewport is required');
-    Object.defineProperty(window.visualViewport, 'height', { configurable: true, get: () => innerHeight - 300 });
-    window.visualViewport.dispatchEvent(new Event('resize'));
-  });
-  const settings = page.getByRole('button', { name: /聊天设置/ });
-  await expect(settings).toHaveAccessibleName(/快速模式/);
-  await request.post(`${fixtureUrl}/test/composer`, { data: { speed: 'normal' } });
-  await expect(settings).not.toHaveAccessibleName(/快速模式/);
-  await openChatSettings(page);
-  await expect(page.getByRole('button', { name: '设置速度模式', exact: true })).toContainText('普通模式');
+  await request.post(fixtureUrl + '/test/composer', { data: { speed: 'ultrafast' } });
+  if (desktop) await expect(speed).toHaveAttribute('data-speed', 'ultrafast');
+  else await expect(page.getByRole('button', { name: '设置速度模式' })).toContainText('Ultrafast 模式');
+  if (desktop) await page.getByRole('button', { name: /^模型与推理强度：/ }).click();
+  else await closeChatSettings(page);
+  await expect(speed).toHaveCount(0);
+  await request.post(fixtureUrl + '/test/sidebar', { data: { action: 'start' } });
+  await expect(page.getByRole('button', { name: '暂停生成' })).toBeVisible();
+  await expect(page.getByText(/处理中…/).last()).toBeVisible();
+  if (desktop) {
+    await page.getByRole('button', { name: /^模型与推理强度：/ }).click();
+    await speed.click();
+  } else {
+    await openChatSettings(page);
+    await chooseSetting(page, '速度模式', '普通模式');
+  }
+  await expect.poll(async () => (await state(request)).composer.settings.speed).toBe('normal');
+  if (desktop) await page.getByRole('button', { name: /^模型与推理强度：/ }).click();
+  else await closeChatSettings(page);
+  await expect(speed).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '暂停生成' })).toBeVisible();
+  await screenshot(page, info, 'composer-without-speed-icons');
+  await page.getByRole('button', { name: '暂停生成' }).click();
 });
 
 test('syncs PC chats over direct transport, supports actions and reconnects without duplicate sends',
   async ({ page, request }, info) => chatJourney({ page, request, info }));
 
+for (const [access, label] of [['danger-full-access', '完全访问'], ['read-only', '请求批准']] as const) {
+  test(`inherits the last access choice ${access} in new chats and after reconnecting`,
+    async ({ page, request }, info) => {
+      await connect(page);
+      await expect(page.getByRole('status').filter({ hasText: /P2P|Relay/ })).toBeVisible({ timeout: 16_000 });
+      await openChatList(page);
+      await page.getByRole('button', { name: '移动端聊天体验', exact: true }).click();
+      await openChatSettings(page);
+      await chooseSetting(page, '访问权限', label);
+      await expect.poll(async () => (await state(request)).composer.settings.access).toBe(access);
+      await closeChatSettings(page);
+      await openChatList(page);
+      await page.getByRole('button', { name: '新聊天', exact: true }).click();
+      await expect(page.getByRole('heading', { name: '新聊天', exact: true })).toBeVisible();
+      await page.reload();
+      await connect(page);
+      await expect(page.getByRole('status').filter({ hasText: /P2P|Relay/ })).toBeVisible({ timeout: 16_000 });
+      await openChatSettings(page);
+      if (isDesktop(page)) {
+        await page.getByRole('button', { name: /^访问权限：/ }).click();
+        await expect(page.getByRole('menuitemradio', { name: new RegExp(label) })).toBeChecked();
+      } else {
+        await page.getByRole('button', { name: '设置访问权限', exact: true }).click();
+        await expect(page.getByRole('radio', { name: label, exact: true })).toBeChecked();
+      }
+      await screenshot(page, info, `inherited-access-${access}`);
+      if (!isDesktop(page)) await page.getByRole('radio', { name: label, exact: true }).click();
+      await closeChatSettings(page);
+      await send(page, 'Use my previous permission choice');
+      await expect.poll(async () => (await state(request)).operations
+        .filter((entry) => entry.operation === 'start').at(-1)?.access).toBe(access);
+      await expect.poll(async () => (await state(request)).operations
+        .filter((entry) => entry.operation === 'send').at(-1)?.access).toBe(access);
+      await settled(page);
+    });
+}
+
 for (const relay of [false, true]) {
   test(`keeps chat connected across browser tabs and app pages over ${relay ? 'relay' : 'direct'}`,
     async ({ page, request }) => backgroundJourney(page, request, relay));
-  test(`selects a computer folder for a new chat over ${relay ? 'relay' : 'direct'}`,
+  test(`switches existing projects and adds a project over ${relay ? 'relay' : 'direct'}`,
     async ({ page, request }) => projectPickerJourney({ page, request, relay }));
   test(`sends album photos over ${relay ? 'relay' : 'direct'}`,
     async ({ page, request }, info) => attachmentJourney({ page, request, info, relay }));
@@ -118,7 +273,7 @@ test('keeps the PC chat after login renewal and disconnects on logout', async ({
   await connect(page);
   await expect(page.getByRole('status').filter({ hasText: 'P2P' })).toBeVisible({ timeout: 15_000 });
   await openChatList(page);
-  await page.getByRole('button', { name: /移动端聊天体验/ }).click();
+  await page.getByRole('button', { name: '移动端聊天体验', exact: true }).click();
   await navigate(page, '账号');
   await expect.poll(async () => (await state(request)).connectedMobiles).toBe(1);
   let expired = false;
@@ -154,7 +309,7 @@ test('falls back after direct discovery fails and keeps the composer within a sm
     await expect(page.getByRole('status').filter({ hasText: 'Relay' })).toBeVisible({ timeout: 16_000 });
     expect(Date.now() - started).toBeGreaterThanOrEqual(10_000);
     await openChatList(page);
-    await page.getByRole('button', { name: /移动端聊天体验/ }).click();
+    await page.getByRole('button', { name: '移动端聊天体验', exact: true }).click();
     await send(page, 'encrypted relay from H5');
     await settled(page);
     await page.setViewportSize({ width: 390, height: 480 });

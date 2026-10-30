@@ -7,7 +7,21 @@ fn handle_proxy_request<R: Runtime>(
     session_id: Option<&str>,
     session_request_id: Option<u64>,
 ) -> Result<UpstreamPayload, String> {
-    let _timeout_scope = sse_idle_timeout::RequestScope::enter(read_app_settings(app)?.sse_idle_timeout);
+    let settings = read_app_settings(app).map_err(|error| {
+        diagnostic_event(json!({
+            "event": "request_settings_failed", "errorId": error_messages::error_id(&error),
+            "error": crate::error_logs::sanitize_diagnostic_message(&error)
+        }));
+        if gui_routing::upstream_path(url).is_some() {
+            error_messages::gui(&error)
+        } else {
+            error
+        }
+    })?;
+    let _transport_scope = transport_settings::RequestScope::enter(settings.proxy_transport);
+    let _timeout_scope = sse_idle_timeout::RequestScope::enter(settings.sse_idle_timeout);
+    let _header_timeout_scope =
+        response_header_timeout::RequestScope::enter(settings.response_header_timeout);
     let body = request_chat_usage(method, url, body);
     if let Some(url) = gui_routing::upstream_path(url) {
         return gui_routing::handle(gui_routing::GuiProxyRequest {
@@ -171,6 +185,7 @@ fn handle_proxy_request<R: Runtime>(
     };
     let mut image_account_pool = image_account_pool_for_request(app, path, &body, &target)?;
     let image_account_failover_enabled = image_account_pool.is_some();
+    let image_account_switched = std::cell::Cell::new(false);
     let route = proxy_diagnostic_route(path, &target);
     let mut diagnostic = proxy_diagnostic_entry(method, url, headers, &body, Some(&target), route);
     let make_usage_context = |target: &ActiveTarget| {
@@ -197,7 +212,8 @@ fn handle_proxy_request<R: Runtime>(
     let mut usage_context = make_usage_context(&target);
     let refresh_target = std::cell::Cell::new(false);
     let retry_timeout = upstream_429_retry_timeout(app)?;
-    let result = retry_upstream_request(
+    let result = retry_upstream_request_for_target(
+        matches!(target, ActiveTarget::Aggregate(_)),
         retry_timeout,
         || {
             if refresh_retry_target(&mut target, &refresh_target, || {
@@ -222,13 +238,17 @@ fn handle_proxy_request<R: Runtime>(
                 account_id_override: account_id_override.as_deref(),
             });
             if let Ok(response) = result.as_ref() {
-                advance_image_account_after_429(&mut image_account_pool, response);
+                image_account_switched.set(advance_image_account_after_429(
+                    &mut image_account_pool,
+                    response,
+                ));
             }
             result
         },
         |response, event| {
             if image_account_failover_enabled {
-                return false;
+                return matches!(event, UpstreamQuotaEvent::Retry { .. })
+                    && image_account_switched.get();
             }
             let switched = handle_upstream_quota_event(app, response, event);
             refresh_target.set(switched);

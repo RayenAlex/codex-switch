@@ -87,6 +87,7 @@ fn deactivate_account_and_restart_chatgpt_blocking<R: Runtime>(
     let client_was_running = !proxy_running && chatgpt_or_codex_is_running()?;
     let launch_target = client_was_running
         .then(|| refresh_and_get_chatgpt_launch_target(&app))
+        .transpose()?
         .flatten();
     if client_was_running {
         stop_chatgpt_processes()?;
@@ -166,7 +167,9 @@ fn deactivate_account_unlocked<R: Runtime>(
     if proxy_running && write_codex {
         crate::providers::refresh_official_codex_models();
     }
-    crate::claude_code::sync_after_switch(app)?;
+    if crate::client_integration::enabled_for(proxy_running) {
+        crate::claude_code::sync_after_switch(app)?;
+    }
     crate::system_tray::refresh_menu(app);
     Ok(Some(account_id))
 }
@@ -194,7 +197,7 @@ pub(crate) fn switch_account_and_restart_chatgpt_blocking<R: Runtime>(
     let paths = resolve_paths(&app)?;
     load_validated_managed_auth(&paths, &id)?;
 
-    let launch_target = refresh_and_get_chatgpt_launch_target(&app);
+    let launch_target = refresh_and_get_chatgpt_launch_target(&app)?;
     if chatgpt_or_codex_is_running()? {
         stop_chatgpt_processes()?;
         wait_for_chatgpt_processes_to_exit(Duration::from_secs(10))?;
@@ -236,6 +239,7 @@ pub(crate) fn reapply_active_account_after_login<R: Runtime>(
     let client_was_running = chatgpt_or_codex_is_running()?;
     let launch_target = client_was_running
         .then(|| refresh_and_get_chatgpt_launch_target(&app))
+        .transpose()?
         .flatten();
     if client_was_running {
         stop_chatgpt_processes()?;

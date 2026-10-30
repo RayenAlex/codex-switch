@@ -344,10 +344,12 @@ pub(crate) fn remote_control_config<R: Runtime>(
     let installation = read_or_create_installation_state(app)?;
     let manager_state = read_state(&resolve_paths(app)?);
     Ok(Some(RemoteControlConfig {
+        gui_selection: crate::codex_gui::account_selection::read(app)
+            .map_err(|error| error.to_string())?,
         websocket_url: url.to_string(),
         access_token,
         device_id: installation.device_id,
-        device_name: sysinfo::System::host_name().unwrap_or_else(|| "Codex Switch".to_string()),
+        device_name: sysinfo::System::host_name().unwrap_or_else(|| "Remote AI".to_string()),
         platform: installation.platform,
         app_version: app.package_info().version.to_string(),
         active_account_id: manager_state.active_account_id,

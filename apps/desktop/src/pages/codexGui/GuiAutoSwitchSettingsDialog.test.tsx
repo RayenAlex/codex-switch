@@ -6,8 +6,13 @@ import { invoke } from "../../api/backend";
 import { DEMO_ACCOUNTS } from "../../demo";
 import { GuiAutoSwitchSettingsDialog } from "./GuiAutoSwitchSettingsDialog";
 import type { GuiAutoSwitchSettings } from "./autoSwitchSettings";
+import type { GuiSystemPromptSettings } from "./useGuiSystemPrompts";
+import { translate } from "../../i18n";
 
 vi.mock("../../api/backend", () => ({ invoke: vi.fn() }));
+vi.mock("../../hooks/useLanguage", () => ({ useLanguage: () => ({
+  t: (key: Parameters<typeof translate>[1]) => translate("zh", key),
+}) }));
 const account = { ...DEMO_ACCOUNTS[0], id: "gui-account", email: "gui@example.com", localProxyCompatible: true,
   autoSwitchEnabled: false, autoSwitchPriority: 55, autoSwitchThreshold: 60 };
 const defaults: GuiAutoSwitchSettings = { enabled: false, switchOnQuotaExhaustion: true,
@@ -61,7 +66,52 @@ afterEach(async () => {
   localStorage.clear();
 });
 
-it("switches between top tabs and saves appearance independently of account settings", async () => {
+it("edits GUI prompt rules in its own tab without changing account or proxy settings", async () => {
+  const prompts: GuiSystemPromptSettings = {
+    filterEnabled: false, filterRules: [], injectionEnabled: false,
+    injectionPrompts: [{ name: "GUI 规则", text: "只在 GUI 中使用", enabled: true }],
+  };
+  vi.mocked(invoke).mockImplementation(async (command, args) => {
+    if (command === "codex_gui_system_prompt_settings") return prompts;
+    if (command === "codex_gui_set_system_prompt_settings") return args?.settings;
+    return defaults;
+  });
+  await render();
+  await click([...document.querySelectorAll<HTMLElement>('[role="tab"]')]
+    .find((element) => element.textContent === "系统提示词")!);
+  expect(document.body.textContent).toContain("GUI 规则");
+  expect(document.body.textContent).toContain("仅用于 Codex GUI 对话");
+  await click(button("启用或禁用系统提示词注入"));
+  expect(invoke).toHaveBeenLastCalledWith("codex_gui_set_system_prompt_settings", {
+    settings: { ...prompts, injectionEnabled: true },
+  });
+  expect(button("启用或禁用系统提示词注入").getAttribute("aria-checked")).toBe("true");
+  await click(footerButton("完成"));
+  expect(onClose).toHaveBeenCalledOnce();
+  expect(vi.mocked(invoke).mock.calls.map(([command]) => command)).toEqual([
+    "codex_gui_auto_switch_settings", "codex_gui_system_prompt_settings", "codex_gui_set_system_prompt_settings",
+  ]);
+});
+
+it("keeps saved prompt switches unchanged after a failed save and allows retry", async () => {
+  const prompts: GuiSystemPromptSettings = {
+    filterEnabled: false, filterRules: [], injectionEnabled: false, injectionPrompts: [],
+  };
+  vi.mocked(invoke).mockResolvedValueOnce(defaults).mockResolvedValueOnce(prompts)
+    .mockRejectedValueOnce(new Error("private-path"))
+    .mockResolvedValueOnce({ ...prompts, filterEnabled: true });
+  await render();
+  await click([...document.querySelectorAll<HTMLElement>('[role="tab"]')]
+    .find((element) => element.textContent === "系统提示词")!);
+  await click(button("启用或禁用系统提示词过滤"));
+  expect(button("启用或禁用系统提示词过滤").getAttribute("aria-checked")).toBe("false");
+  expect(document.body.textContent).toContain("系统提示词未保存，请重试。");
+  expect(document.body.textContent).not.toContain("private-path");
+  await click(button("启用或禁用系统提示词过滤"));
+  expect(button("启用或禁用系统提示词过滤").getAttribute("aria-checked")).toBe("true");
+});
+
+it("switches between setting sections and saves appearance independently of account settings", async () => {
   await render();
   const tab = (label: string) => [...document.querySelectorAll<HTMLElement>('[role="tab"]')]
     .find((element) => element.textContent === label)!;
@@ -92,6 +142,42 @@ it("keeps appearance available when account settings cannot be loaded", async ()
   expect(onClose).toHaveBeenCalledOnce();
 });
 
+it("saves theme choices immediately even when account settings are unavailable", async () => {
+  vi.mocked(invoke).mockRejectedValue(new Error("unavailable"));
+  await render();
+  await click([...document.querySelectorAll<HTMLElement>('[role="tab"]')]
+    .find((element) => element.textContent === "主题")!);
+  const mode = (label: string) => [...document.querySelectorAll<HTMLElement>(".ant-segmented-item")]
+    .find((element) => element.textContent === label)!;
+  await click(mode("深色"));
+  expect(JSON.parse(localStorage.getItem("codex-switch:gui-theme")!)).toEqual({ mode: "dark", color: null });
+  await click(document.querySelector<HTMLButtonElement>("#gui-theme-color-inherit")!);
+  expect(JSON.parse(localStorage.getItem("codex-switch:gui-theme")!).color).toMatch(/^#[0-9a-f]{6}$/i);
+  const reset = [...document.querySelectorAll<HTMLButtonElement>("button")]
+    .find((element) => element.textContent?.replace(/ /g, "") === "恢复默认")!;
+  await click(reset);
+  expect(JSON.parse(localStorage.getItem("codex-switch:gui-theme")!)).toEqual({ mode: "inherit", color: null });
+  await click(footerButton("完成"));
+  expect(onClose).toHaveBeenCalledOnce();
+  expect(invoke).toHaveBeenCalledExactlyOnceWith("codex_gui_auto_switch_settings");
+});
+
+it("reports a theme save failure and preserves pending account changes on the theme tab", async () => {
+  await render();
+  await click(button("自动切换账号"));
+  await click([...document.querySelectorAll<HTMLElement>('[role="tab"]')]
+    .find((element) => element.textContent === "主题")!);
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("unavailable"); });
+  await click([...document.querySelectorAll<HTMLElement>(".ant-segmented-item")]
+    .find((element) => element.textContent === "深色")!);
+  expect(document.querySelector('[role="alert"]')?.textContent).toBe("主题未保存，请重试。");
+  await click(footerButton("保存"));
+  expect(invoke).toHaveBeenLastCalledWith("codex_gui_set_auto_switch_settings", {
+    settings: { ...defaults, enabled: true },
+  });
+  expect(onClose).toHaveBeenCalledOnce();
+});
+
 it("keeps pending account changes saveable after switching to appearance", async () => {
   await render();
   await click(button("自动切换账号"));
@@ -107,7 +193,6 @@ it("keeps pending account changes saveable after switching to appearance", async
 it("loads GUI rules independently and saves participation, priority and thresholds together", async () => {
   await render();
   expect(invoke).toHaveBeenCalledExactlyOnceWith("codex_gui_auto_switch_settings");
-  expect(document.querySelector<HTMLElement>(".ant-modal")?.style.width).toBe("80vw");
   expect(button(`${account.email} 参与自动切换`).getAttribute("aria-checked")).toBe("true");
   expect(input(`${account.email} 优先级`).value).toBe("0");
   expect(Number(input(`${account.email} 剩余阈值`).value)).toBe(0);

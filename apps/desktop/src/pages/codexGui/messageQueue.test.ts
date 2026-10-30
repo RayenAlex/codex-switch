@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { guiApi } from "./api";
+import { testModels } from "./testModels";
 import { GuiController } from "./controller";
 import type { GuiEvent, Thread } from "./types";
 
@@ -22,7 +23,8 @@ beforeEach(async () => {
   vi.mocked(guiApi.subscribe).mockImplementation(async (callback) => { receive = callback; return vi.fn<() => void>(); });
   let batchCount = 0;
   vi.mocked(guiApi.request).mockImplementation(async (request) => {
-    if (request.operation === "list" || request.operation === "models") return { data: [], nextCursor: null };
+    if (request.operation === "models") return { data: testModels, nextCursor: null };
+    if (request.operation === "list") return { data: [], nextCursor: null };
     if (request.operation === "sendBatch") return {
       turn: { id: batchCount++ ? "next-batch" : "batch", status: "inProgress", items: [] } };
     if (request.operation === "resume") return { thread: {
@@ -187,8 +189,28 @@ it("keeps failed batches available for retry and does not loop", async () => {
   expect(vi.mocked(guiApi.request).mock.calls.filter(([request]) => request.operation === "sendBatch")).toHaveLength(1);
   vi.mocked(guiApi.request).mockImplementation(original);
   await controller.queue.flush("one");
+  expect(messages()[0].needsReview).toBe(true);
+  expect(vi.mocked(guiApi.request).mock.calls.filter(([request]) => request.operation === "sendBatch")).toHaveLength(1);
+  await controller.queue.flush("one", true);
   expect(messages()).toEqual([]);
 });
+
+it.each(['sendBatch', 'steer'])('shows image validation errors from %s and retains the message for editing',
+  async operation => {
+    const error = '图片无法读取，请重新选择后发送。';
+    await controller.send('keep my picture', ['broken-image']);
+    const original = vi.mocked(guiApi.request).getMockImplementation()!;
+    vi.mocked(guiApi.request).mockImplementation(async request => {
+      if (request.operation === operation) throw error;
+      return original(request);
+    });
+    if (operation === 'sendBatch') await finish();
+    else await controller.queue.steer('one', messages()[0].id);
+    expect(messages()[0]).toMatchObject({ text: 'keep my picture', images: ['broken-image'],
+      error, needsReview: true, busy: false });
+    await controller.queue.flush('one');
+    expect(vi.mocked(guiApi.request).mock.calls.filter(([request]) => request.operation === operation)).toHaveLength(1);
+  });
 
 it("merges acknowledgement items after an earlier turn event without reviving a completed turn", async () => {
   await controller.send("continue", []);

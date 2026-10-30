@@ -1,3 +1,4 @@
+import { guiText } from "../../i18n/guiText";
 import { guiApi } from "./api";
 import { conversation } from "./events";
 import type { ThreadGoal } from "./goalTypes";
@@ -24,7 +25,7 @@ export class GuiGoals {
     } catch {
       const state = this.host.getSnapshot();
       this.host.patch({ goalErrors: { ...state.goalErrors,
-        [threadId]: "目标暂时无法加载，请重试或更新 Codex 后再试。" } });
+        [threadId]: guiText("目标暂时无法加载，请重试或更新 Codex 后再试。") } });
     }
   };
   private prepare = async (state: GuiState) => {
@@ -41,7 +42,8 @@ export class GuiGoals {
   set = async (options: { objective?: string; status: "active" | "paused"; threadId?: string }) => {
     const state = this.host.getSnapshot();
     const id = options.threadId ?? state.selected;
-    if (state.workspaceBusy || state.connection !== "ready" || state.sending || state.goalBusy || state.archived
+    if (state.modelCatalogLoading || state.modelSettingsLoading || state.workspaceBusy
+      || state.connection !== "ready" || state.sending || state.goalBusy || state.archived
       || state.deleting || state.compacting || (!id && !options.objective?.trim())) return false;
     if (options.status === "active" && id && (state.conversations[id]?.activeTurn
       || state.queued[id]?.length || state.approvals.some((event) => event.params.threadId === id))) return false;
@@ -54,7 +56,7 @@ export class GuiGoals {
       if (this.host.getSnapshot().goals?.[threadId] === before) this.update(threadId, goal);
       return true;
     } catch {
-      this.host.report("目标未能更新，请重试或更新 Codex 后再试。");
+      this.host.report(guiText("目标未能更新，请重试或更新 Codex 后再试。"));
       return false;
     } finally { this.host.patch({ goalBusy: false, sending: false }); }
   };
@@ -66,7 +68,7 @@ export class GuiGoals {
       await guiApi.request({ operation: "goalClear", threadId });
       this.update(threadId, null);
       return true;
-    } catch { this.host.report("目标未能移除，请稍后重试。"); return false; }
+    } catch { this.host.report(guiText("目标未能移除，请稍后重试。")); return false; }
     finally { this.host.patch({ goalBusy: false }); }
   };
 }

@@ -21,6 +21,8 @@ import { useAuthenticatedApi } from "./hooks/useAuthenticatedApi";
 import { ApprovalsPage } from "./pages/ApprovalsPage";
 import { AnnouncementPage } from "./pages/AnnouncementPage";
 import { ChatSettingsPage } from "./pages/ChatSettingsPage";
+import { UpdateSharingPage } from "./pages/UpdateSharingPage";
+import { TokenPricingPage } from "./pages/TokenPricingPage";
 import { CurrencyPage } from "./pages/CurrencyPage";
 import { CodexHomePresetsPage } from "./pages/CodexHomePresetsPage";
 import { AuditLogsPage } from "./pages/AuditLogsPage";
@@ -29,6 +31,7 @@ import { EmailTemplatesPage } from "./pages/EmailTemplatesPage";
 import { InvitationsPage } from "./pages/InvitationsPage";
 import { MyAccountsPage } from "./pages/MyAccountsPage";
 import { OfficialAccountsPage } from "./pages/OfficialAccountsPage";
+import { OfficialModelsPage } from "./pages/OfficialModelsPage";
 import { SkillsPage } from "./pages/SkillsPage";
 import { PromptPluginsPage } from "./pages/PromptPluginsPage";
 import { TelemetryPage } from "./pages/TelemetryPage";
@@ -140,14 +143,18 @@ const emptyAnnouncementClickOverview: AnnouncementClickOverview = {
 };
 
 const menuPermissions: Record<MenuKey, Permission> = {
+  chatTraffic: "admin.chat-traffic.read",
   chatSettings: "admin.chat-settings.read",
+  updateSharing: "admin.update-sharing.read",
   dashboard: "admin.dashboard.read",
   myAccounts: "self.accounts.read",
   users: "admin.users.read",
   roles: "admin.roles.read",
   officialAccounts: "admin.official-accounts.read",
+  officialModels: "admin.official-accounts.read",
   announcement: "admin.announcements.read",
   currency: "admin.currency.read",
+  tokenPricing: "admin.token-pricing.read",
   codexHomePresets: "admin.codex-home-presets.read",
   emailTemplates: "admin.email-templates.read",
   skills: "admin.skills.read",
@@ -165,9 +172,13 @@ const menuOrder: MenuKey[] = [
   "roles",
   "myAccounts",
   "officialAccounts",
+  "officialModels",
   "announcement",
   "currency",
+  "tokenPricing",
   "chatSettings",
+  "updateSharing",
+  "chatTraffic",
   "codexHomePresets",
   "emailTemplates",
   "skills",
@@ -1093,6 +1104,7 @@ export function AdminConsole({ dark, onThemeChange }: AdminConsoleProps) {
       return (
         <Suspense fallback={<Skeleton active paragraph={{ rows: 10 }} />}>
           <DashboardPage
+            api={api}
             data={dashboard}
             days={dashboardDays}
             dark={dark}
@@ -1306,6 +1318,24 @@ export function AdminConsole({ dark, onThemeChange }: AdminConsoleProps) {
     if (activeKey === "chatSettings") {
       return <ChatSettingsPage api={api}
         canManage={Boolean(profile?.permissions?.includes('admin.chat-settings.manage'))} />;
+    }
+    if (activeKey === "updateSharing") {
+      return <UpdateSharingPage api={api}
+        canManage={Boolean(profile?.permissions?.includes('admin.update-sharing.manage'))} />;
+    }
+
+    if (activeKey === "chatTraffic") {
+      return <ChatTrafficPage api={api} dark={dark}
+        canManage={Boolean(profile?.permissions?.includes("admin.chat-traffic.manage"))} />;
+    }
+
+    if (activeKey === "tokenPricing") {
+      return <TokenPricingPage api={api}
+        canManage={Boolean(profile?.permissions?.includes("admin.token-pricing.manage"))} />;
+    }
+    if (activeKey === "officialModels") {
+      return <OfficialModelsPage api={api}
+        canManage={Boolean(profile?.permissions?.includes("admin.official-accounts.manage"))} />;
     }
 
     if (activeKey === "currency") {
@@ -1764,3 +1794,4 @@ export function AdminConsole({ dark, onThemeChange }: AdminConsoleProps) {
     </AdminShell>
   );
 }
+import { ChatTrafficPage } from "./pages/ChatTrafficPage";

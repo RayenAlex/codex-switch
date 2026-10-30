@@ -314,7 +314,7 @@
         assert!(expression.contains("data-composer-navigation-target"));
         assert!(expression.contains("modelWrapper.before(container)"));
         assert!(expression.contains("pointerdown"));
-        assert!(expression.contains("data-speed-switch"));
+        assert!(expression.contains("data-speed-button"));
         assert!(expression.contains("data-today-usage"));
         assert!(expression.contains("align-items:center"));
         assert!(expression.contains("transform:translateY(1px)"));
@@ -331,29 +331,29 @@
         assert!(expression.contains("rgb(10,132,105)"));
         assert!(expression.contains("rgb(180,93,0)"));
         assert!(expression.contains("style.setProperty(\"color\", tokens, \"important\")"));
-        assert!(expression.contains("setAttribute(\"role\", \"switch\")"));
+        assert!(!expression.contains("setAttribute(\"role\", \"switch\")"));
+        assert!(!expression.contains("data-speed-switch"));
+        assert!(expression.contains("ultrafast: { name: \"ultrafast\", next: \"default\", bolts: 2 }"));
         assert!(expression.contains("border-radius:9999px"));
         assert!(!expression.contains("menuitemradio"));
         assert!(!expression.contains("openSubmenu"));
         assert!(!expression.contains("button.h-token-button-composer"));
-        assert!(expression.contains(&format!(
-            "window.{CODEX_COMPOSER_STATUS_ALLOWED_GLOBAL} = allowed"
-        )));
-        assert!(expression.contains("const hasActiveLocalModelQuery = (authMethod = null) =>"));
+        assert!(expression.contains("window.__CODEX_SWITCH_COMPOSER_STATUS_ALLOWED__ = allowed"));
+        assert!(expression.contains("const hasActiveProxyModelQuery = (noAuthOnly = false) =>"));
         assert!(expression.contains("const syncComposerStatus = () =>"));
         assert!(expression.contains("window.__CODEX_SWITCH_REFRESH_SPEED_SELECTOR__?.()"));
         assert!(expression.contains("__CODEX_SWITCH_COMPOSER_STATUS_OBSERVER__"));
         assert!(expression.contains("patchState.unsubscribe?.()"));
         assert!(expression.contains("if (matchesModelsQuery(event?.query)) syncComposerStatus()"));
         assert!(expression.contains("__CODEX_SWITCH_FAST_MODE_ALLOWED__"));
-        assert!(expression.contains("const allowed = hasActiveLocalModelQuery()"));
+        assert!(expression.contains("const allowed = proxyRunning && hasActiveProxyModelQuery()"));
         assert!(expression.contains(
-            "const fastModeAllowed = fastModeModels.size > 0 && hasActiveLocalModelQuery(\"no-auth\")"
+            "const fastModeAllowed = allowed && fastModeModels.size > 0 && hasActiveProxyModelQuery(true)"
         ));
         assert!(expression.contains("if (changed) window.__CODEX_SWITCH_REFRESH_SPEED_SELECTOR__?.()"));
         assert!(expression.contains("state.fastModeAllowed || state.usage.enabled"));
         assert!(expression.contains("controls.hidden = !state.fastModeAllowed"));
-        assert!(expression.contains("authMethod === null || key[3] === authMethod"));
+        assert!(expression.contains("key[3] === \"no-auth\""));
         assert!(!expression.contains("authMethod = \"chatgpt\""));
         assert!(!expression.contains("featureRequirements.fast_mode"));
     }
@@ -401,7 +401,7 @@
         )
         .unwrap();
 
-        assert!(expression.contains("Codex Switch Control"));
+        assert!(expression.contains("Remote AI Control"));
         assert!(expression.contains("isDefault:"));
     }
 

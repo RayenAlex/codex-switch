@@ -1,0 +1,120 @@
+@media (max-width: 1000px) {
+  .hero-bottom {
+    display: block;
+  }
+  .hero-facts {
+    margin-top: 30px;
+  }
+  .hero h1 {
+    font-size: clamp(44px, 6.4vw, 68px);
+  }
+  .section-heading {
+    gap: 30px;
+  }
+  .section-heading > p {
+    max-width: 280px;
+  }
+  .remote-inner {
+    gap: 15px;
+  }
+  .feature-grid {
+    gap: 14px;
+  }
+  .feature-card {
+    padding: 22px;
+  }
+  .feature-card h3 {
+    font-size: 18px;
+  }
+}
+@media (max-width: 640px) {
+  .hero {
+    padding-top: 48px;
+    padding-bottom: 30px;
+  }
+  .hero h1 {
+    font-size: clamp(29px, 8vw, 48px);
+    line-height: 1.3;
+    margin-block: 27px 22px;
+  }
+  .hero-description {
+    font-size: 14px;
+    margin-bottom: 25px;
+  }
+  .hero-explore {
+    margin-top: 22px;
+  }
+  .hero-facts {
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-top: 24px;
+  }
+  .hero-facts span {
+    font-size: 10px;
+  }
+  .hero-facts small {
+    font-size: 9px;
+    margin-top: 7px;
+  }
+  .hero-facts svg {
+    width: 15px;
+  }
+  .hero .ant-btn-lg {
+    padding-inline: 18px;
+    font-size: 14px;
+    height: 46px;
+  }
+  .hero-badge {
+    font-size: 10px;
+  }
+  .section {
+    padding-block: 64px;
+  }
+  .section-heading {
+    display: block;
+    margin-bottom: 27px;
+  }
+  .section-heading > p {
+    margin-top: 19px;
+    max-width: 100%;
+    font-size: 13px;
+  }
+  .remote-inner {
+    grid-template-columns: 1fr;
+    padding-block: 56px 20px;
+  }
+  .remote-copy > p:not(.eyebrow) {
+    max-width: 100%;
+  }
+  .feature-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .feature-card-visual {
+    padding-bottom: 0;
+  }
+  .feature-card-image {
+    height: 185px;
+  }
+  .feature-card-image img {
+    width: 620px;
+  }
+  .open-source-banner {
+    align-items: flex-start;
+    gap: 17px;
+    flex-wrap: wrap;
+    margin-top: 55px;
+  }
+  .open-source-banner > svg {
+    width: 25px;
+  }
+  .open-source-banner > div {
+    flex: 1;
+  }
+  .open-source-banner h3 {
+    font-size: 19px;
+  }
+  .open-source-banner > a {
+    margin-left: 42px;
+  }
+}

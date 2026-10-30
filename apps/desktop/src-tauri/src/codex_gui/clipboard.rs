@@ -5,7 +5,7 @@ use std::path::PathBuf;
 const MAX_FILES: usize = 32;
 
 #[derive(Debug, thiserror::Error)]
-enum ClipboardError {
+pub(super) enum ClipboardError {
     #[error("无法读取剪贴板，请重新复制文件后粘贴。")]
     Read,
     #[error("文件已移动或无法访问，请重新选择。")]
@@ -29,7 +29,7 @@ pub(crate) struct ClipboardFile {
     path: String,
 }
 
-fn file_reference(path: PathBuf) -> Result<ClipboardFile, ClipboardError> {
+pub(super) fn file_reference(path: PathBuf) -> Result<ClipboardFile, ClipboardError> {
     if !path.is_absolute() {
         return Err(ClipboardError::InvalidFile);
     }
@@ -55,14 +55,7 @@ fn file_reference(path: PathBuf) -> Result<ClipboardFile, ClipboardError> {
 }
 
 fn read_files() -> Result<Vec<ClipboardFile>, ClipboardError> {
-    let mut clipboard = arboard::Clipboard::new().map_err(|_| ClipboardError::Read)?;
-    let paths = match clipboard.get().file_list() {
-        Ok(paths) => paths,
-        Err(arboard::Error::ContentNotAvailable) => return Ok(Vec::new()),
-        Err(_) => return Err(ClipboardError::Read),
-    };
-    // Release the clipboard before metadata calls, which may involve network drives.
-    drop(clipboard);
+    let paths = super::clipboard_paths::read_paths().map_err(|_| ClipboardError::Read)?;
     if paths.len() > MAX_FILES {
         return Err(ClipboardError::TooMany);
     }

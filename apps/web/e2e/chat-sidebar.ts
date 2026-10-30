@@ -29,7 +29,8 @@ export async function sidebarJourney({ page, request, info }: {
   await change('complete');
   await expect(row.getByLabel('未读回复')).toBeVisible();
   await click(row);
-  await expect(page.getByRole('textbox', { name: '搜索聊天' })).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: '搜索聊天' }))
+    .toHaveCount((page.viewportSize()?.width ?? 0) > 860 ? 1 : 0);
   await expect.poll(async () => (await state(request)).sidebar.readState['demo-chat']?.unread).toBe(false);
   await openChatList(page);
   await expect(row.getByLabel('未读回复')).toHaveCount(0);

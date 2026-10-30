@@ -3,8 +3,30 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { ChatOperations } from './operations';
 import { guiApi } from '../pages/codexGui/api';
 import { remoteQueue } from './queue';
+import { guiComposer } from '../pages/codexGui/composerBridge';
 vi.mock('../pages/codexGui/api', () => ({ guiApi: { connect: vi.fn(), request: vi.fn(), respond: vi.fn() } }));
-beforeEach(() => vi.resetAllMocks());
+vi.mock('../pages/codexGui/composerBridge', () => ({ guiComposer: {
+  validateSend: vi.fn(), read: vi.fn(), refreshModels: vi.fn(),
+} }));
+beforeEach(() => {
+  vi.resetAllMocks();
+  vi.mocked(guiComposer.validateSend).mockResolvedValue({ model: 'model', effort: 'high', access: 'workspace-write' });
+});
+
+it('discovers only on an explicit model refresh and deduplicates a retried refresh request', async () => {
+  const composer = { models: [], settings: { model: '', effort: '', access: 'workspace-write' as const }, revision: 1 };
+  vi.mocked(guiComposer.read).mockResolvedValue(composer);
+  vi.mocked(guiComposer.refreshModels).mockResolvedValue(composer);
+  const operations = new ChatOperations();
+  const request = { kind: 'request' as const, id: 'poll', method: 'request' as const,
+    body: { operation: 'models', threadId: null } };
+  expect(await operations.execute(request)).toMatchObject({ data: { composer } });
+  expect(guiComposer.refreshModels).not.toHaveBeenCalled();
+  const refresh = { ...request, id: 'refresh', body: { operation: 'modelsRefresh', threadId: null } };
+  await Promise.all([operations.execute(refresh), operations.execute(refresh)]);
+  expect(guiComposer.refreshModels).toHaveBeenCalledExactlyOnceWith(null);
+  expect(guiComposer.read).toHaveBeenCalledOnce();
+});
 
 it('passes scoped text previews to the desktop and retains safe failure messages', async () => {
   const body = { operation: 'textPreview', threadId: 'chat', path: 'src/example.ts' };
@@ -18,6 +40,16 @@ it('passes scoped text previews to the desktop and retains safe failure messages
     .toMatchObject({ error: '文件暂时无法读取。' });
 });
 
+it.each(['text', 'thumbnail', 'image'])('opens a %s snapshot with the authenticated policy limit', async preview => {
+  vi.mocked(guiApi.request).mockResolvedValue({ id: 'file', size: 12 });
+  const body = { operation: 'previewOpen', threadId: 'chat', transferId: 'transfer', path: './image.png',
+    preview, maxBytes: Number.MAX_SAFE_INTEGER };
+  const operations = new ChatOperations();
+  await operations.execute({ kind: 'request', id: `preview-${preview}`, method: 'request', body }, 'relay');
+  expect(guiApi.request).toHaveBeenCalledWith({ ...body,
+    maxBytes: (preview === 'text' ? 2 : 20) * 1024 * 1024 });
+});
+
 it('executes a retried mutation once even while the original is still running', async () => {
   let finish: (value: unknown) => void = () => undefined;
   vi.mocked(guiApi.request).mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
@@ -26,7 +58,7 @@ it('executes a retried mutation once even while the original is still running', 
     body: { operation: 'send', text: 'continue', threadId: 'thread' } };
   const first = operations.execute(request);
   const retry = operations.execute(request);
-  expect(guiApi.request).toHaveBeenCalledTimes(1);
+  await vi.waitFor(() => expect(guiApi.request).toHaveBeenCalledTimes(1));
   finish({ turn: { id: 'turn' } });
   expect(await first).toEqual(await retry);
   expect(await operations.execute(request)).toEqual(await first);
@@ -65,6 +97,46 @@ it('passes project photo browsing to the typed desktop boundary', async () => {
   expect(result.error).toBeUndefined();
   expect(guiApi.request).toHaveBeenCalledWith(body);
   expect(result.data).toMatchObject({ directory: 'C:/project', entries: [] });
+});
+
+it('routes project edits over the authenticated connection and deduplicates a retried save', async () => {
+  const body = { operation: 'projectFileWrite', cwd: 'D:/remote', path: 'D:/remote/src/main.ts',
+    text: 'export const changed = true;', revision: 'original' };
+  vi.mocked(guiApi.request).mockResolvedValue({ path: body.path, text: body.text, revision: 'updated' });
+  const operations = new ChatOperations();
+  const request = { kind: 'request' as const, id: 'project-save', method: 'request' as const, body };
+  const [first, retry] = await Promise.all([operations.execute(request), operations.execute(request)]);
+  expect(first.error).toBeUndefined();
+  expect(retry).toEqual(first);
+  expect(guiApi.request).toHaveBeenCalledExactlyOnceWith(body);
+  const read = { operation: 'projectFileRead', cwd: body.cwd, path: body.path };
+  expect(await operations.execute({ ...request, id: 'project-read', body: read }))
+    .toMatchObject({ data: { revision: 'updated' } });
+  expect(guiApi.request).toHaveBeenLastCalledWith(read);
+});
+
+it.each(['projectFileRead', 'projectFileWrite'])('preserves literal image data in %s documents', async operation => {
+  const image = 'data:image/png;base64,aW1hZ2U=';
+  const data = { path: 'C:/project/source.ts', text: `export const icon = "${image}";`, image, revision: 'original' };
+  vi.mocked(guiApi.request).mockResolvedValue(data);
+  const reply = await new ChatOperations().execute({ kind: 'request', id: 'document', method: 'request',
+    body: { operation, cwd: 'C:/project', path: data.path, text: data.text, revision: 'original' } });
+  expect(reply.data).toEqual(data);
+});
+
+it.each(['createFolder', 'copy', 'move', 'rename', 'delete'])
+('deduplicates project tree action %s across remote retries', async action => {
+  const body = { operation: 'projectEntryAction', cwd: 'D:/remote', path: 'D:/remote/folder',
+    action, name: 'new', directory: 'D:/remote/target' };
+  const data = { path: 'D:/remote/new', directory: true };
+  vi.mocked(guiApi.request).mockResolvedValue(data);
+  const operations = new ChatOperations();
+  const request = { kind: 'request' as const, id: 'tree-action', method: 'request' as const, body };
+  const responses = await Promise.all([operations.execute(request), operations.execute(request)]);
+  expect(responses[0]).toMatchObject({ data });
+  expect(responses[1]).toEqual(responses[0]);
+  expect(await operations.execute(request)).toEqual(responses[0]);
+  expect(guiApi.request).toHaveBeenCalledExactlyOnceWith(body);
 });
 
 it('retains available skills when the plugin catalog fails', async () => {

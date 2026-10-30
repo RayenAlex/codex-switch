@@ -1,18 +1,20 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ConfigProvider, Dropdown, Modal, theme as antdTheme } from "antd";
+import { HelpAssistant } from "../helpAssistant/HelpAssistant";
+import { Button, ConfigProvider, Dropdown, Modal, theme as antdTheme } from "antd";
 import enUS from "antd/locale/en_US";
 import zhCN from "antd/locale/zh_CN";
+import ruRU from "antd/locale/ru_RU";
 import {
   CalendarClock,
   Check,
   CircleHelp,
-  ClipboardList,
   PanelLeftClose,
   PanelLeftOpen,
   Play,
   Plus,
   RefreshCw,
   RotateCcw,
+  ShieldCheck,
   X,
 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -41,7 +43,6 @@ import {
   subscribeToCloudSessionExpired,
   subscribeToOpenSettings,
   updateAutoDisableStatusCodes,
-  updateAccountGroups,
   updateNetworkProxy,
   updateProviderGroups,
   updateShowUsageNetworkErrors,
@@ -53,9 +54,11 @@ import { HelpModal } from "../modals/HelpModal";
 import { FeedbackModal } from "../modals/FeedbackModal";
 import { TokenUsageHeatmap } from "../TokenUsageHeatmap";
 import { TokenUsageDashboard } from "../TokenUsageDashboard";
-import { TotpWindowButton } from "../TotpWindowButton";
-import { ProxySessionManager } from "../ProxySessionManager";
-import { ErrorLogsPage } from "../../pages/ErrorLogsPage";
+import { TotpPage } from "../../pages/TotpPage";
+import { LogDiagnosticsPage, type LogDiagnosticsTab } from "../../pages/LogDiagnosticsPage";
+import { DownloadsPage } from "../../pages/DownloadsPage";
+import { authenticatedDownloadOwner } from "../../downloads/useDesktopDownloads";
+import logDiagnosticsStyles from "../../pages/LogDiagnosticsPage/index.module.less";
 import { CloudLoginModal } from "../modals/CloudLoginModal";
 import { CloudAccountModal } from "../modals/CloudAccountModal";
 import { CloudRecycleBin } from "../CloudRecycleBin";
@@ -72,7 +75,7 @@ import { DashboardMenuTools } from "./DashboardMenuTools";
 import { DashboardTopbar } from "./DashboardTopbar";
 import { ProxyProgressModal } from "./ProxyProgressModal";
 import { buildDashboardMenuItems } from "./dashboardMenuItems";
-import { DashboardNavigation, type DashboardPage } from "./DashboardNavigation";
+import { DashboardNavigation, isAccountManagementPage, type DashboardPage } from "./DashboardNavigation";
 import { useAccountManager } from "../../hooks/useAccountManager";
 import { useAppUpdate } from "../../hooks/useAppUpdate";
 import { useAccountAutoRefresh, useAutoRefresh } from "../../hooks/useAutoRefresh";
@@ -97,6 +100,8 @@ import { useThemeColor } from "../../hooks/useThemeColor";
 import { useThemeMode } from "../../hooks/useThemeMode";
 import { useTokenUsagePreferences } from "../../hooks/useTokenUsagePreferences";
 import { useSseIdleTimeout } from "../../hooks/useSseIdleTimeout";
+import { useProxyTransport } from "../../hooks/useProxyTransport";
+import { useResponseHeaderTimeout } from "../../hooks/useResponseHeaderTimeout";
 import { useUpstream429RetryTimeout } from "../../hooks/useUpstream429RetryTimeout";
 import { useToast } from "../../hooks/useToast";
 import { useTotpEntries } from "../../hooks/useTotpEntries";
@@ -110,19 +115,26 @@ import { SkillsMarketPage } from "../../pages/SkillsMarketPage";
 import { CodexThreadsPage } from "../../pages/CodexThreadsPage";
 import { WindowControls } from "../WindowControls";
 import { GuiWorkspace } from "../../pages/codexGui/GuiWorkspace";
+import { CozeTab } from "../../pages/coze/CozeTab";
+import cozeStyles from "../../pages/coze/CozePage.module.less";
+import { useNotificationNavigation } from "../../pages/codexGui/useNotificationNavigation";
+import { useGuiTheme } from "../../pages/codexGui/guiTheme";
+import { RemoteAssistance } from '../../remoteAssistance/RemoteAssistance';
 import codexGuiStyles from "../../pages/codexGui/styles.module.less";
 import { CODEX_CONFIG_TOPBAR_ID, CodexConfigPage } from "../../pages/CodexConfigPage";
 import codexConfigStyles from "../../pages/codexConfig/pageStyles.module.less";
 import { SystemPromptPage } from "../../pages/SystemPromptPage";
 import { NetworkProxySettingsModal } from "../../pages/settings/NetworkProxySettings";
 import type { Translate } from "../../i18n";
+import { guiText } from "../../i18n/guiText";
 import { AccountDisplayTabs } from "./AccountDisplayTabs";
-import { AccountTopbarActions } from "./AccountTopbarActions";
+import { AccountManagementToolbar } from "./AccountManagementToolbar";
 import { AccountToolbox } from "./AccountToolbox";
 import { AccountImageModelButton } from "./AccountImageModelButton";
 import { CodexConfigRepairButton } from "./CodexConfigRepairButton";
 import { AccountGroupManager } from "../accounts/AccountGroupManager";
-import { UsageSpeedPill } from "../accounts/UsageSpeedPill";
+import { changeSharedGroupMembers, sharedGroupNames } from "../../utils/sharedGroups";
+import { ExternalProxySpeedButton } from "../accounts/ExternalProxySpeedButton";
 import type {
   AccountDetailsDraft,
   BubbleResetDisplay,
@@ -131,8 +143,8 @@ import type {
   Provider,
 } from "../../types";
 
-const REPOSITORY_URL = "https://github.com/piperhex/codex-switch";
-const LATEST_RELEASE_API_URL = "https://api.github.com/repos/piperhex/codex-switch/releases/latest";
+const REPOSITORY_URL = "https://github.com/piperhex/remoteai";
+const LATEST_RELEASE_API_URL = "https://api.github.com/repos/piperhex/remoteai/releases/latest";
 const APP_LOGO_URL = new URL("../../../src-tauri/icons/128x128.png", import.meta.url).href;
 const NATIVE_WINDOW_CONTROLS_ENABLED = isDesktopApp && navigator.userAgent.includes("Windows");
 const MemoAccountsPage = memo(AccountsPage);
@@ -171,7 +183,7 @@ type SystemMenuAction =
   | "import-archive"
   | "export-archive"
   | "open-codex-home"
-  | "open-account-store"
+  | "open-remote-ai-home"
   | "restart-app"
   | "quit-app"
   | `navigation-style-${NavigationStyle}`
@@ -182,7 +194,12 @@ type SystemMenuAction =
   | "token-usage"
   | "dream-skin"
   | "skills"
+  | "coze"
   | "sessions"
+  | "proxy-sessions"
+  | "log-diagnostics"
+  | "downloads"
+  | "totp"
   | "system-prompts"
   | "settings"
   | "refresh-all"
@@ -222,7 +239,7 @@ async function refreshProviderBalances(providers: Provider[]) {
 }
 
 function dashboardEyebrow(page: DashboardPage, t: Translate) {
-  if (page === "errorLogs") return t("errorLogs.eyebrow");
+  if (page === "totp") return "AUTHENTICATOR";
   if (page === "codexConfig") return "CODEX / CONFIGURATION";
   if (page === "providers") return t("topbar.providersEyebrow");
   if (page === "skills") return t("topbar.skillsEyebrow");
@@ -236,7 +253,7 @@ function dashboardTitle(page: DashboardPage, t: Translate, options: {
   accountCount: number;
   providerCount: number;
 }) {
-  if (page === "errorLogs") return t("errorLogs.title");
+  if (page === "totp") return t("totp.title");
   if (page === "codexConfig") return t("nav.codexConfig");
   if (page === "settings") return t("topbar.settings");
   if (page === "skills") return t("topbar.skills");
@@ -248,8 +265,13 @@ function dashboardTitle(page: DashboardPage, t: Translate, options: {
 }
 
 export function DashboardApp() {
-  const [page, setPage] = useState<DashboardPage>(() =>
-    new URLSearchParams(window.location.search).get("page") === "codexGui" ? "codexGui" : "accounts");
+  const [page, setPage] = useState<DashboardPage>("codexGui");
+  const notificationTarget = useNotificationNavigation(() => setPage("codexGui"));
+  const [diagnosticsTab, setDiagnosticsTab] = useState<LogDiagnosticsTab>("errorLogs");
+  const openProxySessions = () => {
+    setDiagnosticsTab("proxySessions");
+    setPage("logDiagnostics");
+  };
   const [showLogin, setShowLogin] = useState(false);
   const [showCloudLogin, setShowCloudLogin] = useState(false);
   const [cloudSessionExpired, setCloudSessionExpired] = useState(false);
@@ -276,8 +298,7 @@ export function DashboardApp() {
   const [showUsageNetworkErrors, setShowUsageNetworkErrors] = useState(false);
   const [showUsageNetworkErrorsLoading, setShowUsageNetworkErrorsLoading] = useState(false);
   const [showCustomCloudServer, setShowCustomCloudServer] = useState(false);
-  const [providerGroups, setProviderGroups] = useState<string[]>([]);
-  const [accountGroups, setAccountGroups] = useState<string[]>([]);
+  const [sharedGroups, setSharedGroups] = useState<string[]>([]);
   const cloudSessionPromptedRef = useRef(false);
   const providerBalanceRefreshCountRef = useRef(0);
   useEffect(() => subscribeToOpenSettings(() => setPage("settings")), []);
@@ -366,10 +387,13 @@ export function DashboardApp() {
   const privacyMode = usePrivacyMode(notify);
   const accountDisplayMode = useAccountDisplayMode();
   const navigationStyle = useNavigationStyle();
-  const themeColor = useThemeColor(notify);
-  const themeMode = useThemeMode();
+  const guiTheme = useGuiTheme();
+  const themeColor = useThemeColor(notify, page === "codexGui" ? guiTheme.color ?? undefined : undefined);
+  const themeMode = useThemeMode(page === "codexGui" && guiTheme.mode !== "inherit" ? guiTheme.mode : undefined);
   const tokenUsagePreferences = useTokenUsagePreferences(notify);
   const sseIdleTimeout = useSseIdleTimeout(notify);
+  const proxyTransport = useProxyTransport(notify);
+  const responseHeaderTimeout = useResponseHeaderTimeout(notify);
   const upstream429RetryTimeout = useUpstream429RetryTimeout(notify);
   const manager = useAccountManager(notify, t, accountCloudSync);
   const providerManager = useProviderManager(notify, t, providerCloudSync);
@@ -400,41 +424,47 @@ export function DashboardApp() {
         );
         setShowUsageNetworkErrors(settings.showUsageNetworkErrors ?? false);
         setShowCustomCloudServer(settings.showCustomCloudServer ?? false);
-        setProviderGroups(settings.providerGroups ?? []);
-        setAccountGroups(settings.accountGroups ?? []);
+        setSharedGroups(sharedGroupNames(settings.providerGroups ?? [], settings.accountGroups ?? []));
       })
       .catch((error) => notify(String(error)));
   }, [notify]);
   const saveProviderGroups = useCallback(async (groups: string[]) => {
     try {
-      setProviderGroups(await updateProviderGroups(groups));
+      setSharedGroups(await updateProviderGroups(groups));
     } catch (error) {
       notify(String(error));
       throw error;
     }
   }, [notify]);
-  const saveAccountGroups = useCallback(async (groups: string[]) => {
-    try {
-      setAccountGroups(await updateAccountGroups(groups));
-    } catch (error) {
-      notify(String(error));
-      throw error;
+  const saveAccountGroups = saveProviderGroups;
+  const changeGroupMembers = useCallback(async (group: string, nextGroup: string) => {
+    const changed = await changeSharedGroupMembers({
+      group, nextGroup, accounts: manager.accounts, providers: providerManager.providers,
+      changeAccounts: manager.changeAccountGroups, changeProviders: providerManager.changeProviderGroups,
+    });
+    if (changed && providerManager.localProxy?.concurrentAccountGroup === group) {
+      await providerManager.setProxyConcurrentRouting(
+        providerManager.localProxy.concurrentAccountRoutingEnabled, nextGroup || null,
+      );
     }
-  }, [notify]);
+    return changed;
+  }, [manager.accounts, manager.changeAccountGroups, providerManager.providers, providerManager.changeProviderGroups,
+    providerManager.localProxy, providerManager.setProxyConcurrentRouting]);
   const changeAccountGroup = useCallback(async (id: string, group: string) => {
     const changed = await manager.changeAccountGroup(id, group);
     const normalizedGroup = group.trim();
     if (changed && normalizedGroup) {
-      setAccountGroups((current) => current.includes(normalizedGroup)
+      setSharedGroups((current) => current.includes(normalizedGroup)
         ? current
         : [...current, normalizedGroup]);
     }
     return changed;
   }, [manager.changeAccountGroup]);
   const managedAccountGroups = useMemo(() => [...new Set([
-    ...accountGroups,
+    ...sharedGroups,
     ...manager.accounts.map((account) => account.group),
-  ].filter(Boolean))], [accountGroups, manager.accounts]);
+    ...providerManager.providers.filter(provider => provider.kind === "custom").map(provider => provider.group),
+  ].filter(Boolean))], [sharedGroups, manager.accounts, providerManager.providers]);
   const resetCredits = useResetCredits(manager.accounts, notify, t);
   const activeAccount = manager.accounts.find((account) => account.active) ?? null;
   const activeProvider = providerManager.activeProvider;
@@ -768,7 +798,7 @@ export function DashboardApp() {
   const changeHideAccountNotes = useCallback((enabled: boolean) => {
     void privacyMode.setHideAccountNotes(enabled);
   }, [privacyMode.setHideAccountNotes]);
-  const openFolder = useCallback((target: "codexHome" | "accountStore") => {
+  const openFolder = useCallback((target: Parameters<typeof openManagedFolder>[0]) => {
     if (!hasLocalBackend) {
       notify(t("toast.previewOpenFolder"));
       return;
@@ -806,8 +836,7 @@ export function DashboardApp() {
   useCloudContentLifecycle(cloudContent, cloud.state.baseUrl);
 
   useEffect(() => {
-    void reportFirstInstallation().catch(() => undefined);
-    void reportDeviceActivity().catch(() => undefined);
+    void reportFirstInstallation().then(() => reportDeviceActivity()).catch(() => undefined);
   }, [cloud.state.baseUrl]);
 
   const startLogin = (embedded: boolean, privateMode = false) => {
@@ -861,7 +890,7 @@ export function DashboardApp() {
   const confirmRestartChatGpt = useCallback(() => {
     Modal.confirm({
       title: t("actions.restartChatGptConfirmTitle"),
-      content: t("actions.restartChatGptConfirmDescription"),
+      content: <span className="compact-confirm-copy">{t("actions.restartChatGptConfirmDescription")}</span>,
       okText: t("actions.restartChatGpt"),
       cancelText: t("table.cancel"),
       okButtonProps: { danger: true },
@@ -925,7 +954,7 @@ export function DashboardApp() {
     availableUpdate, checkAboutVersion, checkForUpdates, downloadingUpdate,
     downloadRequested: installAfterDownloadRequested, downloadUpdate, helpVersionState,
     installingUpdate, installUpdate, setShowUpdatePrompt, showAvailableUpdate, showUpdatePrompt,
-    updateDownloaded, updateInstallError, updateProgress,
+    updateDownloaded, updateInstallError, updateDownloadProgress,
   } = appUpdate;
   const openAbout = useCallback(() => {
     setShowAbout(true);
@@ -950,8 +979,8 @@ export function DashboardApp() {
       case "open-codex-home":
         openCodexHome();
         break;
-      case "open-account-store":
-        openAccountStore();
+      case "open-remote-ai-home":
+        openFolder("remoteAiHome");
         break;
       case "restart-app":
         void restartApplication();
@@ -984,8 +1013,23 @@ export function DashboardApp() {
       case "skills":
         setPage("skills");
         break;
+      case "coze":
+        setPage("coze");
+        break;
       case "sessions":
         setPage("sessions");
+        break;
+      case "proxy-sessions":
+        openProxySessions();
+        break;
+      case "totp":
+        setPage("totp");
+        break;
+      case "log-diagnostics":
+        setPage("logDiagnostics");
+        break;
+      case "downloads":
+        setPage("downloads");
         break;
       case "system-prompts":
         setPage("systemPrompts");
@@ -1156,33 +1200,45 @@ export function DashboardApp() {
       startDisabledReason={proxyStartDisabledReason} t={t} />
   );
   const sidebarNavigationEnabled = navigationStyle.style === "sidebar";
-  const usageSpeedPill = providerManager.localProxy?.running
-    && providerManager.localProxy.fastModeAvailable
-    ? <UsageSpeedPill fastModeEnabled={providerManager.localProxy.fastModeEnabled}
-      fastModeAvailable proxyRunning loading={providerManager.proxyBusy}
-      onChange={providerManager.setProxyFastMode} t={t} />
-    : null;
+  const downloadOwner = authenticatedDownloadOwner(cloud.state);
+  const proxySpeedControl = <ExternalProxySpeedButton proxy={providerManager.localProxy}
+    busy={providerManager.proxyBusy} onChange={providerManager.setProxyServiceTier} t={t} />;
   const proxyTopbarActions = (
     <ProxyTopbarActions manager={providerManager} showSessionManager={!sidebarNavigationEnabled}
-      t={t} />
+      onOpenSessions={openProxySessions} t={t} />
   );
-  const accountProxyTopbarActions = (
-    <ProxyTopbarActions manager={providerManager} showSessionManager={!sidebarNavigationEnabled}
-      trailingAction={<>
-        {managedAccountGroups.length > 0 && <AccountGroupManager accounts={manager.accounts}
-          concurrentGroup={providerManager.localProxy?.concurrentAccountGroup ?? null}
-          concurrentRoutingEnabled={providerManager.localProxy?.concurrentAccountRoutingEnabled ?? false}
-          groups={managedAccountGroups} onChangeMany={manager.changeAccountGroups}
-          onConcurrentRoutingChange={providerManager.setProxyConcurrentRouting}
-          onGroupsChange={saveAccountGroups} t={t} />}
-        {providerManager.localProxy?.running && <AccountImageModelButton accounts={manager.accounts}
-          providers={providerManager.providers}
-          inputTarget={providerManager.localProxy.imageInputTarget}
-          outputTarget={providerManager.localProxy.imageOutputTarget}
-          busy={providerManager.proxyBusy} onChange={providerManager.setProxyImageModel}
-          privacyMode={privacyMode.enabled} t={t} />}
-        {!sidebarNavigationEnabled && <TotpWindowButton notify={notify} t={t} />}
-      </>} t={t} />
+  const accountToolbox = (
+    <AccountToolbox t={t}
+      onSystemPrompts={isAccountManagementPage(page) ? () => setPage("systemPrompts") : undefined}
+      navigation={sidebarNavigationEnabled ? undefined : { page, onPageChange: setPage, downloadOwner }}>
+      {(page === "accounts" || page === "providers") && <>
+        {titlebarProxyRunning && <CloudRecycleBin t={t} disabled={!cloud.state.authenticated}
+          triggerClassName="refresh-all" />}
+        <CodexConfigRepairButton disabled={providerManager.proxyBusy} notify={notify} t={t} />
+        <AccountDisplayTabs displayMode={accountDisplayMode.displayMode}
+          onChange={accountDisplayMode.setDisplayMode} t={t} />
+      </>}
+    </AccountToolbox>
+  );
+  const officialAccountActions = (
+    <>
+      {managedAccountGroups.length > 0 && <AccountGroupManager accounts={manager.accounts}
+        additionalMembers={providerManager.providers.filter(provider => provider.kind === "custom")}
+        onChangeGroupMembers={changeGroupMembers}
+        concurrentGroup={providerManager.localProxy?.concurrentAccountGroup ?? null}
+        concurrentRoutingEnabled={providerManager.localProxy?.concurrentAccountRoutingEnabled ?? false}
+        groups={managedAccountGroups} onChangeMany={manager.changeAccountGroups}
+        onConcurrentRoutingChange={providerManager.setProxyConcurrentRouting}
+        onGroupsChange={saveAccountGroups} t={t} />}
+      {providerManager.localProxy?.running && <AccountImageModelButton accounts={manager.accounts}
+        providers={providerManager.providers}
+        inputTarget={providerManager.localProxy.imageInputTarget}
+        outputTarget={providerManager.localProxy.imageOutputTarget}
+        busy={providerManager.proxyBusy} onChange={providerManager.setProxyImageModel}
+        privacyMode={privacyMode.enabled} t={t} />}
+      {!sidebarNavigationEnabled && <Button className="refresh-all proxy-topbar-action" size="small"
+        icon={<ShieldCheck size={14} />} onClick={() => setPage("totp")}>{t("totp.action")}</Button>}
+    </>
   );
   const menuTools = (
     <DashboardMenuTools actions={{
@@ -1206,12 +1262,12 @@ export function DashboardApp() {
     : "nav.collapseSidebar");
 
   return (
-    <ConfigProvider locale={language === "zh" ? zhCN : enUS} theme={{
-      algorithm: themeMode.mode === "dark"
+    <ConfigProvider locale={{ zh: zhCN, en: enUS, ru: ruRU }[language]} theme={{
+      algorithm: themeMode.appliedMode === "dark"
         ? [antdTheme.darkAlgorithm, antdTheme.compactAlgorithm]
         : antdTheme.compactAlgorithm,
       token: {
-        colorPrimary: themeColor.color,
+        colorPrimary: themeColor.appliedColor,
         borderRadius: 6,
         fontFamily: "\"DM Sans\", \"Microsoft YaHei UI\", sans-serif",
       },
@@ -1238,76 +1294,70 @@ export function DashboardApp() {
             <button type="button" className="brand sidebar-brand" onClick={openRepository}
               aria-label={t("help.github")} title={t("help.github")}>
               <img className="brand-logo" src={APP_LOGO_URL} alt="" />
-              <span>Codex<br /><b>Switch</b></span>
+              <span className="brand-name">Remote AI</span>
             </button>
             <DashboardNavigation collapsed={navigationStyle.sidebarCollapsed}
-              onPageChange={setPage} page={page} t={t} variant="sidebar"
-              sidebarTools={(
-                <>
-                  {titlebarProxyRunning && <ProxySessionManager t={t} triggerVariant="sidebar" />}
-                  <button type="button" className={page === "errorLogs" ? "selected" : ""}
-                    aria-current={page === "errorLogs" ? "page" : undefined}
-                    aria-label={t("errorLogs.open")} title={t("errorLogs.open")}
-                    onClick={() => setPage("errorLogs")}>
-                    <ClipboardList size={19} aria-hidden="true" /><span>{t("errorLogs.open")}</span>
-                  </button>
-                  <TotpWindowButton notify={notify} t={t} variant="sidebar" />
-                </>
-              )} />
+              downloadOwner={downloadOwner}
+              onPageChange={setPage} page={page} t={t} variant="sidebar" />
           </aside>
         )}
-        <header className="app-menu" hidden={sidebarNavigationEnabled && page === "codexGui"}>
+        <header className="app-menu" hidden={sidebarNavigationEnabled && (page === "codexGui" || page === "coze")}>
           {!sidebarNavigationEnabled && (
             <button type="button" className="brand" onClick={openRepository}
               aria-label={t("help.github")} title={t("help.github")}>
               <img className="brand-logo" src={APP_LOGO_URL} alt="" />
-              <span>Codex<br /><b>Switch</b></span>
+              <span className="brand-name">Remote AI</span>
             </button>
           )}
-          {page !== "codexGui" && <AnnouncementBanner link={announcementLink} onOpenLink={openAnnouncementLink}
+          {page !== "codexGui" && page !== "coze" && <AnnouncementBanner link={announcementLink}
+            onOpenLink={openAnnouncementLink}
             scrollDurationSeconds={announcement?.scrollDurationSeconds ?? 22}
             style={announcementStyle} text={announcementText}
             trackKey={`${language}:${announcementText}`} />}
           {!sidebarNavigationEnabled && (
             <DashboardNavigation onPageChange={setPage} page={page} t={t} />
           )}
-          {(!sidebarNavigationEnabled || page === "accounts" || page === "providers") && <AccountToolbox t={t}
-            navigation={sidebarNavigationEnabled ? undefined : { page, onPageChange: setPage }}>
-            {(page === "accounts" || page === "providers") && <>
-            <AccountDisplayTabs displayMode={accountDisplayMode.displayMode}
-              onChange={accountDisplayMode.setDisplayMode} t={t} />
-            {usageSpeedPill}
-            {titlebarProxyRunning && <CloudRecycleBin t={t} disabled={!cloud.state.authenticated}
-              triggerClassName="refresh-all announcement-recycle-bin-button" />}
-            <CodexConfigRepairButton disabled={providerManager.proxyBusy} notify={notify} t={t} />
-            </>}
-          </AccountToolbox>}
+          {!sidebarNavigationEnabled && !isAccountManagementPage(page) && accountToolbox}
         </header>
 
         <main className={page === "accounts" ? "accounts-main"
           : page === "codexGui" ? codexGuiStyles.main
+          : page === "coze" ? cozeStyles.main
           : page === "providers" ? "providers-main"
+          : page === "logDiagnostics" ? logDiagnosticsStyles.main
           : page === "claudeCode" ? "claude-code-main"
           : page === "tokens" ? "tokens-main"
             : page === "dreamSkin" ? "dream-skin-main"
               : page === "sessions" ? "sessions-main"
               : page === "codexConfig" ? codexConfigStyles.main : undefined}>
-          {page !== "tokens" && page !== "dreamSkin" && page !== "codexGui" && (
+          {!['tokens', 'dreamSkin', 'codexGui', 'coze', 'logDiagnostics', 'downloads'].includes(page) && (
           <>
-          <header data-tauri-drag-region className={`topbar${
-            page === "accounts" || page === "providers" ? " account-view-topbar" : ""
-          }${
-            page === "accounts" && providerManager.localProxy?.running ? " accounts-topbar" : ""
-          }${page === "settings" ? " settings-topbar" : ""}${
+          {isAccountManagementPage(page) ? (
+            <AccountManagementToolbar section={page} onSectionChange={setPage} t={t}
+              summary={providerManager.localProxy?.running && (
+                <TokenUsageHeatmap weeks={tokenUsagePreferences.weeks}
+                  refreshSeconds={tokenUsagePreferences.refreshSeconds} language={language} t={t}
+                  providers={providerManager.providers} />
+              )}
+              sharedActions={<>
+                {page !== "claudeCode" && <>{chatGptActionMenu}{proxyTopbarActions}</>}
+                {accountToolbox}
+              </>}>
+              {page === "accounts" && <>
+                <button type="button" className="primary-button" onClick={openLogin}>
+                  <Plus size={18} />{t("actions.addAccount")}
+                </button>
+                {refreshActionMenu}
+                {officialAccountActions}
+              </>}
+              {page === "providers" && <div id="provider-topbar-actions" className="provider-topbar-action-slot" />}
+              {page === "claudeCode" && <div id="third-party-apps-topbar-actions" />}
+            </AccountManagementToolbar>
+          ) : (
+          <header data-tauri-drag-region className={`topbar${page === "settings" ? " settings-topbar" : ""}${
             page === "codexConfig" ? ` ${codexConfigStyles.topbar}` : ""
           }`}>
-            {page === "accounts" && providerManager.localProxy?.running ? (
-              <TokenUsageHeatmap weeks={tokenUsagePreferences.weeks}
-                refreshSeconds={tokenUsagePreferences.refreshSeconds} language={language} t={t}
-                providers={providerManager.providers} />
-            ) : (
-              <div className={page === "accounts" ? "accounts-heading"
-                : page === "skills" ? "skills-market-heading"
+              <div className={page === "skills" ? "skills-market-heading"
                 : page === "settings" ? "settings-heading"
                 : page === "codexConfig" ? codexConfigStyles.heading : undefined}>
                 <span className="eyebrow">{dashboardEyebrow(page, t)}</span>
@@ -1320,28 +1370,10 @@ export function DashboardApp() {
                   {page === "skills" && <div id="skills-market-tabs" className="skills-market-tabs-slot" />}
                   {page === "settings" && <SettingsGroupsNav t={t} />}
                   {page === "codexConfig" && <p className={codexConfigStyles.subtitle}>
-                    管理 Codex 的 config.toml 配置项
+                    {guiText("管理 Codex 的 config.toml 配置项", {}, language)}
                   </p>}
                 </div>
               </div>
-            )}
-            {page === "accounts" && (
-              <AccountTopbarActions>
-                <button className="primary-button" onClick={openLogin}>
-                  <Plus size={18} />{t("actions.addAccount")}
-                </button>
-                {refreshActionMenu}
-                {chatGptActionMenu}
-                {accountProxyTopbarActions}
-              </AccountTopbarActions>
-            )}
-            {page === "providers" && (
-              <div className="topbar-actions">
-                <div id="provider-topbar-actions" className="provider-topbar-action-slot" />
-                {chatGptActionMenu}
-                {proxyTopbarActions}
-              </div>
-            )}
             {page === "settings" && (
               <div className="topbar-actions">
                 <button type="button" className="refresh-all settings-help-button" onClick={openHelp}>
@@ -1359,11 +1391,8 @@ export function DashboardApp() {
             {page === "systemPrompts" && (
               <div id="system-prompt-topbar-actions" className="topbar-actions" />
             )}
-            {page === "claudeCode" && (
-              <div id="third-party-apps-topbar-actions"
-                className="topbar-actions third-party-apps-topbar-actions" />
-            )}
           </header>
+          )}
           {page === "accounts" && accountDisplayMode.displayMode === "cards" && (
             <div className="account-card-toolbar-row">
               <div id="account-card-topbar-controls" className="account-card-topbar-controls" />
@@ -1372,11 +1401,16 @@ export function DashboardApp() {
           </>
           )}
 
-          {page === "errorLogs" && <ErrorLogsPage language={language} t={t} />}
+          {page === "totp" && <TotpPage accounts={manager.accounts} manager={totpManager} t={t} />}
+          {page === "downloads" && <DownloadsPage auth={cloud.state} />}
+          {page === "logDiagnostics" && <LogDiagnosticsPage activeTab={diagnosticsTab}
+            onTabChange={setDiagnosticsTab} language={language} t={t}
+            onExportLogs={() => void exportLogs()} exportingLogs={exportingLogs} />}
           <section className="page-panel" hidden={page !== "dreamSkin"}>
             {page === "dreamSkin" && <MemoDreamSkinPage t={t} notify={notify} />}
           </section>
-          <section className="page-panel" hidden={page !== "claudeCode"}>
+          <section id="account-panel-claudeCode" className="page-panel third-party-apps-page-panel"
+            role="tabpanel" aria-labelledby="account-section-claudeCode" hidden={page !== "claudeCode"}>
             {page === "claudeCode" && (
               <MemoThirdPartyAppsPage
                 settings={thirdPartyAppIntegration.settings}
@@ -1406,7 +1440,8 @@ export function DashboardApp() {
             <CodexConfigPage active={page === "codexConfig"} homeKey={manager.info?.codexHome} />
           </section>
           <section className="page-panel" hidden={page !== "settings"}>
-            <MemoSettingsPage info={manager.info} autoRefreshEnabled={autoRefresh.enabled}
+            <MemoSettingsPage providers={providerManager.providers}
+              info={manager.info} autoRefreshEnabled={autoRefresh.enabled}
               autoUpdateEnabled={appUpdate.autoUpdateEnabled}
               onAutoUpdateChange={appUpdate.setAutoUpdateEnabled}
               launchAtStartupEnabled={launchAtStartup.enabled}
@@ -1451,6 +1486,8 @@ export function DashboardApp() {
               codexUsageSummaryEnabled={tokenUsagePreferences.codexSummaryEnabled}
               tokenUsagePreferencesLoading={tokenUsagePreferences.loading}
               sseIdleTimeout={sseIdleTimeout}
+              proxyTransport={proxyTransport}
+              responseHeaderTimeout={responseHeaderTimeout}
               upstream429RetryTimeoutSeconds={upstream429RetryTimeout.timeoutSeconds}
               upstream429RetryTimeoutLoading={upstream429RetryTimeout.loading}
               onUpstream429RetryTimeoutChange={upstream429RetryTimeout.update}
@@ -1496,15 +1533,15 @@ export function DashboardApp() {
           <section className="page-panel sessions-page-panel" hidden={page !== "sessions"}>
             {page === "sessions" && <MemoCodexThreadsPage language={language} notify={notify} />}
           </section>
+          <CozeTab active={page === "coze"} />
           <section className={codexGuiStyles.panel} hidden={page !== "codexGui"}>
-            <GuiWorkspace active={page === "codexGui"}
+            <GuiWorkspace active={page === "codexGui"} notificationTarget={notificationTarget}
               plugins={{ baseUrl: cloud.state.baseUrl, authenticated: cloud.state.authenticated,
                 currentUserId: cloud.state.userId, onLogin: openCloudLogin, notify, t }}
               windowControls={NATIVE_WINDOW_CONTROLS_ENABLED && <WindowControls onError={notify} t={t} />}
               accounts={manager.accounts}
                 privacyMode={privacyMode.enabled}
                 providers={providerManager.providers}
-                proxyRunning={Boolean(providerManager.localProxy?.running)}
                 loading={manager.loading || providerManager.loading} />
           </section>
           <section className="page-panel" hidden={page !== "systemPrompts"}>
@@ -1523,9 +1560,10 @@ export function DashboardApp() {
               />
             )}
           </section>
-          <section className="page-panel providers-page-panel" hidden={page !== "providers"}>
+          <section id="account-panel-providers" className="page-panel providers-page-panel"
+            role="tabpanel" aria-labelledby="account-section-providers" hidden={page !== "providers"}>
             <MemoProvidersPage providers={providerManager.providers}
-              aggregateApis={providerManager.aggregateApis} providerGroups={providerGroups}
+              aggregateApis={providerManager.aggregateApis} providerGroups={managedAccountGroups}
               accounts={manager.accounts}
               active={page === "providers"}
               loading={providerManager.loading}
@@ -1545,6 +1583,7 @@ export function DashboardApp() {
               onGroupChange={providerManager.changeProviderGroup}
               onGroupChangeMany={providerManager.changeProviderGroups}
               onProviderGroupsChange={saveProviderGroups}
+              onChangeGroupMembers={changeGroupMembers}
               onAutoSwitchChange={providerManager.setProviderAutoSwitch}
               onDelete={deleteProvider}
               onDeleteMany={providerManager.deleteProviders}
@@ -1562,8 +1601,10 @@ export function DashboardApp() {
               onWeeksChange={tokenUsagePreferences.updateWeeks}
               preferencesLoading={tokenUsagePreferences.loading} embedded />
           </section>
-          <section className="page-panel accounts-page-panel" hidden={page !== "accounts"}>
+          <section id="account-panel-accounts" className="page-panel accounts-page-panel"
+            role="tabpanel" aria-labelledby="account-section-accounts" hidden={page !== "accounts"}>
             <MemoAccountsPage active={page === "accounts"}
+              proxySpeedControl={proxySpeedControl}
               accounts={manager.accounts}
               accountGroups={managedAccountGroups}
               providers={providerManager.providers}
@@ -1574,6 +1615,8 @@ export function DashboardApp() {
               onDeactivate={(id) => void manager.deactivateAccount(id)}
               onCopyAuthJson={manager.copyAuthJson}
               onRefresh={refreshUsage}
+              onRefreshAllUsage={() => void manager.refreshAll()}
+              refreshingAllUsage={manager.refreshingAll}
               onDelete={deleteAccount}
               onConsumeQuotaMany={manager.consumeAccountsQuota}
               onDeleteMany={manager.deleteAccounts}
@@ -1606,6 +1649,8 @@ export function DashboardApp() {
           </section>
         </main>
 
+        <HelpAssistant language={language} page={page} onOpenCodex={() => setPage("codexGui")} />
+
         {showLogin && <LoginModal onClose={() => setShowLogin(false)} onWebSession={startWebSessionLogin}
           onStart={startLogin}
           onImport={importAccountJson} onImportClipboard={importAccountJsonFromClipboard}
@@ -1621,7 +1666,8 @@ export function DashboardApp() {
         }}
           sendingRegistrationCode={cloud.sendingRegistrationCode} onLogin={loginCloudAccount}
           onForgotPassword={openCloudPasswordReset} onRegister={registerCloudAccount}
-          onSendRegistrationCode={cloud.sendRegistrationCode} sessionExpired={cloudSessionExpired} t={t} />}
+          onSendRegistrationCode={cloud.sendRegistrationCode} sessionExpired={cloudSessionExpired}
+          language={language} t={t} />}
         {showCloudAccount && cloud.state.authenticated && <CloudAccountModal
           email={cloud.state.userEmail} baseUrl={cloud.state.baseUrl}
           changingPassword={cloud.changingPassword} onChangePassword={cloud.changePassword}
@@ -1646,7 +1692,7 @@ export function DashboardApp() {
           onInstall={() => void installUpdate()} downloading={downloadingUpdate}
           downloadRequested={installAfterDownloadRequested} downloaded={updateDownloaded}
           checking={appUpdate.checkingBeforeInstall} installing={installingUpdate}
-          progress={updateProgress} error={updateInstallError} t={t} />}
+          progress={updateDownloadProgress} error={updateInstallError} t={t} />}
         <ProxySettingsModal open={showProxySettings} proxy={providerManager.localProxy}
           loading={providerManager.proxyBusy || chatGptOperation !== null}
           onClose={() => setShowProxySettings(false)}
@@ -1668,6 +1714,7 @@ export function DashboardApp() {
           hintKey="providers.proxy.stopProgressHint" t={t} />
         {toast && <div className="toast"><Check size={17} />{toast}</div>}
       </div>
+      {isDesktopApp && <RemoteAssistance auth={cloud.state} onLogin={openCloudLogin} />}
     </ConfigProvider>
   );
 }

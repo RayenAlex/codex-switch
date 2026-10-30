@@ -26,10 +26,13 @@ function ActivityGroup({ items, running, startedAt }: Props) {
 
 export function WorkItems({ items, running, startedAt }: Props) {
   const groups = useMemo(() => groupConsecutiveActivities(items), [items]);
-  return <div className={styles.workItems}>{groups.map((group) => group.activity && group.items.length > 1
-    ? <ActivityGroup key={group.key} items={group.items} running={running} startedAt={startedAt} />
+  return <div className={styles.workItems}>
+    {groups.map((group) => group.activity && group.items.length > 1
+    ? <ActivityGroup key={group.key} items={group.items}
+      running={running} startedAt={startedAt} />
     : <div key={group.key} data-message-id={group.items[0].id}>
       <MessageItem item={group.items[0]} startedAt={startedAt}
         streaming={running && group.items[0].status !== "completed"} />
-    </div>)}</div>;
+    </div>)}
+  </div>;
 }

@@ -4,11 +4,14 @@ fn set_local_proxy_enabled(paths: &Paths, enabled: bool) -> Result<(), String> {
     write_state(paths, &state)
 }
 
+/// Wire values shared by external proxy settings and upstream request bodies.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-enum ProxyServiceTier {
+#[serde(rename_all = "lowercase")]
+pub(crate) enum ProxyServiceTier {
     #[default]
     Default,
     Priority,
+    Ultrafast,
 }
 
 impl ProxyServiceTier {
@@ -16,6 +19,7 @@ impl ProxyServiceTier {
         match self {
             Self::Default => "default",
             Self::Priority => "priority",
+            Self::Ultrafast => "ultrafast",
         }
     }
 }
@@ -52,7 +56,8 @@ fn parse_proxy_service_tier_name(value: Option<&str>) -> Result<ProxyServiceTier
     match value {
         Some("default") => Ok(ProxyServiceTier::Default),
         Some("priority" | "fast") => Ok(ProxyServiceTier::Priority),
-        _ => Err("service_tier must be either default or priority"),
+        Some("ultrafast") => Ok(ProxyServiceTier::Ultrafast),
+        _ => Err("service_tier must be default, priority, fast or ultrafast"),
     }
 }
 
@@ -272,7 +277,17 @@ fn trusted_gateway_client_address(
         .or(Some(socket_address))
 }
 
-fn handle_request<R: Runtime>(app: tauri::AppHandle<R>, mut request: Request) {
+#[derive(Clone, Copy)]
+enum RequestOrigin {
+    External,
+    Gui,
+}
+
+fn handle_request<R: Runtime>(app: tauri::AppHandle<R>, request: Request) {
+    serve_request(app, request, RequestOrigin::External);
+}
+
+fn serve_request<R: Runtime>(app: tauri::AppHandle<R>, mut request: Request, origin: RequestOrigin) {
     let _diagnostic_scope = match diagnostic_log_path(&app) {
         Ok(path) => Some(DiagnosticScope::enter(path)),
         Err(_) => {
@@ -302,6 +317,10 @@ fn handle_request<R: Runtime>(app: tauri::AppHandle<R>, mut request: Request) {
     let is_loopback = client_address
         .map(|address| address.ip().is_loopback())
         .unwrap_or(false);
+    if !request_origin_allowed(origin, &url, &headers, is_loopback) {
+        respond_error(request, 403, "This endpoint is not available on this connection.".into());
+        return;
+    }
     let quota_query = method == Method::Get && lan_keys::is_quota_endpoint(request_path(&url));
     let lan_key = match lan_keys::authorize_request(&app, &headers, is_loopback, quota_query) {
         Ok(key) => key,
@@ -358,7 +377,7 @@ fn handle_request<R: Runtime>(app: tauri::AppHandle<R>, mut request: Request) {
         respond_error(
             request,
             400,
-            format!("Failed to read request body: {error}"),
+            request_error::RequestError::io(request_error::Stage::Request, &error).to_string(),
         );
         return;
     }
@@ -375,12 +394,16 @@ fn handle_request<R: Runtime>(app: tauri::AppHandle<R>, mut request: Request) {
             return;
         }
     }
-    // Use the same explicit choice as the UI, including normal mode before the first toggle.
+    // Snapshot only this caller's speed; later toggles cannot change in-flight requests or retries.
+    let tier = match origin {
+        RequestOrigin::External => proxy_service_tier(),
+        RequestOrigin::Gui => gui_runtime::service_tier(&app),
+    };
     let body = snapshot_request_service_tier(
         &method,
         request_path(&url),
         body,
-        Some(proxy_service_tier()),
+        Some(tier),
     );
     let session = begin_tracked_proxy_session(ProxySessionRequest {
         method: &method,
@@ -404,9 +427,13 @@ fn handle_request<R: Runtime>(app: tauri::AppHandle<R>, mut request: Request) {
         Err(error) => {
             diagnostic_event(json!({
                 "event": "request_failed",
+                "errorId": error_messages::error_id(&error),
                 "error": crate::error_logs::sanitize_diagnostic_message(&error)
             }));
-            let message = upstream_error_message(&error);
+            let message = match origin {
+                RequestOrigin::Gui => error,
+                RequestOrigin::External => upstream_error_message(&error),
+            };
             json_payload(502, json!({ "error": { "message": message } }))
         }
     };
@@ -419,24 +446,19 @@ fn handle_request<R: Runtime>(app: tauri::AppHandle<R>, mut request: Request) {
     );
 }
 
-fn is_upstream_transport_error(error: &str) -> bool {
-    let normalized = error.to_ascii_lowercase();
-    normalized.contains("official codex proxy request failed: error sending request")
-        || normalized.contains("provider proxy request failed: error sending request")
+fn request_origin_allowed(
+    origin: RequestOrigin, url: &str, headers: &[(String, String)], is_loopback: bool,
+) -> bool {
+    let gui_path = gui_routing::upstream_path(url).is_some();
+    match origin {
+        RequestOrigin::External => !gui_path,
+        RequestOrigin::Gui => gui_path && is_loopback
+            && request_has_valid_api_key(headers, crate::codex_config::LOCAL_PROXY_TOKEN),
+    }
 }
 
-fn upstream_error_message(error: &str) -> &str {
-    if error.contains("request timed out during request upload") {
-        return "The request could not be uploaded in time. Please check your connection and try again.";
-    }
-    if error.contains("request timed out during response headers") {
-        return "The service took too long to respond. Please try again shortly.";
-    }
-    if is_upstream_transport_error(error) {
-        UPSTREAM_CONNECTION_FAILURE_MESSAGE
-    } else {
-        error
-    }
+fn upstream_error_message(error: &str) -> String {
+    error_messages::gui(error)
 }
 
 fn request_has_valid_api_key(headers: &[(String, String)], expected: &str) -> bool {

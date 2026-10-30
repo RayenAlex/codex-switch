@@ -1,21 +1,32 @@
 # Chrome Web Store review instructions
 
-The extension is free and has no extension account, password, or subscription.
-Its browser tools can be reviewed without an AI account or model API key.
+The extension's local browser tools can be reviewed without an AI account or model API key.
+The optional chat in the side panel uses the existing Remote AI Web account and connected device.
 Use a desktop version of Chrome (125 or later) on Windows, macOS, or Linux.
 
 ## Install the companion application
 
-1. Download and install [Codex Switch 1.5.23](https://github.com/piperhex/codex-switch/releases/tag/v1.5.23).
+1. Download and install [Remote AI 1.5.23](https://github.com/piperhex/remoteai/releases/tag/v1.5.23).
    Earlier desktop versions do not recognize the Chrome Web Store extension ID.
-2. Open Codex Switch and select a Codex Home directory. If none exists, add a directory in Settings.
+2. Open Remote AI and select a Codex Home directory. If none exists, add a directory in Settings.
 3. Open the community plugins page (社区插件), find **Chrome 浏览器助手**, and click **安装**.
    If already installed, enable it or use **修复** when offered.
 4. Install the extension under review in Chrome. Its store ID is
    `ocngjhjonejkndmlkjmbgjdlghkdhpjj`.
    The desktop setup dialog also describes an unpacked installation option; skip that option when
    reviewing the store package. Only one copy of the extension is needed.
-5. Open the extension popup and confirm **已连接**. If necessary, use its reconnect control.
+5. Click the extension icon to open the side panel. Open **浏览器助手设置** in its toolbar and
+   confirm **已连接**. If necessary, use its reconnect control. Settings do not require chat sign-in.
+
+## Side panel
+
+Clicking the extension icon opens Chrome's native side panel alongside the current page; the page
+retains its own scrollbar. The panel embeds `https://codex.onepiper.cloud/web/` in a sandboxed,
+cross-origin iframe. It reuses Remote AI's mobile Web interface and account flow. Remote scripts
+have no access to extension APIs and cannot grant website permissions or control tabs directly.
+Only bundled local settings pages can send permission-management messages to the extension.
+Use the toolbar to switch between chat and settings, reload chat, or open it in a normal tab.
+Switching views preserves the chat document. Check narrow and wider panel sizes for independent scrolling.
 
 ## Test without an AI account
 
@@ -44,19 +55,28 @@ Node.js is needed for Inspector, but is not required by the extension or its des
    open the local URL it prints, and connect to `codex_switch_chrome`.
 4. List the tools and call `browser_list` with `{}`. Use the returned `browserId` for your test profile.
 5. Call `browser_open` with that ID, `url` set to `https://example.com`, and `background` set to `true`.
-   Expect a new background tab in a green **Codex** group. Use its returned `tabId` in later calls.
+   Expect a new background tab in a green **Remote AI** group. Use its returned `tabId` in later calls.
 6. Call `browser_snapshot` and `browser_screenshot` with `browserId` and `tabId`.
    Expect the Example Domain page text and an image. A green cursor favicon marks the controlled tab.
 7. To test clicking, take a fresh snapshot, then call `browser_click` with the link's returned `ref`.
    To test input, open a test page containing a text field, take a fresh snapshot, and use
    `browser_fill` with that field's returned `ref` and your test text. Inspector shows each tool's schema.
-8. Pause control in the extension popup. A subsequent page operation should be rejected.
-   Resume it, switch to per-site confirmation, and try a new website. Grant access in the popup
+8. Pause control in the side panel's browser settings. A subsequent page operation should be rejected.
+   Resume it, switch to per-site confirmation, and try a new website. Grant access in the approval window
    to continue; declining or leaving the request unanswered must not grant access.
-9. Close only the test-created tabs with `browser_close`.
+9. Call `browser_finish` with `browserId` and the test tabs' `tabIds`. Temporary tabs and empty groups
+   should close, and debugging should end. Existing user tabs stay open. To retain a test page,
+   also include it in `keepTabIds`.
+   Include tabs opened by clicked links, keyboard actions, or page buttons in the same completion call.
+   These child pages should close as well, including links using `rel="noopener"` and popup windows.
+
+The `webNavigation` permission identifies pages opened from the tab being operated on. The extension
+listens to `onCreatedNavigationTarget` only during assistant input and the associated rendering wait,
+and stores child tab IDs with the task owner for cleanup. It does not retain navigation URLs or record
+normal browsing history. Existing user pages and children opened outside assistant input remain unowned.
 
 Normal AI use runs the same tools from a new Codex conversation after enabling the plugin.
-The assistant instructions require new background tabs in a Codex group unless the user explicitly
+The assistant instructions require new background tabs in a Remote AI group unless the user explicitly
 requests an already-open page. An explicitly selected existing page stays in its original group.
 
 The extension sends results to the local companion application. In the Inspector flow above,

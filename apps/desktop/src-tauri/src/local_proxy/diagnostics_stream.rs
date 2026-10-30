@@ -1,12 +1,13 @@
-fn attach_diagnostic_response(mut payload: UpstreamPayload) -> UpstreamPayload {
+fn attach_diagnostic_response(mut payload: UpstreamPayload, endpoint: &str) -> UpstreamPayload {
     let Some(context) = current_diagnostic_context() else {
         return payload;
     };
     context.emit(json!({ "event": "response_ready", "result": diagnostic_payload(&payload) }));
-    let capture = error_capture::ErrorCapture::new(
+    let mut capture = error_capture::ErrorCapture::new(
         is_event_stream(payload.content_type.as_deref()),
         payload.status,
-    );
+    )
+    .for_endpoint(endpoint);
     payload.body = match payload.body {
         UpstreamBody::Streaming(inner) => {
             UpstreamBody::Streaming(Box::new(DiagnosticStreamReader {
@@ -15,11 +16,19 @@ fn attach_diagnostic_response(mut payload: UpstreamPayload) -> UpstreamPayload {
                 capture,
                 bytes: 0,
                 first_byte_ms: None,
+                last_byte_ms: None,
+                http_status: payload.status,
+                content_type: payload.content_type.clone(),
                 finished: false,
             }))
         }
         UpstreamBody::Buffered(body) => {
-            context.emit(json!({ "event": "response_buffered", "bytes": body.len() }));
+            capture.observe(&body);
+            capture.finish();
+            context.emit(json!({
+                "event": "response_buffered", "bytes": body.len(),
+                "upstreamErrorSeen": capture.error_seen(), "stream": capture.diagnostic_summary()
+            }));
             UpstreamBody::Buffered(body)
         }
     };
@@ -41,6 +50,9 @@ struct DiagnosticStreamReader {
     capture: error_capture::ErrorCapture,
     bytes: u64,
     first_byte_ms: Option<u64>,
+    last_byte_ms: Option<u64>,
+    http_status: u16,
+    content_type: Option<String>,
     finished: bool,
 }
 
@@ -49,7 +61,9 @@ impl DiagnosticStreamReader {
         for error in errors {
             self.context.emit(json!({
                 "event": "response_stream_error", "status": error.status_code,
-                "error": crate::error_logs::sanitize_diagnostic_message(&error.message)
+                "httpStatus": self.http_status, "contentType": self.content_type,
+                "error": crate::error_logs::sanitize_diagnostic_message(&error.message),
+                "details": self.capture.diagnostic_summary()["failure"]
             }));
         }
     }
@@ -62,8 +76,14 @@ impl DiagnosticStreamReader {
         self.context.emit(json!({
             "event": "response_stream_finished", "outcome": outcome,
             "bytes": self.bytes, "firstByteMs": self.first_byte_ms,
+            "lastByteMs": self.last_byte_ms,
+            "idleMs": self.last_byte_ms.map(|last| {
+                (self.context.started_at.elapsed().as_millis() as u64).saturating_sub(last)
+            }),
+            "httpStatus": self.http_status, "contentType": self.content_type,
             "terminalEventSeen": self.capture.terminal_seen(),
-            "upstreamErrorSeen": self.capture.error_seen()
+            "upstreamErrorSeen": self.capture.error_seen(),
+            "stream": self.capture.diagnostic_summary()
         }));
     }
 }
@@ -87,16 +107,21 @@ impl Read for DiagnosticStreamReader {
             }
             Ok(count) => {
                 self.bytes = self.bytes.saturating_add(count as u64);
-                self.first_byte_ms
-                    .get_or_insert(self.context.started_at.elapsed().as_millis() as u64);
+                let elapsed = self.context.started_at.elapsed().as_millis() as u64;
+                self.first_byte_ms.get_or_insert(elapsed);
+                self.last_byte_ms = Some(elapsed);
                 let errors = self.capture.observe(&target[..count]);
                 self.record_errors(errors);
                 Ok(count)
             }
             Err(error) => {
+                let errors = self.capture.finish_with_error(&error);
+                self.record_errors(errors);
                 self.context.emit(json!({
                     "event": "response_stream_error", "kind": format!("{:?}", error.kind()),
-                    "error": crate::error_logs::sanitize_diagnostic_message(&error.to_string())
+                    "httpStatus": self.http_status, "contentType": self.content_type,
+                    "error": crate::error_logs::sanitize_diagnostic_message(&error.to_string()),
+                    "causes": diagnostic_error_causes(&error)
                 }));
                 self.finish(DiagnosticStreamOutcome::ReadError);
                 Err(error)

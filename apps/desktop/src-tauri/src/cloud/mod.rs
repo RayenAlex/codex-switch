@@ -45,30 +45,49 @@ use crate::{
 };
 
 mod accounts;
+mod aggregates;
+mod assistance;
 mod auth;
 mod common;
 mod content;
+mod gui_devices;
+mod official_usage;
+mod port_mappings;
 mod prompt_plugins;
 mod providers;
+mod public_settings;
+mod push_identity;
 mod request_error;
 mod skills;
 mod sync_commands;
+mod telemetry;
+mod token_pricing;
 mod totp;
 mod transport;
 mod types;
+mod update_downloads;
 
 #[cfg(test)]
 mod tests;
 
 use accounts::*;
+pub(crate) use assistance::*;
 pub(super) use auth::*;
 pub(super) use common::*;
 pub(super) use content::*;
+pub(crate) use gui_devices::*;
+pub(crate) use official_usage::*;
+pub(crate) use port_mappings::*;
 pub(super) use prompt_plugins::*;
 use providers::*;
+pub(crate) use public_settings::*;
+pub(crate) use push_identity::*;
 use request_error::request_error;
 pub(super) use skills::*;
 pub(super) use sync_commands::*;
+pub(super) use telemetry::*;
+pub(crate) use token_pricing::*;
 pub(super) use totp::*;
 use transport::*;
 pub(super) use types::*;
+pub(crate) use update_downloads::report_update_download;

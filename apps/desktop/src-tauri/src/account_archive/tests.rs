@@ -8,6 +8,16 @@ mod tests {
     fn archive_keeps_payload_encrypted_inside_plain_zip() {
         let payload = AccountArchivePayload {
             format_version: 2,
+            aggregates: vec![crate::aggregate_sync::AggregateSyncEntry {
+                id: "route-one".into(), modified_at: Utc::now(),
+                config: Some(serde_json::from_value(json!({
+                    "id":"route-one", "name":"Route", "model":"public", "enabled":true,
+                    "memberProviderIds":["provider-1","provider-2"],
+                    "memberModels":{"provider-1":"alias-a", "provider-2":"alias-b"},
+                    "failoverPolicy":{"routingStrategy":"priority","recoverySuccessThreshold":3,
+                        "errorRateThresholdPercent":40,"errorRateMinRequests":20}
+                })).unwrap()),
+            }],
             exported_at: "2026-07-04T00:00:00Z".to_string(),
             active_account_id: Some("account-1".to_string()),
             active_provider_id: Some("provider-1".to_string()),
@@ -32,6 +42,13 @@ mod tests {
                 last_modified_at: Some("2026-07-04T00:00:00Z".to_string()),
             }],
             providers: vec![ProviderSyncPayload {
+                request_options: Some(
+                    serde_json::from_value(json!({
+                        "useFullUrl": true, "headers": { "X-Region": "private-region" },
+                        "body": { "temperature": 0.4 }
+                    }))
+                    .unwrap(),
+                ),
                 id: "provider-1".to_string(),
                 kind: ProviderKind::Custom,
                 name: "Gateway".to_string(),
@@ -68,6 +85,7 @@ mod tests {
         assert!(!archive_text.contains("plain-secret-provider-key"));
         assert!(!archive_text.contains("plain-secret-note"));
         assert!(!archive_text.contains("plain-secret-password"));
+        assert!(!archive_text.contains("private-region"));
 
         let mut zip = ZipArchive::new(Cursor::new(archive)).expect("archive should be a plain zip");
         let mut encrypted = Vec::new();
@@ -90,5 +108,20 @@ mod tests {
             "plain-secret-password"
         );
         assert_eq!(restored.providers[0].api_key, "plain-secret-provider-key");
+        assert_eq!(restored.aggregates[0].config, payload.aggregates[0].config);
+        assert_eq!(
+            restored.providers[0].request_options,
+            payload.providers[0].request_options
+        );
+        let profile = provider_payload_to_profile(&restored.providers[0]).unwrap();
+        let exported = provider_payload_from_profile(
+            profile,
+            restored.providers[0].last_modified_at.clone(),
+            restored.providers[0].field_modified_at.clone(),
+        );
+        assert_eq!(
+            exported.request_options,
+            payload.providers[0].request_options
+        );
     }
 }

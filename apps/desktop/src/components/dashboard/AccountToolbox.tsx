@@ -1,27 +1,27 @@
 import { useId, useRef, useState, type ReactNode } from "react";
 import { Popover } from "antd";
-import { ChevronDown, ChevronLeft, BriefcaseBusiness } from "lucide-react";
+import { ChevronDown, BriefcaseBusiness, MessageSquareText } from "lucide-react";
 import type { Translate } from "../../i18n";
 import { DashboardNavigation, isToolboxPage, type DashboardPage } from "./DashboardNavigation";
 import styles from "./AccountToolbox.module.less";
 
 interface AccountToolboxProps {
   children?: ReactNode;
-  navigation?: { page: DashboardPage; onPageChange: (page: DashboardPage) => void };
+  navigation?: { page: DashboardPage; onPageChange: (page: DashboardPage) => void; downloadOwner?: string };
+  onSystemPrompts?: () => void;
   t: Translate;
 }
 
-export function AccountToolbox({ children, navigation, t }: AccountToolboxProps) {
+export function AccountToolbox({ children, navigation, onSystemPrompts, t }: AccountToolboxProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
-  const Chevron = navigation ? ChevronDown : ChevronLeft;
   const selected = navigation && isToolboxPage(navigation.page);
 
   return (
-    <Popover open={open} onOpenChange={setOpen} placement={navigation ? "bottomRight" : "leftTop"} arrow={false}
+    <Popover open={open} onOpenChange={setOpen} placement="bottomRight" arrow={false}
       trigger={["hover", "click"]} mouseLeaveDelay={0.2}
-      styles={{ root: { maxWidth: 400 }, body: { padding: 8 } }}
+      styles={{ root: { maxWidth: 400 }, body: { padding: 0, borderRadius: 0 } }}
       content={(
         <div id={panelId} className={styles.actions} role="group" aria-label={t("actions.toolbox")}
           onKeyDown={(event) => {
@@ -31,10 +31,15 @@ export function AccountToolbox({ children, navigation, t }: AccountToolboxProps)
             setOpen(false);
           }}>
           {navigation && <DashboardNavigation page={navigation.page} t={t} variant="toolbox"
+            downloadOwner={navigation.downloadOwner}
             onPageChange={(page) => {
               navigation.onPageChange(page);
               setOpen(false);
             }} />}
+          {onSystemPrompts && <button type="button" className="refresh-all"
+            onClick={() => { setOpen(false); onSystemPrompts(); }}>
+            <MessageSquareText size={15} /><span>{t("nav.systemPrompts")}</span>
+          </button>}
           {children}
         </div>
       )}>
@@ -44,9 +49,9 @@ export function AccountToolbox({ children, navigation, t }: AccountToolboxProps)
         onKeyDown={(event) => {
           if (event.key === "Escape") setOpen(false);
         }}>
-        <Chevron size={14} className={open ? styles.expanded : undefined} aria-hidden="true" />
         <BriefcaseBusiness size={15} aria-hidden="true" />
         <span>{t("actions.toolbox")}</span>
+        <ChevronDown size={14} className={open ? styles.expanded : undefined} aria-hidden="true" />
       </button>
     </Popover>
   );

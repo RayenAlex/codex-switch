@@ -1,4 +1,5 @@
 import { getLocale, t, useLanguage } from './i18n';
+import type { RemoteModelTarget } from '../../../shared/remote-chat/modelTarget';
 import { profileRole } from './i18n/profile';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Dialog, Form, Input, PullToRefresh, SafeArea, SpinLoading, TabBar, Toast } from "antd-mobile";
@@ -15,6 +16,7 @@ import { AdaptiveSheet } from "./components/AdaptiveSheet";
 import { BrandMark } from "./components/BrandMark";
 import { RegistrationSheet } from "./components/RegistrationSheet";
 import { DeviceManagementList } from "./devices/DeviceManagementList";
+import { useRevokeDesktopService } from './devices/useRevokeDesktopService';
 import { useRemoteModelRestartPrompt } from "./devices/useRemoteModelRestartPrompt";
 import { RemoteModelSwitchSheet } from "./components/RemoteModelSwitchSheet";
 import { TotpPage } from "./components/TotpPage";
@@ -24,6 +26,8 @@ import { loadRefreshMinutes, REFRESH_INTERVAL_EVENT } from "./settings/refreshIn
 import { useTotpVault } from "./useTotpVault";
 import { ChatPage } from "./chat/ChatPage";
 import { usePanelVisibility } from "./useDesktopLayout";
+import { AgreementConsent } from '../../../shared/legal/AgreementConsent';
+import { useAgreementConsent } from '../../../shared/legal/useAgreementConsent';
 
 const PULL_REFRESH_TEXT = {
   get pulling() { return t("下拉刷新"); },
@@ -33,7 +37,8 @@ const PULL_REFRESH_TEXT = {
 } as const;
 
 function LoginView() {
-  useLanguage();
+  const language = useLanguage();
+  const consent = useAgreementConsent();
   const dispatch = useAppDispatch();
   const { submitting, error } = useAppSelector((state) => state.auth);
   const [baseUrl, setBaseUrl] = useState(defaultApiBaseUrl);
@@ -43,22 +48,25 @@ function LoginView() {
   const [showRegistration, setShowRegistration] = useState(false);
 
   const submit = async () => {
+    if (submitting) return;
     if (!email.trim() || !password) {
       Toast.show({ icon: "fail", content: t("请填写邮箱和密码") });
       return;
     }
-    try {
-      await dispatch(signIn({ baseUrl, email, password })).unwrap();
-      Toast.show({ icon: "success", content: t("欢迎回来") });
-    } catch {
-      // The Redux state renders the actionable server error.
-    }
+    await consent.request('login', async () => {
+      try {
+        await dispatch(signIn({ baseUrl, email, password })).unwrap();
+        Toast.show({ icon: "success", content: t("欢迎回来") });
+      } catch {
+        // The Redux state renders the actionable server error.
+      }
+    });
   };
 
   return <main className="login-page">
     <section className="login-story">
       <div className="story-grid" />
-      <div className="brand-lockup light"><BrandMark /><b>Codex Switch</b></div>
+      <div className="brand-lockup light"><BrandMark /><b>Remote AI</b></div>
       <div className="story-copy">
         <span className="eyebrow"><Sparkles size={14} />  {t("随时掌握每个账号")}</span>
         <h1>{t("离开电脑，也能")}<br />{t("从容切换。")}</h1>
@@ -74,7 +82,7 @@ function LoginView() {
     <section className="login-panel">
       <div className="mobile-login-brand brand-lockup">
         <BrandMark />
-        <b>Codex Switch</b><span className="login-web-badge">Web</span>
+        <b>Remote AI</b><span className="login-web-badge">Web</span>
       </div>
       <div className="login-form-wrap">
         <span className="login-kicker">{t("云端控制台")}</span>
@@ -83,7 +91,8 @@ function LoginView() {
         <Form className="login-form" layout="vertical" footer={<div className="login-actions">
           <Button className="login-register" color="primary" fill="outline" size="large"
             type="button" onClick={() => setShowRegistration(true)}>{t("注册")}</Button>
-          <Button block color="primary" size="large" loading={submitting} onClick={submit}>{t("登录并查看")}</Button>
+          <Button block color="primary" size="large" loading={submitting} disabled={submitting}
+            onClick={submit}>{t("登录并查看")}</Button>
         </div>}>
           <Form.Item label={t("邮箱")}>
             <Input value={email} onChange={(value) => { setEmail(value); dispatch(clearAuthError()); }}
@@ -105,6 +114,7 @@ function LoginView() {
                 autoCapitalize="none" placeholder="https://api.example.com" clearable />
             </Form.Item> : null}
           </div>
+          <AgreementConsent consent={consent} language={language} disabled={submitting} />
           {error ? <div className="form-error" role="alert">{t(error)}</div> : null}
         </Form>
         <div className="login-security"><ShieldCheck size={16} /><span>{t("安全连接，安心管理你的账号。")}</span></div>
@@ -115,6 +125,7 @@ function LoginView() {
 }
 
 function DevicesPage() {
+  const revokeService = useRevokeDesktopService();
   useLanguage();
   const dispatch = useAppDispatch();
   const {
@@ -153,10 +164,11 @@ function DevicesPage() {
     } catch { /* Global toast */ }
   };
 
-  const switchOfficialModel = async (deviceId: string, accountId: string) => {
+  const switchOfficialModel = async (deviceId: string, accountId: string, target: RemoteModelTarget = 'proxy') => {
     try {
-      const result = await dispatch(switchDeviceAccount({ deviceId, accountId })).unwrap();
-      Toast.show({ icon: "success", content: t("已切换到官方模型") });
+      const result = await dispatch(switchDeviceAccount({ deviceId, accountId, target })).unwrap();
+      Toast.show({ icon: "success", content: target === 'gui'
+        ? t("Codex GUI 模型已切换") : t("代理接口模型已切换") });
       if (result.result.requiresRestart) {
         window.setTimeout(() => void promptModelRestart(deviceId), 0);
       }
@@ -166,10 +178,11 @@ function DevicesPage() {
     }
   };
 
-  const switchProviderModel = async (deviceId: string, providerId: string) => {
+  const switchProviderModel = async (deviceId: string, providerId: string, target: RemoteModelTarget = 'proxy') => {
     try {
-      const result = await dispatch(switchDeviceProvider({ deviceId, providerId })).unwrap();
-      Toast.show({ icon: "success", content: t("已切换到第三方 Provider") });
+      const result = await dispatch(switchDeviceProvider({ deviceId, providerId, target })).unwrap();
+      Toast.show({ icon: "success", content: target === 'gui'
+        ? t("Codex GUI 模型已切换") : t("代理接口模型已切换") });
       if (result.result.requiresRestart) {
         window.setTimeout(() => void promptModelRestart(deviceId), 0);
       }
@@ -199,9 +212,10 @@ function DevicesPage() {
         switchingModelDeviceId={switchingProvider?.deviceId ?? (switchingAccountId ? modelDeviceId : null)}
         switchingAuthDeviceId={switchingOpenAiAuth?.deviceId ?? null}
         onSwitchModel={setModelDeviceId} onSelectAuthAccount={setAuthDeviceId}
-        onDelete={(device) => void deleteDevice(device)} />
+        onDelete={(device) => void deleteDevice(device)} onRevokeService={device => void revokeService(device)} />
     </PullToRefresh>
     <RemoteModelSwitchSheet
+      key={modelDeviceId ?? 'closed'}
       device={modelDevice}
       accounts={accounts}
       providers={providers}
@@ -252,7 +266,7 @@ function AppShell() {
   const [menuVisible, setMenuVisible] = usePanelVisibility('main-menu');
   const dispatch = useAppDispatch();
   const { session } = useAppSelector((state) => state.auth);
-  const { page, profile, devices, refreshing, lastRefreshAt, error } = useAppSelector((state) => state.data);
+  const { page, profile, devices, refreshing, error } = useAppSelector((state) => state.data);
   const lastRefreshRef = useRef(Date.now());
   const totpManager = useTotpVault(session);
   const onlineCount = devices.filter((item) => item.online).length;
@@ -262,10 +276,6 @@ function AppShell() {
     Toast.show({ icon: "fail", content: t(error) });
     dispatch(clearDataError());
   }, [dispatch, error]);
-
-  useEffect(() => {
-    if (session && lastRefreshAt === null) void dispatch(refreshAll());
-  }, [dispatch, lastRefreshAt, session]);
 
   useEffect(() => {
     if (!session) return;
@@ -341,7 +351,7 @@ function AppShell() {
     <aside className="desktop-sidebar">
       <div className="desktop-sidebar-heading">
         <div className="brand-lockup"><BrandMark />
-          <b>Codex Switch</b></div>
+          <b>Remote AI</b></div>
         <button type="button" className="main-menu-toggle" aria-label={menuVisible ? t("收起主菜单") : t("展开主菜单")}
           aria-expanded={menuVisible} onClick={() => setMenuVisible(value => !value)}>
           <MenuToggleIcon size={20} /></button>
@@ -391,6 +401,6 @@ export default function App() {
   const { session, initialized } = useAppSelector((state) => state.auth);
   useEffect(() => { void dispatch(bootstrapApp()); }, [dispatch]);
   if (!initialized) return <div className="boot-screen"><BrandMark /><SpinLoading color="primary" />
-    <p>{t("正在打开 Codex Switch")}</p></div>;
+    <p>{t("正在打开 Remote AI")}</p></div>;
   return session ? <AppShell /> : <LoginView />;
 }

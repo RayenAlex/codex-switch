@@ -18,6 +18,9 @@ function mergeItems(previous: Item[], incoming: Item[]) {
 
 export function updateThread(thread: Thread, event: GuiEvent): Thread {
   const { params, method } = event;
+  if (method === 'thread/name/updated' && params.threadName !== undefined) {
+    return { ...thread, name: params.threadName };
+  }
   if (method === 'thread/tokenUsage/updated' && params.tokenUsage) {
     return { ...thread, tokenUsage: params.tokenUsage };
   }
@@ -25,6 +28,8 @@ export function updateThread(thread: Thread, event: GuiEvent): Thread {
   if (!id) return thread;
   const turns = [...(thread.turns ?? [])];
   const index = turns.findIndex((turn) => turn.id === id);
+  // A delayed error for unloaded history must not create a new active turn at the end of the conversation.
+  if (index < 0 && method === 'error') return thread;
   let turn: Turn = turns[index] ?? { id, status: 'inProgress', items: [] };
   if (params.turn) turn = { ...turn, ...params.turn, items: mergeItems(turn.items, params.turn.items ?? []) };
   if (method === MESSAGE_ACKNOWLEDGED) turn = acknowledgeMessage(turn, event);
@@ -60,6 +65,7 @@ export function applyChatEvent(state: ChatState, event: GuiEvent): ChatState {
 
 function reduceChatEvent(state: ChatState, event: GuiEvent): ChatState {
   const { method, params } = event;
+  if (method === 'chat/notifications/error') return { ...state, notificationError: true };
   if (event.id != null) return { ...state,
     approvals: [...state.approvals.filter((entry) => entry.id !== event.id), event] };
   if (method === 'serverRequest/resolved') return { ...state,
@@ -72,6 +78,9 @@ function reduceChatEvent(state: ChatState, event: GuiEvent): ChatState {
     return { ...state, goals: { ...state.goals, [threadId]: params.goal ?? null } };
   }
   let threads = state.threads;
+  if (method === 'thread/name/updated' && threadId) {
+    threads = threads.map((thread) => thread.id === threadId ? updateThread(thread, event) : thread);
+  }
   if (method === 'thread/started' && params.thread) {
     threads = [params.thread, ...threads.filter((thread) => thread.id !== params.thread!.id)];
   }

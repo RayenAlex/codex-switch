@@ -1,9 +1,24 @@
 # Agent Notes
 
+## Admin Backend: Go Only
+
+- `apps/admin` 中的 NestJS 版本已停止维护，源码冻结，不再新增功能、修复业务问题或作为生产部署目标。
+- 后端功能开发、问题修复、数据库升级和线上部署统一使用 `apps/admin-go`；管理页面继续使用 `apps/admin-ui`。
+- NestJS 源码仅保留为历史接口契约和本地兼容对照测试基线。不要为更新契约或通过测试而修改已冻结的 NestJS 实现；新功能应在 Go 中实现并增加对应测试。
+- 生产构建、部署配置和运维文档不得重新引入 NestJS 服务。更新和回滚均使用已经验证的 admin-go 镜像。
+- `apps/admin-go/sql` 是数据库升级脚本目录；生产部署说明以 `apps/admin-go/DEPLOYMENT.md` 为准。
+- admin-go 更新和回滚统一使用 `apps/admin-go/scripts/deployment_compose.py` 的 `check`、`up`、`verify`。
+  保留当前容器记录的完整 Compose 文件列表；已启用 TURN 时必须保留 `compose.desktop-relay.yml`。
+  部署前后核对中继端口和网络，不能仅凭 HTTP、聊天 WebSocket 或 STUN 正常就判定远程桌面可用。
+- 新增 Go 接口时同步检查 `apps/admin-go/kong/existing-kong.example.yml` 的覆盖范围及鉴权规则；
+  `go -C apps/admin-go test ./internal/server -run TestKong` 必须通过，线上已有路由也要保存在项目中。
+
 ## Automatic Commit and Push
 
 - After completing the requested changes and verifying them successfully, automatically commit the changes made for the current task and push the current branch to its configured upstream. Do not wait for a separate request to commit or push.
-- Never include unrelated existing changes in the commit. If verification fails, the branch has no configured upstream, or the push is blocked, report the issue instead of bypassing checks or rewriting history.
+- Never include unrelated existing changes in the commit. If verification fails, the branch has no configured upstream, or the push is blocked for a reason other than remote updates, report the issue instead of bypassing checks or rewriting history.
+- If remote updates are detected before or during a push, fetch the configured upstream and attempt to merge it into the current branch. After a successful merge, rerun the relevant checks and push again.
+- If the merge produces conflicts, immediately abort it with `git merge --abort`, preserve local commits and existing work, and stop the push. Report the conflict instead of resolving it automatically or forcing the push.
 - Also include tracked files changed only by line-ending differences rather than leaving them uncommitted.
 
 ## User-Facing Prompts and Copy
@@ -11,6 +26,20 @@
 - Write all user-facing prompts and copy in natural, clear, and easy-to-understand language. Do not mention implementation details, internal processes, or other technical details.
 - Whenever a user request involves writing prompts or copy, proactively refine and improve the wording so it is concise, friendly, and accurate instead of simply repeating the user's original wording.
 - Keep temporary messages, including hover tooltips, popovers, and confirmation prompts shown after a click, visually compact. Limit the text area to a maximum width of `400px`, which is roughly one line of 25 full-width Chinese characters at the standard body-text size. Wrap longer copy onto additional lines instead of widening the message.
+
+## Desktop Local, Remote, and Web Parity
+
+- 后续涉及 PC 端的改动，默认在同一任务中同步修改 `apps/desktop` 的本地模式、远程模式和 `apps/web` 的 PC 页面，确保对应功能、界面效果、交互及文案一致，无需用户另行提醒；用户明确限定范围时，以用户要求为准。
+- 从任一入口修改功能或修复问题时，都要检查另外两个入口的对应实现；能复用的业务逻辑、组件和样式优先放在共享模块，避免各端后续遗漏同步。
+- 三个入口应保持一致的布局、视觉样式、操作反馈和状态展示，并适配各自窗口与桌面浏览器宽度；受平台能力限制无法完全一致时，应提供对应适配，并在交付时说明差异及原因。
+- 完成前分别验证 PC 本地、PC 远程和 Web PC 的受影响功能与展示效果，并在交付时说明同步结果，不得只修改或验证其中一个入口就视为完成。
+
+## Mobile and Web Parity
+
+- 用户提出移动端或手机端改动时，默认在同一任务中同步修改 `apps/native` 和 `apps/web` 的对应功能、界面效果、交互及文案，无需用户另行提醒；用户明确限定范围时，以用户要求为准。
+- 同步 Web 时同时考虑手机窄屏和桌面宽屏，保持对应行为一致，并按各自布局适配；能复用的业务逻辑优先放在共享模块，避免两端后续遗漏同步。
+- Android/iOS 系统能力等平台专属改动，不要求照搬到浏览器；应检查 Web 是否需要对应适配，并在交付时说明未同步的部分及原因。
+- 完成前验证两端受影响的功能与展示效果，并在交付时说明同步结果，不得只修改原生端就将移动端需求视为完成。
 
 ## Tauri 2 WebView Window Creation On Windows
 

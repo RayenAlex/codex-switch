@@ -102,8 +102,10 @@ fn should_skip_header(name: &str, skip_auth: bool) -> bool {
             | "x-forwarded-for"
             | "x-forwarded-host"
             | "x-forwarded-proto"
+            | ANTHROPIC_BRIDGE_HEADER
             | LOCAL_PROXY_ACTOR_AUTHORIZATION_HEADER
             | crate::codex_config::LOCAL_PROXY_REQUEST_PURPOSE_HEADER
+            | crate::codex_config::HELP_ACCOUNT_REVISION_HEADER
     ) || (skip_auth
         && matches!(
             name,
@@ -119,9 +121,12 @@ fn should_skip_header(name: &str, skip_auth: bool) -> bool {
 }
 
 fn http_client() -> Result<Client, String> {
+    let timeout = model_catalog_deadline::credential_timeout(UPSTREAM_RESPONSE_IDLE_TIMEOUT)
+        .map_err(|error| error.to_string())?;
     crate::system_proxy::apply(Client::builder())
-        .timeout(UPSTREAM_RESPONSE_IDLE_TIMEOUT)
+        .timeout(timeout)
         .connect_timeout(UPSTREAM_CONNECT_TIMEOUT)
+        .redirect(transport_settings::redirect_policy(transport_settings::current().max_redirects))
         .build()
         .map_err(|error| format!("Failed to create proxy HTTP client: {error}"))
 }
@@ -132,18 +137,21 @@ fn send_with_timeout_retries(
     mut build_request: impl FnMut() -> RequestBuilder,
     failure_context: &str,
 ) -> Result<ReqwestResponse, String> {
-    let request = upstream_transport::Request::prepare(build_request())
-        .map_err(|error| format!("{failure_context}: {error}"))?;
+    let request = upstream_transport::Request::prepare(build_request()).map_err(|error| {
+        failover_transport::record(Some(&error));
+        format!("{failure_context}: {error}")
+    })?;
+    let retries = transport_settings::current().network_retry_count;
     let mut attempt = 0;
     let result = retry_timeout_operation(
         || {
             attempt += 1;
             let result = request.send();
             diagnostic_http_result(&result, attempt);
-            if result.as_ref().is_err_and(upstream_transport::Error::can_retry)
-                && attempt < UPSTREAM_TIMEOUT_ATTEMPT_LIMIT
+            if result.as_ref().is_err_and(|error| request.can_retry(error))
+                && attempt <= u64::from(retries)
             {
-                diagnostic_retry("transport_timeout", Duration::ZERO);
+                diagnostic_retry("transport_timeout", UPSTREAM_TIMEOUT_RETRY_DELAY);
                 crate::error_logs::record_proxy_error(
                     &format!("{failure_context}: request timed out; retrying."),
                     None,
@@ -151,30 +159,54 @@ fn send_with_timeout_retries(
             }
             result
         },
-        upstream_transport::Error::can_retry,
+        |error| request.can_retry(error),
+        retries,
+        thread::sleep,
     );
+    failover_transport::record(result.as_ref().err());
     match result {
         Ok(response) => Ok(response),
-        Err(error) if error.is_timeout() => {
-            Err(format!("{failure_context}: {error} (attempts: {attempt})"))
-        }
-        Err(error) => Err(format!("{failure_context}: {error}")),
+        Err(error) => Err(transport_error_detail(&error, failure_context, attempt)),
     }
+}
+
+fn transport_error_detail(
+    error: &upstream_transport::Error,
+    failure_context: &str,
+    attempts: u64,
+) -> String {
+    // Display alone hides nested DNS/TLS/socket failures. Keep the sanitized cause chain
+    // until the response boundary so GUI and shared requests can explain the actual failure.
+    let mut details = vec![crate::error_logs::sanitize_diagnostic_message(
+        &error.to_string(),
+    )];
+    for cause in diagnostic_error_causes(error) {
+        if !details.contains(&cause) {
+            details.push(cause);
+        }
+    }
+    format!(
+        "{failure_context}: {} (attempts: {attempts})",
+        details.join(": ")
+    )
 }
 
 fn retry_timeout_operation<T, E>(
     mut operation: impl FnMut() -> Result<T, E>,
     is_timeout: impl Fn(&E) -> bool,
+    retry_count: u32,
+    mut wait: impl FnMut(Duration),
 ) -> Result<T, E> {
-    for attempt in 1..=UPSTREAM_TIMEOUT_ATTEMPT_LIMIT {
+    let mut remaining = retry_count;
+    loop {
         match operation() {
-            Err(error) if is_timeout(&error) && attempt < UPSTREAM_TIMEOUT_ATTEMPT_LIMIT => {
-                continue
+            Err(error) if remaining > 0 && is_timeout(&error) => {
+                remaining -= 1;
+                wait(UPSTREAM_TIMEOUT_RETRY_DELAY);
             }
             result => return result,
         }
     }
-    unreachable!("the retry loop always returns on its final attempt")
 }
 
 fn reqwest_method(method: &Method) -> Result<reqwest::Method, String> {
@@ -193,7 +225,7 @@ fn stream_response(response: ReqwestResponse) -> Result<UpstreamPayload, String>
     if !status_ok(status) {
         let body = response
             .bytes()
-            .map_err(|error| format!("Failed to read upstream error response: {error}"))?;
+            .map_err(|error| request_error::RequestError::io(request_error::Stage::Read, &error).wire())?;
         return Ok(UpstreamPayload {
             status,
             content_type,
@@ -218,6 +250,7 @@ fn forwarded_response_headers(headers: &reqwest::header::HeaderMap) -> Vec<(Stri
         "etag",
         "x-models-etag",
         CODEX_RATE_LIMIT_REACHED_TYPE_HEADER,
+        "retry-after",
     ]
     .into_iter()
     .filter_map(|name| {
@@ -272,6 +305,10 @@ fn base_url_ends_with_version_segment(base_url: &str) -> bool {
 fn official_url(endpoint: &str) -> String {
     let endpoint = endpoint.trim_start_matches('/');
     let endpoint = endpoint.strip_prefix("v1/").unwrap_or(endpoint);
+    #[cfg(test)]
+    if let Some(base) = tests::aggregate_official_test_upstream() {
+        return format!("{base}/{endpoint}");
+    }
     format!("{}/{}", OFFICIAL_CODEX_BASE_URL, endpoint)
 }
 
@@ -364,12 +401,15 @@ fn attach_first_response_capture(
             }))
         }
     };
-    payload
+    first_token::capture(payload, session)
 }
 
 fn respond_payload(request: Request, payload: UpstreamPayload) {
     let payload = restore_stream_content_type(&request, payload);
-    let payload = attach_proxy_error_capture(attach_diagnostic_response(payload));
+    let payload = attach_proxy_error_capture(
+        attach_diagnostic_response(payload, request.url()),
+        request.url(),
+    );
     let UpstreamPayload {
         status,
         content_type,
@@ -417,9 +457,11 @@ fn restore_stream_content_type(request: &Request, mut payload: UpstreamPayload) 
     }
     let accepts_sse = request.headers().iter().any(|header| {
         header.field.equiv("Accept")
-            && header.value.as_str().split(',').any(|value| {
-                value.trim().eq_ignore_ascii_case("text/event-stream")
-            })
+            && header
+                .value
+                .as_str()
+                .split(',')
+                .any(|value| value.trim().eq_ignore_ascii_case("text/event-stream"))
     });
     if accepts_sse {
         // Some upstreams omit Content-Type. The client's explicit SSE request still needs

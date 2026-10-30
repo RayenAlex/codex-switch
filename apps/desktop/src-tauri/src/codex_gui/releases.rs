@@ -1,7 +1,19 @@
 use super::error::{GuiError, Result};
+#[path = "release_errors.rs"]
+mod errors;
+#[path = "release_import.rs"]
+pub(crate) mod manual;
+#[path = "release_publish.rs"]
+mod publish_package;
+#[path = "release_download.rs"]
+mod shared_download;
+#[path = "release_store.rs"]
+mod store;
 #[cfg(test)]
 #[path = "release_tests.rs"]
 mod tests;
+#[path = "release_updates.rs"]
+pub(crate) mod updates;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -9,14 +21,13 @@ use std::{
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
-    sync::Mutex,
     time::Duration,
 };
 use tauri::{AppHandle, Manager};
+pub(crate) use updates::{codex_gui_cli_check, codex_gui_cli_prepare, start, CliUpdateState};
 
 const RELEASE_API: &str = "https://api.github.com/repos/openai/codex/releases";
 const MAX_DOWNLOAD: u64 = 512 * 1024 * 1024;
-static INSTALL_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Deserialize)]
 struct Release {
@@ -35,11 +46,20 @@ struct Asset {
 pub(crate) struct Installed {
     pub(crate) version: Option<String>,
 }
-#[derive(Serialize)]
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CliStatus {
+    version: Option<String>,
+    release: Option<ReleaseInfo>,
+}
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ReleaseInfo {
     version: String,
     size: u64,
+    #[serde(default)]
+    ready: bool,
 }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,7 +73,9 @@ pub(super) fn root(app: &AppHandle) -> Result<PathBuf> {
     Ok(app
         .path()
         .app_data_dir()
-        .map_err(|_| GuiError::Startup)?
+        .map_err(|error| {
+            errors::failure("locate installation directory", &error, GuiError::Startup)
+        })?
         .join("codex-cli"))
 }
 
@@ -62,19 +84,8 @@ fn valid_version(version: &str) -> bool {
 }
 
 pub(super) fn installed(app: &AppHandle) -> Result<Installed> {
-    let root = root(app)?;
-    let content = match fs::read_to_string(root.join("installed.json")) {
-        Ok(content) => content,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(Installed { version: None })
-        }
-        Err(_) => return Err(GuiError::Startup),
-    };
-    let installed: Installed = serde_json::from_str(&content).map_err(|_| GuiError::Startup)?;
-    let version = installed.version.filter(|version| {
-        valid_version(version) && root.join(version).join(entrypoint()).is_file()
-    });
-    Ok(Installed { version })
+    updates::initialize(app);
+    store::installed(&root(app)?)
 }
 
 pub(super) struct Executable {
@@ -98,6 +109,30 @@ fn entrypoint() -> &'static str {
     }
 }
 
+/// Recognize GUI-managed CLI versions so external client restarts leave them running.
+#[cfg(any(unix, test))]
+pub(crate) fn is_gui_executable(path: &std::path::Path) -> bool {
+    let Some(bin) = path
+        .parent()
+        .filter(|parent| parent.file_name().is_some_and(|name| name == "bin"))
+    else {
+        return false;
+    };
+    let Some(version) = bin.parent() else {
+        return false;
+    };
+    path.file_name()
+        .is_some_and(|name| name == "codex" || name == "codex.exe")
+        && version
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(valid_version)
+        && version
+            .parent()
+            .and_then(|parent| parent.file_name())
+            .is_some_and(|name| name == "codex-cli")
+}
+
 fn asset_name() -> Result<String> {
     let arch = match std::env::consts::ARCH {
         "x86_64" => "x86_64",
@@ -119,7 +154,7 @@ fn http_client() -> Result<Client> {
         .connect_timeout(Duration::from_secs(20))
         .timeout(Duration::from_secs(600))
         .build()
-        .map_err(|_| GuiError::Release)
+        .map_err(|error| errors::failure("prepare download connection", &error, GuiError::Release))
 }
 
 fn release(client: &Client, version: Option<&str>) -> Result<(String, Asset)> {
@@ -137,7 +172,11 @@ fn release(client: &Client, version: Option<&str>) -> Result<(String, Asset)> {
         .send()
         .and_then(|response| response.error_for_status())
         .and_then(|response| response.json())
-        .map_err(|_| GuiError::Release)?;
+        .map_err(|error| errors::failure("fetch release information", &error, GuiError::Release))?;
+    select_asset(release)
+}
+
+fn select_asset(release: Release) -> Result<(String, Asset)> {
     let version = release
         .tag_name
         .strip_prefix("rust-v")
@@ -178,14 +217,17 @@ fn download(
         .get(&asset.browser_download_url)
         .send()
         .and_then(|response| response.error_for_status())
-        .map_err(|_| GuiError::Release)?;
-    let mut file = fs::File::create(path).map_err(|_| GuiError::Install)?;
+        .map_err(|error| errors::failure("download package", &error, GuiError::Release))?;
+    let mut file = fs::File::create(path)
+        .map_err(|error| errors::io("create download file", error, GuiError::InstallWrite))?;
     let mut hash = Sha256::new();
     let mut buffer = vec![0u8; 256 * 1024];
     let mut downloaded = 0;
     let mut last_percent = 0;
     loop {
-        let count = response.read(&mut buffer).map_err(|_| GuiError::Release)?;
+        let count = response.read(&mut buffer).map_err(|error| {
+            errors::failure("read download response", &error, GuiError::Release)
+        })?;
         if count == 0 {
             break;
         }
@@ -195,7 +237,7 @@ fn download(
         }
         hash.update(&buffer[..count]);
         file.write_all(&buffer[..count])
-            .map_err(|_| GuiError::Install)?;
+            .map_err(|error| errors::io("write download file", error, GuiError::InstallWrite))?;
         let percent = downloaded * 100 / asset.size.max(1);
         if percent > last_percent {
             progress(Progress {
@@ -213,82 +255,140 @@ fn download(
 }
 
 pub(super) fn unpack(archive: &Path, destination: &Path) -> Result<()> {
-    let file = fs::File::open(archive).map_err(|_| GuiError::Install)?;
+    let file = fs::File::open(archive)
+        .map_err(|error| errors::io("open archive", error, GuiError::InstallRead))?;
     let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(file));
-    let mut total = 0u64;
-    for entry in archive.entries().map_err(|_| GuiError::Install)? {
-        let mut entry = entry.map_err(|_| GuiError::Install)?;
-        let kind = entry.header().entry_type();
-        if !kind.is_file() && !kind.is_dir() {
-            return Err(GuiError::Integrity);
-        }
-        total = total.checked_add(entry.size()).ok_or(GuiError::Integrity)?;
-        if total > MAX_DOWNLOAD * 4 {
-            return Err(GuiError::Integrity);
-        }
-        if !entry
-            .unpack_in(destination)
-            .map_err(|_| GuiError::Install)?
-        {
-            return Err(GuiError::Integrity);
-        }
+    unpack_entries(&mut archive, destination)?;
+    // Tar can stop before gzip validates its trailer; drain it to reject truncated packages.
+    let remaining = std::io::copy(
+        &mut archive.into_inner().take(MAX_DOWNLOAD * 4 + 1),
+        &mut std::io::sink(),
+    )
+    .map_err(|error| errors::io("verify gzip trailer", error, GuiError::InstallUnpack))?;
+    if remaining > MAX_DOWNLOAD * 4 {
+        return Err(errors::invalid(
+            "verify gzip trailer",
+            "trailing data exceeds limit",
+            GuiError::Integrity,
+        ));
     }
     if !destination.join(entrypoint()).is_file() {
-        return Err(GuiError::Install);
+        return Err(errors::invalid(
+            "verify executable",
+            entrypoint(),
+            GuiError::InstallMissingExecutable,
+        ));
     }
     Ok(())
 }
 
-fn install(app: &AppHandle, version: String) -> Result<Installed> {
-    let _guard = INSTALL_LOCK.try_lock().map_err(|_| GuiError::Installing)?;
-    let client = http_client()?;
-    let (version, asset) = release(&client, Some(&version))?;
+fn unpack_entries(archive: &mut tar::Archive<impl Read>, destination: &Path) -> Result<()> {
+    let mut total = 0u64;
+    for entry in archive
+        .entries()
+        .map_err(|error| errors::io("read archive", error, GuiError::InstallUnpack))?
+    {
+        let mut entry = entry
+            .map_err(|error| errors::io("read archive entry", error, GuiError::InstallUnpack))?;
+        let kind = entry.header().entry_type();
+        if !kind.is_file() && !kind.is_dir() {
+            return Err(errors::invalid(
+                "validate archive entry",
+                "unsupported entry type",
+                GuiError::Integrity,
+            ));
+        }
+        total = total.checked_add(entry.size()).ok_or_else(|| {
+            errors::invalid(
+                "validate archive size",
+                "entry size overflow",
+                GuiError::Integrity,
+            )
+        })?;
+        if total > MAX_DOWNLOAD * 4 {
+            return Err(errors::invalid(
+                "validate archive size",
+                "extracted size exceeds limit",
+                GuiError::Integrity,
+            ));
+        }
+        if !entry
+            .unpack_in(destination)
+            .map_err(|error| errors::io("extract archive entry", error, GuiError::InstallUnpack))?
+        {
+            return Err(errors::invalid(
+                "validate archive path",
+                "entry escapes installation folder",
+                GuiError::Integrity,
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn prepare_package(app: &AppHandle, version: &str, asset: &Asset, silent: bool) -> Result<()> {
     let root = root(app)?;
-    fs::create_dir_all(&root).map_err(|_| GuiError::Install)?;
+    fs::create_dir_all(&root).map_err(|error| {
+        errors::io(
+            "create install directory",
+            error,
+            GuiError::InstallDirectory,
+        )
+    })?;
     let archive = root.join(format!("download-{}.tar.gz", uuid::Uuid::new_v4()));
     let staging = root.join(format!("staging-{}", uuid::Uuid::new_v4()));
     let outcome = (|| {
-        download(|progress| publish(app, progress), &client, &asset, &archive)?;
-        publish(
+        shared_download::shared_download(
             app,
-            Progress {
-                downloaded: asset.size,
-                total: asset.size,
-                phase: "installing",
+            &archive,
+            shared_download::Request {
+                version,
+                asset,
+                silent,
             },
-        );
-        fs::create_dir(&staging).map_err(|_| GuiError::Install)?;
-        unpack(&archive, &staging)?;
-        let destination = root.join(&version);
-        if !destination.exists() {
-            fs::rename(&staging, destination).map_err(|_| GuiError::Install)?;
+        )?;
+        if !silent {
+            publish(
+                app,
+                Progress {
+                    downloaded: asset.size,
+                    total: asset.size,
+                    phase: "installing",
+                },
+            );
         }
-        let installed = Installed {
-            version: Some(version),
-        };
-        crate::storage::write_json_atomic(
-            &root.join("installed.json"),
-            &serde_json::json!(installed),
-        )
-        .map_err(|_| GuiError::Install)?;
-        Ok(installed)
+        fs::create_dir(&staging).map_err(|error| {
+            errors::io(
+                "create extraction directory",
+                error,
+                GuiError::InstallDirectory,
+            )
+        })?;
+        unpack(&archive, &staging)?;
+        let state = app.state::<CliUpdateState>();
+        let _publication = state.publication.lock().map_err(|error| {
+            errors::failure("lock package publication", &error, GuiError::Install)
+        })?;
+        store::stage(&root, version, &staging)?;
+        Ok(())
     })();
-    // These paths are generated children of the verified installation root, never frontend input.
-    if archive.is_file() && fs::remove_file(&archive).is_err() {
-        eprintln!("Codex GUI download cleanup failed");
-    }
-    if staging.is_dir()
-        && staging.parent() == Some(root.as_path())
-        && fs::remove_dir_all(&staging).is_err()
-    {
-        eprintln!("Codex GUI staging cleanup failed");
-    }
+    cleanup_package(&root, &archive, &staging);
     outcome
 }
 
+fn cleanup_package(root: &Path, archive: &Path, staging: &Path) {
+    // These paths are generated children of the verified installation root, never frontend input.
+    if archive.is_file() && fs::remove_file(archive).is_err() {
+        eprintln!("Codex GUI download cleanup failed");
+    }
+    if staging.is_dir() && staging.parent() == Some(root) && fs::remove_dir_all(staging).is_err() {
+        eprintln!("Codex GUI staging cleanup failed");
+    }
+}
+
 #[tauri::command]
-pub(crate) async fn codex_gui_cli_status(app: AppHandle) -> std::result::Result<Installed, String> {
-    tauri::async_runtime::spawn_blocking(move || installed(&app))
+pub(crate) async fn codex_gui_cli_status(app: AppHandle) -> std::result::Result<CliStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || updates::status(&app))
         .await
         .map_err(|_| GuiError::Startup.to_string())?
         .map_err(|error| error.to_string())
@@ -301,6 +401,7 @@ pub(crate) async fn codex_gui_cli_release() -> std::result::Result<ReleaseInfo, 
         Ok(ReleaseInfo {
             version,
             size: asset.size,
+            ready: false,
         })
     })
     .await
@@ -313,8 +414,11 @@ pub(crate) async fn codex_gui_cli_install(
     app: AppHandle,
     version: String,
 ) -> std::result::Result<Installed, String> {
-    tauri::async_runtime::spawn_blocking(move || install(&app, version))
+    if !valid_version(&version) {
+        return Err(GuiError::InvalidRequest.to_string());
+    }
+    // The displayed version is only a hint: a newer release may have arrived since the last check.
+    updates::install(app)
         .await
-        .map_err(|_| GuiError::Install.to_string())?
         .map_err(|error| error.to_string())
 }

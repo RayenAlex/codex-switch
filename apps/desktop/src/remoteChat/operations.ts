@@ -1,4 +1,4 @@
-import { fileDownloadByteLimit, getChatPolicy, textPreviewByteLimit, videoByteLimit }
+import { fileDownloadByteLimit, getChatPolicy, imagePreviewByteLimit, textPreviewByteLimit, videoByteLimit }
   from '../../../../shared/remote-chat/policy';
 import { remoteAttachments } from '../../../../shared/remote-chat/composerAttachments';
 import { guiApi } from '../pages/codexGui/api';
@@ -22,31 +22,74 @@ import { chatHandshake, validateChatHandshake } from '../../../../shared/remote-
 import { guiConnectionError } from '../../../../shared/remote-chat/connectionErrors';
 import { invoke } from '../api/backend';
 import type { UsageSummary } from '../../../../shared/remote-chat/usage';
+import { CONVERSATION_METRICS_OPERATION } from '../../../../shared/remote-chat/conversationMetrics';
 import { TOKEN_SUMMARY_OPERATION } from '../../../../shared/remote-chat/tokenSummary';
 import { encodeTokenSummary, QUOTA_HISTORY_FORMAT } from '../../../../shared/remote-chat/tokenSummaryCodec';
 import { readTokenSummary } from './tokenSummary';
 import { CONTEXT_READ_OPERATION, CONTEXT_WRITE_OPERATION } from '../../../../shared/remote-chat/contextSettings';
 import { contextSettingsRequest } from './contextSettings';
+import { GUI_TOOL_OPERATIONS } from '../../../../shared/remote-chat/guiTools';
+import { GUI_FILE_OPERATIONS } from '../../../../shared/remote-chat/files';
+import { RemoteFiles } from './files';
+import { guiToolRequest } from './guiTools';
+import { remoteTerminals, type RemoteTerminals } from './terminals';
+import { deleteRemoteThread, pinRemoteThread } from './threadActions';
+import { forkRemoteConversation } from './forkConversation';
+import { changeRemoteMessage } from './messageEdit';
+import { RemoteDesktopHost } from '../remoteDesktop/host';
+import { DESKTOP_OPERATION } from '../../../../shared/remote-desktop/protocol';
+import { RemoteThreadTitles } from './threadTitles';
+import { applyProjectOverride, effectiveProjectThread } from './projects';
+import { PROJECT_LIST_OPERATION } from '../../../../shared/remote-chat/projects';
 
 const OPERATIONS = new Set([
+  'projectFileRead', 'projectFileWrite', 'projectEntryAction',
+  'suggestNextPrompt',
+  'guiGitGenerateMessage',
+  'downloadOpen', 'downloadBrowse', 'previewOpen',
   'fileOpen', 'fileRead', 'fileClose',
   'videoOpen', 'videoRead', 'videoClose',
   'projectDirectories',
   'models', 'list', 'read', 'start', 'resume', 'send', 'steer', 'interrupt', 'rename', 'archive', 'unarchive',
-  'compact', 'skills', 'projectFiles', 'imagePreview', 'textPreview', 'goalGet', 'goalSet', 'goalClear',
+  'compact', 'skills', 'cozeCatalog', 'projectFiles', 'imagePreview', 'textPreview', 'goalGet', 'goalSet', 'goalClear',
 ]);
 const CACHE_TTL_MS = 5 * 60_000;
 interface Cached {
   fingerprint: string; result: Promise<RpcResponse>; expires: number; completed: boolean; readOnly: boolean;
+  terminalLink?: { terminal: unknown; stream: unknown; action: unknown };
+}
+function terminalLinkRequest(request: RpcRequest): Cached['terminalLink'] {
+  const body = request.body as { operation?: unknown; id?: unknown; request?: unknown;
+    action?: unknown; resource?: unknown } | undefined;
+  if (request.method === 'request' && body?.operation === 'guiResourceStream') {
+    return { terminal: JSON.stringify([body.operation, body.resource]), stream: body.id,
+      action: body.action === 'open' ? 'connect' : 'close' };
+  }
+  if (request.method !== 'request' || !body || !['guiTerminalLink', 'guiResourceLink'].includes(String(body.operation))
+    || !body.request || typeof body.request !== 'object' || Array.isArray(body.request)) return;
+  const stream = object(body.request);
+  const udpActions: Record<string, string> = { udpConnect: 'connect', udpRead: 'read',
+    udpWrite: 'write', udpClose: 'close' };
+  return { terminal: JSON.stringify([body.operation, body.id]), stream: stream.id,
+    action: udpActions[String(stream.type)] ?? stream.type };
 }
 const READ_OPERATIONS = new Set([
+  'projectFileRead',
+  'guiFileApplications', 'guiFilePreviewClose', 'guiFilePreviewHost', 'guiResourceClose',
+  'suggestNextPrompt',
+  PROJECT_LIST_OPERATION,
+  'downloadOpen', 'downloadBrowse', 'previewOpen',
+  'guiCliStatus', 'guiCliRelease', 'guiTerminalRead', 'guiTerminalList',
+  'guiGitChanges', 'guiGitDiff', 'guiGitHistory', 'guiGitRepository', 'guiGitCommitFiles',
   'fileOpen', 'fileRead', 'fileClose',
   CONTEXT_READ_OPERATION,
   TOKEN_SUMMARY_OPERATION,
   'usageSummary',
+  CONVERSATION_METRICS_OPERATION,
   'projectDirectories',
   'videoOpen', 'videoRead', 'videoClose',
   'textPreview',
+  'cozeCatalog',
   'guiAccountsRead', 'syncHistory', 'imageChunk', 'imagePreview', 'models', 'list', 'read', 'goalGet', 'skills', 'projectFiles', 'queueRead',
 ]);
 const QUEUE_OPERATIONS = new Set([
@@ -67,37 +110,97 @@ function response(request: RpcRequest, data: unknown, mode: ConnectionMode): Rpc
 }
 
 export class ChatOperations {
+  private readonly files = new RemoteFiles();
+  attachMappingStreams(owner: string, link: import('../../../../shared/remote-chat/link').ChatLink) {
+    this.files.attach(owner, link);
+  }
+  readonly desktop = new RemoteDesktopHost();
+  constructor(private readonly terminals: RemoteTerminals = remoteTerminals) {}
   private readonly cache = new Map<string, Cached>();
   private readonly images = new RemoteImages();
   private readonly liveHistory = new LiveHistory();
+  private readonly titles = new RemoteThreadTitles();
 
-  execute(request: RpcRequest, mode: ConnectionMode = 'relay'): Promise<RpcResponse> {
+  execute(request: RpcRequest, mode: ConnectionMode = 'relay', owner = 'default', terminalOwner = owner)
+    : Promise<RpcResponse> {
     if (typeof request.id !== 'string' || request.id.length > 160) return Promise.reject(new Error('Invalid request'));
     const fingerprint = JSON.stringify([request.method, request.body]);
-    const cached = this.cache.get(request.id);
+    const cacheKey = JSON.stringify([owner, request.id]);
+    const cached = this.cache.get(cacheKey);
     if (cached) {
       if (cached.fingerprint !== fingerprint) return Promise.reject(new Error('Request id reused'));
       return cached.result;
     }
+    this.pruneTerminalLink(request, owner);
     this.prune();
     if (this.cache.size >= 512) return Promise.reject(new Error('请求较多，请稍后重试。'));
-    const result = this.run(request, mode).then((data) => response(request, data, mode))
-      .catch((error: unknown): RpcResponse => ({ kind: 'response', id: request.id, error: operationError(error) }));
     const operation = (request.body as { operation?: string } | undefined)?.operation;
-    const readOnly = request.method === 'request' && READ_OPERATIONS.has(operation ?? '');
+    const running = request.method === 'request' && GUI_FILE_OPERATIONS.has(operation ?? '')
+      ? this.files.request(object(request.body), owner)
+      : request.method === 'request' && operation === DESKTOP_OPERATION
+      ? this.desktop.request(request.body, owner) : this.run(request, mode, terminalOwner);
+    const result = running.then((data) => response(request, data, mode))
+      .catch((error: unknown): RpcResponse => ({ kind: 'response', id: request.id, error: operationError(error) }));
+    const readOnly = request.method === 'request' && (READ_OPERATIONS.has(operation ?? '')
+      || (operation === 'guiGitSettings' && object(request.body).autoMessage === undefined)
+      || (operation === 'guiGitWorkspace' && object(object(request.body).request).operation === 'status')
+      || (operation === DESKTOP_OPERATION && object(request.body).action === 'signal'));
     const entry: Cached = { fingerprint, result, expires: Date.now() + CACHE_TTL_MS, completed: false, readOnly };
-    this.cache.set(request.id, entry);
-    void result.then(() => {
+    entry.terminalLink = terminalLinkRequest(request);
+    if (entry.terminalLink) {
+      entry.readOnly = entry.terminalLink.action === 'close'; // Closing a closed stream is safe to repeat.
+    }
+    this.cache.set(cacheKey, entry);
+    void result.then(reply => {
       entry.completed = true;
+      if (entry.terminalLink?.action === 'connect' && !reply.error) {
+        entry.terminalLink.stream = (reply.data as { id?: string } | undefined)?.id;
+      }
+      if (entry.terminalLink && reply.error) entry.readOnly = true;
       // Range reads are repeatable; caching their payloads would retain an entire file in memory.
-      if (operation === 'videoRead' || operation === 'fileRead') this.cache.delete(request.id);
+      if (operation === 'videoRead' || operation === 'fileRead' || operation === 'projectFileRead'
+        || (operation === 'guiTerminalRead' && object(request.body).cursor !== undefined)) this.cache.delete(cacheKey);
     });
     return result;
   }
 
-  private async run(request: RpcRequest, mode: ConnectionMode): Promise<unknown> {
+  release(owner?: string) {
+    this.files.release(owner);
+    this.desktop.release(owner);
+    if (owner === undefined) this.titles.clear();
+    for (const key of this.cache.keys()) {
+      if (owner === undefined || (JSON.parse(key) as string[])[0] === owner) this.cache.delete(key);
+    }
+  }
+
+  private pruneTerminalLink(request: RpcRequest, owner: string) {
+    const stream = terminalLinkRequest(request);
+    if (!stream || !['read', 'write', 'close'].includes(String(stream.action))) return;
+    // The next request in each single-flight direction acknowledges the preceding response.
+    // Keep that response until then so transport retries cannot consume or write bytes twice.
+    for (const [key, entry] of this.cache) {
+      if (!entry.completed || (JSON.parse(key) as string[])[0] !== owner) continue;
+      const previous = entry.terminalLink;
+      if (previous && previous.terminal === stream.terminal && previous.stream === stream.stream
+        && (stream.action === 'close' || previous.action === 'connect' || previous.action === stream.action)) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
+  private async run(request: RpcRequest, mode: ConnectionMode, owner: string): Promise<unknown> {
     if (request.method === 'connect') return this.connect(request.body);
     const body = { ...object(request.body) };
+    if (request.method === 'request' && ['editMessage', 'deleteMessage'].includes(String(body.operation))) {
+      return this.images.prepare(await changeRemoteMessage(body), String(body.threadId));
+    }
+    if (request.method === 'request' && body.operation === 'delete') return deleteRemoteThread(body.threadId);
+    if (request.method === 'request' && body.operation === 'threadPin') return pinRemoteThread(body);
+    if (request.method === 'request' && body.operation === 'forkLatest') return forkRemoteConversation(body.threadId);
+    if (request.method === 'request' && GUI_TOOL_OPERATIONS.has(String(body.operation))) {
+      return String(body.operation).startsWith('guiTerminal')
+        ? this.terminals.request(body, owner) : guiToolRequest(body);
+    }
     if (request.method === 'request'
       && [CONTEXT_READ_OPERATION, CONTEXT_WRITE_OPERATION].includes(String(body.operation))) {
       return contextSettingsRequest(body);
@@ -108,6 +211,10 @@ export class ChatOperations {
     }
     if (request.method === 'request' && body.operation === 'usageSummary') {
       return invoke<UsageSummary>('codex_gui_usage_summary');
+    }
+    if (request.method === 'request' && body.operation === CONVERSATION_METRICS_OPERATION) {
+      if (typeof body.threadId !== 'string' || !body.threadId.trim()) throw new Error('请选择聊天后重试。');
+      return invoke('get_proxy_session_metrics', { threadId: body.threadId });
     }
     if (request.method === 'request' && body.operation === 'guiAccountsRead') return readGuiAccounts();
     if (request.method === 'request' && body.operation === 'guiAccountSelect') return selectGuiAccount(body.selection);
@@ -121,16 +228,21 @@ export class ChatOperations {
       if (typeof body.threadId !== 'string') throw new Error('请选择聊天后重试。');
       const known = parseHistoryVersion(body.known);
       const window = parseHistoryWindow(body.window);
-      const { thread } = await guiApi.request<{ thread: Thread }>({ operation: 'read', threadId: body.threadId });
-      const sliced = sliceHistory(acknowledgedMessages.merge(this.liveHistory.merge(thread)), window);
+      const threadId = body.threadId;
+      const thread = await this.liveHistory.read(threadId,
+        () => guiApi.request<{ thread: Thread }>({ operation: 'read', threadId }));
+      const current = effectiveProjectThread(thread);
+      const sliced = sliceHistory(acknowledgedMessages.merge(current), window);
       return { ...historyDelta(this.images.prepare(sliced.thread, thread.id), known), page: sliced.page };
     }
     if (request.method === 'request' && body.operation === 'composerSet') {
       return guiComposer.update(body.settings, composerThreadId(body.threadId));
     }
     if (request.method === 'request' && body.operation === 'threadRead') return guiSidebar.markRead(body);
-    if (request.method === 'request' && body.operation === 'models') {
-      const composer = await guiComposer.read(composerThreadId(body.threadId));
+    if (request.method === 'request' && (body.operation === 'models' || body.operation === 'modelsRefresh')) {
+      const threadId = composerThreadId(body.threadId);
+      const composer = body.operation === 'modelsRefresh'
+        ? await guiComposer.refreshModels(threadId) : await guiComposer.read(threadId);
       return { data: composer.models, nextCursor: null, composer };
     }
     if (request.method === 'respond') {
@@ -139,6 +251,15 @@ export class ChatOperations {
     }
     if (request.method !== 'request' || !OPERATIONS.has(String(body.operation))) {
       throw new Error('当前手机端暂不支持此操作。');
+    }
+    if (body.operation === 'start' || body.operation === 'send') {
+      const settings = await guiComposer.validateSend({
+        threadId: typeof body.threadId === 'string' ? body.threadId : undefined,
+        model: typeof body.model === 'string' ? body.model : undefined,
+        effort: typeof body.effort === 'string' ? body.effort : undefined,
+      });
+      body.model = settings.model;
+      if (body.operation === 'send') body.effort = settings.effort;
     }
     // The existing typed Rust boundary validates directories, thread ids, inputs and approval replies.
     const sidebarVersion = guiSidebar.version();
@@ -149,20 +270,32 @@ export class ChatOperations {
     }
     if (body.operation === 'list') body.limit = getChatPolicy().threadPageSize;
     if (body.operation === 'textPreview') body.maxBytes = textPreviewByteLimit(mode);
-    if (body.operation === 'fileOpen' || body.operation === 'fileRead') {
+    if (body.operation === 'previewOpen') {
+      body.maxBytes = body.preview === 'text' ? textPreviewByteLimit(mode) : imagePreviewByteLimit(mode);
+      if (body.preview !== 'text') body.path = await this.images.downloadSource(body.threadId, body.path);
+    }
+    if (body.operation === 'fileOpen' || body.operation === 'fileRead' || body.operation === 'downloadOpen') {
       body.maxBytes = fileDownloadByteLimit(mode);
     }
     if (body.operation === 'videoOpen' || body.operation === 'videoRead') {
       body.maxBytes = videoByteLimit(mode);
     }
+    applyProjectOverride(body);
     const result = await guiApi.request(body as unknown as Request);
+    // File documents must stay byte-faithful; conversation image rewriting would corrupt embedded data URLs.
+    if (['projectFileRead', 'projectFileWrite', 'projectEntryAction'].includes(String(body.operation))) return result;
+    this.titles.completed(body, result);
     if (body.operation === 'skills') return composerCatalog(result as SkillsResponse, body);
     if (body.operation === 'list') {
       const list = result as ListResponse<Thread>;
-      return { ...list, data: list.data.map(({ turns: _turns, ...thread }) => thread),
+      return { ...list, data: list.data.map(({ turns: _turns, ...thread }) => effectiveProjectThread(thread)),
         sidebar: guiSidebar.observe(list.data, sidebarVersion) };
     }
     if (body.operation === 'resume' || body.operation === 'send' || body.operation === 'steer') return {};
+    if (body.operation === 'read') {
+      const response = result as { thread: Thread };
+      return this.images.prepare({ ...response, thread: effectiveProjectThread(response.thread) }, String(body.threadId));
+    }
     return this.images.prepare(result, String(body.threadId ?? ''));
   }
 
@@ -170,12 +303,17 @@ export class ChatOperations {
     validateChatHandshake(body);
     try {
       const approvals = await guiApi.connect({ reuseExisting: true });
-      return body === undefined ? approvals : { ...chatHandshake, approvals };
+      this.titles.refreshSettings();
+      return body === undefined ? approvals
+        : { ...chatHandshake, approvals, fileBulkV1: true, filePreviewsV1: true, portStreamsV1: true };
     } catch (error) { throw new Error(guiConnectionError(error)); }
   }
 
   prepareEvent(event: GuiEvent) {
     this.liveHistory.receive(event);
+    if (event.params.thread) {
+      event = { ...event, params: { ...event.params, thread: effectiveProjectThread(event.params.thread) } };
+    }
     return this.images.prepare(historyNotification(event), event.params.threadId ?? event.params.thread?.id ?? '');
   }
 

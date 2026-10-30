@@ -8,12 +8,15 @@ import {
   FAST_MODE_COST_MULTIPLIER_EVENT,
   FAST_MODE_COST_MULTIPLIER_STORAGE_KEY,
 } from "../../utils/tokenCostFastMode";
-import { LONG_CONTEXT_COST_EVENT, LONG_CONTEXT_COST_STORAGE_KEY } from "../../utils/tokenCostLongContext";
+import {
+  LONG_CONTEXT_COST_EVENT, LONG_CONTEXT_COST_STORAGE_KEY, MODEL_LONG_CONTEXT_THRESHOLD_STORAGE_KEY,
+} from "../../utils/tokenCostLongContext";
 
-export function useProviderTokenUsage(tokenUsageRefreshSeconds: number, providers: Provider[]) {
+export function useProviderTokenUsage(tokenUsageRefreshSeconds: number, providers: Provider[], enabled: boolean) {
   const [providerTokenUsage, setProviderTokenUsage] = useState<ProviderTokenUsageTotals[]>([]);
 
   useEffect(() => {
+    if (!enabled) return;
     let active = true;
     let refreshing = false;
     const refresh = async () => {
@@ -41,7 +44,8 @@ export function useProviderTokenUsage(tokenUsageRefreshSeconds: number, provider
     const refreshStoredMultiplier = (event: StorageEvent) => {
       if (event.storageArea !== window.localStorage
         || (event.key !== null && event.key !== FAST_MODE_COST_MULTIPLIER_STORAGE_KEY
-          && event.key !== LONG_CONTEXT_COST_STORAGE_KEY)) return;
+          && event.key !== LONG_CONTEXT_COST_STORAGE_KEY
+          && event.key !== MODEL_LONG_CONTEXT_THRESHOLD_STORAGE_KEY)) return;
       invalidateCustomTokenCostRulesCache();
       void refresh();
     };
@@ -60,7 +64,7 @@ export function useProviderTokenUsage(tokenUsageRefreshSeconds: number, provider
       window.removeEventListener(LONG_CONTEXT_COST_EVENT, refresh);
       window.removeEventListener("storage", refreshStoredMultiplier);
     };
-  }, [providers, tokenUsageRefreshSeconds]);
+  }, [enabled, providers, tokenUsageRefreshSeconds]);
 
   return useMemo(
     () => createProviderTokenUsageLookup(providerTokenUsage),

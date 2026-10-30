@@ -1,4 +1,6 @@
 import { t } from './i18n';
+import { assertUsageOwner, preserveLatestUsage, runRemoteUsage, usageOwner, usageUpdatedAt } from './accounts/remoteUsage';
+import { mergeRemoteModelState, remoteModelPath, type RemoteModelTarget } from '../../../shared/remote-chat/modelTarget';
 import { configureStore, createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import {
   apiJson,
@@ -7,7 +9,6 @@ import {
   loadStoredSession,
   login,
   logout,
-  refreshAccountUsage,
   restartRemoteDeviceCodex,
   setActiveSession,
   subscribeSession,
@@ -40,6 +41,8 @@ interface DataState {
   page: AppPage;
   loading: boolean;
   refreshing: boolean;
+  consumingQuota: boolean;
+  selectedChatDeviceId: string | null;
   refreshingAccountId: string | null;
   deletingDeviceId: string | null;
   switchingAccountId: string | null;
@@ -62,7 +65,7 @@ export const bootstrapApp = createAsyncThunk("auth/bootstrap", async () => {
   const session = loadStoredSession();
   if (!session) return { session: null, data: null };
   try {
-    return { session, data: await fetchDashboardData(false) };
+    return { session, data: await fetchDashboardData() };
   } catch (error) {
     if (!getActiveSession()) return { session: null, data: null };
     return { session, data: null, error: messageOf(error) };
@@ -74,7 +77,7 @@ export const signIn = createAsyncThunk(
   async (payload: { baseUrl: string; email: string; password: string }) => {
     try {
       const session = await login(payload.baseUrl, payload.email, payload.password);
-      const data = await fetchDashboardData(true);
+      const data = await fetchDashboardData();
       return { session, data };
     } catch (error) {
       setActiveSession(null);
@@ -87,14 +90,43 @@ export const signOut = createAsyncThunk("auth/signOut", async () => {
   await logout();
 });
 
-export const refreshAll = createAsyncThunk("data/refreshAll", async () => fetchDashboardData(true), {
-  condition: (_, { getState }) => !(getState() as { data: DataState }).data.refreshing,
+const usageBusy = (state: { data: DataState }) =>
+  state.data.refreshing || state.data.consumingQuota || Boolean(state.data.refreshingAccountId);
+
+export const refreshAll = createAsyncThunk("data/refreshAll", async (_, { getState }) => {
+  const owner = usageOwner();
+  const data = await fetchDashboardData();
+  assertUsageOwner(owner);
+  const current = (getState() as { data: DataState }).data;
+  const accounts = preserveLatestUsage(data.accounts, current.accounts);
+  try {
+    const result = await runRemoteUsage({ accounts, devices: data.devices,
+      selectedDeviceId: current.selectedChatDeviceId, action: 'refresh' });
+    return { ...data, accounts: result.accounts, error: result.failed
+      ? t('{count} 个账号的用量未刷新，请稍后重试。', { count: result.failed }) : null };
+  } catch (error) {
+    assertUsageOwner(owner);
+    // Metadata still updates when the selected PC is unavailable.
+    return { ...data, accounts, error: messageOf(error) };
+  }
+}, {
+  condition: (_, { getState }) => !usageBusy(getState() as { data: DataState }),
 });
 
-export const refreshOneAccount = createAsyncThunk("data/refreshAccount", async (accountId: string) => ({
-  accountId,
-  usage: await refreshAccountUsage(accountId),
-}));
+export const refreshOneAccount = createAsyncThunk("data/refreshAccount", async (accountId: string, { getState }) => {
+  const state = (getState() as { data: DataState }).data;
+  const result = await runRemoteUsage({ accounts: state.accounts.filter(account => account.id === accountId),
+    devices: state.devices, selectedDeviceId: state.selectedChatDeviceId, action: 'refresh' });
+  const usage = result.accounts[0]?.usage;
+  if (!usage || usage.error) throw new Error(usage?.error || t('用量刷新失败，请稍后重试。'));
+  return { accountId, usage };
+}, { condition: (_, { getState }) => !usageBusy(getState() as { data: DataState }) });
+
+export const consumeQuota = createAsyncThunk('data/consumeQuota', async (accountIds: string[], { getState }) => {
+  const state = (getState() as { data: DataState }).data;
+  return runRemoteUsage({ accounts: state.accounts.filter(account => accountIds.includes(account.id)),
+    devices: state.devices, selectedDeviceId: state.selectedChatDeviceId, action: 'consume' });
+}, { condition: (_, { getState }) => !usageBusy(getState() as { data: DataState }) });
 
 export const removeDevice = createAsyncThunk("data/removeDevice", async (deviceId: string) => {
   await apiJson(`/devices/${encodeURIComponent(deviceId)}`, { method: "DELETE" });
@@ -103,10 +135,12 @@ export const removeDevice = createAsyncThunk("data/removeDevice", async (deviceI
 
 export const switchDeviceAccount = createAsyncThunk(
   "data/switchDeviceAccount",
-  async ({ deviceId, accountId }: { deviceId: string; accountId: string }) => ({
+  async ({ deviceId, accountId, target = 'proxy' }: {
+    deviceId: string; accountId: string; target?: RemoteModelTarget;
+  }) => ({
     accountId,
     result: await apiJson<RemoteModelSwitchResult>(
-      `/devices/${encodeURIComponent(deviceId)}/account`,
+      `/devices/${encodeURIComponent(deviceId)}/${remoteModelPath('account', target)}`,
       { method: "POST", body: JSON.stringify({ accountId }) },
     ),
   }),
@@ -114,9 +148,11 @@ export const switchDeviceAccount = createAsyncThunk(
 
 export const switchDeviceProvider = createAsyncThunk(
   "data/switchDeviceProvider",
-  async ({ deviceId, providerId }: { deviceId: string; providerId: string }) => ({
+  async ({ deviceId, providerId, target = 'proxy' }: {
+    deviceId: string; providerId: string; target?: RemoteModelTarget;
+  }) => ({
     providerId,
-    result: await switchRemoteDeviceProvider(deviceId, providerId),
+    result: await switchRemoteDeviceProvider(deviceId, providerId, target),
   }),
 );
 
@@ -153,10 +189,7 @@ function applyModelSwitchResult(
 ): RemoteDevice[] {
   return devices.map((device) => device.deviceId === result.deviceId
     ? {
-      ...device,
-      activeAccountId: result.activeAccountId ?? device.activeAccountId,
-      activeProviderId: result.activeProviderId ?? null,
-      activeProviderGroup: result.activeProviderGroup ?? null,
+      ...mergeRemoteModelState(device, result),
       online: result.online,
     }
     : device);
@@ -192,6 +225,7 @@ const authSlice = createSlice({
 const initialDataState: DataState = {
   accounts: [], providers: [], devices: [], profile: null, page: "chat",
   loading: false, refreshing: false, refreshingAccountId: null, deletingDeviceId: null,
+  consumingQuota: false, selectedChatDeviceId: null,
   switchingAccountId: null, switchingProvider: null, switchingOpenAiAuth: null,
   restartingDeviceId: null, lastRefreshAt: null, error: null,
 };
@@ -201,6 +235,7 @@ const dataSlice = createSlice({
   initialState: initialDataState,
   reducers: {
     pageChanged(state, action: PayloadAction<AppPage>) { state.page = action.payload; },
+    chatDeviceSelected(state, action: PayloadAction<string | null>) { state.selectedChatDeviceId = action.payload; },
     deviceSocketMessage(state, action: PayloadAction<DeviceStatusSocketMessage>) {
       const message = action.payload;
       if (message.type === "devices-snapshot") {
@@ -223,6 +258,7 @@ const dataSlice = createSlice({
     .addCase(bootstrapApp.fulfilled, (state, action) => {
       state.loading = false;
       if (action.payload.data) Object.assign(state, action.payload.data);
+      state.lastRefreshAt = usageUpdatedAt(state.accounts);
       if ("error" in action.payload && action.payload.error) state.error = action.payload.error;
     })
     .addCase(bootstrapApp.rejected, (state, action) => {
@@ -233,7 +269,7 @@ const dataSlice = createSlice({
     .addCase(signIn.fulfilled, (state, action) => {
       state.loading = false;
       Object.assign(state, action.payload.data);
-      state.lastRefreshAt = Date.now();
+      state.lastRefreshAt = usageUpdatedAt(state.accounts);
     })
     .addCase(signIn.rejected, (state) => { state.loading = false; })
     .addCase(signOut.fulfilled, () => initialDataState)
@@ -241,7 +277,7 @@ const dataSlice = createSlice({
     .addCase(refreshAll.fulfilled, (state, action) => {
       state.refreshing = false;
       Object.assign(state, action.payload);
-      state.lastRefreshAt = Date.now();
+      state.lastRefreshAt = usageUpdatedAt(state.accounts);
     })
     .addCase(refreshAll.rejected, (state, action) => {
       state.refreshing = false;
@@ -253,6 +289,7 @@ const dataSlice = createSlice({
       state.accounts = state.accounts.map((account) => account.id === action.payload.accountId
         ? { ...account, plan: action.payload.usage.plan ?? account.plan, usage: action.payload.usage }
         : account);
+      state.lastRefreshAt = usageUpdatedAt(state.accounts);
     })
     .addCase(refreshOneAccount.rejected, (state, action) => {
       state.refreshingAccountId = null;
@@ -262,12 +299,22 @@ const dataSlice = createSlice({
           ...account,
           usage: {
             ...account.usage,
-            fetchedAt: new Date().toISOString(),
             error: refreshError,
           },
         }
         : account);
       state.error = refreshError;
+    })
+    .addCase(consumeQuota.pending, (state) => { state.consumingQuota = true; state.error = null; })
+    .addCase(consumeQuota.fulfilled, (state, action) => {
+      state.consumingQuota = false;
+      const updated = new Map(action.payload.accounts.map(account => [account.id, account]));
+      state.accounts = state.accounts.map(account => updated.get(account.id) ?? account);
+      state.lastRefreshAt = usageUpdatedAt(state.accounts);
+    })
+    .addCase(consumeQuota.rejected, (state, action) => {
+      state.consumingQuota = false;
+      state.error = messageOf(action.error);
     })
     .addCase(removeDevice.pending, (state, action) => { state.deletingDeviceId = action.meta.arg; })
     .addCase(removeDevice.fulfilled, (state, action) => {
@@ -332,7 +379,8 @@ const dataSlice = createSlice({
 export const store = configureStore({ reducer: { auth: authSlice.reducer, data: dataSlice.reducer } });
 subscribeSession((session) => store.dispatch(authSlice.actions.sessionUpdated(session)));
 
-export const { pageChanged, deviceSocketMessage, resetData, clearError: clearDataError } = dataSlice.actions;
+export const { pageChanged, chatDeviceSelected, deviceSocketMessage, resetData,
+  clearError: clearDataError } = dataSlice.actions;
 export const { clearError: clearAuthError } = authSlice.actions;
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;

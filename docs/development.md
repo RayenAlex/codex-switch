@@ -5,18 +5,36 @@ For installed Linux packages, headless servers, systemd, and proxy setup, see
 
 ## Environment Setup
 
-Install Node.js, npm, the latest stable Rust toolchain, and the Tauri 2 dependencies for your platform. Then install project dependencies:
+Install Node.js, npm, the Go toolchain declared in `apps/admin-go/go.mod`, the latest stable Rust toolchain, and the Tauri 2 dependencies for your platform. Then install project dependencies:
 
 ```powershell
 npm install
 ```
 
-Ubuntu needs the Linux WebKitGTK/AppIndicator toolchain before `npm run dev:app`, `npm run check`, or `npm run build:app`:
+Windows desktop builds require Visual Studio 2022 C++ build tools, Windows SDK 10.0.26100.0,
+and CMake 3.20 or newer. In Visual Studio Installer, include **C++ CMake tools for Windows**.
+The desktop build scripts use CMake and CTest from PATH when available, then look for Visual Studio's
+bundled tools (including custom installation locations) and the standard `C:\Program Files\CMake\bin`
+installation. A separate CMake installation in another location must have its `bin` directory on PATH;
+reopen the terminal after changing PATH.
+Windows release builds also need [7-Zip](https://www.7-zip.org/download.html) on PATH to unpack native
+dependencies. After installing it, add `C:\Program Files\7-Zip` to PATH and reopen the terminal.
+
+Ubuntu needs the Linux WebKitGTK/AppIndicator and screen capture dependencies before
+`npm run dev:app`, `npm run check`, or `npm run build:app`:
 
 ```bash
 sudo apt update
-sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev \
+  libappindicator3-dev librsvg2-dev patchelf xdg-utils pkg-config libclang-dev libxcb1-dev \
+  libxrandr-dev libdbus-1-dev libpipewire-0.3-dev libwayland-dev libegl-dev
 ```
+
+The screen capture bindings require newer PipeWire headers than Ubuntu 22.04's 0.3.48 package.
+Ubuntu 24.04 provides a suitable development package. The release workflow keeps Ubuntu 22.04 as its
+build baseline by compiling a checksum-pinned PipeWire 1.0.5 SDK into a private directory and setting
+`PKG_CONFIG_PATH` for compilation; it does not replace the system PipeWire runtime. See the
+`Prepare Linux screen capture SDK` step in [release.yml](../.github/workflows/release.yml).
 
 Dependency versions are locked by the root `package-lock.json` and `apps/desktop/src-tauri/Cargo.lock`. Include both lockfile changes whenever a dependency update is intentional.
 
@@ -27,19 +45,19 @@ Dependency versions are locked by the root `package-lock.json` and `apps/desktop
 | `npm run dev` | Start the desktop browser preview with data from `apps/desktop/src/demo.ts` |
 | `npm run dev:app` | Start the complete Tauri desktop application |
 | `npm run dev:admin` | Start the admin console |
-| `npm run dev:backend` | Start the NestJS backend in watch mode |
+| `npm run dev:backend` | Start the Go backend (configuration in `apps/admin-go/.env`) |
 | `npm run start -w @codex-switch/native` | Start the Expo mobile development server |
 | `npm run android -w @codex-switch/native` | Start Expo and open the Android target |
 | `npm run ios -w @codex-switch/native` | Start Expo and open the iOS target |
-| `npm run build` | Build all npm workspaces through Lerna/Nx |
+| `npm run build` | Build maintained npm workspaces and the Go backend |
 | `npm run build:desktop` | Type-check and build the desktop frontend |
 | `npm run build:admin` | Build the admin console |
-| `npm run build:backend` | Build the NestJS backend |
+| `npm run build:backend` | Build the Go backend into `apps/admin-go/dist/` |
 | `npm run build:app` | Build desktop installers |
 | `npm run build:app:mac` | Build a universal macOS bundle |
 | `npm run build:app:win-arm64` | Build a Windows ARM64 bundle |
 | `npm run check:rust` | Check Rust formatting and run Rust tests |
-| `npm run check` | Check desktop, admin UI, backend tests/types, mobile types, Rust formatting, and Rust tests |
+| `npm run check` | Check maintained frontend workspaces, Go contract/vet/tests, and Rust |
 | `npm run test` | Run workspace test scripts where present |
 | `npm run nx -- graph` | Open the Nx project graph |
 | `npm run release` | Bump the patch version, tag, and push a stable release |
@@ -70,10 +88,12 @@ For local Windows ARM64 app builds, install the Rust `aarch64-pc-windows-msvc` t
 - Floating bubble issue: inspect `settings.json`, window label `usage-bubble`, and the `theme-color-changed` event path.
 - Provider/config issue: inspect the managed blocks in `$CODEX_HOME/config.toml`, `config-before-provider.toml`, the selected Provider JSON, and the `providers-changed` event path. Never paste real Provider keys into an issue.
 - Local proxy issue: confirm `127.0.0.1:15722` is free, inspect `state.json`, call the local `/health` route, and export diagnostics from Settings. Review an export before sharing because upstream error details can still be sensitive.
+
+  For interrupted model responses, see [stream diagnostics](proxy-stream-diagnostics.md) for error fields, request correlation, and capture limits.
 - Token Usage issue: requests must pass through the local proxy. Inspect `token-usage.sqlite3`, the `token-usage` capability label, and the hash route used by the auxiliary window.
 - Cloud issue: verify the configured Base URL, Kong route split, backend logs, and `lastModifiedAt` values. Use only fake credentials while debugging synchronization.
 - Mobile issue: verify the same Base URL reaches `/auth/login` and `/sync/accounts/summary` from the device; localhost on the development computer is not localhost on a physical phone.
-- Admin schema issue: when `POSTGRES_DB_SYNCHRONIZE=false`, apply every dated SQL migration listed in `apps/admin/README.md` in order.
+- Admin schema issue: when `POSTGRES_DB_SYNCHRONIZE=false`, apply only missing compatible migrations from `apps/admin-go/sql`; follow `apps/admin-go/DEPLOYMENT.md`.
 - Restart issue: test with a disposable Codex session. Windows validates desktop process paths and creation times before using a process handle to stop an observed instance; macOS and Linux use their platform process and relaunch strategies. Recovery regression tests simulate CDP outages and process operations without restarting the installed desktop app.
 - Rust logic: prefer unit tests around the pure parsing functions in `auth.rs` and `codex_api.rs`.
 
@@ -100,7 +120,7 @@ validates the build only; producing an installable IPA requires signing credenti
 7. If it affects tray or floating-bubble behavior, update `system_tray.rs`, `floating_bubble.rs`, and the relevant event refresh paths.
 8. For a new auxiliary Tauri window, use an async creation command on Windows, add its label to `src-tauri/capabilities/default.json`, and keep packaged routes compatible with the frontend route parser.
 9. Manage business state in a hook, then render it through pages and components.
-10. If a backend entity changes, add a dated SQL migration for deployments with `POSTGRES_DB_SYNCHRONIZE=false` and update the backend API list.
+10. Implement backend changes in `apps/admin-go` and add required versioned SQL under `apps/admin-go/sql`. NestJS source is frozen as a compatibility baseline.
 11. Update the relevant architecture or usage documentation and run `npm run check`.
 
 Pages must not call `invoke` directly. Tauri command functions must not absorb JWT parsing, HTTP response parsing, or low-level file-replacement logic.

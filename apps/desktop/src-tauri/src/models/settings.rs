@@ -10,6 +10,8 @@ pub(crate) struct AppSettings {
     pub(crate) launch_at_startup: bool,
     #[serde(default = "default_close_to_tray")]
     pub(crate) close_to_tray: bool,
+    #[serde(default = "default_non_proxy_enhancements_enabled")]
+    pub(crate) non_proxy_enhancements_enabled: bool,
     #[serde(default = "default_floating_bubble_enabled")]
     pub(crate) floating_bubble_enabled: bool,
     #[serde(default)]
@@ -52,6 +54,12 @@ pub(crate) struct AppSettings {
     pub(crate) upstream_429_retry_timeout_seconds: u64,
     #[serde(default)]
     pub(crate) sse_idle_timeout: SseIdleTimeoutSettings,
+    #[serde(default)]
+    pub(crate) sse_idle_timeout_migrated: bool,
+    #[serde(default)]
+    pub(crate) proxy_transport: ProxyTransportSettings,
+    #[serde(default)]
+    pub(crate) response_header_timeout: ResponseHeaderTimeoutSettings,
     /// Records the one-time migration from the legacy five-minute retry default.
     #[serde(default)]
     pub(crate) upstream_429_retry_timeout_migrated: bool,
@@ -224,7 +232,7 @@ pub(crate) const MAX_GPT_5_6_SOL_CONTEXT_WINDOW: u64 = 1_050_000;
 pub(crate) const MIN_GPT_5_6_SOL_CONTEXT_WINDOW: u64 = 1_000;
 
 fn default_token_usage_weeks() -> u16 {
-    20
+    10
 }
 
 fn default_token_usage_refresh_seconds() -> u64 {
@@ -243,6 +251,10 @@ fn default_close_to_tray() -> bool {
     true
 }
 
+fn default_non_proxy_enhancements_enabled() -> bool {
+    true
+}
+
 fn default_auto_disable_status_codes() -> Vec<u16> {
     vec![401, 402, 403, 429]
 }
@@ -258,6 +270,7 @@ impl Default for AppSettings {
             codex_homes: Vec::new(),
             launch_at_startup: default_launch_at_startup(),
             close_to_tray: default_close_to_tray(),
+            non_proxy_enhancements_enabled: default_non_proxy_enhancements_enabled(),
             floating_bubble_enabled: default_floating_bubble_enabled(),
             theme_color: None,
             language: None,
@@ -280,6 +293,9 @@ impl Default for AppSettings {
             upstream_429_retry_timeout_seconds: default_upstream_429_retry_timeout_seconds(),
             upstream_429_retry_timeout_migrated: false,
             sse_idle_timeout: SseIdleTimeoutSettings::default(),
+            sse_idle_timeout_migrated: false,
+            proxy_transport: ProxyTransportSettings::default(),
+            response_header_timeout: ResponseHeaderTimeoutSettings::default(),
             show_usage_network_errors: false,
             gpt_5_6_sol_context_window: default_gpt_5_6_sol_context_window(),
             official_model_context_windows: std::collections::BTreeMap::new(),

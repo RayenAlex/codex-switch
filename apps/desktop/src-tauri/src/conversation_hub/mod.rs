@@ -1,10 +1,16 @@
 pub(crate) mod home_migration;
 mod home_migration_batch;
+mod home_migration_error;
 mod home_migration_plan;
+mod home_migration_provider;
+mod home_migration_reason;
 pub(crate) use home_migration::migrate_codex_threads_to_home;
 
 mod context;
 pub(crate) use context::ThreadContext;
+mod deletion_batch;
+pub(crate) mod deletion_plan;
+mod thread_relations;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -253,5 +259,10 @@ include!("tests.rs");
 #[path = "thread_title_tests.rs"]
 mod thread_title_tests;
 
+#[cfg(test)]
+mod visibility_provider_tests;
+
+#[cfg(test)]
+mod bin_test_support;
 #[cfg(test)]
 mod bin_tests;

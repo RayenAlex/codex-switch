@@ -9,6 +9,8 @@ import {
 
 import type { LinkOptions } from './linkOptions';
 import { HotLink } from './hotLink';
+import { CONNECTION_ERRORS } from './connectionErrors';
+import { ConnectionEndpointMonitor } from './connectionEndpoints';
 
 /** One logical encrypted connection across ICE direct transport and the admin fallback relay. */
 class LegacyChatLink {
@@ -18,14 +20,16 @@ class LegacyChatLink {
   private readonly assembler = new Assembler();
   private mode: ConnectionMode = 'connecting';
   private relay = false;
+  private quotaBlocked = false;
   private closed = false;
   private readonly outgoing = new SendQueue({ capacity: () => this.waitForCapacity(),
     mode: () => this.mode,
     send: (part, delivered) => {
       if (!this.cipher) throw new Error('正在连接电脑。');
       const payload = this.cipher.encrypt(part);
-      if (this.relay) this.signal({ type: 'relay', payload });
-      else this.channel!.send(payload);
+      if (this.relay && !this.quotaBlocked) {
+        if (!this.signal({ type: 'relay', payload })) throw new Error(CONNECTION_ERRORS.network);
+      } else this.channel!.send(payload);
       delivered?.();
     } });
   private readonly startedAt = Date.now();
@@ -49,9 +53,21 @@ class LegacyChatLink {
   }
 
   get connectionMode() { return this.mode; }
+  get directEndpoints() {
+    return !this.closed && this.mode === 'direct' ? this.channel?.connectionEndpoints : undefined;
+  }
 
   private signal(message: object) {
-    if (!this.closed) this.options.signal({ ...message, sessionId: this.options.sessionId });
+    if (this.closed) return false;
+    try {
+      this.options.signal({ ...message, sessionId: this.options.sessionId });
+      return true;
+    } catch {
+      // ICE/channel callbacks can race the socket close event; v1 must reconnect the whole session.
+      this.options.error(CONNECTION_ERRORS.network);
+      this.close();
+      return false;
+    }
   }
 
   private setKey(publicKey: string) {
@@ -77,7 +93,7 @@ class LegacyChatLink {
 
   private ready() {
     if (this.closed || !this.cipher) return;
-    if (this.relay) this.changeMode('relay');
+    if (this.relay) this.changeMode(this.quotaBlocked ? 'connecting' : 'relay');
     else if (this.channel?.readyState === 'open') {
       clearTimeout(this.fallbackTimer);
       this.changeMode('direct');
@@ -111,6 +127,11 @@ class LegacyChatLink {
     this.ready();
   }
 
+  setRelayQuotaBlocked(blocked: boolean) {
+    this.quotaBlocked = blocked;
+    if (this.relay) this.changeMode(blocked ? 'connecting' : 'relay');
+  }
+
   receive(payload: string) {
     if (this.closed || !this.cipher) return;
     try {
@@ -131,7 +152,8 @@ class LegacyChatLink {
   private async waitForCapacity() {
     const started = Date.now();
     while (!this.closed) {
-      const ready = this.mode === 'relay' || (this.mode === 'direct' && this.channel?.readyState === 'open');
+      const ready = (this.mode === 'relay' && !this.quotaBlocked)
+        || (this.mode === 'direct' && this.channel?.readyState === 'open');
       const buffered = this.relay ? this.options.relayBuffered() : (this.channel?.bufferedAmount ?? 0);
       if (ready && buffered < MAX_BUFFER_BYTES) return;
       if (Date.now() - started > 15_000) throw new Error('连接暂时中断，请重新连接。');
@@ -156,14 +178,35 @@ class LegacyChatLink {
 /** Transport v2 is used only when the coordinator and both endpoints advertise support. */
 export class ChatLink {
   private readonly implementation: LegacyChatLink | HotLink;
+  private readonly endpoints?: ConnectionEndpointMonitor;
   constructor(options: LinkOptions) {
     this.implementation = options.transportVersion === 2 ? new HotLink(options) : new LegacyChatLink(options);
+    if (options.directEndpoints) {
+      this.endpoints = new ConnectionEndpointMonitor(
+        () => this.implementation.directEndpoints, options.directEndpoints);
+    }
   }
   get resumable() { return this.implementation instanceof HotLink && this.implementation.resumable; }
+  get bulk() { return this.implementation instanceof HotLink ? this.implementation.bulk : undefined; }
+  createBulkCipher(context: Parameters<SessionCipher['createBulkCipher']>[0]) {
+    if (!(this.implementation instanceof HotLink)) throw new Error('Bulk unavailable');
+    return this.implementation.createBulkCipher(context);
+  }
+  openNativeMedia(viewId: string) {
+    return this.implementation instanceof HotLink ? this.implementation.openNativeMedia(viewId)
+      : Promise.resolve(undefined);
+  }
+  reportDiagnostic: import('./diagnostics').ConnectionDiagnostic = (event, fields) => {
+    if (this.implementation instanceof HotLink) this.implementation.reportDiagnostic(event, fields);
+  };
+  renew(expiresAt: number) {
+    if (this.implementation instanceof HotLink) this.implementation.renew(expiresAt);
+  }
   get connectionMode() { return this.implementation.connectionMode; }
   offer() { return this.implementation.offer(); }
   acceptSignal(signal: Signal) { return this.implementation.acceptSignal(signal); }
   enableRelay() { this.implementation.enableRelay(); }
+  setRelayQuotaBlocked(blocked: boolean) { this.implementation.setRelayQuotaBlocked(blocked); }
   fallback() { this.implementation.fallback(); }
   receive(payload: string) { this.implementation.receive(payload); }
   send(message: RpcMessage, progress?: TransferProgress) { return this.implementation.send(message, progress); }
@@ -171,5 +214,5 @@ export class ChatLink {
     if (this.implementation instanceof HotLink) this.implementation.setRelayAvailable(available);
     else if (!available) this.implementation.close();
   }
-  close() { this.implementation.close(); }
+  close() { this.endpoints?.close(); this.implementation.close(); }
 }

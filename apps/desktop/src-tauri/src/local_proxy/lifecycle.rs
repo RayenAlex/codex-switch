@@ -15,7 +15,7 @@ pub(crate) fn restore_local_proxy_if_enabled<R: Runtime>(
     };
     let write_codex = crate::claude_code::should_write_codex_for_app(app)?;
     let config_result = if write_codex {
-        providers::apply_local_proxy_config_for_state(app)
+        providers::restore_local_proxy_config_for_state(app)
     } else {
         Ok(())
     };
@@ -32,6 +32,9 @@ pub(crate) fn restore_local_proxy_if_enabled<R: Runtime>(
         }
         let _ = set_local_proxy_enabled(&paths, false);
         return Err(error);
+    }
+    if write_codex {
+        official_context_startup::restore(app.clone());
     }
     Ok(true)
 }
@@ -60,6 +63,7 @@ fn start_local_proxy_blocking<R: Runtime>(
     let client_was_running = write_codex && crate::commands::chatgpt_or_codex_is_running()?;
     let launch_target = client_was_running
         .then(|| crate::commands::refresh_and_get_chatgpt_launch_target(&app))
+        .transpose()?
         .flatten();
     if client_was_running {
         // Preserve the path of a running client before ending all ChatGPT/Codex
@@ -193,6 +197,7 @@ fn stop_local_proxy_blocking<R: Runtime>(
     let client_was_running = write_codex && crate::commands::chatgpt_or_codex_is_running()?;
     let launch_target = client_was_running
         .then(|| crate::commands::refresh_and_get_chatgpt_launch_target(&app))
+        .transpose()?
         .flatten();
     emit_stop_progress(&app, "stoppingClient", 5, None, None);
     if client_was_running {
@@ -246,18 +251,9 @@ fn stop_local_proxy_blocking<R: Runtime>(
     }
 
     emit_stop_progress(&app, "restoringConfiguration", 90, None, None);
-    let commit_result = (|| -> Result<(), String> {
-        if write_codex {
-            if let Some(account_id) = selected_account_id.as_deref() {
-                crate::commands::write_managed_auth_to_current(&paths, account_id)?;
-            }
-            for target in crate::storage::resolve_enabled_paths(&app)? {
-                providers::restore_default_official_config(&target)?;
-            }
-        }
-        let state = stopped_proxy_state(read_state(&paths));
-        write_state(&paths, &state)
-    })();
+    let commit_result = commit_stopped_proxy_configuration(
+        &app, &paths, write_codex, selected_account_id.as_deref(),
+    );
     if let Err(commit_error) = commit_result {
         let recovery_errors = recover_proxy_after_failed_stop(&app, &paths, ProxyRecoveryOptions {
             original_state: &original_state,
@@ -301,6 +297,25 @@ fn stop_local_proxy_blocking<R: Runtime>(
             }
         }
     }
+}
+
+fn commit_stopped_proxy_configuration<R: Runtime>(
+    app: &tauri::AppHandle<R>,
+    paths: &Paths,
+    write_codex: bool,
+    selected_account_id: Option<&str>,
+) -> Result<(), String> {
+    if write_codex {
+        // Validate the complete target list before restoring any credentials or configuration.
+        let targets = crate::storage::resolve_enabled_paths(app)?;
+        if let Some(account_id) = selected_account_id {
+            crate::commands::write_managed_auth_to_current(paths, account_id)?;
+        }
+        for target in targets {
+            providers::restore_default_official_config(&target)?;
+        }
+    }
+    write_state(paths, &stopped_proxy_state(read_state(paths)))
 }
 
 struct ProxyRecoveryOptions<'a> {

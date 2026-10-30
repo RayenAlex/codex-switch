@@ -1,0 +1,233 @@
+// @vitest-environment jsdom
+import { act, type ComponentProps } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import * as backend from "../../../api/backend";
+import { DEMO_ACCOUNTS } from "../../../demo";
+import { AccountTable } from ".";
+import { loadOfficialUsage } from '../../../api/officialUsage';
+import { saveTokenCostDisplaySettings } from '../../../utils/tokenCost';
+
+vi.mock('../../../api/officialUsage', () => ({ loadOfficialUsage: vi.fn() }));
+
+vi.mock("../../../api/backend", async (original) => ({
+  ...await original<typeof backend>(),
+  loadAccountTokenUsage: vi.fn(),
+  subscribeToTokenUsageChanges: vi.fn(() => vi.fn()),
+}));
+
+const account = { ...DEMO_ACCOUNTS[0], agentIdentity: false, directSwitchCompatible: true };
+const usage = [{ accountId: account.id, accountEmail: null, totalTokens: 1200,
+  inputTokens: 800, outputTokens: 400, reasoningTokens: 50, cachedTokens: 200, estimatedCost: 0.25 }];
+const props: ComponentProps<typeof AccountTable> = {
+  active: true, accounts: [account], accountGroups: [], providers: [], busyAccountId: null,
+  onSwitch: vi.fn(), onDeactivate: vi.fn(), onCopyAuthJson: vi.fn(), onRefresh: vi.fn(), onDelete: vi.fn(),
+  onRefreshAllUsage: vi.fn(), refreshingAllUsage: false,
+  onConsumeQuotaMany: vi.fn(), onDeleteMany: vi.fn(), onEnableMany: vi.fn(), onDisableMany: vi.fn(),
+  onAccountGroupChange: vi.fn(), onAutoSwitchEnabledChange: vi.fn(), autoSwitchBusyAccountId: null,
+  onAutoSwitchPriorityChange: vi.fn(), autoSwitchPriorityBusyAccountId: null,
+  onAutoSwitchThresholdChange: vi.fn(), autoSwitchThresholdBusyAccountId: null,
+  autoSwitchOnQuotaExhaustion: false, customAutoSwitchPriorityEnabled: false,
+  customAutoSwitchThresholdEnabled: false, globalAutoSwitchThreshold: 0,
+  onGlobalAutoSwitchThresholdChange: vi.fn(), onSaveNote: vi.fn(), onLoadAccountDetails: vi.fn(),
+  resetCredits: {}, onLoadResetCredits: vi.fn(), onUseResetCredit: vi.fn(), resetCreditBusyAccountId: null,
+  hotSwitchEnabled: true, fastModeEnabled: false, concurrentAccountRoutingEnabled: false,
+  concurrentAccountGroup: null, concurrentAccountRoutingBusy: false, onConcurrentAccountRoutingChange: vi.fn(),
+  openaiAuthAccountId: null, openaiAuthBusy: false, onOpenaiAuthAccountChange: vi.fn(),
+  privacyMode: false, privacyModeLoading: false, onPrivacyModeChange: vi.fn(), hideAccountNotes: false,
+  showUsageNetworkErrors: true, displayMode: "cards", tokenUsageRefreshSeconds: 2, language: "en",
+  t: (key) => key,
+};
+let root: Root;
+let container: HTMLDivElement;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.useFakeTimers();
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+  vi.stubGlobal("matchMedia", () => ({ matches: false, addListener() {}, removeListener() {} }));
+  localStorage.clear();
+  vi.mocked(backend.loadAccountTokenUsage).mockResolvedValue(usage);
+  vi.mocked(loadOfficialUsage).mockResolvedValue({ accounts: [], status: 'signedOut', updatedAt: 0 });
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+});
+
+afterEach(async () => {
+  await act(async () => root.unmount());
+  container.remove();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+async function render(overrides: Partial<typeof props> = {}) {
+  await act(async () => root.render(<AccountTable {...props} {...overrides} />));
+}
+
+it.each([true, false])("switches from table account and quota areas with proxy enabled=%s", async (hotSwitchEnabled) => {
+  await render({ displayMode: "table", hotSwitchEnabled, accounts: [{ ...account, active: false }] });
+  const row = container.querySelector<HTMLElement>(`tr[data-row-key="${account.id}"]`)!;
+  expect(row.classList.contains("account-switchable-row")).toBe(true);
+  await act(async () => row.querySelector<HTMLElement>(".plan-tag")!.click());
+  expect(props.onSwitch).toHaveBeenCalledExactlyOnceWith(account.id);
+  vi.mocked(props.onSwitch).mockClear();
+  await act(async () => row.querySelector<HTMLElement>(".account-token-cost")!.click());
+  expect(props.onSwitch).toHaveBeenCalledExactlyOnceWith(account.id);
+});
+
+it.each(["table", "cards"] as const)("keeps %s account-area switching within availability rules", async (displayMode) => {
+  const inactive = { ...account, active: false };
+  const cases: Partial<typeof props>[] = [
+    { accounts: [account] },
+    { busyAccountId: account.id },
+    { concurrentAccountRoutingEnabled: true },
+    { accounts: [{ ...inactive, localProxyCompatible: false }] },
+    { hotSwitchEnabled: false, accounts: [{ ...inactive, directSwitchCompatible: false }] },
+  ];
+  for (const overrides of cases) {
+    await render({ displayMode, accounts: [inactive], ...overrides });
+    await act(async () => container.querySelector<HTMLElement>(".plan-tag")!.click());
+    expect(props.onSwitch).not.toHaveBeenCalled();
+    expect(container.querySelector(".account-switchable-row")).toBeNull();
+  }
+  await render({ displayMode, accounts: [inactive] });
+  await act(async () => container.querySelector<HTMLElement>(".plan-tag")!.click());
+  expect(props.onSwitch).toHaveBeenCalledExactlyOnceWith(account.id);
+});
+
+it("keeps table selection, details, group editing and action buttons independent from area switching", async () => {
+  localStorage.setItem("codex-switch:account-table-group-column-preference", "true");
+  await render({ displayMode: "table", accounts: [{ ...account, active: false }] });
+  const row = container.querySelector<HTMLElement>(`tr[data-row-key="${account.id}"]`)!;
+  await act(async () => row.querySelector<HTMLElement>(".ant-checkbox-wrapper")!.click());
+  expect(row.querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked).toBe(true);
+  await act(async () => row.querySelector<HTMLButtonElement>(".ant-table-row-expand-icon")!.click());
+  expect(props.onLoadAccountDetails).toHaveBeenCalledWith(account.id);
+  await act(async () => row.querySelector<HTMLButtonElement>(".account-group-button")!.click());
+  expect(document.querySelector(".account-group-editor")).not.toBeNull();
+  await act(async () => document.querySelector<HTMLElement>(".account-group-editor-actions")!.click());
+  await act(async () => row.querySelector<HTMLButtonElement>(".account-actions-column button")!
+    .parentElement!.click());
+  expect(props.onSwitch).not.toHaveBeenCalled();
+  const switchButton = row.querySelector<HTMLButtonElement>(".account-actions-column button")!;
+  expect(switchButton.textContent).toBe("table.switch");
+  await act(async () => switchButton.click());
+  expect(props.onSwitch).toHaveBeenCalledExactlyOnceWith(account.id);
+});
+
+it("keeps numeric setting wrappers and suffixes independent from table switching", async () => {
+  await render({
+    displayMode: "table", accounts: [{ ...account, active: false }],
+    autoSwitchOnQuotaExhaustion: true,
+    customAutoSwitchPriorityEnabled: true, customAutoSwitchThresholdEnabled: true,
+  });
+  const row = container.querySelector<HTMLElement>(`tr[data-row-key="${account.id}"]`)!;
+  const priority = row.querySelector<HTMLElement>(".auto-switch-priority-input")!;
+  const suffix = row.querySelector<HTMLElement>(".ant-input-number-suffix")!;
+  expect(priority).not.toBeNull();
+  expect(suffix).not.toBeNull();
+  await act(async () => priority.click());
+  await act(async () => suffix.click());
+  expect(props.onSwitch).not.toHaveBeenCalled();
+  await act(async () => row.querySelector<HTMLElement>(".plan-tag")!.click());
+  expect(props.onSwitch).toHaveBeenCalledExactlyOnceWith(account.id);
+});
+
+it("shows credits in a separate column and reuses usage refresh without overlapping clicks", async () => {
+  // Existing saved column preferences must still include the newly added column.
+  localStorage.setItem("codex-switch:account-table-column-order", JSON.stringify(["fiveHours", "oneWeek"]));
+  const withCredits = { ...account, usage: { ...account.usage,
+    credits: { hasCredits: true, unlimited: false, balance: "62500" } } };
+  await render({ displayMode: "table", accounts: [withCredits] });
+  expect(container.querySelector(".account-credits")?.textContent).toBe("62,500");
+  const refresh = container.querySelector<HTMLButtonElement>('button[aria-label="table.refreshCredits"]');
+  expect(refresh?.closest("th")?.textContent).toContain("table.credits");
+  await act(async () => refresh?.click());
+  expect(props.onRefreshAllUsage).toHaveBeenCalledTimes(1);
+  await render({ displayMode: "table", accounts: [withCredits], refreshingAllUsage: true });
+  await act(async () => refresh?.click());
+  expect(props.onRefreshAllUsage).toHaveBeenCalledTimes(1);
+  const updated = { ...withCredits, usage: { ...withCredits.usage,
+    credits: { ...withCredits.usage.credits, balance: "62000" } } };
+  await render({ displayMode: "table", accounts: [updated] });
+  expect(container.querySelector(".account-credits")?.textContent).toBe("62,000");
+  expect(props.onRefresh).not.toHaveBeenCalled();
+});
+
+it.each([true, false])("shows recorded tokens and cost regardless of proxy running=%s", async (hotSwitchEnabled) => {
+  await render({ hotSwitchEnabled });
+  expect(container.querySelector(".account-card-token-summary")?.textContent).toBe("Today 1.2K Tokens");
+  expect(container.querySelector(".account-card-token-cost")?.textContent).toBe("0.25 USD");
+  await render({ hotSwitchEnabled: !hotSwitchEnabled });
+  expect(container.querySelector(".account-card-token-cost")?.textContent).toBe("0.25 USD");
+});
+
+it("shows actual zeroes when no usage was recorded", async () => {
+  vi.mocked(backend.loadAccountTokenUsage).mockResolvedValue([]);
+  await render();
+  expect(container.querySelector(".account-card-token-summary")?.textContent).toBe("Today 0 Tokens");
+  expect(container.querySelector(".account-card-token-cost")?.textContent).toBe("0.00 USD");
+});
+
+it("keeps missing quotas visible and opens details without switching the account", async () => {
+  const inactive = { ...account, active: false, autoSwitchEnabled: false,
+    usage: { ...account.usage, secondary: null } };
+  await render({ accounts: [inactive] });
+  const meters = container.querySelectorAll(".card-usage-meter");
+  expect(meters).toHaveLength(2);
+  expect(meters[1].textContent).toContain("No data yet");
+  expect(meters[1].querySelector('[role="progressbar"]')).toBeNull();
+  expect(container.querySelector(".account-card-avatar .avatar")?.textContent).toBe("AL");
+  expect(container.querySelector(".account-card-disabled-label")?.textContent).toBe("Disabled");
+  const details = meters[0].querySelector<HTMLButtonElement>(".card-usage-details-button");
+  await act(async () => details?.click());
+  const popover = document.querySelector<HTMLElement>(".card-usage-details");
+  expect(popover?.textContent).toContain("Remaining quota: 72%");
+  await act(async () => popover?.click());
+  expect(props.onSwitch).not.toHaveBeenCalled();
+});
+
+it('updates the quota unit and amount with cost display settings without reloading usage', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  vi.mocked(loadOfficialUsage).mockResolvedValue({ status: 'ready', updatedAt: now,
+    accounts: [{ accountId: account.id, accountLabel: account.email, tokens: 200, costUsd: 10,
+      remainingUsd: 30, primary: { capacityUsd: 100, remainingUsd: 30, consumedUsd: 10, declinePercent: 10,
+        startPercent: 40, remainingPercent: 30, startTs: 0, endTs: 1 }, secondary: null, devices: [] }],
+  });
+  await render({ displayMode: 'table' });
+  expect(container.textContent).toContain('Estimated available (USD)');
+  expect(container.textContent).toContain('30 / 100USD');
+  await act(async () => saveTokenCostDisplaySettings({ unit: '元', usdMultiplier: 7, currencyCode: 'CNY' }));
+  expect(container.textContent).toContain('Estimated available (元)');
+  expect(container.textContent).toContain('210 / 700元');
+  expect(container.textContent).not.toContain('Estimated available (USD)');
+  await act(async () => saveTokenCostDisplaySettings({ unit: '积分', usdMultiplier: 100, currencyCode: null }));
+  expect(container.textContent).toContain('Estimated available (积分)');
+  expect(container.textContent).toContain('3000 / 10000积分');
+  await act(async () => saveTokenCostDisplaySettings({ unit: 'USD', usdMultiplier: 1, currencyCode: null }));
+  expect(container.textContent).toContain('Estimated available (USD)');
+  expect(container.textContent).toContain('30 / 100USD');
+  expect(loadOfficialUsage).toHaveBeenCalledTimes(1);
+});
+
+it("keeps actions responsive and polling single-flight while usage is pending", async () => {
+  let finish!: (value: typeof usage) => void;
+  vi.mocked(backend.loadAccountTokenUsage).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+  await render();
+  await render({ providers: [...props.providers] });
+  await act(async () => vi.advanceTimersByTime(6000));
+  expect(backend.loadAccountTokenUsage).toHaveBeenCalledTimes(1);
+  const refresh = container.querySelector<HTMLButtonElement>(".card-header-actions .table-icon-button");
+  expect(refresh).not.toBeNull();
+  await act(async () => refresh?.click());
+  expect(props.onRefresh).toHaveBeenCalledWith(account.id);
+  await act(async () => finish(usage));
+  expect(backend.loadAccountTokenUsage).toHaveBeenCalledTimes(2);
+  expect(container.querySelector(".account-card-token-cost")?.textContent).toBe("0.25 USD");
+  await render({ active: false });
+  const calls = vi.mocked(backend.loadAccountTokenUsage).mock.calls.length;
+  await act(async () => vi.advanceTimersByTime(6000));
+  expect(backend.loadAccountTokenUsage).toHaveBeenCalledTimes(calls);
+});

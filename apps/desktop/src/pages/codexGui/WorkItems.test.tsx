@@ -11,7 +11,8 @@ const command = (id: string, status = "completed"): Item => ({ id, type: "comman
   command: `echo ${id}`, aggregatedOutput: `output-${id}` });
 const explanation = (id: string): Item => ({ id, type: "agentMessage", phase: "commentary", text: id,
   status: "completed" });
-const render = (items: Item[], running = true) => act(async () => root.render(<WorkItems items={items} running={running} />));
+const render = (items: Item[], running = true) => act(async () => root.render(
+  <WorkItems items={items} running={running} />));
 async function toggle(node: HTMLDetailsElement, open = true) {
   await act(async () => { node.open = open; node.dispatchEvent(new Event("toggle")); });
 }
@@ -20,6 +21,63 @@ beforeEach(() => {
   container = document.createElement("div"); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); vi.unstubAllGlobals(); });
+
+it('renders the entire open process and retains earlier activities while streaming', async () => {
+  let items = Array.from({ length: 300 }, (_, index) => explanation(`comment-${index}`));
+  await render(items);
+  expect(container.querySelectorAll('[data-message-id]')).toHaveLength(300);
+  expect(container.querySelector('[data-message-id="comment-0"]')).not.toBeNull();
+  expect(container.querySelector('[data-message-id="comment-299"]')).not.toBeNull();
+  expect(container.querySelectorAll('button')).toHaveLength(0);
+  const first = container.querySelector('[data-message-id]');
+  items = [...items, explanation('new')];
+  await render(items);
+  expect(container.querySelector('[data-message-id]')).toBe(first);
+  expect(container.querySelectorAll('[data-message-id]')).toHaveLength(301);
+  expect(container.querySelector('[data-message-id="new"]')).not.toBeNull();
+});
+
+it('mounts every command on expansion, unmounts them on collapse, and reopens in full', async () => {
+  await render(Array.from({ length: 300 }, (_, index) => command(`cmd-${index}`)));
+  const group = container.querySelector('details')!;
+  expect(container.querySelectorAll('[data-message-id]')).toHaveLength(0);
+  await toggle(group);
+  expect(container.querySelectorAll('[data-message-id]')).toHaveLength(300);
+  expect(container.querySelector('[data-message-id="cmd-0"]')).not.toBeNull();
+  expect(container.querySelector('[data-message-id="cmd-299"]')).not.toBeNull();
+  await toggle(container.querySelector('[data-message-id="cmd-0"] details')!);
+  expect(container.textContent).toContain('output-cmd-0');
+  await toggle(group, false);
+  expect(container.querySelectorAll('[data-message-id], pre')).toHaveLength(0);
+  await toggle(group);
+  expect(container.querySelectorAll('[data-message-id]')).toHaveLength(300);
+  expect(container.textContent).not.toContain('output-cmd-0');
+});
+
+it('retains an expanded command run and command details while scrolling', async () => {
+  await render(Array.from({ length: 100 }, (_, index) => command(`cmd-${index}`)));
+  const group = container.querySelector('details')!;
+  expect(group.querySelector('summary')?.getAttribute('aria-label')).toContain('全部 100 项活动');
+  await toggle(group);
+  const commandDetails = container.querySelector<HTMLDetailsElement>('[data-message-id="cmd-60"] details')!;
+  await toggle(commandDetails);
+  await act(async () => {
+    group.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -120 }));
+    container.dispatchEvent(new Event('scroll'));
+  });
+  expect(container.querySelector('details')).toBe(group);
+  expect(group.open).toBe(true);
+  expect(container.querySelector('[data-message-id="cmd-60"] details')).toBe(commandDetails);
+  expect(commandDetails.open).toBe(true);
+  expect(container.querySelector('[data-message-id="cmd-25"]')).not.toBeNull();
+});
+
+it('shows earlier explanations alongside a collapsed command run', async () => {
+  await render([explanation('before'), ...Array.from({ length: 300 }, (_, index) => command(`cmd-${index}`))]);
+  expect(container.querySelector('[data-message-id="before"]')).not.toBeNull();
+  expect(container.querySelectorAll('[data-message-id]')).toHaveLength(1);
+  expect(container.querySelector('summary')?.textContent).toBe('已运行 echo cmd-299');
+});
 
 it("shows one latest running operation while preserving explanations on either side", async () => {
   await render([explanation("before"), command("first"),

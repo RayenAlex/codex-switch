@@ -1,3 +1,5 @@
+import { remoteProviderCommand, type RemoteModelTarget } from '../../../shared/remote-chat/modelTarget';
+import { t } from './i18n';
 import type {
   AccountSummary,
   AuthResponse,
@@ -8,7 +10,6 @@ import type {
   RemoteModelSwitchResult,
   RemoteProviderSummary,
   ResetCreditsSummary,
-  UsageSummary,
   TotpVault,
   UserProfile,
 } from "./types";
@@ -70,10 +71,10 @@ export function subscribeSession(listener: (session: AuthSession | null) => void
 async function responseError(response: Response) {
   const payload = await response.json().catch(() => null) as { message?: string | string[] } | null;
   if (Array.isArray(payload?.message)) return payload.message.join("；");
-  return payload?.message || `请求失败（HTTP ${response.status}）`;
+  return payload?.message || t('请求失败（HTTP {value1}）', { value1: response.status });
 }
 
-async function refreshSession() {
+export async function refreshSession() {
   if (refreshRequest) return refreshRequest;
   const session = activeSession;
   if (!session?.refreshToken) throw new Error("登录已过期，请重新登录");
@@ -83,11 +84,15 @@ async function refreshSession() {
     body: JSON.stringify({ refreshToken: session.refreshToken }),
   }).then(async (response) => {
     if (!response.ok) {
-      setActiveSession(null);
-      throw new Error("登录已过期，请重新登录");
+      if (response.status === 401 || response.status === 403) {
+        if (activeSession === session) setActiveSession(null);
+        throw Object.assign(new Error("登录已过期，请重新登录"), { status: response.status });
+      }
+      throw Object.assign(new Error("暂时无法刷新登录状态，请稍后重试"), { status: response.status });
     }
     const payload = await response.json() as AuthResponse;
     if (!payload.accessToken || !payload.refreshToken) throw new Error("刷新登录状态失败");
+    if (activeSession !== session) throw new Error("登录状态已改变，请重新连接");
     const next = { ...session, accessToken: payload.accessToken, refreshToken: payload.refreshToken };
     setActiveSession(next);
     return next;
@@ -156,24 +161,11 @@ export async function logout() {
   setActiveSession(null);
 }
 
-async function mapWithConcurrency<T, R>(values: T[], limit: number, mapper: (value: T) => Promise<R>) {
-  const results = new Array<R>(values.length);
-  let cursor = 0;
-  const workers = Array.from({ length: Math.min(limit, values.length) }, async () => {
-    while (cursor < values.length) {
-      const index = cursor++;
-      results[index] = await mapper(values[index] as T);
-    }
-  });
-  await Promise.all(workers);
-  return results;
-}
-
-export async function fetchDashboardData(refreshUsage = true) {
+export async function fetchDashboardData() {
   const [{ accounts }, devicesPayload, { providers }, profile] = await Promise.all([
     apiJson<{ accounts: AccountSummary[] }>("/sync/accounts/web-summary"),
     apiJson<{ devices: RemoteDevice[] }>("/devices"),
-    apiJson<{ providers: RemoteProviderSummary[] }>("/devices/providers"),
+    apiJson<{ providers: RemoteProviderSummary[] }>("/devices/providers?includeAggregates=true"),
     apiJson<UserProfile>("/auth/me"),
   ]);
   const devices = devicesPayload.devices.map(normalizeRemoteDevice);
@@ -181,23 +173,7 @@ export async function fetchDashboardData(refreshUsage = true) {
     ...provider,
     group: typeof provider.group === "string" ? provider.group : "",
   }));
-  if (!refreshUsage) return { accounts, devices, providers: normalizedProviders, profile };
-  const refreshedAccounts = await mapWithConcurrency(accounts, 4, async (account) => {
-    try {
-      const usage = await apiJson<UsageSummary>(`/sync/accounts/${encodeURIComponent(account.id)}/usage`);
-      return { ...account, plan: usage.plan ?? account.plan, usage };
-    } catch (error) {
-      return {
-        ...account,
-        usage: {
-          ...account.usage,
-          fetchedAt: new Date().toISOString(),
-          error: error instanceof Error ? error.message : "用量刷新失败",
-        },
-      };
-    }
-  });
-  return { accounts: refreshedAccounts, devices, providers: normalizedProviders, profile };
+  return { accounts, devices, providers: normalizedProviders, profile };
 }
 
 export function deviceStatusWebSocketUrl(baseUrl: string) {
@@ -271,10 +247,6 @@ export async function putTotpVault(vault: TotpVault) {
     body: JSON.stringify(vault),
   });
 }
-export async function refreshAccountUsage(accountId: string) {
-  return apiJson<UsageSummary>(`/sync/accounts/${encodeURIComponent(accountId)}/usage`);
-}
-
 export async function fetchResetCredits(accountId: string) {
   return apiJson<ResetCreditsSummary>(`/sync/accounts/${encodeURIComponent(accountId)}/reset-credits`);
 }
@@ -285,13 +257,16 @@ export async function consumeResetCredit(accountId: string) {
   });
 }
 
-export async function switchRemoteDeviceProvider(deviceId: string, providerId: string) {
+export async function switchRemoteDeviceProvider(
+  deviceId: string, providerId: string, target: RemoteModelTarget = 'proxy',
+) {
+  const command = remoteProviderCommand(providerId, target);
   return apiJson<RemoteModelSwitchResult>(
-    `/devices/${encodeURIComponent(deviceId)}/provider`,
+    `/devices/${encodeURIComponent(deviceId)}/${command.path}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ providerId }),
+      body: JSON.stringify(command.body),
     },
   );
 }
@@ -325,6 +300,10 @@ function normalizeRemoteDevice(device: RemoteDevice): RemoteDevice {
         capability === "provider-switch"
         || capability === "provider-group-switch"
         || capability === "restart-codex"
+        || capability === "gui-model-switch"
+        || capability === "aggregate-switch"
+        || capability === "gui-aggregate-switch"
+        || capability === "account-usage"
       ))
       : [],
   };

@@ -28,6 +28,7 @@ struct Simulation {
     skin_installed: bool,
     skin_paused: bool,
     proxy_running: bool,
+    enhancements_enabled: bool,
     running_executable: Option<PathBuf>,
     probe: ProbeResponse,
     write_fails: bool,
@@ -49,6 +50,7 @@ impl Default for Simulation {
             skin_installed: true,
             skin_paused: false,
             proxy_running: false,
+            enhancements_enabled: true,
             running_executable: Some(executable),
             probe: ProbeResponse::Unavailable,
             write_fails: false,
@@ -95,6 +97,10 @@ fn pause_path() -> Result<SimulatedPath, String> {
 
 fn runtime_proxy_running() -> bool {
     with_simulation(|simulation| simulation.proxy_running)
+}
+
+fn runtime_enhancements_enabled() -> bool {
+    with_simulation(|simulation| simulation.proxy_running || simulation.enhancements_enabled)
 }
 
 fn read_session() -> NativeSessionState {
@@ -160,7 +166,6 @@ include!("runtime_recovery.rs");
 fn runtime_paths() -> RuntimePaths {
     RuntimePaths {
         bundled_root: PathBuf::from("simulated/resources"),
-        codex_paths: None,
     }
 }
 
@@ -226,10 +231,11 @@ fn a_busy_operation_lock_skips_recovery_without_waiting() {
 #[test]
 fn conditions_are_rechecked_after_the_original_outage_observation() {
     let _suite = TEST_SUITE_LOCK.lock().unwrap();
-    let changes: [fn(&mut Simulation); 6] = [
+    let changes: [fn(&mut Simulation); 7] = [
         |simulation| simulation.probe = ProbeResponse::Empty,
         |simulation| simulation.probe = ProbeResponse::OtherError,
         |simulation| simulation.skin_paused = true,
+        |simulation| simulation.enhancements_enabled = false,
         |simulation| simulation.session.recovery_attempted = true,
         |simulation| simulation.running_executable = None,
         |simulation| simulation.running_executable = Some(PathBuf::from("updated/ChatGPT.exe")),
@@ -241,6 +247,29 @@ fn conditions_are_rechecked_after_the_original_outage_observation() {
         recover(&observed).unwrap();
         assert_no_start_or_write();
     }
+}
+
+#[test]
+fn an_updated_installation_cannot_be_restarted_by_the_previous_session() {
+    let _suite = TEST_SUITE_LOCK.lock().unwrap();
+    reset_simulation();
+    let observed = read_session();
+    let updated = CodexInstall {
+        executable: PathBuf::from("updated/ChatGPT.exe"),
+        app_user_model_id: None,
+    };
+    with_simulation(|simulation| simulation.running_executable = Some(updated.executable.clone()));
+    // Both the initial observation and final process check can see the new
+    // version. Matching those two checks alone does not establish ownership.
+    recover_running_codex(&runtime_paths(), &observed, &updated).unwrap();
+    assert_no_start_or_write();
+
+    let mut recovery = RendererRecovery::default();
+    for _ in 0..3 {
+        recover_after_outage(&runtime_paths(), &observed, &mut recovery).unwrap();
+        assert!(recovery.observed.is_none());
+    }
+    assert_no_start_or_write();
 }
 
 #[test]
@@ -299,6 +328,18 @@ fn paused_skin_only_recovers_when_proxy_is_running() {
     assert_no_start_or_write();
     with_simulation(|simulation| simulation.proxy_running = true);
     recover(&observed).unwrap();
+    with_simulation(|simulation| assert_eq!(simulation.starts, 1));
+}
+
+#[test]
+fn disabled_enhancements_do_not_block_proxy_recovery() {
+    let _suite = TEST_SUITE_LOCK.lock().unwrap();
+    reset_simulation();
+    with_simulation(|simulation| {
+        simulation.enhancements_enabled = false;
+        simulation.proxy_running = true;
+    });
+    recover(&read_session()).unwrap();
     with_simulation(|simulation| assert_eq!(simulation.starts, 1));
 }
 

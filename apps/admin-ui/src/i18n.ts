@@ -1,8 +1,11 @@
+import { ru } from "./i18n-ru";
+
 export const LANGUAGE_STORAGE_KEY = "codex-switch-admin-language";
 
 export const LANGUAGE_OPTIONS = [
   { value: "zh", label: "中文" },
   { value: "en", label: "English" },
+  { value: "ru", label: "Русский" },
 ] as const;
 
 export type Language = (typeof LANGUAGE_OPTIONS)[number]["value"];
@@ -22,7 +25,11 @@ const en = {
   "nav.approvals": "Admin Approvals",
   "nav.announcement": "App Announcement",
   "nav.chatSettings": "Chat Settings",
+  "nav.updateSharing": "Download Optimization",
+  "nav.chatTraffic": "Chat Traffic",
   "nav.currency": "Currency Settings",
+  "nav.tokenPricing": "Model Pricing",
+  "nav.officialModels": "Official Models",
   "nav.codexHomePresets": "Codex Home Paths",
   "nav.emailTemplates": "Email Settings",
   "nav.skills": "Community Skills",
@@ -111,6 +118,7 @@ const en = {
   "login.registerPasswordLength": "Registration password must be at least 8 characters",
   "login.register": "Register first/invited account",
   "login.submit": "Sign in",
+  "login.locked": "Too many incorrect attempts. Try again in {minutes} min.",
   "forgotPassword.title": "Reset Password",
   "forgotPassword.description": "Verify your email to set a new password.",
   "forgotPassword.verificationCode": "Email verification code",
@@ -348,7 +356,7 @@ const en = {
   "announcement.secondsPerLoop": "seconds/loop",
   "announcement.preview": "Scrolling preview",
   "announcement.previewLanguageHint": "The preview follows the management console language.",
-  "announcement.emptyPreview": "Welcome to Codex Switch — manage accounts and models with ease, and stay focused on creating.",
+  "announcement.emptyPreview": "Welcome to Remote AI — manage accounts and models with ease, and stay focused on creating.",
   "announcement.save": "Save announcement",
   "announcement.saved": "Announcement saved",
   "currency.title": "Currency Settings",
@@ -469,7 +477,7 @@ const en = {
   "mailServices.password": "Password",
   "mailServices.passwordHint": "Leave blank to keep the existing password.",
   "mailServices.fromAddress": "From address",
-  "mailServices.fromAddressHint": "An address or display name plus address, for example Codex Switch <noreply@example.com>.",
+  "mailServices.fromAddressHint": "An address or display name plus address, for example Remote AI <noreply@example.com>.",
   "mailServices.sender": "Sending service",
   "mailServices.default": "Default service",
   "mailServices.envDefault": "Environment default",
@@ -504,7 +512,7 @@ const en = {
   "feedback.emailTo": "Recipient: {email}",
   "feedback.emailSubject": "Subject",
   "feedback.emailContent": "Message",
-  "feedback.emailDefaultSubject": "Reply from Codex Switch about your feedback",
+  "feedback.emailDefaultSubject": "Reply from Remote AI about your feedback",
   "feedback.send": "Send",
   "feedback.emailSent": "Email sent",
   "skills.title": "Community Skills",
@@ -541,6 +549,27 @@ const en = {
   "dashboard.periodDays": "last {count} days",
   "dashboard.days": "{count} days",
   "dashboard.totalUsers": "Total users",
+  "dashboard.bandwidthTitle": "Server bandwidth",
+  "dashboard.bandwidthDescription": "Chat and remote desktop traffic relayed by this server. Each direction counts once.",
+  "dashboard.bandwidthRate": "Current relay rate",
+  "dashboard.bandwidthPeak": "Peak in the last minute",
+  "dashboard.bandwidthRecent": "Traffic in the last minute",
+  "dashboard.bandwidthLive": "Updates every 2 seconds",
+  "dashboard.bandwidthPaused": "Update interrupted",
+  "dashboard.bandwidthRefresh": "Refresh server bandwidth",
+  "dashboard.bandwidthChart": "Relay bandwidth over the last minute",
+  "dashboard.bandwidthError": "Bandwidth is temporarily unavailable. Retrying automatically.",
+  "dashboard.bandwidthNote": "Current rate averages the last 2 seconds. 1 KB = 1,024 B; 1 MB = 1,024 KB.",
+  "dashboard.chatTraffic": "Chat relay traffic",
+  "dashboard.chatTrafficNote": "Both directions combined since tracking began; each transfer counts once. "
+    + "Beijing time (UTC+8).",
+  "dashboard.chatTrafficTotal": "Total traffic",
+  "dashboard.chatTrafficPeriod": "Traffic in selected period",
+  "dashboard.chatTrafficSelectedDay": "Traffic on {date}",
+  "dashboard.chatTrafficDaily": "Daily traffic",
+  "dashboard.chatTrafficHourly": "Hourly distribution",
+  "dashboard.chatTrafficDate": "Select traffic date",
+  "dashboard.chatTrafficHourlyAria": "Hourly chat relay traffic on {date}, Beijing time",
   "dashboard.userMetricNote": "{active} active · {newCount} new in {period}",
   "dashboard.dailyActiveUsers": "Daily active users",
   "dashboard.dailyActiveUsersNote": "Distinct devices active today (UTC)",
@@ -662,7 +691,11 @@ const zh: Record<TranslationKey, string> = {
   "nav.approvals": "管理员审批",
   "nav.announcement": "软件通知",
   "nav.chatSettings": "聊天设置",
+  "nav.updateSharing": "下载优化",
+  "nav.chatTraffic": "聊天流量",
   "nav.currency": "货币设置",
+  "nav.tokenPricing": "模型计价",
+  "nav.officialModels": "官方模型",
   "nav.codexHomePresets": "Codex Home 路径",
   "nav.emailTemplates": "邮件设置",
   "nav.skills": "社区 Skills",
@@ -723,6 +756,7 @@ const zh: Record<TranslationKey, string> = {
   "login.registerPasswordLength": "注册密码至少需要 8 位",
   "login.register": "注册首个/邀请账号",
   "login.submit": "登录",
+  "login.locked": "密码错误次数过多，请在 {minutes} 分钟后重试。",
   "forgotPassword.title": "重置密码",
   "forgotPassword.description": "验证邮箱后设置新的登录密码。",
   "forgotPassword.verificationCode": "邮箱验证码",
@@ -955,7 +989,7 @@ const zh: Record<TranslationKey, string> = {
   "announcement.secondsPerLoop": "秒/轮",
   "announcement.preview": "滚动效果预览",
   "announcement.previewLanguageHint": "预览内容跟随管理后台当前语言。",
-  "announcement.emptyPreview": "欢迎使用 Codex Switch，轻松管理账号与模型，专注高效创作。",
+  "announcement.emptyPreview": "欢迎使用 Remote AI，轻松管理账号与模型，专注高效创作。",
   "announcement.save": "保存通知",
   "announcement.saved": "通知已保存",
   "currency.title": "货币设置",
@@ -1076,7 +1110,7 @@ const zh: Record<TranslationKey, string> = {
   "mailServices.password": "密码",
   "mailServices.passwordHint": "留空则保留现有密码。",
   "mailServices.fromAddress": "发件人",
-  "mailServices.fromAddressHint": "可填写邮箱，或名称加邮箱，例如 Codex Switch <noreply@example.com>。",
+  "mailServices.fromAddressHint": "可填写邮箱，或名称加邮箱，例如 Remote AI <noreply@example.com>。",
   "mailServices.sender": "发件服务",
   "mailServices.default": "默认服务",
   "mailServices.envDefault": "环境变量默认",
@@ -1111,7 +1145,7 @@ const zh: Record<TranslationKey, string> = {
   "feedback.emailTo": "收件人：{email}",
   "feedback.emailSubject": "邮件主题",
   "feedback.emailContent": "邮件内容",
-  "feedback.emailDefaultSubject": "Codex Switch 问题反馈回复",
+  "feedback.emailDefaultSubject": "Remote AI 问题反馈回复",
   "feedback.send": "发送",
   "feedback.emailSent": "邮件已发送",
   "skills.title": "社区 Skills",
@@ -1148,6 +1182,26 @@ const zh: Record<TranslationKey, string> = {
   "dashboard.periodDays": "近 {count} 天",
   "dashboard.days": "{count} 天",
   "dashboard.totalUsers": "累计用户",
+  "dashboard.bandwidthTitle": "服务器带宽",
+  "dashboard.bandwidthDescription": "统计经此服务器转发的聊天和远程桌面流量，双向各计一次。",
+  "dashboard.bandwidthRate": "实时转发速率",
+  "dashboard.bandwidthPeak": "最近一分钟峰值",
+  "dashboard.bandwidthRecent": "最近一分钟流量",
+  "dashboard.bandwidthLive": "每 2 秒更新",
+  "dashboard.bandwidthPaused": "更新中断",
+  "dashboard.bandwidthRefresh": "刷新服务器带宽",
+  "dashboard.bandwidthChart": "最近一分钟转发速率趋势",
+  "dashboard.bandwidthError": "暂时无法获取带宽数据，正在自动重试。",
+  "dashboard.bandwidthNote": "当前速率为最近 2 秒均值。1 KB = 1,024 B，1 MB = 1,024 KB。",
+  "dashboard.chatTraffic": "聊天转发流量",
+  "dashboard.chatTrafficNote": "自统计启用后累计，双向转发各计一次，按北京时间（UTC+8）展示。",
+  "dashboard.chatTrafficTotal": "累计总流量",
+  "dashboard.chatTrafficPeriod": "所选时段流量",
+  "dashboard.chatTrafficSelectedDay": "{date} 当日流量",
+  "dashboard.chatTrafficDaily": "每日流量",
+  "dashboard.chatTrafficHourly": "小时分布",
+  "dashboard.chatTrafficDate": "选择流量日期",
+  "dashboard.chatTrafficHourlyAria": "{date} 的聊天转发流量小时分布，按北京时间展示",
   "dashboard.userMetricNote": "{active} 位启用 · {period}新增 {newCount} 位",
   "dashboard.dailyActiveUsers": "日活跃用户",
   "dashboard.dailyActiveUsersNote": "今日活跃设备（UTC，按设备去重）",
@@ -1221,18 +1275,33 @@ const zh: Record<TranslationKey, string> = {
   "audit.action.prompt-plugin.delete": "删除系统提示词",
 };
 
-const translations: Record<Language, Record<TranslationKey, string>> = { en, zh };
+const translations: Record<Language, Partial<Record<TranslationKey, string>>> = { en, zh, ru };
+
+// ru is a partial dictionary (public auth pages and the self-service shell);
+// missing keys fall back to English before the Chinese default.
+const fallbackLanguages: Record<Language, readonly Language[]> = {
+  zh: ["zh"],
+  en: ["en", DEFAULT_LANGUAGE],
+  ru: ["ru", "en", DEFAULT_LANGUAGE],
+};
 
 export type { TranslationKey };
 export type TranslationValues = Record<string, string | number>;
 export type Translate = (key: TranslationKey, values?: TranslationValues) => string;
 
 export function isLanguage(value: unknown): value is Language {
-  return value === "en" || value === "zh";
+  return value === "en" || value === "zh" || value === "ru";
 }
 
 export function translate(language: Language, key: TranslationKey, values: TranslationValues = {}) {
-  let text = translations[language][key] ?? translations[DEFAULT_LANGUAGE][key] ?? key;
+  let text = key as string;
+  for (const candidate of fallbackLanguages[language]) {
+    const value = translations[candidate][key];
+    if (value !== undefined) {
+      text = value;
+      break;
+    }
+  }
   for (const [name, value] of Object.entries(values)) {
     text = text.split(`{${name}}`).join(String(value));
   }

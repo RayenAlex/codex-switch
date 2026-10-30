@@ -37,6 +37,7 @@ fn read_upstream_payload(mut payload: UpstreamPayload) -> Vec<u8> {
 
 fn openai_provider(base_url: String) -> ProviderProfile {
     ProviderProfile {
+        request_options: Default::default(),
         id: "openai".to_string(),
         kind: ProviderKind::OpenAi,
         name: "OpenAI".to_string(),
@@ -73,20 +74,20 @@ fn proxy_bind_host_uses_loopback_unless_lan_listening_is_enabled() {
 
 #[test]
 fn upstream_transport_errors_are_sanitized_for_client_responses() {
-    assert!(is_upstream_transport_error(
+    assert!(error_messages::transport(
         "Official Codex proxy request failed: error sending request for url (https://example.com)",
-    ));
-    assert!(is_upstream_transport_error(
+    )
+    .is_some());
+    assert!(error_messages::transport(
         "Provider proxy request failed: error sending request for url (https://example.com)",
-    ));
-    assert!(!is_upstream_transport_error(
-        "Official Codex proxy request returned HTTP 502",
-    ));
+    )
+    .is_some());
+    assert!(error_messages::transport("Official Codex proxy request returned HTTP 502",).is_none());
     assert_eq!(
             upstream_error_message(
                 "Official Codex proxy request failed: error sending request for url (https://example.com)",
             ),
-            UPSTREAM_CONNECTION_FAILURE_MESSAGE,
+            "无法连接上游服务，请检查网络、代理和服务地址后重试。",
         );
     assert_eq!(
         upstream_error_message("Select an official account"),
@@ -95,17 +96,36 @@ fn upstream_transport_errors_are_sanitized_for_client_responses() {
 }
 
 #[test]
+fn configured_timeout_retries_wait_two_seconds_between_attempts_only() {
+    for retries in [0, 1, 6, 9] {
+        let mut attempts = 0;
+        let mut delays = Vec::new();
+        let result: Result<(), &str> = retry_timeout_operation(
+            || { attempts += 1; Err("timeout") },
+            |error| *error == "timeout",
+            retries,
+            |delay| delays.push(delay),
+        );
+        assert_eq!(result, Err("timeout"));
+        assert_eq!(attempts, retries + 1);
+        assert_eq!(delays, vec![Duration::from_secs(2); retries as usize]);
+    }
+}
+
+#[test]
 fn timeout_operation_succeeds_when_the_third_attempt_recovers() {
     let attempts = AtomicUsize::new(0);
     let result = retry_timeout_operation(
         || {
             let attempt = attempts.fetch_add(1, AtomicOrdering::SeqCst) + 1;
-            if attempt < UPSTREAM_TIMEOUT_ATTEMPT_LIMIT {
+            if attempt < 3 {
                 return Err("timeout");
             }
             Ok("recovered")
         },
         |error| *error == "timeout",
+        2,
+        |_| {},
     );
 
     assert_eq!(result, Ok("recovered"));
@@ -121,6 +141,8 @@ fn timeout_operation_returns_after_three_consecutive_timeouts() {
             Err("timeout")
         },
         |error| *error == "timeout",
+        2,
+        |_| {},
     );
 
     assert_eq!(result, Err("timeout"));
@@ -136,6 +158,8 @@ fn timeout_operation_does_not_retry_other_failures() {
             Err("authentication failed")
         },
         |error| *error == "timeout",
+        2,
+        |_| {},
     );
 
     assert_eq!(result, Err("authentication failed"));
@@ -581,6 +605,7 @@ fn account_with_usage(id: &str, primary: f64, secondary: f64) -> AccountSummary 
         official: false,
         metadata_editable: true,
         usage: UsageSummary {
+            credits: None,
             primary: Some(UsageWindow {
                 used_percent: 100.0 - primary,
                 remaining_percent: primary,

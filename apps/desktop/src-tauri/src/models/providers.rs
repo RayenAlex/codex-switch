@@ -31,6 +31,8 @@ pub(crate) struct ProviderProfile {
     #[serde(default)]
     pub(crate) websocket_enabled: bool,
     pub(crate) api_format: ProviderApiFormat,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) request_options: Option<ProviderRequestOptions>,
     #[serde(default)]
     pub(crate) balance_platform: Option<ProviderBalancePlatform>,
     #[serde(default)]
@@ -67,6 +69,7 @@ pub(crate) struct ProviderSummary {
     pub(crate) fast_mode_enabled: bool,
     pub(crate) websocket_enabled: bool,
     pub(crate) api_format: ProviderApiFormat,
+    pub(crate) request_options: Option<ProviderRequestOptions>,
     pub(crate) active: bool,
     pub(crate) auto_switch_enabled: bool,
     pub(crate) has_api_key: bool,
@@ -104,7 +107,9 @@ pub(crate) struct ProviderBalanceItem {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct LocalProxyStatus {
+    pub(crate) active_provider_group: Option<String>,
     pub(crate) running: bool,
+    pub(crate) service_tier: crate::local_proxy::ProxyServiceTier,
     pub(crate) fast_mode_enabled: bool,
     pub(crate) fast_mode_available: bool,
     pub(crate) address: String,
@@ -171,6 +176,7 @@ pub(crate) struct ProxySessionRequestSummary {
     pub(crate) response_truncated: bool,
     pub(crate) interrupted: bool,
     pub(crate) first_response_time_ms: Option<u64>,
+    pub(crate) first_token_time_ms: Option<u64>,
     pub(crate) response_time_ms: Option<u64>,
     pub(crate) total_tokens: Option<u64>,
     pub(crate) input_tokens: Option<u64>,
@@ -179,11 +185,16 @@ pub(crate) struct ProxySessionRequestSummary {
     pub(crate) cached_tokens: Option<u64>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ProxySessionLatencySummary {
+    pub(crate) total_first_token_time_ms: u64,
+    pub(crate) first_token_request_count: u64,
     pub(crate) total_first_response_time_ms: u64,
     pub(crate) request_count: u64,
+    pub(crate) total_output_tokens: u64,
+    pub(crate) total_output_time_ms: u64,
+    pub(crate) output_request_count: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

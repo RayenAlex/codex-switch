@@ -13,7 +13,8 @@ interface FixtureState {
   connectedMobiles: number;
   relayFrames: number;
 }
-export const fixtureUrl = process.env.CHAT_TEST_FIXTURE_URL ?? 'http://127.0.0.1:1490';
+export const fixtureUrl = process.env.CHAT_TEST_FIXTURE_URL
+  ?? `http://127.0.0.1:${process.env.CHAT_TEST_API_PORT ?? '1490'}`;
 export async function state(request: APIRequestContext): Promise<FixtureState> {
   return (await request.get(`${fixtureUrl}/test/state`)).json();
 }
@@ -33,15 +34,17 @@ export async function connect(page: Page) {
   await navigate(page, '聊天');
   await expect(page.getByRole('textbox', { name: '聊天消息' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '新聊天', exact: true })).toBeVisible();
-  await expect(page.getByRole('textbox', { name: '搜索聊天' })).toHaveCount(0);
+  await expect(page.getByRole('textbox', { name: '搜索聊天' }))
+    .toHaveCount((page.viewportSize()?.width ?? 0) > 860 ? 1 : 0);
 }
 export async function send(page: Page, text: string) {
   await page.getByRole('textbox', { name: '聊天消息' }).fill(text);
   await click(page.getByRole('button', { name: '发送消息', exact: true }));
 }
 export async function settled(page: Page) {
-  await expect(page.getByRole('button', { name: '暂停生成' })).toHaveCount(0);
+  // The draft hides Pause until the send is acknowledged and the input clears.
   await expect(page.getByRole('textbox', { name: '聊天消息' })).toHaveValue('');
+  await expect(page.getByRole('button', { name: '暂停生成' })).toHaveCount(0);
 }
 export async function openChatSettings(page: Page) {
   if ((page.viewportSize()?.width ?? 0) > 860) return;
@@ -67,10 +70,11 @@ export async function screenshot(page: Page, info: TestInfo, name: string) {
 }
 
 export async function login(page: Page) {
-  await page.goto('http://127.0.0.1:1422/web/', { waitUntil: 'domcontentloaded' });
+  await page.goto('/web/', { waitUntil: 'domcontentloaded' });
   await page.getByPlaceholder('name@example.com').fill('mobile-test@example.test');
   await page.getByPlaceholder('输入登录密码').fill('local-test');
   await page.getByPlaceholder('输入登录密码').press('Enter');
+  await page.getByRole('button', { name: '同意并登录' }).click();
   await expect(page.locator('.app-shell')).toBeVisible();
 }
 

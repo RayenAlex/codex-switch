@@ -23,6 +23,13 @@ export interface SendInput {
 export interface ChatProject { cwd: string; label: string }
 
 export interface ChatState {
+  directEndpoints?: import('../connectionEndpoints').ConnectionEndpoints;
+  publicEndpoints?: import('../publicEndpoints').ConnectionPublicEndpoints;
+  connectionStage?: import('../connectionHealth').ConnectionStage;
+  connectionIssue?: string;
+  deliveries?: Record<string, import('../taskDelivery').TaskDelivery>;
+  notificationError?: boolean;
+  desktopOnly?: boolean;
   upload?: import('../uploadProgress').UploadProgress;
   processing?: import('../../../apps/desktop/src/pages/codexGui/processing').ProcessingState;
   cachedThreadIds?: string[];
@@ -50,10 +57,14 @@ export interface ChatState {
   search: string;
   archived: boolean;
   loading: boolean;
+  listRefreshing?: boolean;
   historyLoading: boolean;
   historyLoadingMore: boolean;
   historyHasMore: boolean;
+  historyLoad?: import('./historyLoad').HistoryLoadResult;
   sending: boolean;
+  workspaceBusy?: boolean;
+  threadActionBusy?: string;
   compacting?: string;
   error: string;
 }

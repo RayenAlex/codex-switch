@@ -44,21 +44,27 @@ it("keeps expandable proxy errors inside the affected reply when later replies a
   value = reduceConversation(value, { method: "error", params: { turnId: "first", willRetry: true,
     error: { message: "HTTP 502 Bad Gateway", additionalDetails: "<script>upstream timed out</script>" } } });
   await act(async () => root.render(<Messages selected="test" value={value} />));
-  expect(container.textContent).toContain("Codex 正在重试");
-  expect(container.textContent).not.toContain("HTTP 502");
+  const notice = container.querySelector<HTMLElement>("[data-request-error]")!;
+  const summary = notice.querySelector("summary")!;
+  expect(summary.getAttribute("aria-label")).toBe("查看报错详情");
+  expect(summary.textContent).toContain("HTTP 502 Bad Gateway");
+  expect(notice.querySelector("pre")).toBeNull();
+  expect(notice.textContent).not.toContain("Codex 正在重试");
+  expect(notice.querySelector("script")).toBeNull();
   await openDetails();
-  expect(container.textContent).toContain("HTTP 502 Bad Gateway");
-  expect(container.textContent).toContain("<script>upstream timed out</script>");
+  expect(notice.textContent).toContain("Codex 正在重试");
+  expect(notice.querySelector("pre")?.textContent)
+    .toBe("HTTP 502 Bad Gateway\n\n<script>upstream timed out</script>");
   expect(container.querySelector("script")).toBeNull();
   value = reduceConversation(value, { method: "turn/completed", params: {
     turn: { id: "first", status: "completed", items: [] } } });
   value = reduceConversation(value, { method: "turn/started", params: {
     turn: { id: "second", status: "inProgress", items: [] } } });
   await act(async () => root.render(<Messages selected="test" value={value} />));
-  const notice = container.querySelector("summary")!;
   expect(notice.closest("[data-turn-id]")?.getAttribute("data-turn-id")).toBe("first");
   expect(notice.textContent).toContain("现已恢复");
-  expect(container.querySelector('[data-turn-id="second"]')?.textContent).not.toContain("报错");
+  expect(summary.textContent).toContain("HTTP 502 Bad Gateway");
+  expect(container.querySelector('[data-turn-id="second"] [data-request-error]')).toBeNull();
 });
 
 it("keeps commentary in expandable process groups while showing steering and final replies", async () => {

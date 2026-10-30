@@ -7,6 +7,7 @@ pub(crate) fn is_running() -> bool {
 
 fn status<R: Runtime>(app: &tauri::AppHandle<R>) -> LocalProxyStatus {
     let (
+        active_provider_group,
         auto_switch_on_quota_exhaustion,
         concurrent_account_routing_enabled,
         concurrent_account_group,
@@ -29,6 +30,7 @@ fn status<R: Runtime>(app: &tauri::AppHandle<R>) -> LocalProxyStatus {
             let state = read_state(&paths);
             let image_output_target = effective_image_output_target(&state);
             (
+                state.active_provider_group.clone(),
                 state.auto_switch_on_quota_exhaustion,
                 state.concurrent_account_routing_enabled,
                 state.concurrent_account_group.clone(),
@@ -49,6 +51,7 @@ fn status<R: Runtime>(app: &tauri::AppHandle<R>) -> LocalProxyStatus {
             )
         })
         .unwrap_or((
+            None,
             false,
             false,
             None,
@@ -68,9 +71,16 @@ fn status<R: Runtime>(app: &tauri::AppHandle<R>) -> LocalProxyStatus {
             None,
         ));
     let running = is_running();
+    let service_tier = if running {
+        proxy_service_tier()
+    } else {
+        ProxyServiceTier::Default
+    };
     LocalProxyStatus {
+        active_provider_group,
         running,
-        fast_mode_enabled: running && proxy_service_tier_name() == "priority",
+        service_tier,
+        fast_mode_enabled: service_tier != ProxyServiceTier::Default,
         fast_mode_available: running
             && resolve_paths(app)
                 .is_ok_and(|paths| providers::current_target_supports_fast_mode(&paths)),
@@ -115,32 +125,6 @@ pub(crate) async fn get_local_proxy_status<R: Runtime + 'static>(
     tauri::async_runtime::spawn_blocking(move || Ok(status(&app)))
         .await
         .map_err(|error| format!("Local proxy status task failed: {error}"))?
-}
-
-#[tauri::command]
-pub(crate) async fn set_local_proxy_fast_mode<R: Runtime + 'static>(
-    app: tauri::AppHandle<R>,
-    enabled: bool,
-) -> Result<LocalProxyStatus, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        if !is_running() {
-            return Err("Start the local proxy before changing request speed".to_string());
-        }
-        let paths = resolve_paths(&app)?;
-        if enabled && !providers::current_target_supports_fast_mode(&paths) {
-            return Err("Fast mode is not available for the current provider".to_string());
-        }
-        let tier = if enabled { "priority" } else { "default" };
-        if !set_proxy_service_tier_by_name(tier) {
-            return Err("The selected request speed is not supported".to_string());
-        }
-        providers::refresh_codex_models_for_current_target(&paths);
-        app.emit("providers-changed", ())
-            .map_err(|error| error.to_string())?;
-        Ok(status(&app))
-    })
-    .await
-    .map_err(|error| format!("Request speed task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -208,22 +192,12 @@ pub(crate) async fn set_official_model_context_window<R: Runtime + 'static>(
         validate_gpt_5_6_sol_context_window(value)?;
     }
     tauri::async_runtime::spawn_blocking(move || {
-        let mut settings = read_app_settings(&app)?;
-        match context_window {
-            Some(value) => {
-                settings.official_model_context_windows.insert(model, value);
-            }
-            None => {
-                settings.official_model_context_windows.remove(&model);
-            }
-        }
-        write_app_settings(&app, &settings)?;
+        let settings = crate::storage::update_model_context_window(
+            &app,
+            crate::storage::ModelContextWindowUpdate::Model { model, context_window },
+        )?;
         if let Ok(paths) = resolve_paths(&app) {
-            if let Err(error) = update_cached_official_model_context_windows(
-                &paths,
-                settings.gpt_5_6_sol_context_window,
-                &settings.official_model_context_windows,
-            ) {
+            if let Err(error) = update_cached_official_model_context_windows(&app, &paths, &settings) {
                 log_proxy_error!("failed to update cached official model context windows: {error}");
             }
         }
@@ -269,15 +243,12 @@ fn set_gpt_5_6_sol_context_window_blocking<R: Runtime>(
     app: &tauri::AppHandle<R>,
     context_window: u64,
 ) -> Result<AppSettings, String> {
-    let mut settings = read_app_settings(app)?;
-    settings.gpt_5_6_sol_context_window = context_window;
-    write_app_settings(app, &settings)?;
+    let settings = crate::storage::update_model_context_window(
+        app,
+        crate::storage::ModelContextWindowUpdate::Global(context_window),
+    )?;
     let paths = resolve_paths(app)?;
-    if let Err(error) = update_cached_official_model_context_windows(
-        &paths,
-        context_window,
-        &settings.official_model_context_windows,
-    ) {
+    if let Err(error) = update_cached_official_model_context_windows(app, &paths, &settings) {
         // The proxy applies the override on the next model request even if this best-effort cache refresh races Codex.
         log_proxy_error!("failed to update the cached GPT-5.6 Sol context window: {error}");
     }
@@ -391,35 +362,10 @@ pub(crate) async fn get_recent_proxy_session_latency() -> Result<ProxySessionLat
 }
 
 fn get_recent_proxy_session_latency_blocking() -> Result<ProxySessionLatencySummary, String> {
-    let mut sessions = proxy_sessions()
+    let sessions = proxy_sessions()
         .lock()
-        .map_err(|_| "Proxy session registry lock is poisoned".to_string())?
-        .values()
-        .cloned()
-        .collect::<Vec<_>>();
-    sessions.sort_by(|left, right| {
-        right
-            .last_seen_at
-            .cmp(&left.last_seen_at)
-            .then_with(|| left.id.cmp(&right.id))
-    });
-
-    let (total_first_response_time_ms, request_count) = sessions
-        .into_iter()
-        .take(5)
-        .flat_map(|session| session.requests.into_iter())
-        .filter_map(|request| request.first_response_time_ms)
-        .fold((0_u64, 0_u64), |(total, count), first_response_time_ms| {
-            (
-                total.saturating_add(first_response_time_ms),
-                count.saturating_add(1),
-            )
-        });
-
-    Ok(ProxySessionLatencySummary {
-        total_first_response_time_ms,
-        request_count,
-    })
+        .map_err(|_| "Proxy session registry lock is poisoned".to_string())?;
+    Ok(session_metrics::summarize_recent_sessions(sessions.values()))
 }
 
 #[tauri::command]
@@ -569,7 +515,7 @@ pub(crate) async fn show_token_usage_window<R: Runtime>(
         let _ = window.destroy();
     }
 
-    WebviewWindowBuilder::new(&app, TOKEN_USAGE_WINDOW_LABEL, token_usage_window_url())
+    crate::webview_windows::builder(&app, TOKEN_USAGE_WINDOW_LABEL, token_usage_window_url())
         .title("Token Usage")
         .inner_size(1180.0, 780.0)
         .min_inner_size(900.0, 620.0)

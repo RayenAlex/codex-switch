@@ -1,7 +1,6 @@
 use super::*;
 
-#[path = "bin_test_support.rs"]
-mod support;
+use super::bin_test_support as support;
 use support::*;
 
 #[path = "bin_recovery_tests.rs"]
@@ -9,9 +8,14 @@ mod recovery;
 
 #[path = "home_migration_tests.rs"]
 mod home_migration;
+#[path = "home_migration_error_tests.rs"]
+mod home_migration_errors;
 
 #[path = "home_migration_relation_tests.rs"]
 mod home_migration_relations;
+
+#[path = "home_migration_provider_tests.rs"]
+mod home_migration_providers;
 
 #[test]
 fn selected_home_cannot_list_or_purge_another_homes_bin_entries() {

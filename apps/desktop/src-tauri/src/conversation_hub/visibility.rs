@@ -59,7 +59,8 @@ fn create_visibility_checkpoint<R: Runtime>(
     if state_db.is_none() && snapshots.is_empty() && !index_path.exists() {
         return Ok(None);
     }
-    let root = app.app
+    let root = app
+        .app
         .path()
         .app_data_dir()
         .map_err(|error| error.to_string())?
@@ -94,47 +95,18 @@ fn create_visibility_checkpoint<R: Runtime>(
 }
 
 fn rewrite_rollout_provider(path: &Path, target_provider: &str) -> Result<bool, String> {
-    let mut reader = rollout_reader(path)?;
-    let mut first = String::new();
-    reader
-        .read_line(&mut first)
-        .map_err(|error| error.to_string())?;
-    let mut meta: Value =
-        serde_json::from_str(first.trim_end()).map_err(|error| error.to_string())?;
-    let Some(provider) = meta.pointer_mut("/payload/model_provider") else {
-        return Ok(false);
-    };
-    if provider.as_str() == Some(target_provider) {
-        return Ok(false);
-    }
-    *provider = Value::String(target_provider.to_string());
-    let temporary = path.with_extension(format!("visibility-{}.tmp", Uuid::new_v4()));
-    if path.extension().and_then(|value| value.to_str()) == Some("zst") {
-        let output = File::create(&temporary).map_err(|error| error.to_string())?;
-        let mut encoder =
-            zstd::stream::write::Encoder::new(output, 3).map_err(|error| error.to_string())?;
-        serde_json::to_writer(&mut encoder, &meta).map_err(|error| error.to_string())?;
-        encoder
-            .write_all(b"\n")
-            .map_err(|error| error.to_string())?;
-        std::io::copy(&mut reader, &mut encoder).map_err(|error| error.to_string())?;
-        encoder
-            .finish()
-            .map_err(|error| error.to_string())?
-            .sync_all()
-            .map_err(|error| error.to_string())?;
-    } else {
-        let mut output = File::create(&temporary).map_err(|error| error.to_string())?;
-        serde_json::to_writer(&mut output, &meta).map_err(|error| error.to_string())?;
-        output.write_all(b"\n").map_err(|error| error.to_string())?;
-        std::io::copy(&mut reader, &mut output).map_err(|error| error.to_string())?;
-        output.sync_all().map_err(|error| error.to_string())?;
-    }
-    // Windows does not allow replacing the rollout while its decoder still owns
-    // an open handle to the original file.
-    drop(reader);
-    replace_file(&temporary, path).map_err(|error| error.to_string())?;
-    Ok(true)
+    crate::rollout_metadata::update_provider(path, None, target_provider)
+        .map_err(|error| error.to_string())
+}
+
+fn rollout_needs_provider_update(path: &Path, provider: &str) -> bool {
+    first_rollout_value(path)
+        .ok()
+        .flatten()
+        .is_some_and(|value| {
+            !crate::rollout_metadata::requires_stable_bytes(&value)
+                && value.pointer("/payload/model_provider").and_then(Value::as_str) != Some(provider)
+        })
 }
 
 fn rebuild_index_from_snapshots(
@@ -327,18 +299,7 @@ pub(crate) fn reconcile_codex_thread_visibility_blocking<R: Runtime>(
     } else {
         rollout_count = relevant
             .iter()
-            .filter(|item| {
-                first_rollout_value(&item.path)
-                    .ok()
-                    .flatten()
-                    .and_then(|value| {
-                        value
-                            .pointer("/payload/model_provider")
-                            .and_then(Value::as_str)
-                            .map(str::to_string)
-                    })
-                    .is_some_and(|value| value != provider)
-            })
+            .filter(|item| rollout_needs_provider_update(&item.path, &provider))
             .count();
     }
     let index_entry_count = if mode == "deep" && !dry_run {
@@ -401,7 +362,8 @@ pub(crate) fn open_codex_thread_file_blocking<R: Runtime>(
     } else {
         snapshot.path
     };
-    app.app.opener()
+    app.app
+        .opener()
         .open_path(path.to_string_lossy().to_string(), None::<&str>)
         .map_err(|error| format!("无法打开 {}：{error}", path.display()))
 }

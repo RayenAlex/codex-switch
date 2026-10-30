@@ -1,5 +1,6 @@
 import { expect, type Page, type APIRequestContext, type TestInfo } from '@playwright/test';
 import { openChatList, click, fixtureUrl, screenshot } from './chat-helpers';
+import { isDesktop } from './chat-settings';
 
 export async function groupPreviewJourney({ page, request, info }: {
   page: Page; request: APIRequestContext; info: TestInfo;
@@ -24,9 +25,12 @@ export async function groupPreviewJourney({ page, request, info }: {
   const visibleCount = page.viewportSize()!.width > 860 ? 7 : 5;
   await expect(project.locator('.chat-thread')).toHaveCount(visibleCount);
   await expect(project.getByRole('button', { name: '移动端聊天体验', exact: true })).toBeVisible();
-  await click(drawer.getByRole('button', { name: '搜索聊天', exact: true }));
-  await page.getByRole('textbox', { name: '搜索聊天' }).fill('聊天');
-  await expect(page.locator('.chat-search-results .chat-thread')).toHaveCount(17);
-  await click(page.getByRole('button', { name: '关闭', exact: true }).last());
+  if (!isDesktop(page)) await click(drawer.getByRole('button', { name: '搜索聊天', exact: true }));
+  const search = page.getByRole('textbox', { name: '搜索聊天' });
+  await search.fill('聊天');
+  const results = isDesktop(page) ? drawer.locator('.chat-thread-list') : page.locator('.chat-search-results');
+  await expect(results.locator('.chat-thread')).toHaveCount(17);
+  if (isDesktop(page)) await search.fill('');
+  else await click(page.getByRole('button', { name: '关闭', exact: true }).last());
   await expect(project.locator('.chat-thread')).toHaveCount(visibleCount);
 }

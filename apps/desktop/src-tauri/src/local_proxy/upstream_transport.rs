@@ -11,12 +11,10 @@ mod response;
 pub(super) use response::Response;
 
 const UPLOAD_CHUNK_BYTES: usize = 64 * 1024;
-const MAX_UPLOAD_DURATION: Duration = Duration::from_secs(10 * 60);
 
 #[derive(Clone, Copy)]
 struct Timeouts {
     upload_idle: Duration,
-    upload_total: Duration,
     response_headers: Duration,
     response_idle: Duration,
     sse_response_idle: Option<Duration>,
@@ -25,9 +23,8 @@ struct Timeouts {
 impl Default for Timeouts {
     fn default() -> Self {
         Self {
-            upload_idle: super::UPSTREAM_RESPONSE_IDLE_TIMEOUT,
-            upload_total: MAX_UPLOAD_DURATION,
-            response_headers: super::UPSTREAM_RESPONSE_IDLE_TIMEOUT,
+            upload_idle: super::UPSTREAM_UPLOAD_IDLE_TIMEOUT,
+            response_headers: super::response_header_timeout::current(),
             response_idle: super::UPSTREAM_RESPONSE_IDLE_TIMEOUT,
             sse_response_idle: super::sse_idle_timeout::current(),
         }
@@ -61,8 +58,10 @@ pub(super) enum Error {
     Timeout { phase: Phase, sent_bytes: usize },
     #[error("upstream request requires a buffered body")]
     UnbufferedBody,
-    #[error("upstream redirect could not be followed")]
-    Redirect,
+    #[error("upstream redirect limit exceeded ({0})")]
+    RedirectLimit(u32),
+    #[error("unsupported redirect scheme")]
+    RedirectScheme,
     #[error(transparent)]
     Proxy(#[from] crate::system_proxy::ProxyResolutionError),
     #[error("{0}")]
@@ -75,7 +74,10 @@ impl Error {
             Self::Timeout { .. } => true,
             Self::Http { source, .. } => source.is_timeout(),
             Self::AfterRedirect(source) => source.is_timeout(),
-            Self::UnbufferedBody | Self::Redirect | Self::Proxy(_) => false,
+            Self::UnbufferedBody
+            | Self::RedirectLimit(_)
+            | Self::RedirectScheme
+            | Self::Proxy(_) => false,
         }
     }
 
@@ -112,6 +114,8 @@ pub(super) struct Request {
     headers: header::HeaderMap,
     body: Bytes,
     timeouts: Timeouts,
+    deadline: Option<Instant>,
+    max_redirects: u32,
 }
 
 impl Request {
@@ -127,12 +131,35 @@ impl Request {
             headers: request.headers().clone(),
             body,
             timeouts: Timeouts::default(),
+            max_redirects: super::transport_settings::current().max_redirects,
+            deadline: super::model_catalog_deadline::current(),
         })
     }
 
     pub(super) fn send(&self) -> Result<Response, Error> {
         // This entry point is called from the proxy's request worker, never the UI thread.
-        tauri::async_runtime::block_on(self.send_async())
+        tauri::async_runtime::block_on(async {
+            let Some(deadline) = self.deadline else {
+                return self.send_async().await;
+            };
+            if Instant::now() >= deadline {
+                return Err(Error::Timeout {
+                    phase: Phase::ResponseHeaders,
+                    sent_bytes: 0,
+                });
+            }
+            tokio::time::timeout_at(deadline, self.send_async())
+                .await
+                .map_err(|_| Error::Timeout {
+                    phase: Phase::ResponseHeaders,
+                    sent_bytes: 0,
+                })?
+        })
+    }
+
+    pub(super) fn can_retry(&self, error: &Error) -> bool {
+        // Catalog failures go straight to Admin; chat keeps its existing pre-upload retries.
+        self.deadline.is_none() && error.can_retry()
     }
 
     async fn send_async(&self) -> Result<Response, Error> {
@@ -148,16 +175,8 @@ impl Request {
             })?;
             sent_before_redirect |= !target.body.is_empty();
             if !target.follow(&response)? {
-                let content_type = response
-                    .headers()
-                    .get(header::CONTENT_TYPE)
-                    .and_then(|v| v.to_str().ok());
-                let idle = if super::is_event_stream(content_type) {
-                    self.timeouts.sse_response_idle
-                } else {
-                    Some(self.timeouts.response_idle)
-                };
-                return Ok(Response::new(response, idle));
+                return Ok(Response::new(response, self.timeouts, &target.headers)
+                    .with_deadline(self.deadline));
             }
         }
     }
@@ -226,12 +245,11 @@ async fn wait_for_headers(
     body_bytes: usize,
     timeouts: Timeouts,
 ) -> Result<reqwest::Response, Error> {
-    let upload_deadline = Instant::now() + timeouts.upload_total;
     let response = request.send();
     tokio::pin!(response);
     loop {
         let current = *progress.borrow_and_update();
-        let (_, deadline) = phase_deadline(current, body_bytes, upload_deadline, timeouts);
+        let (_, deadline) = phase_deadline(current, body_bytes, timeouts);
         tokio::select! {
             result = &mut response => return result.map_err(|source| Error::Http {
                 source, sent_bytes: progress.borrow().sent_bytes,
@@ -239,9 +257,9 @@ async fn wait_for_headers(
             _ = progress.changed() => continue,
             _ = tokio::time::sleep_until(deadline) => {
                 // Progress can arrive in the same poll as the timer. Re-evaluate before
-                // declaring an idle timeout, while retaining the absolute upload bound.
+                // declaring an idle timeout.
                 let latest = *progress.borrow();
-                let (phase, latest_deadline) = phase_deadline(latest, body_bytes, upload_deadline, timeouts);
+                let (phase, latest_deadline) = phase_deadline(latest, body_bytes, timeouts);
                 if Instant::now() >= latest_deadline {
                     return Err(Error::Timeout { phase, sent_bytes: latest.sent_bytes });
                 }
@@ -250,24 +268,18 @@ async fn wait_for_headers(
     }
 }
 
-fn phase_deadline(
-    progress: Progress,
-    body_bytes: usize,
-    upload_deadline: Instant,
-    timeouts: Timeouts,
-) -> (Phase, Instant) {
+fn phase_deadline(progress: Progress, body_bytes: usize, timeouts: Timeouts) -> (Phase, Instant) {
     if progress.sent_bytes == body_bytes {
         return (
             Phase::ResponseHeaders,
             progress.updated_at + timeouts.response_headers,
         );
     }
-    (
-        Phase::Upload,
-        (progress.updated_at + timeouts.upload_idle).min(upload_deadline),
-    )
+    (Phase::Upload, progress.updated_at + timeouts.upload_idle)
 }
 
+#[cfg(test)]
+mod model_deadline_tests;
 #[cfg(test)]
 mod proxy_tests;
 #[cfg(test)]

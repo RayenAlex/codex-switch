@@ -52,7 +52,7 @@ beforeEach(() => {
   document.body.append(container);
   root = createRoot(container);
   props = { active: true, privacyMode: false, accounts: [account], providers: [provider],
-    aggregateApis: [], proxyRunning: true,
+    aggregateApis: [],
     busy: false, loading: false, onSwitchAccount: vi.fn().mockResolvedValue(true),
     onSwitchProvider: vi.fn().mockResolvedValue(true) };
 });
@@ -96,7 +96,7 @@ it("keeps provider names visible in privacy mode", async () => {
 
 it.each(["custom", "openai"] as const)(
   "shows and switches a %s Provider alongside official accounts", async (kind) => {
-  const target = { ...provider, kind, name: kind === "openai" ? "Codex Switch" : provider.name };
+  const target = { ...provider, kind, name: kind === "openai" ? "Remote AI" : provider.name };
   props.providers = [target];
   await render();
   expect(trigger().textContent).toContain(account.email);
@@ -146,8 +146,11 @@ it.each(["custom", "openai"] as const)(
   await click(option(provider.name));
   await click(option(provider.name));
   expect(option(account.email).disabled).toBe(true);
+  const usageCalls = () => vi.mocked(invoke).mock.calls
+    .filter(([command]) => command === "codex_gui_usage_summary");
+  expect(usageCalls()).toHaveLength(1);
   await act(async () => vi.advanceTimersByTimeAsync(10_000));
-  expect(invoke).toHaveBeenCalledTimes(6);
+  expect(usageCalls()).toHaveLength(3);
   expect(props.onSwitchProvider).toHaveBeenCalledOnce();
   expect(trigger().getAttribute("aria-expanded")).toBe("true");
   props.accounts = [{ ...account, usage: { primary: { usedPercent: 75, remainingPercent: 25 } } }];
@@ -209,13 +212,11 @@ it("preserves selection on failure and allows retry without exposing internal er
   expect(trigger().getAttribute("aria-expanded")).toBe("false");
 });
 
-it("disables switching when the proxy is stopped or another operation is pending", async () => {
-  props.proxyRunning = false;
+it("allows GUI selection without starting the external proxy and blocks pending operations", async () => {
   await render();
   await click(trigger());
-  expect(document.body.textContent).toContain("开启本地代理后，即可在这里切换。");
-  expect(option(provider.name).disabled).toBe(true);
-  props.proxyRunning = true;
+  expect(document.body.textContent).not.toContain("开启本地代理");
+  expect(option(provider.name).disabled).toBe(false);
   props.busy = true;
   await render();
   await click(option(provider.name));
@@ -263,7 +264,7 @@ it("does not present missing usage as zero remaining", async () => {
 const balance: ProviderBalance = { apiAmount: 99, apiUnit: "USD", apiUnlimited: false,
   walletAmount: 12.34, walletUnit: "CNY", queriedAt: 1 };
 
-it.each([0, 7.5])("shows Codex Switch key quota %s in the proxy summary", async (amount) => {
+it.each([0, 7.5])("shows Remote AI key quota %s in the proxy summary", async (amount) => {
   props.providers = [{ ...provider, active: true, balancePlatform: "codexSwitch" }];
   vi.mocked(queryProviderBalance).mockResolvedValue({ ...balance, apiAmount: amount, walletAmount: null });
   await render();
@@ -271,7 +272,7 @@ it.each([0, 7.5])("shows Codex Switch key quota %s in the proxy summary", async 
   expect(trigger().textContent).not.toContain("钱包余额");
 });
 
-it("shows unlimited Codex Switch keys without treating them as a zero balance", async () => {
+it("shows unlimited Remote AI keys without treating them as a zero balance", async () => {
   props.providers = [{ ...provider, active: true, balancePlatform: "codexSwitch" }];
   vi.mocked(queryProviderBalance).mockResolvedValue({ ...balance,
     apiAmount: null, apiUnlimited: true, walletAmount: null });
@@ -371,38 +372,16 @@ it("waits for the account catalog before allowing automatic switching settings t
   expect(settingsButton.disabled).toBe(false);
 });
 
-it("matches the trigger's outer width on resize and cleans up size tracking on page exit", async () => {
-  const observers: { observe: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn>; resize: () => void }[] = [];
-  vi.stubGlobal("ResizeObserver", class {
-    observe = vi.fn();
-    disconnect = vi.fn();
-    unobserve = vi.fn();
-    resize: () => void;
-    constructor(callback: ResizeObserverCallback) {
-      this.resize = () => callback([], this);
-      observers.push(this);
-    }
-  });
+it("keeps the panel within 280px and the viewport, and cleans up on page exit", async () => {
   const removeListener = vi.spyOn(window, "removeEventListener");
   await render();
-  let measuredWidth = 351;
-  trigger().getBoundingClientRect = () => new DOMRect(0, 0, measuredWidth, 60);
-  const observer = observers.find((entry) => entry.observe.mock.calls.some(([element]) => element === trigger()))!;
-  await act(async () => observer.resize());
   await click(trigger());
   const popup = () => document.querySelector<HTMLElement>(".ant-popover")!;
-  expect(popup().style.width).toBe("351px");
-  measuredWidth = 298;
-  await act(async () => observer.resize());
-  expect(popup().style.width).toBe("298px");
-  measuredWidth = 450;
-  await act(async () => observer.resize());
-  expect(popup().style.width).toBe("400px");
+  expect(popup().style.width).toBe("280px");
   vi.stubGlobal("innerWidth", 300);
   await act(async () => window.dispatchEvent(new Event("resize")));
   expect(popup().style.width).toBe("276px");
   props.active = false;
   await render();
-  expect(observer.disconnect).toHaveBeenCalledOnce();
   expect(removeListener).toHaveBeenCalledWith("resize", expect.any(Function));
 });

@@ -2,6 +2,7 @@ import { getLocale, t, useLanguage } from '../i18n';
 import { Dropdown } from 'antd';
 import { Clock, ExternalLink, KeyRound, Laptop, MoreVertical, Server, Trash2, UserRound } from 'lucide-react';
 import type { AccountSummary, RemoteDevice, RemoteProviderSummary } from '../types';
+import { remoteModelOptions, type RemoteModelTarget } from '../../../../shared/remote-chat/modelTarget';
 
 interface DeviceCardProps {
   device: RemoteDevice;
@@ -13,6 +14,7 @@ interface DeviceCardProps {
   onSwitchModel: (deviceId: string) => void;
   onSelectAuthAccount: (deviceId: string) => void;
   onDelete: (device: RemoteDevice) => void;
+  onRevokeService: (device: RemoteDevice) => void;
 }
 
 function platformLabel(platform: string) {
@@ -25,9 +27,13 @@ function platformLabel(platform: string) {
   }
 }
 
-function modelLabel(device: RemoteDevice, account?: AccountSummary, provider?: RemoteProviderSummary) {
-  if (device.activeProviderGroup) return t("分组 · {value1}", { value1: device.activeProviderGroup });
-  if (!device.activeProviderId) return account ? t("官方 · {value1}", { value1: account.email }) : t("未选择");
+function modelLabel(device: RemoteDevice, accounts: AccountSummary[], providers: RemoteProviderSummary[],
+  target: RemoteModelTarget) {
+  const selection = remoteModelOptions(device, target);
+  const account = accounts.find(item => item.id === selection.accountId);
+  const provider = providers.find(item => item.id === selection.providerId);
+  if (selection.group) return t("分组 · {value1}", { value1: selection.group });
+  if (!selection.providerId) return account ? t("官方 · {value1}", { value1: account.email }) : t("未选择");
   if (!provider) return t("模型信息暂不可用");
   return `${provider.name}${provider.model ? ` · ${provider.model}` : ''}`;
 }
@@ -52,10 +58,11 @@ function PlatformIcon({ platform }: { platform: string }) {
 function DeviceDetails({ device, accounts, providers }: Pick<DeviceCardProps, 'device' | 'accounts' | 'providers'>) {
   useLanguage();
   const account = accounts.find((item) => item.id === device.activeAccountId);
-  const provider = providers.find((item) => item.id === device.activeProviderId);
   const authAccount = accounts.find((item) => item.id === device.openaiAuthAccountId);
   const details = [
-    { icon: UserRound, label: t("当前模型"), value: modelLabel(device, account, provider) },
+    { icon: UserRound, label: t("代理接口"), value: modelLabel(device, accounts, providers, 'proxy') },
+    ...(device.capabilities.includes('gui-model-switch')
+      ? [{ icon: Laptop, label: 'Codex GUI', value: modelLabel(device, accounts, providers, 'gui') }] : []),
     { icon: Server, label: t("设备账号"),
       value: account?.email ?? (device.activeAccountId ? t("账号信息暂不可用") : t("未选择")) },
     { icon: KeyRound, label: t("代理登录态"),
@@ -76,6 +83,8 @@ export function DeviceCard(props: DeviceCardProps) {
     { key: 'auth', icon: <ExternalLink size={18} />, label: t("代理登录态账号"),
       disabled: !device.online || Boolean(switchingAuthDeviceId),
       onClick: () => props.onSelectAuthAccount(device.deviceId) },
+    ...(device.platform.toLowerCase() === 'windows' ? [{ key: 'revoke-service', icon: <KeyRound size={18} />,
+      label: '撤销无人值守授权', danger: true, onClick: () => props.onRevokeService(device) }] : []),
     { key: 'delete', icon: <Trash2 size={18} />, label: device.online ? t("在线不可删除") : t("删除设备"),
       danger: true, disabled: device.online || Boolean(deletingDeviceId), onClick: () => props.onDelete(device) },
   ];

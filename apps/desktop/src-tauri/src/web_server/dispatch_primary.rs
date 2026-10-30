@@ -1,5 +1,11 @@
 fn dispatch_command(app: AppHandle, command: &str, args: Value) -> Result<Value, String> {
     match command {
+        "codex_gui_open_file_preview" => serialize(block_on(
+            crate::codex_gui::file_preview::hosted::open(app, argument(&args, "target")?),
+        )),
+        "codex_gui_close_file_preview" => serialize(block_on(
+            crate::codex_gui::file_preview::hosted::close(app, argument(&args, "sessionId")?),
+        )),
         "import_account_json_text" => serialize(block_on(crate::commands::import_account_json_text(
             app,
             argument(&args, "content")?,
@@ -8,6 +14,7 @@ fn dispatch_command(app: AppHandle, command: &str, args: Value) -> Result<Value,
             argument(&args, "limit")?,
             argument(&args, "beforeId")?,
             argument(&args, "source")?,
+            argument(&args, "pagination")?,
         ))),
         "clear_error_logs" => serialize(block_on(crate::error_logs::clear_error_logs())),
         "record_toast_log" => serialize(block_on(crate::error_logs::record_toast_log(
@@ -27,9 +34,16 @@ fn dispatch_command(app: AppHandle, command: &str, args: Value) -> Result<Value,
             app, argument(&args, "homeId")?,
             argument(&args, "request")?,
         ))),
-        "get_app_info" => serialize(crate::commands::get_app_info(app)),
+        "get_app_info" => serialize(block_on(crate::commands::get_app_info(app))),
         "list_accounts" => serialize(block_on(crate::commands::list_accounts(app))),
         "get_app_settings" => serialize(block_on(crate::floating_bubble::get_app_settings(app))),
+        "get_chatgpt_launch_path" => serialize(block_on(crate::chatgpt_launch::get_chatgpt_launch_path(app))),
+        "set_chatgpt_launch_path" => serialize(block_on(crate::chatgpt_launch::set_chatgpt_launch_path(
+            app, argument(&args, "path")?,
+        ))),
+        "set_non_proxy_enhancements" => serialize(block_on(
+            crate::client_integration::set_non_proxy_enhancements(app, argument(&args, "enabled")?),
+        )),
         "set_claude_code_write_target" => serialize(block_on(
             crate::claude_code::set_claude_code_write_target(
                 app,
@@ -58,6 +72,9 @@ fn dispatch_command(app: AppHandle, command: &str, args: Value) -> Result<Value,
         "refresh_official_model_catalog" => serialize(block_on(
             crate::official_models::refresh_official_model_catalog(app),
         )),
+        "read_admin_model_names" => serialize(block_on(
+            crate::official_models::read_admin_model_names(app),
+        )),
         "set_official_model_context_window" => serialize(block_on(
             crate::local_proxy::set_official_model_context_window(
                 app,
@@ -65,9 +82,19 @@ fn dispatch_command(app: AppHandle, command: &str, args: Value) -> Result<Value,
                 argument(&args, "contextWindow")?,
             ),
         )),
+        "set_proxy_transport" => serialize(block_on(
+            crate::local_proxy::transport_settings::set_proxy_transport(
+                app, argument(&args, "settings")?,
+            ),
+        )),
         "set_sse_idle_timeout" => serialize(block_on(crate::local_proxy::sse_idle_timeout::set_sse_idle_timeout(
             app, argument(&args, "settings")?,
         ))),
+        "set_response_header_timeout" => serialize(block_on(
+            crate::local_proxy::response_header_timeout::set_response_header_timeout(
+                app, argument(&args, "settings")?,
+            ),
+        )),
         "set_upstream_429_retry_timeout" => serialize(block_on(
             crate::local_proxy::set_upstream_429_retry_timeout(
                 app,
@@ -97,6 +124,18 @@ fn dispatch_command(app: AppHandle, command: &str, args: Value) -> Result<Value,
             argument(&args, "settings")?,
         ))),
         "list_aggregate_apis" => serialize(block_on(crate::aggregate_api::list_aggregate_apis(app))),
+        "save_aggregate_api" => serialize(block_on(crate::aggregate_api::save_aggregate_api(
+            app,
+            argument(&args, "aggregate")?,
+        ))),
+        "switch_aggregate_api" => serialize(block_on(crate::aggregate_api::switch_aggregate_api(
+            app,
+            argument(&args, "id")?,
+        ))),
+        "delete_aggregate_api" => serialize(block_on(crate::aggregate_api::delete_aggregate_api(
+            app,
+            argument(&args, "id")?,
+        ))),
         "list_providers" => serialize(block_on(crate::providers::list_providers(app))),
         "save_provider" => serialize(block_on(crate::providers::save_provider(
             app,
@@ -136,9 +175,7 @@ fn dispatch_command(app: AppHandle, command: &str, args: Value) -> Result<Value,
         }
         "fetch_relay_models" => serialize(block_on(crate::provider_models::fetch_relay_models(
             app,
-            argument(&args, "baseUrl")?,
-            argument(&args, "apiKey")?,
-            argument(&args, "providerId")?,
+            argument(&args, "request")?,
         ))),
         "fetch_deepseek_models" => serialize(block_on(crate::providers::fetch_deepseek_models(
             app,
@@ -199,6 +236,9 @@ fn dispatch_command(app: AppHandle, command: &str, args: Value) -> Result<Value,
         "get_local_proxy_status" => {
             serialize(block_on(crate::local_proxy::get_local_proxy_status(app)))
         }
+        "set_local_proxy_service_tier" => serialize(block_on(
+            crate::local_proxy::set_local_proxy_service_tier(app, argument(&args, "serviceTier")?),
+        )),
         "list_local_proxy_ipv4_addresses" => serialize(block_on(
             crate::local_proxy::endpoints::list_local_proxy_ipv4_addresses(),
         )),
@@ -211,6 +251,9 @@ fn dispatch_command(app: AppHandle, command: &str, args: Value) -> Result<Value,
         )),
         "get_recent_proxy_session_latency" => serialize(block_on(
             crate::local_proxy::get_recent_proxy_session_latency(),
+        )),
+        "get_proxy_session_metrics" => serialize(block_on(
+            crate::local_proxy::session_metrics::get_proxy_session_metrics(argument(&args, "threadId")?),
         )),
         "list_token_usage_entries" => {
             serialize(block_on(crate::local_proxy::list_token_usage_entries(app)))
@@ -241,6 +284,9 @@ fn dispatch_command(app: AppHandle, command: &str, args: Value) -> Result<Value,
                 argument(&args, "endTs")?,
             ),
         )),
+        "get_official_usage_summary" => serialize(block_on(crate::cloud::get_official_usage_summary(
+            app, argument(&args, "startTs")?,
+        ))),
         "list_provider_token_usage" => serialize(block_on(
             crate::local_proxy::list_provider_token_usage(app, argument(&args, "startTs")?),
         )),

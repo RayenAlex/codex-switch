@@ -18,7 +18,7 @@ async function initialChat({ page, request, info, transport }: Journey) {
   await screenshot(page, info, '00-new-chat');
   await openChatList(page);
   await expect(page.getByRole('region', { name: '演示项目', exact: true })).toBeVisible();
-  await click(page.getByRole('button', { name: /移动端聊天体验/ }));
+  await click(page.getByRole('button', { name: '移动端聊天体验', exact: true }));
   await expect(page.getByText('帮我整理今天的工作计划。')).toBeVisible();
   await send(page, 'H5 regression message');
   await expect(page.locator('.chat-markdown pre')).toHaveText('const connected = true;');
@@ -66,15 +66,20 @@ async function approvals({ page, request, info }: Journey) {
 
 async function manageHistory({ page, request }: Journey) {
   await openChatList(page);
-  await click(page.getByRole('button', { name: '搜索聊天', exact: true }));
-  await page.getByRole('textbox', { name: '搜索聊天' }).fill('不存在的任务');
-  await click(page.getByRole('button', { name: '搜索', exact: true }));
+  if (!isDesktop(page)) await click(page.getByRole('button', { name: '搜索聊天', exact: true }));
+  const search = page.getByRole('textbox', { name: '搜索聊天' });
+  await search.fill('不存在的任务');
+  if (!isDesktop(page)) await click(page.getByRole('button', { name: '搜索', exact: true }));
   await expect(page.getByText('没有找到相关聊天')).toBeVisible();
-  await page.getByRole('textbox', { name: '搜索聊天' }).fill('');
-  await click(page.getByRole('button', { name: '搜索', exact: true }));
-  await click(page.getByRole('button', { name: '关闭', exact: true }).last());
+  await search.fill('');
+  if (!isDesktop(page)) {
+    await click(page.getByRole('button', { name: '搜索', exact: true }));
+    await click(page.getByRole('button', { name: '关闭', exact: true }).last());
+  }
   await click(page.getByRole('button', { name: '在 演示项目 中新建对话', exact: true }));
-  await expect(page.locator('.chat-header')).toContainText('演示项目');
+  await expect(page.locator('.chat-header')).toContainText(isDesktop(page) ? '新聊天' : '演示新聊天');
+  await expect(page.getByRole('button', { name: isDesktop(page) ? '选择远程项目' : '选择项目', exact: true }))
+    .toContainText('demo');
   await send(page, 'new chat from H5');
   await expect.poll(async () => (await state(request)).threads.at(-1)?.turns?.at(-1)?.status).toBe('completed');
   await settled(page);
@@ -85,7 +90,7 @@ async function manageHistory({ page, request }: Journey) {
   await openChatList(page);
   await expect(page.getByRole('region', { name: '演示项目', exact: true })
     .getByRole('button', { name: '手机新聊天', exact: true })).toBeVisible();
-  await click(page.getByRole('button', { name: /移动端聊天体验/ }));
+  await click(page.getByRole('button', { name: '移动端聊天体验', exact: true }));
 }
 
 async function imagePreview({ page, request, info }: Journey) {
@@ -99,6 +104,8 @@ async function imagePreview({ page, request, info }: Journey) {
   await click(page.getByRole('button', { name: '放大查看：本地图片', exact: true }));
   await expect(page.getByRole('dialog', { name: '本地图片' })).toBeVisible();
   const original = page.getByRole('dialog').getByRole('img');
+  await expect.poll(() => original.evaluate((node) => (node as HTMLImageElement).naturalWidth)).toBe(32);
+  await click(page.getByRole('button', { name: '查看原图', exact: true }));
   await expect.poll(() => original.evaluate((node) => (node as HTMLImageElement).naturalWidth),
     { timeout: 30_000 }).toBe(900);
   await expect(page.getByText('正在加载原图…', { exact: true })).toHaveCount(0);
@@ -107,15 +114,16 @@ async function imagePreview({ page, request, info }: Journey) {
   await click(page.getByRole('button', { name: '旋转图片', exact: true }));
   await expect(original).toHaveCSS('transform', /matrix\(0, 1.5, -1.5, 0, 0, 0\)/);
   await screenshot(page, info, '04-original-zoom-rotation');
-  const chunks = await operationCount(request, 'imageChunk');
+  const chunks = await operationCount(request, 'fileRead');
   expect(chunks).toBeGreaterThan(1);
   await click(page.getByRole('button', { name: '关闭图片', exact: true }));
   await click(page.getByRole('button', { name: '放大查看：本地图片', exact: true }));
+  await click(page.getByRole('button', { name: '查看原图', exact: true }));
   await expect.poll(() => page.getByRole('dialog').getByRole('img')
     .evaluate((node) => (node as HTMLImageElement).naturalWidth)).toBe(900);
-  expect(await operationCount(request, 'imageChunk')).toBe(chunks);
+  expect(await operationCount(request, 'fileRead')).toBe(chunks);
   await click(page.getByRole('button', { name: '关闭图片', exact: true }));
-  expect(await operationCount(request, 'imagePreview')).toBeGreaterThan(0);
+  expect(await operationCount(request, 'previewOpen')).toBeGreaterThan(0);
   await screenshot(page, info, '04-inline-images');
 }
 

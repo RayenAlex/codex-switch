@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { AuthSession, RemoteDevice } from '../types';
 
 export type DeviceStatusSocketMessage =
@@ -10,7 +11,7 @@ export function deviceStatusWebSocketUrl(baseUrl: string) {
   const url = new URL(baseUrl);
   if (url.protocol === 'http:') url.protocol = 'ws:';
   else if (url.protocol === 'https:') url.protocol = 'wss:';
-  else throw new Error('设备状态服务地址必须使用 HTTP 或 HTTPS');
+  else throw new Error(t("设备状态服务地址必须使用 HTTP 或 HTTPS"));
   url.pathname = `${url.pathname.replace(/\/+$/, '')}/device-switch`;
   url.search = '';
   url.hash = '';
@@ -119,6 +120,8 @@ function remoteDevice(value: unknown): RemoteDevice | null {
       ? device.openaiAuthAccountId
       : null,
     activeProviderId: typeof device.activeProviderId === 'string' ? device.activeProviderId : null,
+    guiAccountId: typeof device.guiAccountId === 'string' ? device.guiAccountId : null,
+    guiProviderId: typeof device.guiProviderId === 'string' ? device.guiProviderId : null,
     activeProviderGroup: typeof device.activeProviderGroup === 'string'
       ? device.activeProviderGroup
       : null,
@@ -135,5 +138,8 @@ function remoteControlCapabilities(value: unknown): RemoteDevice['capabilities']
     capability === 'provider-switch'
     || capability === 'provider-group-switch'
     || capability === 'restart-codex'
+    || capability === 'gui-model-switch'
+    || capability === 'aggregate-switch'
+    || capability === 'gui-aggregate-switch'
   ));
 }

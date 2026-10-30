@@ -7,7 +7,6 @@ use std::{
 };
 
 use chrono::Utc;
-use semver::Version;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Runtime};
 
@@ -16,7 +15,12 @@ use crate::{
     storage::{managed_auth_path, read_json, read_state, resolve_paths, write_json_atomic, Paths},
 };
 
-pub(crate) const MIN_CODEX_MODEL_CLIENT_VERSION: &str = "0.152.0";
+#[cfg(test)]
+mod admin_tests;
+mod client_version;
+pub(crate) use client_version::model_client_version;
+pub(crate) use client_version::MIN_CODEX_MODEL_CLIENT_VERSION;
+
 const OFFICIAL_MODEL_CACHE_FILENAME: &str = "official-models-cache.json";
 static OFFICIAL_MODEL_REFRESH_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static OFFICIAL_MODELS_APP: OnceLock<AppHandle> = OnceLock::new();
@@ -68,32 +72,9 @@ pub(crate) fn save_source_catalog(
     Ok(cache)
 }
 
-pub(crate) fn model_client_version(paths: &Paths) -> String {
-    let cached = read_json(&paths.codex_home.join("models_cache.json"))
-        .ok()
-        .and_then(|value| value.get("client_version")?.as_str().map(str::to_string));
-    select_model_client_version(cached.as_deref())
-}
-
-fn select_model_client_version(cached: Option<&str>) -> String {
-    let minimum =
-        Version::parse(MIN_CODEX_MODEL_CLIENT_VERSION).unwrap_or_else(|_| Version::new(0, 152, 0));
-    let cached = cached.and_then(|value| Version::parse(value).ok());
-    cached
-        .filter(|version| version > &minimum)
-        .unwrap_or(minimum)
-        .to_string()
-}
-
-pub(crate) fn refresh_on_startup(app: AppHandle) {
-    let _ = OFFICIAL_MODELS_APP.set(app.clone());
-    let _ = thread::Builder::new()
-        .name("official-model-catalog-startup-refresh".to_string())
-        .spawn(move || {
-            if let Err(error) = refresh_official_model_catalog_blocking(&app) {
-                eprintln!("Failed to refresh the official model catalog at startup: {error}");
-            }
-        });
+pub(crate) fn setup(app: AppHandle) {
+    // Account changes still need the handle; startup must not fetch a catalog.
+    let _ = OFFICIAL_MODELS_APP.set(app);
 }
 
 pub(crate) fn refresh_after_account_switch(account_id: &str) {
@@ -108,6 +89,25 @@ pub(crate) fn refresh_after_account_switch(account_id: &str) {
                 eprintln!("Failed to refresh the official model catalog after switching: {error}");
             }
         });
+}
+
+/// Read Admin suggestions without requiring an account or changing the active runtime catalog.
+#[tauri::command]
+pub(crate) async fn read_admin_model_names<R: Runtime + 'static>(
+    app: AppHandle<R>,
+) -> Result<Vec<String>, String> {
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        crate::local_proxy::admin_model_catalog(&app)
+            .map(|catalog| catalog_from_value(&catalog).models)
+    })
+    .await;
+    match result {
+        Ok(Ok(models)) => Ok(models),
+        error => {
+            eprintln!("Failed to read Admin model names: {error:?}");
+            Err("Could not load the model list. Please try again.".to_string())
+        }
+    }
 }
 
 #[tauri::command]
@@ -301,18 +301,5 @@ mod tests {
 
         assert_eq!(catalog.models, vec![DEFAULT_OFFICIAL_MODEL]);
         assert!(catalog.image_input_models.is_empty());
-    }
-
-    #[test]
-    fn model_client_version_tracks_newer_codex_releases() {
-        assert_eq!(select_model_client_version(Some("0.153.0")), "0.153.0");
-        assert_eq!(
-            select_model_client_version(Some("0.144.0")),
-            MIN_CODEX_MODEL_CLIENT_VERSION
-        );
-        assert_eq!(
-            select_model_client_version(Some("not-a-version")),
-            MIN_CODEX_MODEL_CLIENT_VERSION
-        );
     }
 }

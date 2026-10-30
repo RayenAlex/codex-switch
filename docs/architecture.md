@@ -1,6 +1,6 @@
 # Architecture and Data Flow
 
-This document describes the responsibility boundaries, key data flows, persistence, and security constraints of Codex Switch.
+This document describes the responsibility boundaries, key data flows, persistence, and security constraints of Remote AI.
 
 ## Overview
 
@@ -16,7 +16,7 @@ flowchart LR
     Codex["Local Codex client"] --> Loopback["127.0.0.1:15722 local proxy"]
     Loopback --> OfficialAPI
     Loopback --> ProviderAPI["Third-party Provider APIs"]
-    Rust -->|"Optional credential sync"| Cloud["Self-hosted NestJS backend"]
+    Rust -->|"Optional credential sync"| Cloud["Self-hosted Go backend"]
     AdminUI["Admin console"] --> Cloud
     Mobile["Expo mobile companion"] -->|"Account summaries"| Cloud
     Cloud -->|"Short-lived Codex access token"| Mobile
@@ -57,7 +57,7 @@ The desktop React frontend receives redacted models such as `AccountSummary`, `P
 
 ## Cloud Backend and Mobile Responsibilities
 
-- `apps/admin` exposes registration/login, refresh-token, account sync, Provider sync, mobile-summary, and admin-management routes.
+- `apps/admin-go` is the production backend and exposes registration/login, refresh-token, account sync, Provider sync, mobile-summary, and admin-management routes.
 - PostgreSQL stores users, dynamic RBAC roles, built-in and custom permission definitions, role-permission assignments, refresh tokens, synchronized account credentials, Provider API keys, admin audit data, customizable email templates, encrypted custom SMTP services, announcement link-click details, feedback with image attachments, and the optional official-account pool. Redis caches account and Provider lists.
 - The admin console at `/admin` manages roles and permissions (including custom permission definitions for external systems), users, their synchronized accounts and Providers, invitations, approval requests, notification email templates and sending services, feedback and replies, audit logs, and official-account assignments. The SMTP service from environment variables remains the read-only default; templates and manual feedback replies can select an enabled custom service.
 - An official account assigned to a user is merged into that user's effective sync list. The assigned system copy wins when its stable account ID collides with a personal copy, and it must be edited or removed from the official pool.
@@ -106,7 +106,7 @@ The desktop React frontend receives redacted models such as `AccountSummary`, `P
 ### Issue Feedback
 
 1. The Help dialog opens a feedback form that includes the app version and platform user agent. Signed-in submissions use the existing cloud JWT so the backend binds the verified account email; anonymous submissions contain no contact email.
-2. A submission accepts up to four JPEG, PNG, or WebP images. The desktop UI compresses any image larger than 5 MB before IPC, and both Rust and NestJS enforce the 5 MB per-image limit again.
+2. A submission accepts up to four JPEG, PNG, or WebP images. The desktop UI compresses any image larger than 5 MB before IPC, and both Rust and admin-go enforce the 5 MB per-image limit again.
 3. Feedback image bytes remain in PostgreSQL and are only returned through permission-guarded admin endpoints. The admin console can preview attachments and send a plain-text SMTP reply when a verified email is available.
 
 ### Announcement Link Analytics
@@ -135,7 +135,7 @@ The desktop React frontend receives redacted models such as `AccountSummary`, `P
 1. The dashboard, tray, or bubble calls `restart_chatgpt` when a config or credential switch is not picked up by a running session.
 2. Windows process control verifies the desktop installation layout and executable paths. It stops only the initially observed desktop shell and bundled helper instances, using a checked process handle; standalone CLI processes and newly spawned instances are excluded. Store launches require a current, healthy package identity, and packages undergoing deployment or servicing are skipped.
 3. macOS and Linux use the available platform process and launch strategy. Restart is best effort and does not read or log credentials.
-4. Renderer recovery requires a continuous 30-second CDP outage, an active skin or running proxy, and a confirmed running desktop installation. Each explicit managed launch permits at most one automatic recovery, persisted before any process is stopped. Reconnecting or restarting Codex Switch does not reset that allowance. The monitor skips busy operations and rechecks the launch identity, current CDP availability, feature state, and installation before recovery.
+4. Renderer recovery requires a continuous 30-second CDP outage, an active skin or running proxy, and a confirmed running desktop installation matching the executable saved in that session. A replacement installed by an updater never becomes eligible through the old session, even after the grace period. Each explicit managed launch permits at most one automatic recovery, persisted before any process is stopped. Reconnecting or restarting Remote AI does not reset that allowance. The monitor skips busy operations and rechecks the launch identity, current CDP availability, feature state, and installation before recovery. See [Windows update compatibility](chatgpt-update-compatibility.md) for the investigation and diagnostic steps.
 5. An interrupted or failed renderer launch clears the saved port while retaining the executable. Skin verification errors preserve an already working renderer channel. A startup timeout never triggers a second launch into a different installation. Pausing a skin disables recovery for that skin; a running proxy can still require the channel.
 6. The resource updater removes abandoned theme archives and staging directories before downloading, while holding its single-flight guard. Cleanup accepts only managed UUID names inside the resource cache and preserves unknown entries, the current pack, and trees containing links or Windows reparse points. This cleanup does not touch ChatGPT's own runtime directories.
 7. The connection indicator before the proxy controls checks the live Codex main renderer on a single-flight timer. Clicking a disconnected indicator first attempts a non-destructive reconnect; a separate confirmation is required before its restart action. Status reads and reconnects do not reset the recovery allowance. LAN views can read the state but cannot reconnect or restart the host application.

@@ -2,20 +2,26 @@
 mod archive;
 mod assets;
 mod automatic;
+mod client;
 pub(crate) mod commands;
 mod install;
 mod package;
-mod permissions;
+pub(crate) mod permissions;
 mod platform;
 mod session;
 mod state;
+mod upgrade;
 
 use std::path::PathBuf;
 
-pub(crate) use automatic::setup_gui;
+pub(crate) use automatic::{setup_gui, SetupKind};
+pub(crate) use client::ComputerSession;
+pub(crate) use upgrade::start;
 static CHANGES: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-const VERSION: &str = "0.25.0";
+const VERSION: &str = "0.37.0-remoteai.2";
+// run_script allows 120 seconds; leave time for dispatch and the final response.
+const TOOL_TIMEOUT_SECONDS: u64 = 150;
 const MCP_SERVER: &str = "codex_switch_computer_use";
 const HELPER_ARGUMENT: &str = "--computer-use-mcp=";
 
@@ -27,6 +33,12 @@ pub(crate) enum ComputerError {
     Unsupported,
     #[error("未能打开权限设置，请前往系统设置中的“隐私与安全性”重试。")]
     Permissions,
+    #[cfg(any(target_os = "macos", test))]
+    #[error("未能重置权限，请在系统设置的“隐私与安全性”中移除旧应用，再重新添加 Remote AI。")]
+    PermissionReset,
+    #[cfg(any(target_os = "macos", test))]
+    #[error("正在修复权限，请稍候再试。")]
+    PermissionRepairBusy,
     #[error("下载未完成，请检查网络后重试。")]
     Download,
     #[error("电脑助手文件校验失败，请重新安装。")]

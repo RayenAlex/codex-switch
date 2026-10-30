@@ -45,11 +45,17 @@ it.each(["C:\\images\\copied.jpg", "D:/截图.png"])(
   "shows a sent local image thumbnail and opens its original: %s", async (path) => {
     vi.mocked(guiApi.request).mockResolvedValueOnce({ url: thumbnail }).mockResolvedValue({ url: original });
     await render({ type: "localImage", path });
-    expect(guiApi.request).toHaveBeenCalledWith({ operation: "imagePreview", threadId: "task", source: path });
+    expect(guiApi.request).toHaveBeenCalledWith({ operation: "imagePreview", threadId: "task",
+      source: path, variant: "thumbnail" });
     expect(container.querySelector("img")?.getAttribute("src")).toBe(thumbnail);
     expect(container.textContent).toContain("看看这张图片");
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="放大查看：图片附件 1"]')?.click());
     expect(container.querySelector("dialog")?.open).toBe(true);
+    expect(container.querySelector("dialog img")?.getAttribute("src")).toBe(thumbnail);
+    expect(guiApi.request).toHaveBeenCalledTimes(1);
+    await act(async () => container.querySelector<HTMLButtonElement>('.cs-image-original')!.click());
+    expect(guiApi.request).toHaveBeenLastCalledWith({ operation: "imagePreview", threadId: "task",
+      source: path, variant: "original" });
     expect(container.querySelector("dialog img")?.getAttribute("src")).toBe(original);
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="关闭图片"]')?.click());
     expect(container.querySelector("dialog")).toBeNull();
@@ -95,4 +101,29 @@ it("keeps ordinary blockquotes as text and handles quote-only messages", async (
     content: [{ type: "text", text: "引用对话内容：\n> 仅引用" }] }} />));
   expect(container.querySelector('[aria-label="查看 1 条引用"]')).not.toBeNull();
   expect(container.textContent).not.toContain("引用对话内容：");
+});
+
+const awareness = '<codex_gui_conversation_context>\n'
+  + JSON.stringify({ kind: "awareness", running: [{ id: "other", cwd: "D:/private" }] })
+  + '\n</codex_gui_conversation_context>';
+
+it("keeps joined context out of the bubble, clipboard and message editor", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  vi.stubGlobal("navigator", { clipboard: { writeText } });
+  vi.mocked(guiApi.request).mockResolvedValue({ data: [] });
+  await act(async () => root.render(<UserMessage onEdit={vi.fn()} item={{ id: "context", type: "userMessage",
+    content: [{ type: "text", text: `正常消息${awareness}` }] }} />));
+  expect(container.textContent).toBe("正常消息");
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="复制消息"]')?.click());
+  expect(writeText).toHaveBeenCalledWith("正常消息");
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="编辑消息"]')?.click());
+  expect(container.querySelector('[role="textbox"]')?.textContent).toBe("正常消息");
+  expect(container.textContent).not.toContain("codex_gui_conversation_context");
+  expect(container.textContent).not.toContain("D:/private");
+});
+
+it("does not show a bubble, timestamp or actions for context-only messages", async () => {
+  await act(async () => root.render(<UserMessage startedAt={1} onEdit={vi.fn()}
+    item={{ id: "hidden", type: "userMessage", content: [{ type: "text", text: awareness }] }} />));
+  expect(container.innerHTML).toBe("");
 });

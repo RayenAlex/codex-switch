@@ -1,6 +1,8 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { guiText } from "../../i18n/guiText";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { Target, X } from "lucide-react";
+import { isDesktopApp } from "../../api/backend";
 import { useGoalMode } from "../../../../../shared/remote-chat/client/useGoalMode";
 import { ComposerAddMenu } from "./ComposerAddMenu";
 import { ComposerFilesDialog } from "./ComposerFilesDialog";
@@ -12,14 +14,24 @@ import { GOAL_STATUS } from "./goalTypes";
 import extras from "./ComposerExtras.module.less";
 import { AccessPicker } from "./AccessPicker";
 import { ComposerSubmit } from "./ComposerSubmit";
+import { ComposerDictation } from "./ComposerDictation";
 import type { GuiController } from "./controller";
 import type { AccessMode, GuiState } from "./types";
 import { ImageAttachments } from "./ImageAttachments";
+import { useComposerDrop } from './useComposerDrop';
 import { IMAGE_TYPES, useComposerDraft } from "./useComposerDraft";
 import { ModelPicker } from "./ModelPicker";
+import { useGuiRequestSpeed } from "./useGuiRequestSpeed";
 import { UsageStatus } from "./UsageStatus";
+import { ConversationTokenStatus } from './ConversationTokenStatus';
 import { ProjectPicker } from "./ProjectPicker";
+import { GuiToolbox } from "./GuiToolbox";
+import { useLocalGitDownloads } from '../../downloads/localGitDownloads';
+import { LocalProjectBrowser } from './LocalProjectBrowser';
+import { useComposerFileReferences } from '../../../../../shared/chat/ChatFileReferences';
+import { localGitClient } from "./localGitClient";
 import { SkillInput, type SkillInputHandle } from "./SkillInput";
+import { useNextPromptSuggestion } from './useNextPromptSuggestion';
 import { compactCommand } from "./composerOptions";
 import { QueuedMessages } from "./QueuedMessages";
 import { RunningChangesSummary } from "./RunningChangesSummary";
@@ -27,40 +39,45 @@ import styles from "./styles.module.less";
 
 export interface ComposerHandle { addQuote: (quote: ReplyQuote) => boolean }
 
-const TOKENS_PER_THOUSAND = 1_000;
-const TOKENS_PER_MILLION = 1_000_000;
-const TOKEN_DECIMAL_PLACES = 2;
-
-function formatConversationTokens(value: number) {
-  if (value >= TOKENS_PER_MILLION) return `${(value / TOKENS_PER_MILLION).toFixed(TOKEN_DECIMAL_PLACES)}M`;
-  if (value >= TOKENS_PER_THOUSAND) return `${(value / TOKENS_PER_THOUSAND).toFixed(TOKEN_DECIMAL_PLACES)}k`;
-  return value.toLocaleString();
-}
-
 export const Composer = forwardRef<ComposerHandle, {
-  state: GuiState; controller: GuiController; active: boolean;
-}>(function Composer({ state, controller, active }, ref) {
+  state: GuiState; controller: GuiController; active: boolean; hostPicker?: ReactNode;
+  cliVersion?: string | null;
+}>(function Composer({ state, controller, active, hostPicker, cliVersion }, ref) {
+  useLocalGitDownloads();
   const fileInput = useRef<HTMLInputElement>(null);
   const composer = useRef<HTMLDivElement>(null);
+  const dropTarget = useRef<HTMLDivElement>(null);
   const skillInput = useRef<SkillInputHandle>(null);
   const key = state.selected ?? "new";
   const [dialog, setDialog] = useState<"files" | "goal" | null>(null);
+  const [dictating, setDictating] = useState(false);
   const goalMode = useGoalMode(state.selected, Boolean(state.goalBusy));
+  const requestSpeed = useGuiRequestSpeed(active);
   const workspaceBusy = Boolean(state.workspaceBusy);
-  const { draft, reading, editContent, removeImage, addImages, paste, pasteKeyDown, send: sendDraft,
-    addAttachments, removeAttachment, addQuote, removeQuote, clearQuotes, editQueued } = useComposerDraft(key, controller);
+  const { draft, reading: draftReading, editContent, appendDictation, removeImage, editImage, addImages, paste, pasteKeyDown,
+    send: sendDraft, addAttachments, removeAttachment, addQuote, removeQuote, clearQuotes, editQueued }
+    = useComposerDraft(key, controller);
   // Creating a goal first creates its conversation; keep the form until the goal request succeeds.
   useEffect(() => { if (!controller.getSnapshot().goalBusy || !active) setDialog(null); }, [key, active, controller]);
   const current = state.selected ? state.conversations[state.selected] : undefined;
+  const thread = current?.thread ?? state.threads.find((entry) => entry.id === state.selected);
   const project = state.selected
-    ? state.projectOverrides[state.selected] ?? current?.thread.cwd ?? "" : state.settings.cwd;
+    ? state.projectOverrides[state.selected] ?? thread?.cwd ?? "" : state.settings.cwd;
   const running = Boolean(current?.activeTurn);
   const queuedMessages = state.selected ? state.queued[state.selected] ?? [] : [];
-  const attachedQueue = running && queuedMessages.length > 0;
   const disabled = workspaceBusy || state.connection !== "ready" || state.sending || state.archived
     || state.compacting === state.selected;
+  const drop = useComposerDrop({ target: dropTarget, selected: state.selected, active,
+    disabled: disabled || draftReading || !!dialog, addAttachments, addImages,
+    setProject: controller.setProject, report: controller.report, focus: () => skillInput.current?.focus() });
+  const reading = draftReading || drop.reading || dictating;
+  useComposerFileReferences({ scope: `${key}:${project}`,
+    enabled: active && !disabled && !reading && !goalMode.enabled,
+    add: reference => addAttachments([reference]), addQuote, focus: () => skillInput.current?.focus() });
   const hasDraft = Boolean(draft.text.trim() || draft.images.length
     || draft.attachments?.length || draft.quotes?.length);
+  const suggestion = useNextPromptSuggestion(state, { active,
+    blocked: Boolean(draft.text || hasDraft || reading || goalMode.enabled || dialog) });
   useImperativeHandle(ref, () => ({ addQuote: (quote) => {
     if (disabled || !active || !current?.turns.some((turn) => turn.items.some((item) =>
       item.id === quote.messageId && item.type === "agentMessage"))) return false;
@@ -69,10 +86,10 @@ export const Composer = forwardRef<ComposerHandle, {
     return true;
   } }));
   const goal = state.selected ? state.goals?.[state.selected] : null;
-  const canSend = !disabled && !reading && !state.modelSettingsLoading
-    && hasDraft;
+  const canSend = !disabled && !reading && !state.modelSettingsLoading && !state.modelCatalogLoading
+    && state.models.length > 0 && hasDraft;
   const send = async () => {
-    if (!canSend) return;
+    if (!canSend || drop.isReading()) return;
     await sendDraft(goalMode.enabled, goalMode.exit);
   };
   const editQueuedMessage = (id: string) => {
@@ -81,61 +98,85 @@ export const Composer = forwardRef<ComposerHandle, {
     flushSync(() => { restored = editQueued(id); });
     if (restored) skillInput.current?.focus();
   };
-  return <div className={styles.composerWrap}>
+  return <div ref={dropTarget} className={styles.composerWrap}>
     <RunningChangesSummary value={current} />
+    <ProjectPicker value={project}
+      projects={state.projects} hostPicker={hostPicker} running={running} active={active} dropState={drop}
+      actions={<>
+        {isDesktopApp && <GuiToolbox trigger="git" active={active} connected={!workspaceBusy}
+          cwd={project} git={localGitClient} />}
+        <LocalProjectBrowser cwd={project} active={active} connected={!workspaceBusy && state.connection === 'ready'} />
+      </>}
+      disabled={running || state.sending || state.archived || workspaceBusy || reading} gitEnabled={!state.selected}
+      onBusyChange={controller.setWorkspaceBusy}
+      onChange={controller.setProject} onError={controller.report} />
     {state.selected && <QueuedMessages threadId={state.selected} messages={queuedMessages}
       running={running} connected={state.connection === "ready"} queue={controller.queue}
       editDisabled={disabled || reading || !active} onEdit={editQueuedMessage} />}
-    {!running && <ProjectPicker key={key} value={project} projects={state.projects}
-      disabled={state.sending || state.archived || workspaceBusy} gitEnabled={!state.selected}
-      onBusyChange={controller.setWorkspaceBusy}
-      onChange={controller.setProject} onError={controller.report} />}
-    <div ref={composer} className={`${styles.composer} ${attachedQueue ? styles.composerAttached : ""}`}>
+    <div ref={composer} className={styles.composer} {...drop.handlers}
+      data-file-dragging={drop.dragging || undefined}>
       <ImageAttachments key={`images:${key}`} images={draft.images} active={active}
-        disabled={state.sending} onRemove={removeImage} />
+        disabled={state.sending} onRemove={removeImage} onEdit={editImage} />
       <ComposerReferences key={`references:${key}`} items={draft.attachments ?? []} disabled={disabled}
         active={active} onRemove={removeAttachment} />
       <ComposerQuotes quotes={draft.quotes ?? []} draftKey={key} active={active} disabled={disabled}
         onRemove={removeQuote} onClear={() => { clearQuotes(); skillInput.current?.focus(); }} />
       <input ref={fileInput} type="file" accept={IMAGE_TYPES.join(",")} multiple hidden disabled={disabled}
-        aria-label="选择图片" onChange={(event) => {
+        aria-label={guiText("选择图片")} onChange={(event) => {
           addImages(Array.from(event.target.files ?? [])); event.target.value = "";
         }} />
       <SkillInput ref={skillInput} value={draft} draftKey={key} cwd={project} active={active}
+        suggestion={suggestion.text} onUserInput={suggestion.dismiss} onInputEnd={suggestion.restore}
+        conversations={state} onConversation={(reference) => addAttachments([reference])}
+        onCoze={(reference) => addAttachments([reference])}
+        onFile={(reference) => addAttachments([reference])}
         connected={state.connection === "ready"} disabled={disabled}
         compact={compactCommand(state, () => void controller.compact())}
         goal={{ enabled: !disabled && !running, run: goalMode.enter }}
-        placeholder={state.archived ? "恢复对话后即可继续" : goalMode.enabled
-          ? "描述想完成的目标…" : "描述任务，或输入 / 选择命令和技能…"}
+        placeholder={state.archived ? guiText("恢复对话后即可继续") : goalMode.enabled
+          ? guiText("描述想完成的目标…") : guiText("描述任务，% 引用文件，@ 引用对话，/ 技能，# Coze…")}
         onChange={editContent} onPaste={paste} onPasteKeyDown={pasteKeyDown} onSend={() => void send()} />
       <div className={styles.composerControls}>
         <ComposerAddMenu cwd={project} active={active} disabled={disabled} anchor={composer}
           onFiles={() => setDialog("files")} onGoal={() => setDialog("goal")}
           onPlugin={(plugin) => addAttachments([plugin])} onSkill={(skill) => skillInput.current?.addSkill(skill)} />
-        <AccessPicker value={state.settings.access}
-          disabled={false} onChange={(access: AccessMode) => controller.settings({ access })} />
+        <div className={styles.composerSecondary}>
+          <AccessPicker value={state.settings.access}
+            disabled={false} onChange={(access: AccessMode) => controller.settings({ access })} />
+        </div>
         <div className={styles.modelControls}>
-          {(goalMode.enabled || goal) && <div className={extras.goalChip}>
-            <button type="button" onClick={() => goal && setDialog("goal")}
-              title={goal ? `${goal.objective}（${GOAL_STATUS[goal.status]}）` : "目标模式"}>
-              <Target size={14} /><span>目标</span></button>
-            <button type="button" aria-label="移除目标" disabled={disabled || Boolean(state.goalBusy)}
-              onClick={async () => {
-                if (goal && state.selected && !await controller.goals.clear(state.selected)) return;
-                goalMode.exit(); skillInput.current?.focus();
-              }}><X size={13} /></button>
-          </div>}
-          <UsageStatus active={active} threadId={state.selected} tokenUsage={current?.tokenUsage} />
+          <div className={styles.composerSecondary}>
+            {(goalMode.enabled || goal) && <div className={extras.goalChip}>
+              <button type="button" onClick={() => goal && setDialog("goal")}
+                title={goal ? `${goal.objective} (${guiText(GOAL_STATUS[goal.status])})` : guiText("目标模式")}>
+                <Target size={14} /><span>{guiText("目标")}</span></button>
+              <button type="button" aria-label={guiText("移除目标")} disabled={disabled || Boolean(state.goalBusy)}
+                onClick={async () => {
+                  if (goal && state.selected && !await controller.goals.clear(state.selected)) return;
+                  goalMode.exit(); skillInput.current?.focus();
+                }}><X size={13} /></button>
+            </div>}
+            <UsageStatus active={active} threadId={state.selected} tokenUsage={current?.tokenUsage} />
+          </div>
           <ModelPicker models={state.models} model={state.settings.model} effort={state.settings.effort}
-            disabled={false} onChange={controller.settings} />
+            speed={requestSpeed}
+            error={state.modelCatalogError}
+            onRetry={() => controller.refreshModels().catch(controller.report)}
+            disabled={state.connection !== "ready" || Boolean(state.modelCatalogLoading)}
+            onChange={controller.settings} />
+          <ComposerDictation key={`dictation:${key}`} active={active && !disabled} disabled={disabled || !active}
+            onBusyChange={setDictating}
+            onText={(text) => { flushSync(() => appendDictation(text)); skillInput.current?.focus(); }} />
           <ComposerSubmit state={state} controller={controller}
             goalMode={goalMode.enabled}
-            hasDraft={hasDraft} reading={reading || workspaceBusy || Boolean(state.modelSettingsLoading)} onSend={send} />
+            hasDraft={hasDraft} reading={reading || workspaceBusy
+              || Boolean(state.modelSettingsLoading || state.modelCatalogLoading)} onSend={send} />
         </div>
       </div>
     </div>
-    <div className={styles.composerHint}><span>Enter 发送 · Shift + Enter 换行</span>
-      {current && current.tokens > 0 && <span>{formatConversationTokens(current.tokens)} tokens</span>}</div>
+    <div className={styles.composerHint}><span>Codex{cliVersion ? ` ${cliVersion}` : ''}</span>
+      <ConversationTokenStatus threadId={state.selected} tokens={current?.tokens ?? 0}
+        active={active && state.connection === 'ready'} /></div>
     {dialog === "files" && <ComposerFilesDialog onAdd={addAttachments} onImages={() => fileInput.current?.click()}
       onClose={() => setDialog(null)} onError={controller.report} />}
     {dialog === "goal" && <GoalDialog state={state} controller={controller} onClose={() => setDialog(null)} />}

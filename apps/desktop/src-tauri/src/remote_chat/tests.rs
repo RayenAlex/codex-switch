@@ -57,6 +57,21 @@ fn resume_credentials_expire_and_closed_sessions_are_not_reauthenticated() {
 }
 
 #[test]
+fn coordinator_admitted_sessions_are_not_capped_by_the_old_desktop_limit() {
+    let mut sessions = Sessions::default();
+    for index in 0..8 {
+        let message = json!({"type": "peer-open", "sessionId": format!("phone-{index}"),
+            "transportVersion": 2, "resumeToken": "proof", "expiresAt": now_ms() + 120_000});
+        sessions.receive(&message).unwrap();
+        assert!(sessions.receive(&message).is_err());
+    }
+    sessions
+        .receive(&json!({"type": "chat-policy", "policy": {"chatSessionLimit": 1}}))
+        .unwrap();
+    assert_eq!(sessions.authentication().len(), 8);
+}
+
+#[test]
 fn a_paused_frontend_has_bounded_buffers_and_stale_acknowledgements_do_not_release_batches() {
     let (sender, receiver) = mpsc::channel();
     let mut bridge = Bridge::new(
@@ -66,6 +81,8 @@ fn a_paused_frontend_has_bounded_buffers_and_stale_acknowledgements_do_not_relea
     bridge.reset(1);
     assert!(bridge.flush());
     let first = receiver.recv().unwrap();
+    let expired = Instant::now() + Duration::from_secs(31);
+    assert!(!bridge.stalled(Instant::now()));
     for _ in 0..256 {
         assert!(bridge.enqueue(Envelope {
             generation: 1,
@@ -78,9 +95,11 @@ fn a_paused_frontend_has_bounded_buffers_and_stale_acknowledgements_do_not_relea
     }));
     bridge.reset(2);
     bridge.acknowledge(first.sequence + 1);
+    assert!(bridge.stalled(expired));
     assert!(bridge.flush());
     assert!(receiver.try_recv().is_err());
     bridge.acknowledge(first.sequence);
+    assert!(!bridge.stalled(expired));
     assert!(bridge.flush());
     let reset = receiver.recv().unwrap();
     assert_eq!(reset.events.len(), 1);
@@ -164,6 +183,7 @@ fn native_registration_and_pong_continue_without_frontend_callbacks_or_timers() 
     runtime.configure(Some(config(url)));
     // The WebView never acknowledges the initial reset batch. Rust still authenticates and responds to ping.
     runtime.command(Command::Attach {
+        bulk: None,
         client_id: "view".into(),
         deliver: Box::new(|_| true),
     });
@@ -205,6 +225,7 @@ fn native_reconnect_does_not_resume_a_pairing_the_paused_frontend_never_complete
     let mut runtime = Runtime::default();
     runtime.configure(Some(config(url)));
     runtime.command(Command::Attach {
+        bulk: None,
         client_id: "view".into(),
         deliver: Box::new(|_| true),
     });
@@ -216,10 +237,12 @@ fn stale_view_cleanup_does_not_detach_the_replacement() {
     let (sender, receiver) = mpsc::channel();
     let mut runtime = Runtime::default();
     runtime.command(Command::Attach {
+        bulk: None,
         client_id: "old".into(),
         deliver: Box::new(|_| true),
     });
     runtime.command(Command::Attach {
+        bulk: None,
         client_id: "new".into(),
         deliver: Box::new(move |batch| sender.send(batch).is_ok()),
     });
@@ -293,6 +316,7 @@ fn native_reconnect_preserves_a_session_after_its_key_was_sent() {
     let mut runtime = Runtime::default();
     runtime.configure(Some(config(url)));
     runtime.command(Command::Attach {
+        bulk: None,
         client_id: "view".into(),
         deliver: Box::new(move |batch| sender.send(batch).is_ok()),
     });

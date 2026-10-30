@@ -20,7 +20,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use tauri::{Emitter, Manager, Runtime, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Emitter, Manager, Runtime, WebviewUrl};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tiny_http::{Header, Method, Request, Response, Server, StatusCode};
 
@@ -59,19 +59,19 @@ use crate::{
 };
 
 const OFFICIAL_CODEX_BASE_URL: &str = "https://chatgpt.com/backend-api/codex";
-// Forwarded uploads, response headers, and individual response reads receive independent
-// budgets. Credential and model-catalog requests also use this as their blocking timeout.
+// Upload inactivity and non-streaming response reads have independent budgets.
+// Response headers and SSE reads use separate settings; credential requests use this limit.
 const UPSTREAM_RESPONSE_IDLE_TIMEOUT: Duration = Duration::from_secs(120);
-const UPSTREAM_CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
-const UPSTREAM_TIMEOUT_ATTEMPT_LIMIT: usize = 3;
+const UPSTREAM_CONNECT_TIMEOUT: Duration = Duration::from_secs(60);
+const UPSTREAM_UPLOAD_IDLE_TIMEOUT: Duration = Duration::from_secs(240);
+const UPSTREAM_TIMEOUT_RETRY_DELAY: Duration = Duration::from_secs(2);
 const TOOL_SEARCH_PROXY_NAME: &str = "tool_search";
 const CUSTOM_TOOL_INPUT_FIELD: &str = "input";
 const CHAT_TOOL_NAME_MAX_LEN: usize = 64;
-const DIAGNOSTIC_SCHEMA_VERSION: u32 = 2;
+const DIAGNOSTIC_SCHEMA_VERSION: u32 = 3;
 const DIAGNOSTIC_REQUEST_OPTION_MAX_CHARS: usize = 128;
 const DIAGNOSTIC_LOG_MAX_BYTES: u64 = 10 * 1024 * 1024;
 const DIAGNOSTIC_LOG_FILE_NAME: &str = "local-proxy-diagnostics.jsonl";
-const DIAGNOSTIC_RESPONSE_BODY_MAX_CHARS: usize = crate::error_logs::DIAGNOSTIC_MESSAGE_MAX_CHARS;
 const TOKEN_USAGE_JSONL_FILE_NAME: &str = "token-usage.jsonl";
 const TOKEN_USAGE_DB_FILE_NAME: &str = "token-usage.sqlite3";
 const TOKEN_USAGE_LIST_LIMIT: usize = 500;
@@ -87,10 +87,6 @@ const CUSTOM_TOOL_PRESERVED_METADATA_HEADING: &str = "Original tool definition:"
 const LOCAL_PROXY_LAN_HOST: &str = "0.0.0.0";
 const LOCAL_PROXY_START_PROGRESS_EVENT: &str = "local-proxy-start-progress";
 const LOCAL_PROXY_STOP_PROGRESS_EVENT: &str = "local-proxy-stop-progress";
-const UPSTREAM_CONNECTION_FAILURE_MESSAGE: &str = concat!(
-    "Connection to the target service failed. Check your network, VPN/proxy, DNS, and firewall. ",
-    "If multiple proxy tools or modes are enabled, keep only one enabled and try again.",
-);
 const LOCAL_PROXY_REBIND_RETRY_TIMEOUT: Duration = Duration::from_secs(1);
 const LOCAL_PROXY_REBIND_RETRY_INTERVAL: Duration = Duration::from_millis(25);
 const UPSTREAM_429_INITIAL_DELAY_SECONDS: u64 = 1;

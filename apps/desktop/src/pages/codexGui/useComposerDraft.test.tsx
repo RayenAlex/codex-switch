@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { GuiController } from "./controller";
 import { MAX_IMAGE_BYTES, useComposerDraft } from "./useComposerDraft";
 import { MAX_REPLY_QUOTES, MAX_QUOTE_CHARACTERS, quoteKey } from "./replyQuotes";
+import { fileSelectionQuote } from '../../../../../shared/project-browser/fileSelection';
 
 let root: Root;
 let container: HTMLDivElement;
@@ -13,6 +14,55 @@ let editor: ReturnType<typeof useComposerDraft>;
 let readers: FileReader[];
 const imageUrl = "data:image/png;base64,iVBORw0KGgo=";
 const file = () => new File(["image"], "截图.png", { type: "image/png" });
+
+it('sends file selections with their path, range and original content alongside the existing draft', async () => {
+  const quote = fileSelectionQuote({ path: 'F:/project/a.ts', start: { line: 2, column: 3 },
+    end: { line: 3, column: 1 }, text: '  source\n' });
+  act(() => { editor.editText('请修改'); editor.addQuote(quote); });
+  await act(async () => editor.send());
+  expect(controller.send).toHaveBeenCalledWith(
+    '引用文件内容：\n> F:/project/a.ts:2:3-3:1\n> ```\n>   source\n> \n> ```\n\n请修改', [], []);
+});
+
+it("appends dictation to the latest text while retaining references and mentions", () => {
+  const attachment = { kind: "file" as const, name: "notes", path: "C:/notes.txt" };
+  const mention = { start: 0, end: 6,
+    skill: { name: "check", path: "C:/SKILL.md", description: "", enabled: true } };
+  act(() => {
+    editor.editContent({ text: "$check 已输入", mentions: [mention] });
+    editor.addAttachments([attachment]);
+    editor.appendDictation("  这是转写文字  ");
+  });
+  expect(editor.draft.text).toBe("$check 已输入\n这是转写文字");
+  expect(editor.draft.mentions).toEqual([mention]);
+  expect(editor.draft.attachments).toEqual([attachment]);
+  expect(controller.send).not.toHaveBeenCalled();
+});
+
+it("retains conversation references on failure and restores them from queued messages", async () => {
+  const attachment = { kind: "conversation" as const, name: "方案", path: "codex-thread://source" };
+  act(() => editor.addAttachments([attachment, attachment]));
+  expect(editor.draft.attachments).toEqual([attachment]);
+  vi.mocked(controller.send).mockResolvedValueOnce(false);
+  await act(async () => editor.send());
+  expect(controller.send).toHaveBeenCalledWith("", [], [], [attachment]);
+  expect(editor.draft.attachments).toEqual([attachment]);
+  vi.spyOn(controller.queue, "take").mockReturnValue({ text: "参考方案", images: [], skills: [],
+    attachments: [attachment] });
+  act(() => editor.editQueued("queued"));
+  expect(editor.draft.text).toBe("参考方案");
+  expect(editor.draft.attachments).toEqual([attachment]);
+  act(() => editor.removeAttachment(attachment.path));
+  expect(editor.draft.attachments).toEqual([]);
+});
+
+it("rejects a ninth conversation reference before sending", () => {
+  act(() => editor.addAttachments(Array.from({ length: 8 }, (_, index) => ({ kind: "conversation",
+    name: `对话 ${index}`, path: `codex-thread://${index}` }))));
+  act(() => editor.addAttachments([{ kind: "conversation", name: "额外", path: "codex-thread://extra" }]));
+  expect(editor.draft.attachments).toHaveLength(8);
+  expect(controller.report).toHaveBeenCalledWith("每条消息最多引用 8 个对话。");
+});
 
 function Fixture({ draftKey }: { draftKey: string }) {
   editor = useComposerDraft(draftKey, controller);

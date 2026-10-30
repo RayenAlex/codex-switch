@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Composer } from "./Composer";
 import { GuiController } from "./controller";
 import { guiApi } from "./api";
+import { testModels } from "./testModels";
 
 vi.mock("./api", () => ({ guiApi: { connect: vi.fn(), request: vi.fn(), subscribe: vi.fn() } }));
 vi.mock("./UsageStatus", () => ({ UsageStatus: () => null }));
@@ -40,6 +41,8 @@ const pasteImage = () => act(async () => {
 
 beforeEach(async () => {
   vi.resetAllMocks();
+  const getComputedStyle = window.getComputedStyle;
+  vi.spyOn(window, "getComputedStyle").mockImplementation((element) => getComputedStyle(element));
   localStorage.clear();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.spyOn(FileReader.prototype, "readAsDataURL").mockImplementation(function (this: FileReader) {
@@ -49,7 +52,8 @@ beforeEach(async () => {
   vi.mocked(guiApi.connect).mockResolvedValue([]);
   vi.mocked(guiApi.subscribe).mockResolvedValue(() => {});
   vi.mocked(guiApi.request).mockImplementation(async (request) => {
-    if (request.operation === "list" || request.operation === "models") return { data: [], nextCursor: null };
+    if (request.operation === "models") return { data: testModels, nextCursor: null };
+    if (request.operation === "list") return { data: [], nextCursor: null };
     return { thread: { id: "existing", cwd: "", preview: "hello", updatedAt: 1, turns: [] } };
   });
   controller = new GuiController();
@@ -97,5 +101,24 @@ it("clears pasted images after sending creates a conversation, including after r
   await pasteImage();
   expect(images()).toHaveLength(1);
   await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="移除图片 1"]')!.click());
+  expect(images()).toHaveLength(0);
+});
+
+it("preserves annotated images across conversation switches and sends the edited image", async () => {
+  const send = vi.spyOn(controller, "send").mockResolvedValue(true);
+  const edited = "data:image/jpeg;base64,ZWRpdGVk";
+  await pasteImage();
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="标注图片 1"]')!.click());
+  const frame = document.querySelector("iframe")!;
+  await act(async () => { window.dispatchEvent(new MessageEvent("message", {
+    source: frame.contentWindow, data: JSON.stringify({ type: "save", dataUrl: edited }),
+  })); });
+  expect(images()[0].getAttribute("src")).toBe(edited);
+  await switchBack();
+  expect(images()[0].getAttribute("src")).toBe(edited);
+  await act(async () => editor().dispatchEvent(new KeyboardEvent("keydown", {
+    key: "Enter", bubbles: true, cancelable: true,
+  })));
+  expect(send).toHaveBeenCalledWith("", [edited], []);
   expect(images()).toHaveLength(0);
 });

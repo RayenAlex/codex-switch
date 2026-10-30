@@ -4,10 +4,12 @@ use std::{
     fs,
     io::Read,
     path::{Path, PathBuf},
+    sync::Arc,
     time::Duration,
 };
 
 const MAX_ARCHIVE_BYTES: u64 = 64 * 1024 * 1024;
+static DOWNLOAD: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 pub(super) fn directory(root: &Path) -> Result<PathBuf> {
     Ok(root.join(format!("{VERSION}-{}", platform::asset()?.target)))
@@ -26,18 +28,20 @@ pub(super) fn present(root: &Path) -> Result<bool> {
         && platform::executable_present(&executable(root)?))
 }
 
-pub(super) fn ensure(root: &Path) -> Result<()> {
+pub(super) fn ensure(app: &tauri::AppHandle, root: &Path) -> Result<()> {
+    // Automatic upgrades release the installation guard while downloading. Serialize
+    // package preparation separately so simultaneous homes share one verified download.
+    let _download = DOWNLOAD.lock().map_err(|_| ComputerError::Storage)?;
     if present(root)? {
         return Ok(());
     }
     let asset = platform::asset()?;
     let name = format!("cua-driver-rs-{VERSION}-{}", asset.target);
     let url = format!(
-        "https://github.com/trycua/cua/releases/download/cua-driver-rs-v{VERSION}/{name}{}",
+        "https://github.com/piperhex/remoteai/releases/download/cua-v{VERSION}/{name}{}",
         asset.suffix
     );
-    let bytes = download(&url)?;
-    verify(&bytes, asset.digest)?;
+    let bytes = shared_download(app, &url, asset.digest)?;
     fs::create_dir_all(root).map_err(|_| ComputerError::Storage)?;
     let staging = root.join(format!("staging-{}", uuid::Uuid::new_v4()));
     fs::create_dir(&staging).map_err(|_| ComputerError::Storage)?;
@@ -53,6 +57,22 @@ pub(super) fn ensure(root: &Path) -> Result<()> {
         eprintln!("Could not clean computer-use staging directory");
     }
     result
+}
+
+fn shared_download(app: &tauri::AppHandle, url: &str, digest: &str) -> Result<Arc<Vec<u8>>> {
+    let mut package = crate::update_peers::packages::Package::computer_use(VERSION, url, digest);
+    if let Some(bytes) = package
+        .as_mut()
+        .and_then(|package| package.read_shared(app, |_, _| {}))
+    {
+        return Ok(bytes);
+    }
+    let bytes = Arc::new(download(url)?);
+    verify(&bytes, digest)?;
+    if let Some(mut package) = package {
+        package.remember(app, bytes.clone());
+    }
+    Ok(bytes)
 }
 
 fn download(url: &str) -> Result<Vec<u8>> {

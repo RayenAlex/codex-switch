@@ -1,5 +1,7 @@
+import { syntaxColorRoles } from '../../../../shared/theme/syntax';
 import { t, useLanguage } from '../i18n';
-import { useMemo, useState } from 'react';
+import { useContext, useMemo, useState } from 'react';
+import { FileEnvironmentContext } from '../../../desktop/src/pages/codexGui/fileEnvironment';
 import { Code2, WrapText } from 'lucide-react';
 import { highlightCode } from '../../../../shared/chat/codeHighlight';
 import { ChatCopyButton } from './ChatCopyButton';
@@ -12,10 +14,14 @@ const LANGUAGE_LABELS: Record<string, string> = {
   diff: 'Diff', patch: 'Diff',
 };
 
-export function ChatCodeBlock({ text, language = '', label, copyLabel = t("复制代码"), desktop = false }: {
-  text: string; language?: string; label?: string; copyLabel?: string; desktop?: boolean;
+export function ChatCodeBlock({ text, language = '', label, copyLabel = t("复制代码"), copyText = text,
+  desktop = false, wrapMode = 'toggle' }: {
+  text: string; language?: string; label?: string; copyLabel?: string; copyText?: string; desktop?: boolean;
+  wrapMode?: 'toggle' | 'always';
 }) {
   useLanguage();
+  const environment = useContext(FileEnvironmentContext);
+  desktop = desktop || Boolean(environment);
   const [limit, setLimit] = useState(PAGE_CHARACTERS);
   const [wrapped, setWrapped] = useState(false);
   // Bound highlighting and DOM work while progressively exposing the complete output.
@@ -25,15 +31,17 @@ export function ChatCodeBlock({ text, language = '', label, copyLabel = t("复�
   return <section className="chat-code-block">
     <header><span>{desktop && <Code2 size={16} aria-hidden="true" />}
       {label || (desktop ? LANGUAGE_LABELS[language] : '') || language || t("代码")}</span>
-      {desktop && <button type="button" className="chat-code-wrap" aria-label={t("自动换行")} aria-pressed={wrapped}
+      {desktop && wrapMode === 'toggle' && <button type="button" className="chat-code-wrap"
+        aria-label={t("自动换行")} aria-pressed={wrapped}
         onClick={() => setWrapped(value => !value)}><WrapText size={15} /></button>}
-      <ChatCopyButton text={text} label={copyLabel} /></header>
-    <pre className={desktop && !wrapped ? 'chat-code-unwrapped' : undefined} tabIndex={0} onScroll={event => {
+      <ChatCopyButton text={copyText} label={copyLabel} /></header>
+    <pre className={desktop && wrapMode === 'toggle' && !wrapped ? 'chat-code-unwrapped' : undefined}
+      tabIndex={0} onScroll={event => {
       const node = event.currentTarget;
       if (more && node.scrollHeight - node.scrollTop - node.clientHeight < 100) {
         setLimit(value => value + PAGE_CHARACTERS);
       }
-    }}><code>{spans.map((span, index) => <span key={index} style={{ color: span.color }}>{span.text}</span>)}</code></pre>
+    }}><code>{spans.map((span, index) => <span key={index} style={{ color: span.color && `var(--app-${syntaxColorRoles[span.color] ?? 'ink'}, ${span.color})` }}>{span.text}</span>)}</code></pre>
     {more && <button type="button" className="chat-text-action" onClick={() => setLimit(value => value + PAGE_CHARACTERS)}>
       {t("显示更多内容")}</button>}
   </section>;

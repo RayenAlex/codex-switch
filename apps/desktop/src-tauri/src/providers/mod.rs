@@ -1,6 +1,7 @@
 mod catalog_storage;
+mod group_accounts;
 mod reasoning_defaults;
-use reasoning_defaults::known_model_reasoning_efforts;
+pub(crate) use reasoning_defaults::known_model_reasoning_efforts;
 
 include!("model_refresh.rs");
 include!("config_repair.rs");
@@ -19,6 +20,7 @@ include!("model_catalog.rs");
 mod tests {
     include!("tests/common.rs");
     include!("tests/balance.rs");
+    include!("tests/shared_groups.rs");
     include!("tests/codex_switch_balance.rs");
     include!("tests/auth_refresh.rs");
     include!("tests/proxy_config.rs");
@@ -28,4 +30,5 @@ mod tests {
     include!("tests/model_refresh.rs");
     include!("tests/reasoning_defaults.rs");
     include!("tests/config_repair.rs");
+    include!("tests/request_options.rs");
 }

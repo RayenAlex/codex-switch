@@ -2,59 +2,70 @@ import { authorize, assertRunning } from './permissions.js';
 import { createFrameSessions } from './frame-sessions.js';
 import { markControlledTab, clearControlledTabs } from './tab-indicator.js';
 import { prepareBackgroundPage, restoreBackgroundPage, settleRendering } from './rendering.js';
+import { acquireConnection, assertConnected, finishConnection, releaseConnection,
+  stopConnections, connectionOwner } from './debugger-connections.js';
+import { queueTarget } from './target-queue.js';
+import { withNewTabs } from './tab-groups.js';
+import { t } from './i18n.js';
 
-const queues = new Map();
-const attached = new Set();
-
-export async function withTab(context, args, operation) {
-  const previous = queues.get(args.tabId) ?? Promise.resolve();
-  const current = previous.catch(() => {}).then(() => run(context, args, operation));
-  queues.set(args.tabId, current);
-  try { return await current; }
-  finally { if (queues.get(args.tabId) === current) queues.delete(args.tabId); }
+export function withTab(context, args, operation, options = {}) {
+  return queueTarget({ tabId: args.tabId }, () => run(context, args, operation, options));
 }
 
-async function run(context, args, operation) {
+async function run(context, args, operation, { prepareInput = true, trackNewTabs = false }) {
   const tab = await chrome.tabs.get(args.tabId);
   await authorize(tab.url, context.clientId, context.signal);
   const target = { tabId: tab.id };
-  try { await chrome.debugger.attach(target, '1.3'); }
-  catch { throw new Error('无法连接这个标签页。请关闭其开发者工具或其他浏览器控制工具后重试。'); }
-  attached.add(tab.id);
+  const owner = connectionOwner(context);
+  const connection = await acquireConnection(target, context.signal, owner).catch(() => {
+    assertRunning(context.signal);
+    throw new Error(t('tabConnectFailed', '无法连接这个标签页。请关闭其开发者工具或其他浏览器控制工具后重试。'));
+  });
   // Detaching also releases commands held open by a page dialog when the user cancels.
-  const abort = () => { void chrome.debugger.detach(target).catch(() => {}); };
+  const abort = () => { void finishConnection(target, owner); };
   context.signal?.addEventListener('abort', abort, { once: true });
   if (context.signal?.aborted) abort();
-  const guard = async () => {
+  const guard = async (options) => {
     assertRunning(context.signal);
+    assertConnected(connection);
     const current = await chrome.tabs.get(tab.id);
-    await authorize(current.url, context.clientId, context.signal);
+    await authorize(current.url, context.clientId, context.signal, options);
   };
   const sessions = createFrameSessions(target, guard);
   let viewportOverridden = false;
   try {
     await guard();
-    // Prepare the renderer for trusted input without activating its tab or bringing Chrome forward.
-    viewportOverridden = await prepareBackgroundPage({ tab, send: sessions.send });
+    // Log reads need no focus emulation, viewport changes or page JavaScript execution.
+    if (prepareInput) viewportOverridden = await prepareBackgroundPage({ tab, send: sessions.send });
     await markControlledTab(tab.id);
     await sessions.initialize();
-    const driver = { tab, send: sessions.send, documents: sessions.documents, context, guard };
-    const result = await operation(driver);
-    await settleRendering(driver);
+    const driver = { tab, send: sessions.send, documents: sessions.documents, listen: sessions.listen, context, guard,
+      debuggee: sessions.debuggee, relatedFrames: sessions.relatedFrames };
+    const result = await performOperation(driver, operation, { prepareInput, trackNewTabs });
+    await guard();
     return result;
   } finally {
+    const cleaned = await sessions.dispose();
+    const restored = !prepareInput || await restoreBackgroundPage(target, viewportOverridden);
+    // A stale reference or a wait timeout does not end the debugging task. Recheck access
+    // before retaining the transport, even when the requested page action failed.
+    const authorized = await guard({ prompt: false }).then(() => true, () => false);
+    await releaseConnection(connection, authorized && cleaned && restored, owner);
     context.signal?.removeEventListener('abort', abort);
-    sessions.dispose();
-    await restoreBackgroundPage(target, viewportOverridden);
-    attached.delete(tab.id);
-    // The browser can detach first when the tab closes or the user stops debugging.
-    await chrome.debugger.detach(target).catch(() => {});
   }
 }
 
+async function performOperation(driver, operation, { prepareInput, trackNewTabs }) {
+  const perform = async () => {
+    const result = await operation(driver);
+    if (prepareInput) await settleRendering(driver);
+    return result;
+  };
+  return trackNewTabs ? withNewTabs(driver.context, driver.tab.id, perform) : perform();
+}
+
 export async function stopDebugging() {
-  await Promise.all([...attached].map((tabId) => chrome.debugger.detach({ tabId }).catch(() => {})));
-  attached.clear();
+  await stopConnections();
   await clearControlledTabs();
 }
 
@@ -64,7 +75,7 @@ export async function pageCall(driver, ref, functionDeclaration, args = []) {
   try {
     const response = await driver.send('Runtime.callFunctionOn', { objectId, functionDeclaration,
       arguments: args.map((value) => ({ value })), returnByValue: true, awaitPromise: true }, ref.frameId);
-    if (response.exceptionDetails) throw new Error('页面内容已变化，或该元素不能完成此操作。请重新读取页面。');
+    if (response.exceptionDetails) throw new Error(t('elementActionFailed', '页面内容已变化，或该元素不能完成此操作。请重新读取页面。'));
     return response.result.value;
   } finally {
     await driver.send('Runtime.releaseObject', { objectId }, ref.frameId).catch(() => {});

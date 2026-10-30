@@ -1,14 +1,20 @@
 {
   "expo": {
-    "name": "Codex Switch",
+    "name": "Remote AI",
     "slug": "codex-switch",
-    "version": "1.5.33",
+    "version": "2.0.17",
     "icon": "./assets/icon.png",
-    "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "orientation": "default",
+    "userInterfaceStyle": "automatic",
     "splash": {
       "resizeMode": "contain",
       "backgroundColor": "#f7faf7"
+    },
+    "locales": {
+      "en": "./locales/en.json",
+      "ru": "./locales/ru.json",
+      "zh-Hans": "./locales/zh.json",
+      "zh-Hant": "./locales/zh.json"
     },
     "ios": {
       "icon": "./assets/icon.png",
@@ -28,7 +34,7 @@
     "android": {
       "icon": "./assets/icon.png",
       "package": "com.codexswitch.mobile",
-      "versionCode": 10503399,
+      "versionCode": 20001799,
       "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.REQUEST_INSTALL_PACKAGES"
@@ -50,25 +56,26 @@
     },
     "plugins": [
       "expo-secure-store",
+      "./plugins/withChatTransport.cjs",
       [
         "@config-plugins/react-native-webrtc",
         {
-          "cameraPermission": "允许 Codex Switch 拍摄照片和扫描二维码",
+          "cameraPermission": "允许 Remote AI 拍摄照片和扫描二维码",
           "microphonePermission": "聊天不需要使用麦克风"
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "允许 Codex Switch 拍摄照片和扫描二维码",
+          "cameraPermission": "允许 Remote AI 拍摄照片和扫描二维码",
           "recordAudioAndroid": false
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "允许 Codex Switch 选择照片发送到聊天",
-          "cameraPermission": "允许 Codex Switch 拍摄照片和扫描二维码",
+          "photosPermission": "允许 Remote AI 选择照片发送到聊天",
+          "cameraPermission": "允许 Remote AI 拍摄照片和扫描二维码",
           "microphonePermission": false
         }
       ],
@@ -76,27 +83,31 @@
       "./plugins/withChatBackground.cjs",
       "./plugins/withChatTextSelection.cjs",
       "./plugins/withChatScroll.cjs",
-      "./plugins/withChatTransport.cjs",
+      "./plugins/withDesktopWindow.cjs",
+      "./plugins/withChatPacketCipher.cjs",
+      "./plugins/withChatHistoryWorker.cjs",
       "./plugins/withAppUpdate.cjs",
+      "./plugins/withDownloads.cjs",
       "./plugins/withSharedBundleInputs.cjs",
+      "./plugins/withFontScaleRefresh.cjs",
       [
         "expo-screen-orientation",
         {
-          "initialOrientation": "PORTRAIT_UP"
+          "initialOrientation": "DEFAULT"
         }
       ],
       [
         "expo-media-library",
         {
-          "photosPermission": "允许 Codex Switch 选择照片发送到聊天",
-          "savePhotosPermission": "允许 Codex Switch 将图片保存到相册",
+          "photosPermission": "允许 Remote AI 选择照片发送到聊天",
+          "savePhotosPermission": "允许 Remote AI 将图片保存到相册",
           "isAccessMediaLocationEnabled": false
         }
       ],
       [
         "expo-sensors",
         {
-          "motionPermission": "允许 Codex Switch 根据手机方向旋转图片"
+          "motionPermission": "允许 Remote AI 根据手机方向旋转图片"
         }
       ]
     ]

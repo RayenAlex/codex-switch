@@ -78,6 +78,7 @@ export interface Turn {
   id: string; status: string; items: Item[]; startedAt?: number | null;
   error?: import("./requestError").RequestError | null;
   retryError?: import("./requestError").RequestError;
+  requestErrors?: import("./turnRequestErrors").TurnRequestError[];
   completedAt?: number | null;
   durationMs?: number | null;
   diff?: string;
@@ -102,16 +103,23 @@ export interface Question {
   options?: { label: string; description: string }[];
 }
 export interface ThreadTokenUsage {
+  /** Codex's active-context estimate used by its compaction check, separate from billed usage. */
+  contextTokens?: number | null;
   total: { totalTokens: number };
   last: { totalTokens: number };
   modelContextWindow?: number | null;
 }
 export interface EventParams {
+  notificationEventId?: string;
   threadName?: string | null;
   serverName?: string;
   _meta?: { tool_params?: Record<string, unknown> };
   userMessageIndex?: number;
-  computerUseSetup?: ComputerUseSetup;
+  /** Neighbours locate acknowledged messages when history is ahead of the acknowledgement. */
+  afterItemId?: string;
+  beforeItemId?: string;
+  computerUseSetup?: AutomaticSetupStatus;
+  unattendedSetup?: AutomaticSetupStatus;
   goal?: ThreadGoal;
   threadId?: string;
   thread?: Thread;
@@ -141,7 +149,7 @@ export interface EventParams {
   error?: import("./requestError").RequestError;
   willRetry?: boolean;
 }
-export type ComputerUseSetup = "installing" | "ready" | "failed";
+export type AutomaticSetupStatus = "installing" | "ready" | "failed";
 export interface GuiEvent { method: string; params: EventParams; id?: string | number | null }
 export interface Conversation {
   processing?: ProcessingState;
@@ -156,8 +164,12 @@ export interface ListResponse<T> { data: T[]; nextCursor: string | null }
 export interface Settings { cwd: string; model: string; effort: string; access: AccessMode }
 export interface ThreadReadState { turnId: string; unread: boolean }
 export interface GuiState {
+  capacityRetry?: import("./capacityRetry").CapacityRetryState;
   modelSettingsLoading?: boolean;
-  computerUseSetup?: ComputerUseSetup;
+  modelCatalogLoading?: boolean;
+  modelCatalogError?: string;
+  computerUseSetup?: AutomaticSetupStatus;
+  unattendedSetup?: AutomaticSetupStatus;
   workspaceBusy?: boolean;
   pendingRequest?: PendingRequest;
   goals?: Record<string, ThreadGoal | null>;
@@ -193,11 +205,20 @@ export type ApprovalReply = {
   answers?: Record<string, { answers: string[] }>;
 };
 export type Request =
+  | Exclude<import('../../../../../shared/project-browser/protocol').ProjectBrowserRequest, { operation: 'projectFiles' }>
+  | { operation: 'suggestNextPrompt'; threadId: string; sourceTurnId: string; model: string;
+      effort: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra' }
+  | { operation: 'fileManifest'; threadId: string; id: string; page?: number; maxBytes: number }
   | import("../../../../../shared/remote-chat/video").VideoRequest
   | import("../../../../../shared/remote-chat/fileDownload").FileRequest
   | { operation: "textPreview"; threadId: string; path: string; maxBytes?: number }
   | ({ operation: "projectFiles" } & import('../../../../../shared/remote-chat/projectFiles').ProjectFilesRequest)
   | { operation: "projectDirectories"; directory: string }
+    | ({ operation: 'downloadOpen'; maxBytes?: number }
+      & import('../../../../../shared/remote-chat/downloads').DownloadOpen)
+    | ({ operation: 'previewOpen' } & import('../../../../../shared/remote-chat/downloads').PreviewOpen)
+  | ({ operation: 'downloadBrowse' } & import('../../../../../shared/remote-chat/downloads').DownloadBrowse)
+  | { operation: "deleteMessage"; threadId: string; turnId: string; itemId: string; access: AccessMode }
   | { operation: "editMessage"; threadId: string; turnId: string; itemId: string; text: string;
       removedImageIndexes?: number[]; images?: string[]; skills?: SkillReference[];
       model?: string; effort?: string; access: AccessMode; cwd?: string }
@@ -205,12 +226,13 @@ export type Request =
   | { operation: "goalGet" | "goalClear"; threadId: string }
   | { operation: "goalSet"; threadId: string; objective?: string; status: "active" | "paused" }
   | { operation: "plugins"; cwd?: string }
+  | { operation: "cozeCatalog" }
   | { operation: "sendBatch"; threadId: string; messages: MessageInput[]; model?: string; effort?: string;
-      access: AccessMode }
+      access: AccessMode; cwd?: string }
   | { operation: "steer"; threadId: string; turnId: string; text: string; images: string[];
       skills: SkillReference[]; attachments?: AttachmentReference[]; transferMode?: 'direct' | 'relay' }
   | { operation: "skills"; cwd?: string }
-  | { operation: "models"; cursor?: string }
+  | { operation: "models"; cursor?: string; cacheOnly?: boolean }
   | { operation: "list"; cursor?: string; archived: boolean; search?: string; limit?: number }
   | { operation: "start"; cwd?: string; model?: string; access: AccessMode }
   | { operation: "fork"; threadId: string; turnId: string; access: AccessMode; cwd?: string }
@@ -231,6 +253,7 @@ export interface MessageInput {
 }
 export interface QueuedMessage extends MessageInput {
   id: string;
+  needsReview?: boolean;
   busy?: boolean;
   error?: string;
   model: string;

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import {
   AutoComplete,
@@ -12,7 +13,6 @@ import {
   Tag,
   Tooltip,
 } from "antd";
-import type { TableProps } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   CalendarClock,
@@ -28,6 +28,7 @@ import {
   MoreHorizontal,
   Pencil,
   RefreshCw,
+  ListOrdered,
   ToggleLeft,
   ToggleRight,
   Trash2,
@@ -54,8 +55,8 @@ import type {
 } from "../../../types";
 import { accountExpirationDate } from "../../../utils/expiration";
 import { maskAccountEmail } from "../../../utils/accountPrivacy";
-import { formatCompactTokenCount } from "../../../utils/tokenContext";
 import { shouldShowUsageError } from "../../../utils/usageErrors";
+import { translateBackendMessage } from "../../../../../../shared/i18n/backend/translateBackendMessage";
 import {
   formatEstimatedCost,
   invalidateCustomTokenCostRulesCache,
@@ -66,26 +67,33 @@ import {
   FAST_MODE_COST_MULTIPLIER_EVENT,
   FAST_MODE_COST_MULTIPLIER_STORAGE_KEY,
 } from "../../../utils/tokenCostFastMode";
-import { LONG_CONTEXT_COST_EVENT, LONG_CONTEXT_COST_STORAGE_KEY } from "../../../utils/tokenCostLongContext";
 import {
-  DailyTokenUsageTooltip,
-  EMPTY_TOKEN_TOTALS,
-  type TokenTypeTotals,
-} from "../../DailyTokenUsageTooltip";
+  LONG_CONTEXT_COST_EVENT, LONG_CONTEXT_COST_STORAGE_KEY, MODEL_LONG_CONTEXT_THRESHOLD_STORAGE_KEY,
+} from "../../../utils/tokenCostLongContext";
 import { TokenCostColumnTitle, useTokenCostDisplaySettings } from "../../TokenCostUnitSettings";
 import { AccountNoteModal } from "../../modals/AccountNoteModal";
 import { AccountExpandedPanel } from "../AccountExpandedPanel";
 import { AccountAvatar } from "../AccountAvatar";
+import { AccountCardFooter } from "../AccountCardFooter";
+import { accountCardLabels } from "../accountCardLabels";
+import { AccountCredits, AccountCreditsTitle } from "../AccountCredits";
 import { AccountCardAutoSwitchSettings } from "../AccountCardAutoSwitchSettings";
 import { AccountGroupCell, ConcurrentRoutingControl } from "../AccountGroupControls";
 import { AccountUseActionIcon } from "../AccountUseActionIcon";
 import { OfficialContextSettings } from "../OfficialContextSettings";
 import { UsageMeter, UsageRefreshAge } from "../UsageMeter";
 import { canReceiveConcurrentConversation } from "../concurrentAccountEligibility";
-import { getAccountCardTokenUsage } from "../accountCardUsage";
+import { createAccountTokenUsageLookup } from "../accountCardUsage";
+import { useOfficialUsage } from "../../../hooks/useOfficialUsage";
+import { officialUsageLabels } from "../../../../../../shared/officialUsageLabels";
+import { AvailableQuota } from "../../TokenUsageDashboard/OfficialAccountUsage";
 import { getSwitchableAccounts } from "../accountSelectors";
 import { confirmOfficialAuthAccountChange } from "../confirmOfficialAuthAccountChange";
 import styles from "./index.module.less";
+import { isAccountControlTarget } from "./accountAreaInteraction";
+import { AccountOrderModal } from "./AccountOrderModal";
+import { accountOrderLabels } from "./accountOrderLabels";
+import { useAccountOrder, type AccountSortOrder } from "./useAccountOrder";
 import {
   AccountNoteEditButton,
   AccountPrivacyToggle,
@@ -99,8 +107,6 @@ import {
   needsAccountAttention,
   resetCreditsCount,
   ResetCreditsModal,
-  tokenUsageMatchesAccount,
-  totalsForAccount,
 } from "../AccountTableParts";
 
 interface AccountTableProps {
@@ -113,6 +119,8 @@ interface AccountTableProps {
   onDeactivate: (id: string) => void;
   onCopyAuthJson: (id: string) => void;
   onRefresh: (id: string) => void;
+  onRefreshAllUsage: () => void;
+  refreshingAllUsage: boolean;
   onDelete: (id: string) => void;
   onConsumeQuotaMany: (ids: string[]) => Promise<string[]>;
   onDeleteMany: (ids: string[]) => Promise<string[]>;
@@ -138,6 +146,7 @@ interface AccountTableProps {
   resetCreditBusyAccountId: string | null;
   hotSwitchEnabled: boolean;
   fastModeEnabled: boolean;
+  proxySpeedControl?: ReactNode;
   concurrentAccountRoutingEnabled: boolean;
   concurrentAccountGroup: string | null;
   concurrentAccountRoutingBusy: boolean;
@@ -156,7 +165,6 @@ interface AccountTableProps {
   t: Translate;
 }
 
-const USAGE_SORT_STORAGE_KEY = "codex-switch:account-table-usage-sort";
 const HIDDEN_COLUMNS_STORAGE_KEY = "codex-switch:account-table-hidden-columns";
 const GROUP_COLUMN_PREFERENCE_STORAGE_KEY = "codex-switch:account-table-group-column-preference";
 const GPT_5_6_SOL_CONTEXT_WINDOW_OPTIONS = GPT_5_6_SOL_CONTEXT_WINDOW_OPTIONS_K.map((value) => ({
@@ -170,15 +178,15 @@ function modelContextWindowTooltipKey(error: ModelContextWindowError) {
   return "table.modelContextWindowTooltip" as const;
 }
 
-type UsageSortColumn = "fiveHours" | "oneWeek";
-type UsageSortOrder = "ascend" | "descend";
 const ACCOUNT_TABLE_COLUMN_KEYS = [
   "account",
   "group",
   "fiveHours",
   "oneWeek",
+  "credits",
   "tokenTotals",
   "estimatedCost",
+  "availableQuota",
   "autoSwitchPriority",
   "autoSwitchThreshold",
   "actions",
@@ -189,17 +197,14 @@ const REORDERABLE_ACCOUNT_TABLE_COLUMN_KEYS: ReorderableAccountTableColumnKey[] 
   "group",
   "fiveHours",
   "oneWeek",
+  "credits",
   "tokenTotals",
   "estimatedCost",
+  "availableQuota",
   "autoSwitchPriority",
   "autoSwitchThreshold",
 ];
 const COLUMN_ORDER_STORAGE_KEY = "codex-switch:account-table-column-order";
-
-interface UsageSortPreference {
-  column: UsageSortColumn;
-  order: UsageSortOrder;
-}
 
 interface AccountContextMenu {
   accountId: string;
@@ -218,34 +223,6 @@ function contextMenuPosition(event: { clientX: number; clientY: number }, menuHe
     x: Math.max(8, Math.min(event.clientX, window.innerWidth - ACCOUNT_CONTEXT_MENU_WIDTH - 8)),
     y: Math.max(8, Math.min(event.clientY, window.innerHeight - menuHeight - 8)),
   };
-}
-
-function isUsageSortColumn(value: unknown): value is UsageSortColumn {
-  return value === "fiveHours" || value === "oneWeek";
-}
-
-function isUsageSortOrder(value: unknown): value is UsageSortOrder {
-  return value === "ascend" || value === "descend";
-}
-
-function loadUsageSortPreference(): UsageSortPreference | null {
-  try {
-    const parsed: unknown = JSON.parse(window.localStorage.getItem(USAGE_SORT_STORAGE_KEY) ?? "null");
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-    const preference = parsed as Partial<UsageSortPreference>;
-    if (!isUsageSortColumn(preference.column) || !isUsageSortOrder(preference.order)) return null;
-    return { column: preference.column, order: preference.order };
-  } catch {
-    return null;
-  }
-}
-
-function persistUsageSortPreference(preference: UsageSortPreference | null) {
-  if (!preference) {
-    window.localStorage.removeItem(USAGE_SORT_STORAGE_KEY);
-    return;
-  }
-  window.localStorage.setItem(USAGE_SORT_STORAGE_KEY, JSON.stringify(preference));
 }
 
 function isAccountTableColumnKey(value: unknown): value is AccountTableColumnKey {
@@ -328,7 +305,7 @@ function compareKeepingAttentionLast(
   right: Account,
   hotSwitchEnabled: boolean,
   showUsageNetworkErrors: boolean,
-  sortOrder: UsageSortOrder | null | undefined,
+  sortOrder: AccountSortOrder | null | undefined,
   compare: (left: Account, right: Account) => number,
 ) {
   const attentionOrder = Number(needsAccountAttention(left, hotSwitchEnabled, showUsageNetworkErrors))
@@ -347,6 +324,8 @@ export function AccountTable({
   onDeactivate,
   onCopyAuthJson,
   onRefresh,
+  onRefreshAllUsage,
+  refreshingAllUsage,
   onDelete,
   onConsumeQuotaMany,
   onDeleteMany,
@@ -372,6 +351,7 @@ export function AccountTable({
   resetCreditBusyAccountId,
   hotSwitchEnabled,
   fastModeEnabled,
+  proxySpeedControl,
   concurrentAccountRoutingEnabled,
   concurrentAccountGroup,
   concurrentAccountRoutingBusy,
@@ -408,7 +388,7 @@ export function AccountTable({
   const [bulkEnableBusy, setBulkEnableBusy] = useState(false);
   const [bulkDisableBusy, setBulkDisableBusy] = useState(false);
   const [openaiAuthPendingAccountId, setOpenaiAuthPendingAccountId] = useState<string | null>(null);
-  const [usageSort, setUsageSort] = useState<UsageSortPreference | null>(loadUsageSortPreference);
+  const [accountOrderOpen, setAccountOrderOpen] = useState(false);
   const [hiddenColumns, setHiddenColumns] = useState<AccountTableColumnKey[]>(loadHiddenColumns);
   const [columnOrder, setColumnOrder] = useState<ReorderableAccountTableColumnKey[]>(loadColumnOrder);
   const draggedColumnRef = useRef<ReorderableAccountTableColumnKey | null>(null);
@@ -417,6 +397,11 @@ export function AccountTable({
   const modelContextWindow = useGpt56SolContextWindow();
   const [tableScrollY, setTableScrollY] = useState(0);
   const [accountTokenUsage, setAccountTokenUsage] = useState<AccountTokenUsageTotals[]>([]);
+  const officialUsage = useOfficialUsage({ active, refreshSeconds: tokenUsageRefreshSeconds });
+  const officialUsageById = useMemo(() => new Map(officialUsage.accounts.map((account) => [account.accountId, account])),
+    [officialUsage.accounts]);
+  const accountUsageRefreshing = useRef(false);
+  const refreshCurrentAccountUsage = useRef<(() => void) | null>(null);
   const [accountConversationCounts, setAccountConversationCounts] = useState<Record<string, number>>({});
   const tokenCostDisplay = useTokenCostDisplaySettings();
   const [cardTopbarHost, setCardTopbarHost] = useState<HTMLElement | null>(null);
@@ -462,15 +447,12 @@ export function AccountTable({
     return () => document.removeEventListener("pointerdown", closeContextMenu);
   }, []);
   useEffect(() => {
-    if (!hotSwitchEnabled) {
-      setAccountTokenUsage([]);
-      return undefined;
-    }
-    let active = true;
-    let refreshing = false;
+    // Persisted usage remains available while proxy status is loading or the proxy is stopped.
+    if (!active) return undefined;
+    let mounted = true;
     const refresh = async () => {
-      if (refreshing) return;
-      refreshing = true;
+      if (!mounted || accountUsageRefreshing.current) return;
+      accountUsageRefreshing.current = true;
       try {
         const today = new Date();
         const startTs = new Date(
@@ -479,20 +461,24 @@ export function AccountTable({
           today.getDate(),
         ).getTime() / 1_000;
         const totals = await loadAccountTokenUsage(startTs, providers);
-        if (active) setAccountTokenUsage(totals);
+        if (mounted) setAccountTokenUsage(totals);
       } catch {
         // Keep the last successful totals; quota rendering must not fail with token statistics.
       } finally {
-        refreshing = false;
+        accountUsageRefreshing.current = false;
+        // If pricing or visibility changed mid-request, refresh with the latest inputs after it settles.
+        if (!mounted) refreshCurrentAccountUsage.current?.();
       }
     };
+    refreshCurrentAccountUsage.current = () => void refresh();
     void refresh();
     const timer = window.setInterval(() => void refresh(), Math.max(1, tokenUsageRefreshSeconds) * 1000);
     const unsubscribe = subscribeToTokenUsageChanges(() => void refresh());
     const refreshStoredMultiplier = (event: StorageEvent) => {
       if (event.storageArea !== window.localStorage
         || (event.key !== null && event.key !== FAST_MODE_COST_MULTIPLIER_STORAGE_KEY
-          && event.key !== LONG_CONTEXT_COST_STORAGE_KEY)) return;
+          && event.key !== LONG_CONTEXT_COST_STORAGE_KEY
+          && event.key !== MODEL_LONG_CONTEXT_THRESHOLD_STORAGE_KEY)) return;
       invalidateCustomTokenCostRulesCache();
       void refresh();
     };
@@ -502,7 +488,8 @@ export function AccountTable({
     window.addEventListener(LONG_CONTEXT_COST_EVENT, refresh);
     window.addEventListener("storage", refreshStoredMultiplier);
     return () => {
-      active = false;
+      mounted = false;
+      refreshCurrentAccountUsage.current = null;
       window.clearInterval(timer);
       unsubscribe();
       window.removeEventListener(TOKEN_COST_CUSTOM_RULES_EVENT, refresh);
@@ -511,7 +498,7 @@ export function AccountTable({
       window.removeEventListener(LONG_CONTEXT_COST_EVENT, refresh);
       window.removeEventListener("storage", refreshStoredMultiplier);
     };
-  }, [hotSwitchEnabled, providers, tokenUsageRefreshSeconds]);
+  }, [active, providers, tokenUsageRefreshSeconds]);
   useEffect(() => {
     if (!concurrentRoutingActive) {
       setAccountConversationCounts({});
@@ -562,25 +549,15 @@ export function AccountTable({
   const customThresholdActive = hotSwitchEnabled
     && autoSwitchOnQuotaExhaustion
     && customAutoSwitchThresholdEnabled;
-  const todayTokenTotalsByAccount = useMemo(() => {
-    const totals = new Map<string, TokenTypeTotals>();
-    accountTokenUsage.forEach((usage) => {
-      const account = accounts.find((candidate) => tokenUsageMatchesAccount(usage, candidate));
-      if (!account) return;
-      const current = totals.get(account.id) ?? { ...EMPTY_TOKEN_TOTALS };
-      current.total += usage.totalTokens;
-      current.input += usage.inputTokens;
-      current.output += usage.outputTokens;
-      current.reasoning += usage.reasoningTokens;
-      current.cached += usage.cachedTokens;
-      totals.set(account.id, current);
-    });
-    return totals;
-  }, [accountTokenUsage, accounts]);
-  const orderedAccounts = useMemo(() => [...accounts].sort(
+  const usageForAccount = useMemo(
+    () => createAccountTokenUsageLookup(accounts, accountTokenUsage),
+    [accounts, accountTokenUsage],
+  );
+  const defaultOrderedAccounts = useMemo(() => [...accounts].sort(
     (left, right) => Number(needsAccountAttention(left, hotSwitchEnabled, showUsageNetworkErrors))
       - Number(needsAccountAttention(right, hotSwitchEnabled, showUsageNetworkErrors)),
   ), [accounts, hotSwitchEnabled, showUsageNetworkErrors]);
+  const { orderedAccounts, columnSort, handleTableChange, saveOrder } = useAccountOrder(defaultOrderedAccounts);
   const selectedAccountIdSet = new Set(selectedAccountIds);
   const consumableSelectedAccountIds = accounts
     .filter((account) => selectedAccountIdSet.has(account.id) && account.autoSwitchEnabled)
@@ -616,6 +593,13 @@ export function AccountTable({
     [accounts, hotSwitchEnabled],
   );
   const switchableAccountIds = new Set(switchableAccounts.map((account) => account.id));
+  const canSwitchFromAccountArea = (account: Account) => !concurrentRoutingActive
+    && !account.active && busyAccountId !== account.id && switchableAccountIds.has(account.id);
+  const handleAccountAreaClick = (event: MouseEvent<HTMLElement>, account: Account) => {
+    if (isAccountControlTarget(event.target)) return;
+    setContextMenu(null);
+    if (canSwitchFromAccountArea(account)) onSwitch(account.id);
+  };
   const accountSelectAccounts = activeAccount && !switchableAccountIds.has(activeAccount.id)
     ? [...switchableAccounts, activeAccount]
     : switchableAccounts;
@@ -624,16 +608,6 @@ export function AccountTable({
     value: account.id,
     disabled: !switchableAccountIds.has(account.id),
   }));
-  const handleTableChange: NonNullable<TableProps<Account>["onChange"]> = (_, __, sorter) => {
-    const activeSorter = Array.isArray(sorter) ? sorter[0] : sorter;
-    const nextSort = isUsageSortColumn(activeSorter.columnKey) && isUsageSortOrder(activeSorter.order)
-      ? { column: activeSorter.columnKey, order: activeSorter.order }
-      : null;
-
-    setUsageSort(nextSort);
-    persistUsageSortPreference(nextSort);
-  };
-
   const columns: ColumnsType<Account> = [
     Table.EXPAND_COLUMN as ColumnsType<Account>[number],
     {
@@ -642,8 +616,16 @@ export function AccountTable({
           <span>{t("table.account")}</span>
           <AccountPrivacyToggle enabled={privacyMode} loading={privacyModeLoading}
             onChange={onPrivacyModeChange} t={t} />
+          <Tooltip title={accountOrderLabels(language).title} styles={{ root: { maxWidth: 400 } }}>
+            <Button type="text" size="small" className="account-privacy-toggle"
+              aria-label={accountOrderLabels(language).title} icon={<ListOrdered size={16} />}
+              onKeyDown={(event) => event.stopPropagation()}
+              onClick={(event) => { event.stopPropagation(); setAccountOrderOpen(true); }} />
+          </Tooltip>
         </span>
       ), key: "account", dataIndex: "email", width: 280, fixed: "left",
+      showSorterTooltip: { target: "sorter-icon", styles: { root: { maxWidth: 400 } } },
+      sortOrder: columnSort?.column === "account" ? columnSort.order : null,
       sorter: (left, right, sortOrder) => compareKeepingAttentionLast(
         left,
         right,
@@ -694,7 +676,7 @@ export function AccountTable({
                   })}</span>
                 )}
                 {shouldShowUsageError(account.usage.error, showUsageNetworkErrors)
-                  && <Tooltip title={account.usage.error}>
+                  && <Tooltip title={translateBackendMessage(language, account.usage.error)}>
                     <Tag color="error" className="account-error-tag" icon={<CircleHelp size={12} aria-hidden="true" />}>
                       {t("table.error")}
                     </Tag>
@@ -707,6 +689,7 @@ export function AccountTable({
     },
     {
       title: t("accounts.group.column"), key: "group", dataIndex: "group", width: 150,
+      sortOrder: columnSort?.column === "group" ? columnSort.order : null,
       sorter: (left, right) => left.group.localeCompare(right.group),
       filters: [
         { text: t("accounts.group.ungrouped"), value: "" },
@@ -726,7 +709,7 @@ export function AccountTable({
         sortOrder,
         (first, second) => compareUsageRemaining(first, second, "primary"),
       ),
-      sortOrder: usageSort?.column === "fiveHours" ? usageSort.order : null,
+      sortOrder: columnSort?.column === "fiveHours" ? columnSort.order : null,
       // OpenAI currently reports the primary (5-hour) quota with a weekly reset window.
       // Render its reset time like the weekly quota so it does not show a misleading 5-hour countdown.
       render: (_, account) => <UsageMeter window={account.usage.primary} resetWindow="oneWeek"
@@ -742,23 +725,23 @@ export function AccountTable({
         sortOrder,
         (first, second) => compareUsageRemaining(first, second, "secondary"),
       ),
-      sortOrder: usageSort?.column === "oneWeek" ? usageSort.order : null,
+      sortOrder: columnSort?.column === "oneWeek" ? columnSort.order : null,
       render: (_, account) => <UsageMeter window={account.usage.secondary} resetWindow="oneWeek"
+        language={language} t={t} />,
+    },
+    {
+      title: <AccountCreditsTitle refreshing={refreshingAllUsage} onRefresh={onRefreshAllUsage} t={t} />,
+      key: "credits", width: 140, align: "center" as const,
+      render: (_: unknown, account: Account) => <AccountCredits credits={account.usage.credits}
         language={language} t={t} />,
     },
     {
       title: t("table.tokenTotals"), key: "tokenTotals", width: 92, align: "center" as const,
       render: (_: unknown, account: Account) => (
         <div className="account-token-chart-cell">
-          {hotSwitchEnabled ? (
-            <CompactDailyTokenChart
-              totals={totalsForAccount(todayTokenTotalsByAccount, account)}
-              language={language} />
-          ) : (
-            <Tooltip title={t("table.tokenTotalsProxyOnly")}>
-              <span className="account-token-chart-unavailable">--</span>
-            </Tooltip>
-          )}
+          <CompactDailyTokenChart
+            totals={usageForAccount(account).totals}
+            language={language} />
         </div>
       ),
     },
@@ -767,14 +750,21 @@ export function AccountTable({
         settings={tokenCostDisplay} providers={providers} t={t} />,
       key: "estimatedCost", width: 145, align: "center" as const,
       render: (_: unknown, account: Account) => {
-        const usage = accountTokenUsage.find((item) => tokenUsageMatchesAccount(item, account));
+        const usage = usageForAccount(account);
         return <Tooltip title={t("table.estimatedTokenCostHint", { unit: tokenCostDisplay.unit })}
           styles={{ root: { maxWidth: 400 } }}>
           <strong className={`account-token-cost${fastModeEnabled ? " token-cost-burning" : ""}`}>
-            {formatEstimatedCost(usage?.estimatedCost ?? 0, tokenCostDisplay)}
+            {formatEstimatedCost(usage.estimatedCost, tokenCostDisplay)}
           </strong>
         </Tooltip>;
       },
+    },
+    {
+      title: officialUsageLabels(language, tokenCostDisplay.unit).remaining,
+      key: "availableQuota", width: 190, align: "center" as const,
+      render: (_: unknown, account: Account) => <strong>
+        <AvailableQuota account={officialUsageById.get(account.id)} language={language} settings={tokenCostDisplay} />
+      </strong>,
     },
     ...(customPriorityActive ? [{
       title: t("table.autoSwitchPriority"), key: "autoSwitchPriority", width: 150,
@@ -938,8 +928,10 @@ export function AccountTable({
     { key: "group", label: t("accounts.group.column") },
     { key: "fiveHours", label: t("table.fiveHours") },
     { key: "oneWeek", label: t("table.oneWeek") },
+    { key: "credits", label: t("table.credits") },
     { key: "tokenTotals", label: t("table.tokenTotals") },
     { key: "estimatedCost", label: t("table.estimatedTokenCost") },
+    { key: "availableQuota", label: officialUsageLabels(language, tokenCostDisplay.unit).remaining },
     ...(customPriorityActive
       ? [{ key: "autoSwitchPriority" as const, label: t("table.autoSwitchPriority") }]
       : []),
@@ -1202,6 +1194,7 @@ export function AccountTable({
             onClear={modelContextWindow.clearModelValue} t={t} />
         </span>
       </Tooltip>
+      {proxySpeedControl}
     </div>
   );
   const concurrentRoutingControl = <ConcurrentRoutingControl busy={concurrentAccountRoutingBusy}
@@ -1247,11 +1240,7 @@ export function AccountTable({
       {orderedAccounts.map((account) => {
         const waiting = busyAccountId === account.id;
         const isDisabled = isAccountDisabled(account, hotSwitchEnabled);
-        const cardTokenUsage = getAccountCardTokenUsage(
-          account,
-          todayTokenTotalsByAccount,
-          accountTokenUsage,
-        );
+        const cardTokenUsage = usageForAccount(account);
         const switchBlocked = hotSwitchEnabled
           ? !account.localProxyCompatible
           : !account.directSwitchCompatible;
@@ -1271,11 +1260,7 @@ export function AccountTable({
           ].filter(Boolean).join(" ")}
             title={switchBlocked ? switchBlockedReason : undefined}
             aria-disabled={switchBlocked}
-            onClick={(event) => {
-              if ((event.target as HTMLElement).closest("button, a, input, textarea, summary, details")) return;
-              setContextMenu(null);
-              if (!concurrentRoutingActive && !account.active && !switchBlocked) onSwitch(account.id);
-            }}
+            onClick={(event) => handleAccountAreaClick(event, account)}
             onContextMenu={(event) => {
               event.preventDefault();
               setContextMenu({
@@ -1285,11 +1270,15 @@ export function AccountTable({
                   : ACCOUNT_CONTEXT_MENU_HEIGHT.directSwitch),
               });
             }}>
-            <div className="card-topline" />
             <header className="account-head">
-              <AccountAvatar email={account.email} disabled={isDisabled}
-                officialAuthActive={openaiAuthAccountId === account.id} busy={openaiAuthBusy} variant="card"
-                onClearOfficialAuth={() => requestOpenaiAuthAccountChange(null)} t={t} />
+              <div className="account-card-avatar">
+                <AccountAvatar email={account.email} disabled={isDisabled}
+                  officialAuthActive={openaiAuthAccountId === account.id} busy={openaiAuthBusy} variant="card"
+                  onClearOfficialAuth={() => requestOpenaiAuthAccountChange(null)} t={t} />
+                {isDisabled && <span className="account-card-disabled-label">
+                  {accountCardLabels(language).disabled}
+                </span>}
+              </div>
               <div className="identity">
                 <div className="identity-line">
                   <CopyableAccountEmail email={account.email}
@@ -1297,7 +1286,9 @@ export function AccountTable({
                   <AccountResetCreditCount count={resetCreditsCount(resetCredits[account.id])}
                     language={language} />
                   <Tooltip title={account.accountId ? t("table.workspace", { id: account.accountId }) : t("table.personal")}>
-                    <Tag className="plan-tag">{account.plan || "ChatGPT"}</Tag>
+                    <Tag className={`plan-tag${account.plan?.toLowerCase() === "free" ? " free-plan" : ""}`}>
+                      {account.plan || "ChatGPT"}
+                    </Tag>
                   </Tooltip>
                   {account.official && <Tag className="official-account-tag">{t("table.official")}</Tag>}
                 </div>
@@ -1310,25 +1301,25 @@ export function AccountTable({
                     })}</span>
                   )}
                   {shouldShowUsageError(account.usage.error, showUsageNetworkErrors)
-                    && <Tooltip title={account.usage.error}>
+                    && <Tooltip title={translateBackendMessage(language, account.usage.error)}>
                       <Tag color="error" className="account-error-tag" icon={<CircleHelp size={12} aria-hidden="true" />}>
                         {t("table.error")}
                       </Tag>
                     </Tooltip>}
                 </div>
               </div>
-              <div className={`card-header-actions${customPriorityActive || customThresholdActive
-                ? " has-auto-switch-settings" : ""}`}>
+              <div className="card-header-actions">
                 <Tooltip title={t("table.refreshUsage")}><Button size="small" className="table-icon-button" loading={waiting}
-                  icon={<RefreshCw size={14} />} onClick={() => onRefresh(account.id)} /></Tooltip>
+                  aria-label={t("table.refreshUsage")}
+                  icon={<RefreshCw size={19} />} onClick={() => onRefresh(account.id)} /></Tooltip>
                 <UsageRefreshAge fetchedAt={account.usage.fetchedAt} t={t} />
-                <AccountCardAutoSwitchSettings account={account} t={t}
-                  priorityEnabled={customPriorityActive} thresholdEnabled={customThresholdActive}
-                  priorityBusy={autoSwitchPriorityBusyAccountId !== null}
-                  thresholdBusy={autoSwitchThresholdBusyAccountId !== null}
-                  onPrioritySave={onAutoSwitchPriorityChange} onThresholdSave={onAutoSwitchThresholdChange} />
               </div>
             </header>
+            <AccountCardAutoSwitchSettings account={account} t={t}
+              priorityEnabled={customPriorityActive} thresholdEnabled={customThresholdActive}
+              priorityBusy={autoSwitchPriorityBusyAccountId !== null}
+              thresholdBusy={autoSwitchThresholdBusyAccountId !== null}
+              onPrioritySave={onAutoSwitchPriorityChange} onThresholdSave={onAutoSwitchThresholdChange} />
             <div className="account-card-usage">
               <section>
                 <UsageMeter window={account.usage.primary} resetWindow="oneWeek"
@@ -1342,30 +1333,7 @@ export function AccountTable({
                   language={language} t={t} />
               </section>
             </div>
-            {cardTokenUsage && (
-              <footer className="account-card-token-footer">
-                {hotSwitchEnabled ? (
-                  <Tooltip title={<DailyTokenUsageTooltip totals={cardTokenUsage.totals} language={language} />}
-                    placement="topLeft" styles={{ root: { maxWidth: 400 } }}>
-                    <span className="account-card-token-summary" aria-label={t("table.tokenTotals")}>
-                      {t("tokenUsage.dayTotal", {
-                        tokens: formatCompactTokenCount(cardTokenUsage.totals.total, language),
-                      })}
-                    </span>
-                  </Tooltip>
-                ) : (
-                  <Tooltip title={t("table.tokenTotalsProxyOnly")}>
-                    <span className="account-card-token-summary unavailable">--</span>
-                  </Tooltip>
-                )}
-                <Tooltip title={t("table.estimatedTokenCostHint", { unit: tokenCostDisplay.unit })}
-                  styles={{ root: { maxWidth: 400 } }}>
-                  <span className="account-card-token-cost">
-                    {formatEstimatedCost(cardTokenUsage.estimatedCost, tokenCostDisplay)}
-                  </span>
-                </Tooltip>
-              </footer>
-            )}
+            <AccountCardFooter usage={cardTokenUsage} display={tokenCostDisplay} language={language} t={t} />
           </article>
         );
       })}
@@ -1539,6 +1507,7 @@ export function AccountTable({
           onChange: (keys) => setSelectedAccountIds(keys.map(String)),
         }}
         rowClassName={(account) => [
+          canSwitchFromAccountArea(account) ? "account-switchable-row" : "",
           isAccountHighlighted(
             account,
             concurrentRoutingActive,
@@ -1552,6 +1521,7 @@ export function AccountTable({
             ? "account-threshold-row" : "",
         ].filter(Boolean).join(" ")}
         onRow={(account) => ({
+          onClick: (event) => handleAccountAreaClick(event, account),
           onContextMenu: (event) => {
             event.preventDefault();
             setTableActionMenuAccountId(null);
@@ -1574,6 +1544,9 @@ export function AccountTable({
         scroll={tableScrollY ? { x: tableScrollX, y: tableScrollY } : { x: tableScrollX }} />
     </div>
     {tableContextMenu}
+    {accountOrderOpen && <AccountOrderModal accounts={orderedAccounts} privacyMode={privacyMode}
+      hideAccountNotes={hideAccountNotes} language={language} onClose={() => setAccountOrderOpen(false)}
+      onSave={saveOrder} />}
     {editingAccount && <AccountNoteModal key={editingAccount.id} account={editingAccount}
       loading={loadingAccountDetailsId === editingAccount.id}
       onClose={() => setEditingAccount(null)}

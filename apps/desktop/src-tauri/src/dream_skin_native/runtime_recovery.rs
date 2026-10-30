@@ -3,6 +3,9 @@ fn renderer_recovery_required(skin_active: bool, proxy_running: bool) -> bool {
 }
 
 fn recovery_is_enabled() -> Result<bool, String> {
+    if !runtime_enhancements_enabled() {
+        return Ok(false);
+    }
     let skin_active = marker_path()?.is_file() && !pause_path()?.is_file();
     Ok(renderer_recovery_required(
         skin_active,
@@ -59,7 +62,10 @@ fn recover_running_codex(
         }
     };
     let mut state = read_session();
-    if !state.same_launch(observed) || !state.allows_recovery() || !recovery_is_enabled()? {
+    if !state.same_launch(observed)
+        || !state.allows_recovery_for(&expected_install.executable)
+        || !recovery_is_enabled()?
+    {
         return Ok(());
     }
     let Some(port) = state.port else {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { useChatDraft } from '../../../../shared/remote-chat/client/useChatDraft';
 import type { TextSelection } from '../../../../shared/remote-chat/client/skillDraft';
-import { insertPluginTrigger, nativeComposerTrigger } from '../../../../shared/chat/composerTrigger';
+import { composerMenuTrigger } from '../../../../shared/chat/composerTrigger';
 import type { Skill } from './types';
 
 interface Options {
@@ -17,15 +17,18 @@ export function useComposerMenu({ draft, scope, active, refresh, compact }: Opti
   const focusFrame = useRef<number | null>(null);
   const [selection, setSelection] = useState<TextSelection>({ start: 0, end: 0 });
   const [expanded, setExpanded] = useState(false);
+  const [pickingPlugins, setPickingPlugins] = useState(false);
   const [dismissed, setDismissed] = useState('');
   const range = { start: Math.min(selection.start, draft.text.length),
     end: Math.min(selection.end, draft.text.length) };
-  const trigger = nativeComposerTrigger(draft.text, range);
+  const trigger = composerMenuTrigger(draft.text, range);
   const triggerKey = trigger ? JSON.stringify(trigger) : '';
   const open = active && (expanded || (!!trigger && triggerKey !== dismissed));
-  useEffect(() => { setExpanded(false); setDismissed(triggerKey); }, [scope, active]);
+  const conversations = Boolean(trigger?.conversations) && !pickingPlugins;
+  const files = Boolean(trigger?.files) && !pickingPlugins;
+  useEffect(() => { setExpanded(false); setPickingPlugins(false); setDismissed(triggerKey); }, [scope, active]);
   useEffect(() => { if (!triggerKey) setDismissed(''); }, [triggerKey]);
-  useEffect(() => { if (open) refresh(); }, [open, refresh]);
+  useEffect(() => { if (open && !conversations && !files) refresh(); }, [open, conversations, files, refresh]);
   useEffect(() => () => {
     if (focusFrame.current !== null) cancelAnimationFrame(focusFrame.current);
   }, [scope, active]);
@@ -35,15 +38,21 @@ export function useComposerMenu({ draft, scope, active, refresh, compact }: Opti
       focusFrame.current = null; input.current?.focus(); input.current?.setSelectionRange(caret, caret);
     });
   };
-  const close = () => { setExpanded(false); setDismissed(triggerKey); };
+  const close = () => { setExpanded(false); setPickingPlugins(false); setDismissed(triggerKey); };
+  const restoreCaret = (caret: number) => {
+    setSelection({ start: caret, end: caret }); focusAt(caret);
+  };
+  const updateSelection = (next: TextSelection) => {
+    // User input takes precedence over a caret restoration queued by the previous selection.
+    if (focusFrame.current !== null) cancelAnimationFrame(focusFrame.current);
+    focusFrame.current = null;
+    setSelection(next);
+  };
   const openPlugins = () => {
-    const next = insertPluginTrigger(draft.text, trigger ?? range);
-    draft.setText(next.text); setSelection(next.selection); setDismissed(''); setExpanded(false);
-    // Restore the caret after React commits the changed draft.
-    focusAt(next.selection.start);
+    setPickingPlugins(true); setExpanded(true); input.current?.focus();
   };
   const consumeTrigger = () => {
-    if (trigger) {
+    if (trigger && !pickingPlugins) {
       draft.removeText(trigger, draft.text);
       setSelection({ start: trigger.start, end: trigger.start });
       focusAt(trigger.start);
@@ -52,7 +61,7 @@ export function useComposerMenu({ draft, scope, active, refresh, compact }: Opti
   };
   const choose = (skill: Skill) => {
     if (!skill.enabled) return;
-    const target = trigger ?? range;
+    const target = pickingPlugins ? range : trigger ?? range;
     draft.insertSkill(target, skill);
     close();
     input.current?.focus();
@@ -67,7 +76,8 @@ export function useComposerMenu({ draft, scope, active, refresh, compact }: Opti
     if (trigger) draft.removeText(trigger, text);
     close();
   };
-  return { input, selection, setSelection, open, query: trigger?.query ?? '', skillsOnly: trigger?.skillsOnly ?? false,
-    plugins: trigger?.plugins ?? false, openPlugins, consumeTrigger,
-    choose, close, runCompact, toggle: () => { if (open) close(); else setExpanded(true); } };
+  return { input, selection, setSelection: updateSelection, open, query: pickingPlugins ? '' : trigger?.query ?? '',
+    skillsOnly: trigger?.skillsOnly ?? false, conversations, files, plugins: pickingPlugins,
+    openPlugins, consumeTrigger,
+    choose, close, runCompact, restoreCaret, toggle: () => { if (open) close(); else setExpanded(true); } };
 }

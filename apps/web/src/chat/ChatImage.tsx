@@ -3,11 +3,18 @@ import { createContext, useContext, useState } from 'react';
 import { useChatImage, type ImagePreviewOptions } from '../../../../shared/remote-chat/client/useChatImage';
 import { ImageViewer } from '../../../../shared/chat/ImageViewer';
 import { downloadChatImage } from './downloadImage';
+import { FileEnvironmentContext } from '../../../desktop/src/pages/codexGui/fileEnvironment';
+import { ImagePreview } from '../../../desktop/src/pages/codexGui/ImagePreview';
+import { remoteImageBytes } from './remoteImageBytes';
+import thumbnailStyles from '../../../../shared/chat/toolImageThumbnail.module.css';
 
 export const ChatImageContext = createContext<ImagePreviewOptions | null>(null);
 
-export function ChatImage({ source, description = t("图片") }: { source?: string; description?: string }) {
+export function ChatImage({ source, description = t("图片"), compact }: {
+  source?: string; description?: string; compact?: boolean;
+}) {
   useLanguage();
+  const environment = useContext(FileEnvironmentContext);
   const image = useChatImage(source, useContext(ChatImageContext));
   const [preview, setPreview] = useState(false);
   if (image.failed) return <span className="chat-image-notice" role="status">
@@ -15,11 +22,14 @@ export function ChatImage({ source, description = t("图片") }: { source?: stri
   </span>;
   if (image.loading || !image.url) return <span className="chat-image-notice" role="status">{t("正在加载图片…")}</span>;
   return <>
-    <button type="button" className="chat-image" aria-label={t("放大查看：{value1}", { value1: description })} onClick={() => setPreview(true)}>
+    <button type="button" className={`chat-image${compact ? ` ${thumbnailStyles.thumbnail}` : ''}`}
+      aria-label={t("放大查看：{value1}", { value1: description })} onClick={() => setPreview(true)}>
       <img key={image.key} src={image.url} alt={description} loading="lazy" decoding="async"
         referrerPolicy="no-referrer" onError={image.fail} />
     </button>
-    {preview && <ImageViewer key={image.key} thumbnail={image.url} description={description}
-      translate={t} load={image.original} download={downloadChatImage} close={() => setPreview(false)} />}
+    {preview && (environment ? <ImagePreview key={image.key} thumbnail={image.url} description={description}
+      load={image.original} prepare={remoteImageBytes} download={image.save ?? downloadChatImage}
+      close={() => setPreview(false)} /> : <ImageViewer key={image.key} thumbnail={image.url} description={description}
+      translate={t} load={image.original} download={image.save ?? downloadChatImage} close={() => setPreview(false)} />)}
   </>;
 }

@@ -1,7 +1,7 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page, type TestInfo } from '@playwright/test';
 import { openChatList, connect, fixtureUrl, login, operationCount, screenshot, send, settled, state } from './chat-helpers';
 
-const closeSheet = (page: Page) => page.getByRole('button', { name: '关闭', exact: true }).last().click();
+const closeSheet = (page: Page) => page.getByRole('button', { name: /^(关闭|关闭详情抽屉)$/ }).last().click();
 async function selectChat(page: Page) {
   await openChatList(page);
   await page.getByRole('button', { name: '移动端聊天体验', exact: true }).click();
@@ -15,6 +15,8 @@ test.beforeEach(async ({ page, request }) => {
 });
 
 test('renders rich replies, folded work, nested output, file previews and reply quotes', async ({ page, request }, info) => {
+  // Exercise the browser-download fallback; the native OS save picker is outside Playwright's page automation.
+  await page.evaluate(() => Object.defineProperty(window, 'showSaveFilePicker', { value: undefined, configurable: true }));
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await request.post(`${fixtureUrl}/test/sidebar`, { data: { action: 'web-parity' } });
@@ -27,6 +29,7 @@ test('renders rich replies, folded work, nested output, file previews and reply 
   await expect(page.locator('.chat-messages').getByRole('button', { name: '下载', exact: true })).toHaveCount(0);
   await screenshot(page, info, 'rich-chat');
   await page.getByRole('button', { name: /查看处理过程/ }).click();
+  if (info.project.name === 'desktop') await page.getByRole('button', { name: /查看连续操作/ }).click();
   await page.getByRole('button', { name: /执行命令.*npm test/ }).click();
   await expect(page.getByText('OUTPUT_START', { exact: false }).last()).toBeVisible();
   while (await page.getByRole('button', { name: '显示更多内容' }).count()) {
@@ -46,41 +49,61 @@ test('renders rich replies, folded work, nested output, file previews and reply 
     await page.getByRole('button', { name: /查看处理过程/ }).click();
   }
   await page.getByRole('button', { name: /^文件修改/ }).click();
-  await expect(page.locator(desktop ? '.chat-messages .chat-diff' : '.ant-drawer-right .chat-diff')).toBeVisible();
-  await page.locator('.chat-diff-file summary').first().click();
-  await expect(page.locator('.chat-diff-line.remove').first()).toBeVisible();
+  if (desktop) {
+    await page.getByRole('button', { name: /^查看文件修改记录：/ }).click();
+    await expect(page.getByRole('dialog', { name: '文件更改详情', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '关闭详情抽屉' }).click();
+  } else {
+    const details = page.getByRole('tabpanel', { name: '文件修改', exact: true });
+    await expect(details.locator('.chat-diff')).toBeVisible();
+    await details.locator('.chat-diff-file summary').first().click();
+    await expect(details.locator('.chat-diff-line.remove').first()).toBeVisible();
+  }
   if (desktop) await page.getByRole('button', { name: /^文件修改/ }).click();
-  else await page.getByRole('button', { name: '返回上一层' }).click();
+  else {
+    await closeSheet(page);
+    await page.getByRole('button', { name: /查看处理过程/ }).click();
+  }
   await expect(page.getByRole('button', { name: /^文件修改/ })).toBeVisible();
   if (desktop) await page.getByRole('button', { name: /查看处理过程/ }).click();
   else await closeSheet(page);
   await page.getByRole('button', { name: /查看本轮修改：3 个文件/ }).click();
-  await expect(page.locator('.ant-drawer-right .chat-diff')).toBeVisible();
-  await expect(page.locator('.chat-diff > section')).toHaveCount(2);
-  await page.locator('.chat-diff-file summary').first().click();
-  await expect(page.locator('.chat-diff-line.add').first()).toBeVisible();
+  if (desktop) {
+    const details = page.getByRole('dialog', { name: '文件更改详情', exact: true });
+    await expect(details).toBeVisible();
+    await expect(details).toContainText('3 个文件');
+    await details.getByRole('button', { name: '并排', exact: true }).click();
+    await expect(details.getByText('修改前', { exact: true })).toBeVisible();
+  } else {
+    const details = page.getByRole('tabpanel', { name: '本轮修改', exact: true });
+    await expect(details.locator('.chat-diff')).toBeVisible();
+    await expect(details.locator('.chat-diff > section')).toHaveCount(2);
+    await details.locator('.chat-diff-file summary').first().click();
+    await expect(details.locator('.chat-diff-line.add').first()).toBeVisible();
+  }
   await screenshot(page, info, 'grouped-diff');
-  await closeSheet(page);
+  if (desktop) await page.getByRole('button', { name: '关闭详情抽屉' }).click();
+  else await closeSheet(page);
   await page.getByRole('button', { name: '查看文件', exact: true }).click();
   await expect(page.getByText('引用位置：第 2 行')).toBeVisible();
   await expect(page.getByRole('button', { name: '复制文件内容' })).toBeVisible();
   await expect(page.getByRole('button', { name: '下载', exact: true })).toBeVisible();
   await screenshot(page, info, 'file-preview-download');
-  await closeSheet(page);
+  if (desktop) await page.getByRole('button', { name: '关闭详情抽屉' }).click();
+  else await closeSheet(page);
   await page.getByRole('button', { name: '播放视频', exact: true }).click();
   await expect(page.locator('video')).toBeVisible();
   await expect.poll(() => page.locator('video').evaluate(video => video.readyState)).toBeGreaterThan(0);
-  // Exercise the browser save fallback without opening a native file picker in the test runner.
-  await page.evaluate(() => {
-    Object.defineProperty(window, 'showSaveFilePicker', { configurable: true, value: undefined });
-  });
-  const saving = page.waitForEvent('download');
   await page.getByRole('button', { name: '下载', exact: true }).click();
+  await expect(page.getByRole('button', { name: '保存到设备', exact: true })).toBeVisible();
+  const saving = page.waitForEvent('download');
+  await page.getByRole('button', { name: '保存到设备', exact: true }).click();
   const saved = await saving;
   expect(saved.suggestedFilename()).toBe('test.mp4');
   expect(await saved.failure()).toBeNull();
-  await expect(page.getByRole('status').filter({ hasText: '文件已交给浏览器保存' })).toBeVisible();
-  await closeSheet(page);
+  await expect(page.getByText('下载会在后台继续，可在“下载管理”查看进度。')).toBeVisible();
+  if (desktop) await page.getByRole('button', { name: '关闭详情抽屉' }).click();
+  else await closeSheet(page);
   await page.locator('.chat-assistant-message').last().getByRole('button', { name: '引用回复' }).click();
   await expect(page.getByRole('button', { name: '移除引用' })).toBeVisible();
   await send(page, '继续检查引用内容');
@@ -122,17 +145,43 @@ test('sends skills, plugin and file capsules and keeps goal controls removable',
     expect.objectContaining({ kind: 'file', path: 'F:/projects/demo/assets/notes.txt' }),
     expect.objectContaining({ name: 'test.txt', data: Buffer.from('Web file test').toString('base64') }),
   ]));
+  await verifyGoalControls(page, request, info);
+});
+
+async function verifyGoalControls(page: Page, request: APIRequestContext, info: TestInfo) {
+  const input = page.getByRole('textbox', { name: '聊天消息' });
   await input.fill('/goal');
   await page.getByRole('menuitem', { name: '目标模式' }).click();
   await expect(input).toHaveValue('');
   await expect(input).toHaveAttribute('placeholder', '描述想完成的目标…');
-  await send(page, '完成聊天界面测试');
+  const objective = '完成聊天界面测试，确保手机窄屏上的目标文字完整换行，点击后可以查看全部内容。\n'
+    + '同时验证桌面布局与移除目标按钮。';
+  await input.fill(objective);
+  await page.getByRole('button', { name: '查看目标', exact: true }).click();
+  await expect(page.locator('.chat-goal-details')).toContainText(objective);
+  expect(await operationCount(request, 'goalSet')).toBe(0);
+  await closeSheet(page);
+  await expect(input).toHaveValue(objective);
+  await send(page, objective);
   await expect.poll(() => operationCount(request, 'goalSet')).toBe(1);
-  await expect(page.getByRole('button', { name: '退出目标模式' })).toBeVisible();
-  await page.getByRole('button', { name: '退出目标模式' }).click();
+  const preview = page.locator('.chat-goal-preview .chat-goal-objective');
+  await expect(preview).toHaveText(objective);
+  expect(await preview.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  expect(await preview.evaluate(element => element.scrollHeight <= element.clientHeight)).toBe(true);
+  await screenshot(page, info, 'goal-wrapped');
+  const viewGoal = page.getByRole('button', { name: '查看目标', exact: true });
+  if (info.project.use.hasTouch) await viewGoal.tap(); else await viewGoal.click();
+  await expect(page.locator('.chat-goal-details .chat-goal-objective')).toHaveText(objective);
+  await expect(page.locator('.chat-goal-details .chat-goal-objective')).toBeInViewport({ ratio: 1 });
+  await expect(page.locator('.chat-goal-details')).toContainText('进行中');
+  expect((await page.locator('.chat-goal-details').boundingBox())!.width).toBeLessThanOrEqual(400);
+  expect(await operationCount(request, 'goalClear')).toBe(0);
+  await screenshot(page, info, 'goal-details');
+  await closeSheet(page);
+  await page.getByRole('button', { name: '移除目标', exact: true }).click();
   await expect.poll(() => operationCount(request, 'goalClear')).toBe(1);
-  await expect(page.getByRole('button', { name: '退出目标模式' })).toHaveCount(0);
-});
+  await expect(viewGoal).toHaveCount(0);
+}
 
 test('changes context capacity and opens profile, account picker and token summary', async ({ page, request }, info) => {
   await selectChat(page);
@@ -165,7 +214,12 @@ test('changes context capacity and opens profile, account picker and token summa
     await page.keyboard.press('Escape');
   } else await closeSheet(page);
   await openChatList(page);
-  await page.getByRole('button', { name: '打开头像菜单' }).click();
+  const accountMenu = page.getByRole('button', { name: '打开头像菜单', exact: true });
+  await expect(accountMenu).toHaveText('演示');
+  await expect(accountMenu.locator('svg')).toHaveCount(0);
+  expect((await page.locator('.chat-drawer-footer:visible').boundingBox())!.height).toBeLessThanOrEqual(70);
+  await screenshot(page, info, 'compact-account-footer');
+  await accountMenu.click();
   await page.getByRole('button', { name: '切换账户', exact: true }).click();
   await expect(page.getByRole('button', { name: '演示账户一', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: '演示账户二', exact: true }).click();
@@ -196,14 +250,46 @@ test('answers asynchronous questions without blocking the draft and preserves in
   await expect(page.getByRole('button', { name: /回答补充问题/ })).toHaveCount(0);
   await expect(page.getByRole('textbox', { name: '聊天消息' })).toHaveValue('草稿保持不变');
   await openChatList(page);
-  await page.getByRole('button', { name: '搜索聊天', exact: true }).click();
+  const desktop = (page.viewportSize()?.width ?? 0) > 860;
+  if (!desktop) await page.getByRole('button', { name: '搜索聊天', exact: true }).click();
   await page.getByRole('textbox', { name: '搜索聊天' }).fill('不存在');
   await expect(page.getByText('没有找到相关聊天')).toBeVisible();
-  await closeSheet(page);
+  if (desktop) await page.getByRole('button', { name: '清空搜索', exact: true }).click();
+  else await closeSheet(page);
   await expect(page.getByRole('button', { name: '移动端聊天体验', exact: true })).toBeVisible();
 });
 
-test('deletes a question reminder without sending an answer and keeps it deleted after reload',
+test('searches directly in the desktop sidebar and restores chats when cleared', async ({ page }, info) => {
+  test.skip(info.project.name !== 'desktop', 'Inline search is for the desktop layout');
+  const sidebar = page.locator('.chat-sidebar');
+  const search = sidebar.getByRole('textbox', { name: '搜索聊天' });
+  await search.click();
+  await expect(search).toBeFocused();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await search.fill('移动端');
+  await expect(sidebar.getByRole('button', { name: '移动端聊天体验', exact: true })).toBeVisible();
+  await expect(sidebar.locator('.chat-project-group')).toHaveCount(0);
+  await screenshot(page, info, 'inline-sidebar-search');
+  await sidebar.getByRole('button', { name: '移动端聊天体验', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '移动端聊天体验', exact: true })).toBeVisible();
+  await search.fill('不存在');
+  await expect(sidebar.getByText('没有找到相关聊天')).toBeVisible();
+  await search.press('Escape');
+  await expect(search).toBeEmpty();
+  await expect(search).toBeFocused();
+  await expect(sidebar.getByRole('region', { name: '演示项目', exact: true })).toBeVisible();
+  await search.fill('移动端');
+  await sidebar.getByRole('button', { name: '最近聊天 ▾', exact: true }).click();
+  await expect(sidebar.getByText('没有找到相关聊天')).toBeVisible();
+  await expect(search).toHaveValue('移动端');
+  await sidebar.getByRole('button', { name: '已归档 ▾', exact: true }).click();
+  await expect(sidebar.getByRole('button', { name: '移动端聊天体验', exact: true })).toBeVisible();
+  await sidebar.getByRole('button', { name: '清空搜索', exact: true }).click();
+  await expect(search).toBeFocused();
+  await expect(sidebar.getByRole('region', { name: '演示项目', exact: true })).toBeVisible();
+});
+
+test('cancels a question without sending an answer and keeps it dismissed after reload',
   async ({ page, request }, info) => {
   await request.post(`${fixtureUrl}/test/sidebar`, { data: { action: 'async-parity' } });
   await selectChat(page);
@@ -211,7 +297,8 @@ test('deletes a question reminder without sending an answer and keeps it deleted
   await input.fill('保留这份草稿');
   await screenshot(page, info, 'question-delete');
   const before = await operationCount(request, 'queueEnqueue');
-  await page.getByRole('button', { name: /删除补充问题/ }).click();
+  await page.getByRole('button', { name: /回答补充问题/ }).click();
+  await page.getByRole('button', { name: '取消回答', exact: true }).click();
   await expect(page.getByRole('button', { name: /回答补充问题/ })).toHaveCount(0);
   await expect(input).toHaveValue('保留这份草稿');
   expect(await operationCount(request, 'queueEnqueue')).toBe(before);

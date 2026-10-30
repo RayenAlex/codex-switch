@@ -14,11 +14,15 @@ import {
 } from "lucide-react";
 import { dashboardPlatforms, dashboardTrendOption } from "./dashboard-trend";
 import { DailyActiveTable } from "./DailyActiveTable";
+import { ChatTrafficPanel } from "./ChatTrafficPanel";
+import { ServerBandwidthPanel } from "./ServerBandwidthPanel";
+import type { TrafficApi } from "../chat-traffic-types";
 import { EChart } from "../components/charts/EChart";
 import { useI18n } from "../i18n-context";
 import type { DashboardOverview, MenuKey, Permission, TelemetryPlatform } from "../types";
 
 interface DashboardPageProps {
+  api: TrafficApi;
   data: DashboardOverview | null;
   days: 7 | 30 | 90;
   dark: boolean;
@@ -38,6 +42,7 @@ const platformKeys: Record<TelemetryPlatform, string> = {
 };
 
 export function DashboardPage({
+  api,
   data,
   days,
   dark,
@@ -191,7 +196,7 @@ export function DashboardPage({
     <section className="dashboard-page">
       <div className="dashboard-heading">
         <div>
-          <div className="dashboard-eyebrow">CODEX SWITCH · OVERVIEW</div>
+          <div className="dashboard-eyebrow">REMOTE AI · OVERVIEW</div>
           <h1 className="page-title dashboard-title">{t("dashboard.title")}</h1>
           <Typography.Text type="secondary">{t("dashboard.description")}</Typography.Text>
         </div>
@@ -232,6 +237,10 @@ export function DashboardPage({
           </div>
         ))}
       </div>
+
+      <ServerBandwidthPanel api={api} dark={dark} />
+
+      <ChatTrafficPanel data={data?.chatTraffic} dark={dark} loading={loading} />
 
       <DailyActiveTable data={data?.dailyActiveTrend ?? []} loading={loading} />
 

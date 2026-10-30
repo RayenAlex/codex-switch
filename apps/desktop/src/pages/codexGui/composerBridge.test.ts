@@ -20,7 +20,7 @@ beforeEach(() => {
 it('shares the PC catalog and current model, effort and access in both directions', async () => {
   const bridge = new ComposerBridge();
   const controller = new GuiController();
-  controller.setProviderModels(models);
+  controller.setModels(models);
   const detach = bridge.attach(controller);
   const changed = vi.fn();
   bridge.subscribe(changed);
@@ -37,10 +37,9 @@ it('shares the PC catalog and current model, effort and access in both direction
 
 it('preserves phone settings until the desktop GUI is opened', async () => {
   const bridge = new ComposerBridge();
-  bridge.setProviderModels(models);
   await bridge.update({ model: 'second', effort: 'xhigh', access: 'danger-full-access' });
   const controller = new GuiController();
-  controller.setProviderModels(models);
+  controller.setModels(models);
   const detach = bridge.attach(controller);
   expect(controller.getSnapshot().settings).toMatchObject({ model: 'second', effort: 'xhigh',
     access: 'danger-full-access' });
@@ -52,7 +51,7 @@ it('keeps the background queue controller on the configured Provider catalog bef
   const bridge = new ComposerBridge();
   const controller = new GuiController();
   const detach = bridge.attach(controller);
-  bridge.setProviderModels(models);
+  await controller.setModels(models);
   expect(controller.getSnapshot().models).toEqual(models);
   await bridge.update({ model: 'second', effort: 'xhigh' });
   expect(controller.getSnapshot().settings).toMatchObject({ model: 'second', effort: 'xhigh' });
@@ -61,7 +60,6 @@ it('keeps the background queue controller on the configured Provider catalog bef
 
 it('rejects unsupported models, efforts, permissions and unrelated settings', async () => {
   const bridge = new ComposerBridge();
-  bridge.setProviderModels(models);
   for (const patch of [{ model: 'unknown' }, { effort: 'extreme' }, { access: 'invalid' }, { cwd: '/private' }]) {
     await expect(bridge.update(patch)).rejects.toThrow();
   }
@@ -75,19 +73,34 @@ it('loads all account model pages when the desktop GUI has not been opened', asy
     .mockResolvedValueOnce({ data: [models[1]], nextCursor: null });
   const snapshot = await new ComposerBridge().read();
   expect(snapshot.models).toEqual(models);
-  expect(guiApi.request).toHaveBeenLastCalledWith({ operation: 'models', cursor: 'next' });
+  expect(guiApi.request).toHaveBeenLastCalledWith({ operation: 'models', cursor: 'next', cacheOnly: true });
+});
+
+it('does not publish an empty catalog over the last phone-only selection', async () => {
+  const bridge = new ComposerBridge();
+  const previous = await bridge.update({ model: 'second', effort: 'xhigh' });
+  const changed = vi.fn();
+  const stop = bridge.subscribe(changed);
+  vi.mocked(guiApi.request).mockResolvedValue({ data: [], nextCursor: null });
+  await expect(bridge.read()).rejects.toThrow('模型列表');
+  expect(changed).not.toHaveBeenCalled();
+  vi.mocked(guiApi.request).mockResolvedValue({ data: models, nextCursor: null });
+  expect(await bridge.read()).toMatchObject({ models: previous.models, settings: previous.settings });
+  stop();
 });
 
 it('accepts the resolved default when changing to a model without selectable reasoning levels', async () => {
   const bridge = new ComposerBridge();
-  bridge.setProviderModels([{ ...models[1], supportedReasoningEfforts: [], defaultReasoningEffort: 'none' }]);
+  vi.mocked(guiApi.request).mockResolvedValue({ data: [
+    { ...models[1], supportedReasoningEfforts: [], defaultReasoningEffort: 'none' },
+  ], nextCursor: null });
   expect((await bridge.update({ model: 'second', effort: 'none' })).settings.effort).toBe('none');
   await expect(bridge.update({ effort: 'xhigh' })).rejects.toThrow();
 });
 
 it('does not replay a detached conversation choice when the GUI attaches again', () => {
   const bridge = new ComposerBridge(); const controller = new GuiController();
-  controller.setProviderModels(models);
+  controller.setModels(models);
   const detach = bridge.attach(controller);
   controller.settings({ model: 'second', effort: 'xhigh' });
   detach();
@@ -108,7 +121,7 @@ it('shares host speed changes without persisting speed in the conversation or lo
   };
   const bridge = new ComposerBridge(source);
   const controller = new GuiController();
-  controller.setProviderModels(models);
+  controller.setModels(models);
   const detach = bridge.attach(controller);
   const settings = vi.spyOn(controller, 'settings');
   const changed = vi.fn();
@@ -116,9 +129,11 @@ it('shares host speed changes without persisting speed in the conversation or lo
   expect((await bridge.read()).settings.speed).toBe('normal');
   expect((await bridge.update({ speed: 'fast' })).settings.speed).toBe('fast');
   expect(source.set).toHaveBeenCalledWith('fast');
+  expect((await bridge.update({ speed: 'ultrafast' })).settings.speed).toBe('ultrafast');
+  expect(source.set).toHaveBeenCalledWith('ultrafast');
   expect(settings).not.toHaveBeenCalled();
   controller.settings({ model: 'second', effort: 'xhigh' });
-  expect((await bridge.read()).settings).toMatchObject({ model: 'second', effort: 'xhigh', speed: 'fast' });
+  expect((await bridge.read()).settings).toMatchObject({ model: 'second', effort: 'xhigh', speed: 'ultrafast' });
   expect(controller.getSnapshot().settings).not.toHaveProperty('speed');
   speed = 'normal'; notify(speed);
   expect(changed).toHaveBeenLastCalledWith(expect.objectContaining({

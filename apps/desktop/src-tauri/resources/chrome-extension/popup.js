@@ -1,8 +1,12 @@
 import { ALL_WEBSITES } from './site-access.js';
+import { localizeDocument, t } from './i18n.js';
 
+localizeDocument();
 const error = document.querySelector('#error');
 const allowAll = document.querySelector('#allow-all');
 let paused = false;
+let refreshing = false;
+const REFRESH_INTERVAL_MS = 2000;
 
 async function send(message) {
   const reply = await chrome.runtime.sendMessage(message);
@@ -12,7 +16,7 @@ async function send(message) {
 
 function rows(container, items, label, action, handler) {
   container.replaceChildren();
-  if (!items.length) { container.textContent = '暂无'; return; }
+  if (!items.length) { container.textContent = t('listEmpty', '暂无'); return; }
   for (const item of items) {
     const row = document.createElement('div'); row.className = 'row';
     const text = document.createElement('span'); text.textContent = label(item);
@@ -23,24 +27,37 @@ function rows(container, items, label, action, handler) {
 }
 
 async function refresh() {
-  const state = await send({ operation: 'status' });
+  if (refreshing) return;
+  refreshing = true;
+  try { renderStatus(await send({ operation: 'status' })); }
+  finally { refreshing = false; }
+}
+
+function renderStatus(state) {
   paused = state.paused;
   document.querySelector('#status').textContent = state.connected
-    ? paused ? '已连接 · 控制已暂停' : '已连接 · 等待你的任务' : '尚未连接 Codex Switch';
-  document.querySelector('#pause').textContent = paused ? '继续控制' : '暂停控制';
+    ? paused ? t('statusPaused', '已连接 · 控制已暂停') : t('statusWaiting', '已连接 · 等待你的任务')
+    : t('statusDisconnected', '尚未连接 Remote AI');
+  document.querySelector('#pause').textContent = paused
+    ? t('resumeControl', '继续控制') : t('pauseControl', '暂停控制');
   allowAll.checked = state.allSitesAllowed;
   document.querySelector('#site-details').hidden = state.allSitesAllowed;
   error.hidden = !state.connectionError;
   error.textContent = state.connectionError;
-  rows(document.querySelector('#requests'), state.pending, (item) => item.origin, '查看', (item) =>
+  rows(document.querySelector('#requests'), state.pending, (item) => item.origin, t('reviewRequest', '查看'), (item) =>
     chrome.windows.create({ url: chrome.runtime.getURL(`approval.html?id=${item.id}`), type: 'popup', width: 400, height: 520 }));
-  rows(document.querySelector('#origins'), state.allowedOrigins, (origin) => origin, '撤销', (origin) =>
+  rows(document.querySelector('#origins'), state.allowedOrigins, (origin) => origin, t('revokeAccess', '撤销'), (origin) =>
     send({ operation: 'revoke', origin }));
 }
 
 async function perform(action) {
   try { await action(); await refresh(); }
-  catch (caught) { error.hidden = false; error.textContent = caught.message; }
+  catch (caught) { showError(caught); }
+}
+
+function showError(caught) { error.hidden = false; error.textContent = caught.message; }
+function refreshVisible() {
+  if (document.visibilityState === 'visible' && !window.frameElement?.hidden) void refresh().catch(showError);
 }
 
 document.querySelector('#connect').addEventListener('click', () => perform(() => send({ operation: 'connect' })));
@@ -57,4 +74,7 @@ document.querySelector('#save-name').addEventListener('click', () => perform(() 
   send({ operation: 'profileName', name: document.querySelector('#name').value })));
 const { profileName = 'Chrome' } = await chrome.storage.local.get('profileName');
 document.querySelector('#name').value = profileName;
-await perform(refresh);
+await refresh().catch(showError);
+window.addEventListener('focus', refreshVisible);
+const refreshTimer = setInterval(refreshVisible, REFRESH_INTERVAL_MS);
+window.addEventListener('pagehide', () => clearInterval(refreshTimer));

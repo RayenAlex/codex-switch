@@ -10,7 +10,7 @@ import type { ComposerText, Skill } from "./types";
 vi.mock("./api", () => ({ guiApi: { request: vi.fn() } }));
 const skills: Skill[] = [
   { name: "deploy-codex-switch", path: "D:/skills/deploy/SKILL.md", description: "部署服务", enabled: true,
-    interface: { displayName: "Deploy Codex Switch" } },
+    interface: { displayName: "Deploy Remote AI" } },
   { name: "review", path: "D:/skills/review/SKILL.md", description: "检查代码", enabled: true },
 ];
 let root: Root;
@@ -54,6 +54,21 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
+it("inserts QQ rich-text content as plain text after the image handler runs", async () => {
+  const insert = vi.fn();
+  Object.defineProperty(document, "execCommand", { configurable: true, value: insert });
+  const event = new Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "clipboardData", { value: {
+    items: [], getData: (type: string) => type === "text/html"
+      ? '<b>图片说明</b><br>第二行<img src="file:///C:/QQ/photo.png">' : "",
+  } });
+  await act(async () => editor().dispatchEvent(event));
+  expect(paste).toHaveBeenCalledOnce();
+  expect(insert).toHaveBeenCalledWith("insertText", false, "图片说明\n第二行");
+  expect(editor().querySelector("img")).toBeNull();
+  Reflect.deleteProperty(document, "execCommand");
+});
+
 it("lists every skill after an initial slash and inserts a named, atomic inline skill", async () => {
   await type("/");
   expect(host.querySelectorAll('[role="option"]')).toHaveLength(3);
@@ -61,7 +76,7 @@ it("lists every skill after an initial slash and inserts a named, atomic inline 
   await key("ArrowDown");
   await key("Enter");
   expect(send).not.toHaveBeenCalled();
-  expect(host.querySelector('[data-skill]')?.textContent).toBe("Deploy Codex Switch");
+  expect(host.querySelector('[data-skill]')?.textContent).toBe("Deploy Remote AI");
   expect(host.querySelector('[data-skill]')?.getAttribute("contenteditable")).toBe("false");
   expect(readEditor(editor()).mentions[0].skill.path).toBe(skills[0].path);
   expect(host.querySelector('[role="listbox"]')).toBeNull();

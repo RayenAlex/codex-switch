@@ -3,14 +3,21 @@ import { useEffect, useRef, useState } from 'react';
 import type { AttachmentReference, ComposerPlugin } from '../../../desktop/src/pages/codexGui/attachmentTypes';
 import { remoteAttachments } from '../../../../shared/remote-chat/composerAttachments';
 import { checkFileUploadSize } from '../../../../shared/remote-chat/policy';
+import { readFileBase64 } from '../../../../shared/chat/fileData';
 
-function readFile(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error(t("文件无法读取，请重新选择。")));
-    reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '');
-    reader.readAsDataURL(file);
-  });
+/** Validation copy may already be localized when thrown, so trust it by origin rather than by wording. */
+export class AttachmentRejection extends Error {}
+
+function rejection(cause: unknown) {
+  return cause instanceof Error ? new AttachmentRejection(cause.message) : cause;
+}
+
+function validated<T>(step: () => T): T {
+  try { return step(); } catch (cause) { throw rejection(cause); }
+}
+
+export function attachmentErrorMessage(cause: unknown) {
+  return cause instanceof AttachmentRejection ? t(cause.message) : t("文件添加失败，请重新选择。");
 }
 
 export function useComposerAttachments({ threadId, sending }: { threadId: string | null; sending: boolean }) {
@@ -37,20 +44,22 @@ export function useComposerAttachments({ threadId, sending }: { threadId: string
       const additions: AttachmentReference[] = [];
       for (const file of files) {
         if (current !== generation.current) return;
-        checkFileUploadSize(file.size);
-        additions.push({ kind: 'file', name: file.name, path: '', data: await readFile(file) });
-        remoteAttachments([...items, ...additions]);
+        validated(() => checkFileUploadSize(file.size));
+        const data = await readFileBase64(file).catch((cause: unknown) => { throw rejection(cause); });
+        additions.push({ kind: 'file', name: file.name, path: '', data });
+        validated(() => remoteAttachments([...items, ...additions]));
       }
       if (current === generation.current) setItems(existing => [...existing, ...additions]);
     } catch (cause) {
-      if (current === generation.current) setError(cause instanceof Error && /文件|附件/.test(cause.message)
-        ? cause.message : t("文件添加失败，请重新选择。"));
+      if (current === generation.current) setError(attachmentErrorMessage(cause));
     } finally { picking.current = false; if (mounted.current) setBusy(false); }
   };
   const add = (item: AttachmentReference) => {
-    if (sending || picking.current) return;
-    try { setItems(remoteAttachments([...items.filter(entry => entry.path !== item.path), item])); setError(''); }
-    catch { setError(t("每条消息最多添加 8 个文件或插件。")); }
+    if (sending || picking.current) return false;
+    try {
+      setItems(remoteAttachments([...items.filter(entry => entry.path !== item.path), item])); setError('');
+      return true;
+    } catch { setError(t('每条消息最多添加 8 个附件或对话引用。')); return false; }
   };
   return { items, busy, error, pick, add,
     addPlugin: (plugin: ComposerPlugin) => add({ kind: 'plugin', name: plugin.interface?.displayName || plugin.name,

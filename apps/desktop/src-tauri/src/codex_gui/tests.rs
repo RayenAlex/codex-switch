@@ -211,7 +211,6 @@ fn invalid_inline_images_and_excess_attachments_are_rejected() {
         json!(["data:image/svg+xml;base64,PHN2Zz4="]),
         json!(["data:image/png;base64,not base64"]),
         json!(["data:image/png;base64,aGVsbG8="]),
-        json!(["data:image/jpeg;base64,iVBORw0KGgo="]),
         json!(["data:image/png;base64,"]),
         json!(["https://example.com/image.png"]),
         json!(vec!["data:image/png;base64,iVBORw0KGgo="; 9]),
@@ -293,6 +292,25 @@ fn new_turns_override_cached_permissions_in_both_directions() {
 }
 
 #[test]
+fn queued_turns_apply_and_validate_the_selected_project_folder() {
+    let cwd = std::env::current_dir().unwrap();
+    let (method, params) = request(json!({"operation": "sendBatch", "threadId": "thread-1",
+        "messages": [{"text": "continue", "images": []}], "cwd": cwd}))
+    .into_rpc()
+    .unwrap();
+    assert_eq!(method, "turn/start");
+    assert_eq!(params["cwd"], cwd.to_string_lossy().as_ref());
+    for invalid in ["../relative", "folder\u{0000}name"] {
+        assert!(
+            request(json!({"operation": "sendBatch", "threadId": "thread-1",
+            "messages": [{"text": "continue", "images": []}], "cwd": invalid}))
+            .into_rpc()
+            .is_err()
+        );
+    }
+}
+
+#[test]
 fn omitted_turn_access_inherits_permissions_and_invalid_access_is_rejected() {
     for operation in ["send", "sendBatch", "steer"] {
         let mut value = json!({"operation": operation, "threadId": "thread-1", "turnId": "turn-1",
@@ -336,7 +354,8 @@ fn gui_home_preserves_history_and_preferences_without_importing_shared_auth() {
     std::fs::write(source.join("sessions/official.jsonl"), "official").unwrap();
     std::fs::write(source.join("state_5.sqlite"), "official database").unwrap();
     std::fs::write(target.join("sessions/gui.jsonl"), "gui").unwrap();
-    super::home::prepare_from(&source, &target).unwrap();
+    let base_url = "http://127.0.0.1:54321/codex-gui/v1";
+    super::home::prepare_from(&source, &target, base_url).unwrap();
     assert!(!target.join("auth.json").exists());
     assert!(!target.join("sessions/official.jsonl").exists());
     assert!(!target.join("state_5.sqlite").exists());
@@ -352,7 +371,7 @@ fn gui_home_preserves_history_and_preferences_without_importing_shared_auth() {
     );
     assert_eq!(
         document["model_providers"]["codex-switch-gui"]["base_url"].as_str(),
-        Some("http://127.0.0.1:15722/codex-gui/v1")
+        Some(base_url)
     );
     assert_eq!(
         document["model_providers"]["codex-switch-gui"]["requires_openai_auth"].as_bool(),
@@ -367,9 +386,9 @@ fn gui_home_preserves_history_and_preferences_without_importing_shared_auth() {
         "official"
     );
     std::fs::write(target.join("config.toml"), "model = 'edited-gui-model'\n").unwrap();
-    super::home::prepare_from(&target, &target).unwrap();
+    super::home::prepare_from(&target, &target, base_url).unwrap();
     std::fs::remove_file(source.join("auth.json")).unwrap();
-    super::home::prepare_from(&source, &target).unwrap();
+    super::home::prepare_from(&source, &target, base_url).unwrap();
     assert!(!target.join("auth.json").exists());
     let updated = std::fs::read_to_string(target.join("config.toml")).unwrap();
     assert!(updated.contains("edited-gui-model"));

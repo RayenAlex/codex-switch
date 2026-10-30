@@ -2,6 +2,8 @@ fn dispatch_extended_command(app: AppHandle, command: &str, args: Value) -> Resu
     match command {
         "codex_gui_cli_status" => serialize(block_on(crate::codex_gui::releases::codex_gui_cli_status(app))),
         "codex_gui_cli_release" => serialize(block_on(crate::codex_gui::releases::codex_gui_cli_release())),
+        "codex_gui_cli_check" => serialize(block_on(crate::codex_gui::releases::codex_gui_cli_check(app))),
+        "codex_gui_cli_prepare" => serialize(block_on(crate::codex_gui::releases::codex_gui_cli_prepare(app))),
         "codex_gui_cli_install" => serialize(block_on(crate::codex_gui::releases::codex_gui_cli_install(
             app, argument(&args, "version")?,
         ))),
@@ -142,10 +144,10 @@ fn dispatch_extended_command(app: AppHandle, command: &str, args: Value) -> Resu
             app,
             argument(&args, "color")?,
         )),
-        "set_app_language" => serialize(crate::floating_bubble::set_app_language(
+        "set_app_language" => serialize(block_on(crate::floating_bubble::set_app_language(
             app,
             argument(&args, "language")?,
-        )),
+        ))),
         "get_cloud_auth_state" => serialize(block_on(crate::cloud::get_cloud_auth_state(app))),
         "get_saved_cloud_login" => serialize(block_on(crate::cloud::get_saved_cloud_login(app))),
         "set_cloud_base_url" => serialize(block_on(crate::cloud::set_cloud_base_url(
@@ -160,6 +162,13 @@ fn dispatch_extended_command(app: AppHandle, command: &str, args: Value) -> Resu
         ))),
         "fetch_cloud_announcement" => {
             serialize(block_on(crate::cloud::fetch_cloud_announcement(app)))
+        }
+        "fetch_cloud_title_settings" => serialize(block_on(crate::cloud::fetch_cloud_title_settings(app))),
+        "fetch_cloud_home_presets" => serialize(block_on(crate::cloud::fetch_cloud_home_presets(
+            argument(&args, "baseUrl")?, argument(&args, "platform")?,
+        ))),
+        "fetch_cloud_token_cost_presets" => {
+            serialize(block_on(crate::cloud::fetch_cloud_token_cost_presets(app)))
         }
         "fetch_cloud_currency_rates" => {
             serialize(block_on(crate::cloud::fetch_cloud_currency_rates(app)))
@@ -330,7 +339,7 @@ fn dispatch_extended_command(app: AppHandle, command: &str, args: Value) -> Resu
             app,
             argument(&args, "id")?,
         ))),
-        "delete_account" => serialize(crate::commands::delete_account(app, argument(&args, "id")?)),
+        "delete_account" => serialize(block_on(crate::commands::delete_account(app, argument(&args, "id")?))),
         "update_account_note" => serialize(block_on(crate::commands::update_account_note(
             app,
             argument(&args, "input")?,
@@ -349,10 +358,10 @@ fn dispatch_extended_command(app: AppHandle, command: &str, args: Value) -> Resu
             crate::codex_connection::get_codex_connection_status(),
         )),
         "connect_codex" => serialize(block_on(crate::codex_connection::connect_codex())),
-        "open_managed_folder" => serialize(crate::commands::open_managed_folder(
+        "open_managed_folder" => serialize(block_on(crate::commands::open_managed_folder(
             app,
             argument(&args, "target")?,
-        )),
+        ))),
         "get_dream_skin_status" => serialize(block_on(crate::dream_skin::get_dream_skin_status())),
         "get_dream_skin_resources_status" => {
             serialize(Ok(crate::dream_skin::get_dream_skin_resources_status()))

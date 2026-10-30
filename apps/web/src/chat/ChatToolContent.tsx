@@ -1,4 +1,5 @@
 import { t, useLanguage } from '../i18n';
+import { useMemo } from 'react';
 import type { Item } from './types';
 import { messageSections } from '../../../../shared/chat/messageDetails';
 import { toolText } from '../../../../shared/chat/toolText';
@@ -12,6 +13,13 @@ import { ChatMarkdown } from './ChatMarkdown';
 import { ChatDiff } from './ChatDiff';
 import { ChatToolResult } from './ChatToolResult';
 import { ChatImage } from './ChatImage';
+import { ChatFileLink } from './ChatFileLink';
+import { CommandOutput } from '../../../../shared/chat/CommandOutput';
+import { ChatCopyButton } from './ChatCopyButton';
+
+const FILE_CHANGE_STATUS: Record<string, string> = {
+  declined: '未应用', failed: '修改失败', inProgress: '正在修改',
+};
 
 function SearchContent({ item }: { item: Item }) {
   useLanguage();
@@ -19,28 +27,31 @@ function SearchContent({ item }: { item: Item }) {
     {(item.action?.queries ?? [item.action?.query || item.query]).filter(Boolean).map((query, index) =>
       <p key={index}>{query}</p>)}
     {item.action?.url && /^https?:\/\//i.test(item.action.url) &&
-      <a href={item.action.url} target="_blank" rel="noreferrer">{item.action.url}</a>}
+      <ChatFileLink href={item.action.url}>{item.action.url}</ChatFileLink>}
     {item.action?.pattern && <p>{t("查找：")}{item.action.pattern}</p>}
     {item.results?.map((result, index) => <article key={index}>
-      <a href={/^https?:\/\//i.test(result.url ?? '') ? result.url : undefined}
-        target="_blank" rel="noreferrer">{result.title || result.url}</a><p>{result.snippet}</p></article>)}
+      <ChatFileLink href={/^https?:\/\//i.test(result.url ?? '') ? result.url : undefined}>
+        {result.title || result.url}</ChatFileLink><p>{result.snippet}</p></article>)}
   </div>;
 }
 
 export function ChatToolContent({ item }: { item: Item }) {
   useLanguage();
   const text = toolText(item);
+  const files = useMemo(() => item.type === 'fileChange' ? changedFiles(item.changes ?? []) : [], [item]);
   if (['agentMessage', 'reasoning', 'plan', 'enteredReviewMode', 'exitedReviewMode'].includes(item.type)) {
     return <ChatMarkdown text={text} />;
   }
   if (item.type === 'commandExecution') return <>
     <p className="chat-muted">{item.cwd}{item.durationMs != null && ` · ${formatTurnDuration(item.durationMs)}`}</p>
-    <ChatCodeBlock text={item.command ?? ''} label={t("命令")} language="bash" copyLabel={t("复制命令")} />
-    <ChatCodeBlock text={item.aggregatedOutput || (item.status === 'inProgress' ? t("等待输出…") : t("没有文本输出"))}
-      label={t("输出")} copyLabel={t("复制输出")} />
+    <CommandOutput command={item.command ?? ''} label={t("工具内容")}
+      output={item.aggregatedOutput || (item.status === 'inProgress' ? t("等待输出…") : t("没有文本输出"))}
+      copyCommand={<ChatCopyButton text={item.command ?? ''} label={t("复制命令")} iconOnly />}
+      copyOutput={<ChatCopyButton text={item.aggregatedOutput ?? ''} label={t("复制输出")} iconOnly />} />
     {item.exitCode != null && <p className={item.exitCode ? 'chat-error' : 'chat-muted'}>{t("退出码：")}{item.exitCode}</p>}
   </>;
-  if (item.type === 'fileChange') return <ChatDiff files={changedFiles(item.changes ?? [])} />;
+  if (item.type === 'fileChange') return <ChatDiff files={files}
+    status={FILE_CHANGE_STATUS[item.status ?? '']} />;
   if (['mcpToolCall', 'dynamicToolCall', 'functionCallOutput'].includes(item.type)) return <ChatToolResult item={item} />;
   if (item.type === 'webSearch') return <SearchContent item={item} />;
   if (isCollaborationActivity(item)) return <>
@@ -51,7 +62,8 @@ export function ChatToolContent({ item }: { item: Item }) {
       {state.message && <ChatMarkdown text={state.message} />}</div>)}
   </>;
   if (['imageView', 'imageGeneration'].includes(item.type)) return <>
-    <ChatImage source={generatedImageSource(item)} description={item.type === 'imageView' ? t("查看的图片") : t("生成的图片")} />
+    <ChatImage source={generatedImageSource(item)} compact={item.type === 'imageView'}
+      description={item.type === 'imageView' ? t("查看的图片") : t("生成的图片")} />
     <p className="chat-muted">{item.path || item.savedPath}</p>
     {item.failure?.message && <p className="chat-error">{item.failure.message}</p>}
     {item.revisedPrompt && <ChatMarkdown text={item.revisedPrompt} />}

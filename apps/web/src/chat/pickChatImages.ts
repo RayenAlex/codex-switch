@@ -4,6 +4,7 @@ import { ChatImageError, draftImage, MAX_CHAT_IMAGES, chatImageCharLimit,
 
 import { base64Bytes, getChatPolicy, isDirectChat, MIB } from '../../../../shared/remote-chat/policy';
 import { compressChatImage, ImagePolicyError } from '../../../../shared/remote-chat/compressImage';
+import { normalizeImageDataUrl } from '../../../../shared/remote-chat/imageDataUrl';
 
 function readOriginal(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -23,12 +24,12 @@ async function prepareImage(file: File) {
     throw new ChatImageError(t("单张图片不能超过 {value1} MB，请选择较小的图片。", { value1: policy.imageSourceMaxMb }));
   }
   if (isDirectChat() && /^image\/(png|jpeg|webp|gif)$/.test(file.type)) {
-    return draftImage(await readOriginal(file));
+    return draftImage(normalizeImageDataUrl(await readOriginal(file)));
   }
-  const url = URL.createObjectURL(file);
   try {
     const image = new Image();
-    image.src = url;
+    // Desktop WebViews allow inline images but deliberately disallow blob: image sources.
+    image.src = await readOriginal(file);
     await image.decode();
     const compressed = await compressChatImage(async (edge, quality) => {
       const scale = Math.min(1, edge / Math.max(image.naturalWidth, image.naturalHeight));
@@ -47,7 +48,7 @@ async function prepareImage(file: File) {
   } catch (error) {
     if (error instanceof ChatImageError || error instanceof ImagePolicyError) throw new ChatImageError(error.message);
     throw new ChatImageError(t("这张图片暂时无法读取，请换一张 JPG 或 PNG 图片。"));
-  } finally { URL.revokeObjectURL(url); }
+  }
 }
 
 export async function pickChatImages(files: File[], remaining: number): Promise<DraftImage[]> {

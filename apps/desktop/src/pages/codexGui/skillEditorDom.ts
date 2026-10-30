@@ -1,9 +1,8 @@
 import type { ComposerText, Skill } from "./types";
 import styles from "./SkillInput.module.less";
+import { skillLabel } from "../../../../../shared/remote-chat/skills";
 
-export const skillLabel = (skill: Skill) => skill.interface?.displayName || skill.name;
-export const skillDescription = (skill: Skill) =>
-  skill.interface?.shortDescription || skill.shortDescription || skill.description;
+export { skillLabel, skillDescription } from "../../../../../shared/remote-chat/skills";
 
 export function readEditor(root: Node): ComposerText {
   const value: ComposerText = { text: "", mentions: [] };
@@ -52,7 +51,7 @@ export function writeEditor(root: HTMLElement, value: ComposerText) {
   root.replaceChildren(...nodes);
 }
 
-export interface SkillTrigger { query: string; range: Range }
+export interface SkillTrigger { query: string; range: Range; kind?: "skill" | "conversation" | "coze" | "file" }
 
 export function skillTrigger(root: HTMLElement): SkillTrigger | null {
   const selection = window.getSelection();
@@ -62,13 +61,15 @@ export function skillTrigger(root: HTMLElement): SkillTrigger | null {
   const before = caret.cloneRange();
   before.selectNodeContents(root);
   before.setEnd(caret.startContainer, caret.startOffset);
-  const match = readEditor(before.cloneContents()).text.match(/(?:^|\s)\/([^\s/]*)$/u);
+  const text = readEditor(before.cloneContents()).text;
+  const match = text.match(/(?:^|\s)(%)([^\s%]*)$/u) ?? text.match(/(?:^|\s)([/@#])([^\s/@#]*)$/u);
   if (!match) return null;
-  const start = caret.startOffset - match[1].length - 1;
+  const start = caret.startOffset - match[2].length - 1;
   if (start < 0 || caret.startContainer.parentElement?.closest("[data-skill]")) return null;
   const range = caret.cloneRange();
   range.setStart(caret.startContainer, start);
-  return { query: match[1], range };
+  const kinds = { "@": "conversation", "#": "coze", "/": "skill", "%": "file" } as const;
+  return { query: match[2], range, kind: kinds[match[1] as keyof typeof kinds] };
 }
 
 export function insertSkill(trigger: SkillTrigger, skill: Skill) {

@@ -6,10 +6,14 @@ import type { GuiEvent, Thread } from '../pages/codexGui/types';
 import { RemoteQueue } from './queue';
 import { AcknowledgedMessages } from './acknowledgedMessages';
 import { updateThread } from '../../../../shared/remote-chat/client/events';
+import * as sharedAcknowledgements from '../../../../shared/chat/acknowledgedMessages';
 
 vi.mock('../pages/codexGui/api', () => ({ guiApi: {
   connect: vi.fn(), request: vi.fn(), subscribe: vi.fn(),
 } }));
+vi.mock('../api/cloudTitleSettings', () => ({ fetchCloudTitleSettings: async () => ({
+  model: 'queue-title-model', effort: 'low',
+}) }));
 let controller: GuiController;
 let queue: RemoteQueue;
 let receive: (event: GuiEvent) => void;
@@ -24,14 +28,87 @@ beforeEach(async () => {
   vi.mocked(guiApi.connect).mockResolvedValue([]);
   vi.mocked(guiApi.subscribe).mockImplementation(async (callback) => { receive = callback; return () => {}; });
   vi.mocked(guiApi.request).mockImplementation(async (request) => {
-    if (request.operation === 'list' || request.operation === 'models') return { data: [], nextCursor: null };
+    if (request.operation === 'list') return { data: [], nextCursor: null };
+    if (request.operation === 'models') return { data: [{ id: 'phone-model', model: 'phone-model',
+      displayName: 'Phone model', isDefault: true, defaultReasoningEffort: 'high',
+      supportedReasoningEfforts: [{ reasoningEffort: 'high', description: '' }] }], nextCursor: null };
     if (request.operation === 'sendBatch') return { turn: { id: 'next', status: 'inProgress', items: [] } };
     return { thread };
   });
   controller = new GuiController(); queue = new RemoteQueue(() => controller);
   await controller.connect();
 });
-afterEach(() => controller.dispose());
+afterEach(() => { controller.dispose(); vi.useRealTimers(); vi.restoreAllMocks(); });
+
+it('does not scan acknowledgements on streaming frames or while no phone is connected', async () => {
+  const scan = vi.spyOn(sharedAcknowledgements, 'acknowledgedEvents');
+  let connected = false;
+  const events = vi.fn();
+  const stop = new AcknowledgedMessages(() => controller).subscribe(events, () => connected);
+  await queue.request(input);
+  expect(scan).not.toHaveBeenCalled();
+  connected = true;
+  await queue.request({ operation: 'queueSendNow', threadId: 'phone', id: queue.read().threads.phone[0].id });
+  expect(events).toHaveBeenCalledOnce();
+  scan.mockClear();
+  vi.useFakeTimers();
+  for (let index = 0; index < 100; index++) {
+    receive({ method: 'item/agentMessage/delta', params: {
+      threadId: 'phone', turnId: 'live', itemId: 'response', delta: 'streaming',
+    } });
+    await vi.advanceTimersByTimeAsync(32);
+  }
+  expect(scan).not.toHaveBeenCalled();
+  expect(events).toHaveBeenCalledOnce();
+  stop();
+});
+
+it('uses a remotely switched folder for both resume and the next queued turn', async () => {
+  thread.turns = [];
+  await controller.loadRemoteThread('phone');
+  expect(controller.projectActions.selectRemote('/remote/changed', 'phone')).toBe(true);
+  await queue.request(input);
+  await vi.waitFor(() => expect(guiApi.request).toHaveBeenCalledWith(expect.objectContaining({
+    operation: 'sendBatch', threadId: 'phone', cwd: '/remote/changed',
+  })));
+  expect(guiApi.request).toHaveBeenCalledWith(expect.objectContaining({
+    operation: 'resume', threadId: 'phone', cwd: '/remote/changed',
+  }));
+});
+
+it('continues a retained remote chat with the detached directory marker after removing its project', async () => {
+  thread.cwd = '/removed/project';
+  thread.turns = [];
+  await controller.loadRemoteThread('phone');
+  expect(await controller.projectActions.remove(thread.cwd)).toBe(true);
+  expect(controller.getSnapshot().projectOverrides.phone).toBe('');
+  await queue.request(input);
+  await vi.waitFor(() => expect(guiApi.request).toHaveBeenCalledWith(expect.objectContaining({
+    operation: 'sendBatch', threadId: 'phone', cwd: '',
+  })));
+  expect(guiApi.request).toHaveBeenCalledWith(expect.objectContaining({
+    operation: 'resume', threadId: 'phone', cwd: '',
+  }));
+  await vi.waitFor(() => expect(queue.read().threads.phone).toBeUndefined());
+});
+
+it('returns each enqueue receipt even when another writer updates the same queue before acknowledgement', async () => {
+  const [first, second] = await Promise.all([
+    queue.request({ ...input, text: 'first retry' }), queue.request({ ...input, text: 'second retry' }),
+  ]);
+  const messages = queue.read().threads.phone;
+  expect(first).toMatchObject({ enqueuedId: messages.find(message => message.text === 'first retry')?.id });
+  expect(second).toMatchObject({ enqueuedId: messages.find(message => message.text === 'second retry')?.id });
+  expect(messages).toHaveLength(2);
+});
+
+it('generates a title when the first successful phone message goes through the queue', async () => {
+  thread.turns = [];
+  await queue.request(input);
+  await vi.waitFor(() => expect(guiApi.request).toHaveBeenCalledWith({ operation: 'generateTitle',
+    threadId: thread.id, prompt: input.text, settings: { model: 'queue-title-model', effort: 'low' } }));
+  expect(queue.read().threads.phone).toBeUndefined();
+});
 
 it('keeps P2P upload provenance through queuing and rejects a forged Relay exemption', async () => {
   const attachment = { kind: 'file', name: 'large.txt', path: '', data: 'YWFh'.repeat(1024 * 1024) };
@@ -127,6 +204,40 @@ it('queues on the PC without steering or changing its selection, then sends afte
   expect(updates).toHaveBeenCalled();
 });
 
+it.each(['completed', 'inProgress'])('ignores an older unfinished turn when the latest turn is %s', async status => {
+  thread.turns = [{ id: 'abandoned', status: 'inProgress', items: [] },
+    { id: 'live', status, items: [] }];
+  await queue.request(input);
+  if (status === 'inProgress') {
+    expect(controller.getSnapshot().conversations.phone.activeTurn).toBe('live');
+    expect(queue.read().threads.phone).toHaveLength(1);
+    expect(guiApi.request).not.toHaveBeenCalledWith(expect.objectContaining({ operation: 'sendBatch' }));
+    thread.turns[1].status = 'completed';
+    receive({ method: 'turn/completed', params: { threadId: thread.id, turn: thread.turns[1] } });
+  }
+  await vi.waitFor(() => expect(queue.read().threads.phone).toBeUndefined());
+  expect(vi.mocked(guiApi.request).mock.calls.filter(([request]) => request.operation === 'sendBatch')).toHaveLength(1);
+  expect(controller.getSnapshot().conversations.phone.activeTurn).toBe('next');
+  expect(thread.turns[0].status).toBe('inProgress');
+});
+
+it('automatically sends a restored queue after resuming history with an older unfinished turn', async () => {
+  controller.dispose();
+  thread.turns = [{ id: 'abandoned', status: 'inProgress', items: [] },
+    { id: 'latest', status: 'completed', items: [] }];
+  controller = new GuiController({
+    read: async () => ({ revision: 1, threads: { phone: [{
+      id: 'saved-message', text: 'check udp', images: [], skills: [],
+      model: 'phone-model', effort: 'high', access: 'read-only',
+    }] } }),
+    save: async snapshot => ({ ...snapshot, revision: snapshot.revision + 1 }),
+  });
+  await controller.connect();
+  await vi.waitFor(() => expect(queue.read().threads.phone).toBeUndefined());
+  expect(guiApi.request).toHaveBeenCalledWith(expect.objectContaining({ operation: 'sendBatch',
+    messages: [{ text: 'check udp', images: [], skills: [] }] }));
+});
+
 it('sends only the chosen message now, retaining other PC and phone messages', async () => {
   await queue.request(input);
   controller.queue.enqueue('phone', { text: 'PC message', images: [], skills: [] });
@@ -144,11 +255,23 @@ it('retains failed messages for retry and never transmits image data in queue pr
   const id = queue.read().threads.phone[0].id;
   vi.mocked(guiApi.request).mockRejectedValueOnce(new Error('private transport failure'));
   await queue.request({ operation: 'queueSendNow', threadId: 'phone', id });
-  expect(queue.read().threads.phone).toMatchObject([{ id, busy: false, imageCount: 1, error: '发送失败，请重试。' }]);
+  expect(queue.read().threads.phone).toMatchObject([{ id, busy: false, imageCount: 1,
+    error: '发送结果尚未确认，请查看聊天后重试。' }]);
   expect(JSON.stringify(queue.read())).not.toContain(images[0]);
   await queue.request({ operation: 'queueSendNow', threadId: 'phone', id });
   expect(queue.read().threads.phone).toBeUndefined();
   expect(guiApi.request).toHaveBeenLastCalledWith(expect.objectContaining({ operation: 'steer', images }));
+});
+
+it('shares the specific image failure with phone and web clients without losing the queued image', async () => {
+  const images = ['data:image/png;base64,aGVsbG8='];
+  const error = '图片无法读取，请重新选择后发送。';
+  await queue.request({ ...input, images });
+  const id = queue.read().threads.phone[0].id;
+  vi.mocked(guiApi.request).mockRejectedValueOnce(error);
+  await queue.request({ operation: 'queueSendNow', threadId: 'phone', id });
+  expect(queue.read().threads.phone).toMatchObject([{ id, imageCount: 1, busy: false, error }]);
+  expect(controller.getSnapshot().queued.phone[0].images).toEqual(images);
 });
 
 it('rejects invalid input and synchronizes PC edits and removals', async () => {

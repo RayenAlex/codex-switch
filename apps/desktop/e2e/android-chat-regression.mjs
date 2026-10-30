@@ -5,7 +5,7 @@ import { markdownReport } from './android-chat-report.mjs';
 import { existingChatSettings } from './android-existing-settings.mjs';
 import { groupPreviewJourney } from './android-group-preview.mjs';
 import { imagePreviewJourney } from './android-image-preview.mjs';
-import { adb, output, prepare, serverState, waitFor, waitText, tap, input, send, screenshot, hasText }
+import { adb, activity, appErrorLogs, output, prepare, serverState, waitFor, waitText, tap, input, send, screenshot, hasText }
   from './android-chat-driver.mjs';
 
 const report = {
@@ -45,6 +45,8 @@ try {
     await input(2, 'local-test');
     await adb('shell', 'input', 'keyevent', 'KEYCODE_BACK');
     await tap('登录并查看');
+    await waitText('同意并登录');
+    await tap('同意并登录');
     await waitText('账户管理');
     await tap('聊天', { last: true });
     await waitText('聊天消息');
@@ -150,7 +152,7 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 2000));
     assert.equal((await serverState()).connectedMobiles, 1);
     assert.equal((await serverState()).mobileConnections, connections);
-    await adb('shell', 'am', 'start', '-n', 'com.codexswitch.mobile/.MainActivity');
+    await adb('shell', 'am', 'start', '-n', activity);
     await ready();
   });
   await check('12-inline-images-and-preview', imagePreviewJourney);
@@ -235,7 +237,7 @@ try {
   process.exitCode = 1;
 } finally {
   report.finishedAt = new Date().toISOString();
-  const logs = await adb('logcat', '-d', '-s', 'ReactNativeJS:E', 'AndroidRuntime:E');
+  const logs = await appErrorLogs();
   await writeFile(path.join(output, 'logcat.txt'), logs);
   if (/ReactNativeJS:|FATAL EXCEPTION/.test(logs)) {
     report.passed = false;

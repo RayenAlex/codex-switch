@@ -1,5 +1,8 @@
-import { useMemo, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { createThemedStyles } from '../theme/styles';
+import { useThemeMode } from '../theme/store';
+import { t, useLanguage, getLocale } from '../i18n';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Modal, Pressable, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { editedImageMessage, imageEditorHtml } from '../../../../shared/chat/imageEditorHtml';
@@ -8,7 +11,17 @@ import type { ChatPhoto } from './chatPhotos';
 interface Props { photo: ChatPhoto; save: (dataUrl: string) => void; close: () => void }
 
 export function ChatPhotoEditor({ photo, save, close }: Props) {
-  const source = useMemo(() => ({ html: imageEditorHtml(photo.dataUrl) }), [photo.dataUrl]);
+  const styles = useStyles();
+  const language = useLanguage();
+  const themeMode = useThemeMode();
+  const initialTheme = useRef(themeMode);
+  const webview = useRef<WebView>(null);
+  const source = useMemo(() => ({ html: imageEditorHtml(photo.dataUrl, t, getLocale(), {
+    themeMode: initialTheme.current,
+  }) }), [photo.dataUrl, language]);
+  const themeScript = `document.documentElement.dataset.theme = ${JSON.stringify(themeMode)}; true;`;
+  // Update only the page colors so an appearance change preserves unsaved annotations.
+  useEffect(() => { webview.current?.injectJavaScript(themeScript); }, [themeScript]);
   const [error, setError] = useState('');
   const receive = (raw: string) => {
     try {
@@ -17,31 +30,32 @@ export function ChatPhotoEditor({ photo, save, close }: Props) {
       if (!dataUrl) return;
       save(dataUrl);
       close();
-    } catch { setError('图片未保存，请减少标注或照片后重试。'); }
+    } catch { setError(t("图片未保存，请减少标注或照片后重试。")); }
   };
   return <Modal visible animationType="slide" onRequestClose={close}
     supportedOrientations={['portrait', 'landscape-left', 'landscape-right']}>
     <SafeAreaProvider><SafeAreaView style={styles.container}>
-      <WebView source={source} style={styles.container} originWhitelist={['about:blank']}
+      <WebView ref={webview} source={source} style={styles.container} originWhitelist={['about:blank']}
+        onLoadEnd={() => webview.current?.injectJavaScript(themeScript)}
         scrollEnabled={false} bounces={false} javaScriptEnabled
         allowFileAccess={false} allowFileAccessFromFileURLs={false} allowUniversalAccessFromFileURLs={false}
         setSupportMultipleWindows={false} javaScriptCanOpenWindowsAutomatically={false}
         onShouldStartLoadWithRequest={({ url }) => url === 'about:blank'}
         onMessage={({ nativeEvent }) => receive(nativeEvent.data)}
-        onError={() => setError('图片无法编辑，请关闭后重试。')} />
+        onError={() => setError(t("图片无法编辑，请关闭后重试。"))} />
       {!!error && <View style={styles.notice}>
         <Text accessibilityRole="alert" style={styles.error}>{error}</Text>
         <Pressable accessibilityRole="button" onPress={close} style={styles.close}>
-          <Text style={styles.error}>关闭编辑</Text>
+          <Text style={styles.error}>{t("关闭编辑")}</Text>
         </Pressable>
       </View>}
     </SafeAreaView></SafeAreaProvider>
   </Modal>;
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f1f3f6' },
+const useStyles = createThemedStyles((color) => ({
+  container: { flex: 1, backgroundColor: color('#f1f3f6', 'canvas') },
   notice: { padding: 12, maxWidth: 400, alignSelf: 'center' },
-  error: { color: '#b42318', textAlign: 'center' },
+  error: { color: color('#b42318', 'warning'), textAlign: 'center' },
   close: { minHeight: 44, justifyContent: 'center' },
-});
+}));

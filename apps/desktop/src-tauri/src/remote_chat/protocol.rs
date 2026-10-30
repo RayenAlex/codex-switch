@@ -5,7 +5,8 @@ use super::{bridge::Batch, AckRequest, ReconnectRequest, SendRequest};
 
 pub(super) const COMMAND_LIMIT: usize = 128;
 pub(super) const FRAME_LIMIT: usize = 64 * 1024;
-pub(super) const SESSION_LIMIT: usize = 4;
+pub(super) const DIAGNOSTIC_FRAME_LIMIT: usize = 4096;
+const DIAGNOSTIC_EVENT_LIMIT: usize = 64;
 
 #[derive(Debug, thiserror::Error)]
 pub(super) enum ChatError {
@@ -15,7 +16,7 @@ pub(super) enum ChatError {
     Transport,
 }
 
-/// Only peer protocol frames may cross IPC. Authentication stays in Rust.
+/// Peer frames and bounded diagnostics may cross IPC. Authentication stays in Rust.
 #[derive(Deserialize, Serialize)]
 #[serde(
     tag = "type",
@@ -24,6 +25,7 @@ pub(super) enum ChatError {
 )]
 pub(crate) enum Outgoing {
     Signal { session_id: String, payload: Value },
+    Diagnostic { session_id: String, payload: Value },
     Relay { session_id: String, payload: String },
     RelayRequest { session_id: String, reason: String },
     PeerClose { session_id: String },
@@ -33,6 +35,7 @@ impl Outgoing {
     pub(super) fn session_id(&self) -> &str {
         match self {
             Self::Signal { session_id, .. }
+            | Self::Diagnostic { session_id, .. }
             | Self::Relay { session_id, .. }
             | Self::RelayRequest { session_id, .. }
             | Self::PeerClose { session_id } => session_id,
@@ -43,24 +46,40 @@ impl Outgoing {
         if self.session_id().is_empty() || self.session_id().len() > 160 {
             return Err(ChatError::InvalidFrame);
         }
+        if let Self::Relay { payload, .. } = self {
+            // Bounded ASCII ciphertext plus the bounded session ID always fits FRAME_LIMIT.
+            // Avoid serializing a full hexadecimal JSON envelope before writing a binary frame.
+            return if payload.len() <= 40_000
+                && payload
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            {
+                Ok(())
+            } else {
+                Err(ChatError::InvalidFrame)
+            };
+        }
+        let limit = if matches!(self, Self::Diagnostic { .. }) {
+            DIAGNOSTIC_FRAME_LIMIT
+        } else {
+            FRAME_LIMIT
+        };
         if serde_json::to_vec(self)
             .map_err(|_| ChatError::InvalidFrame)?
             .len()
-            > FRAME_LIMIT
+            > limit
         {
             return Err(ChatError::InvalidFrame);
         }
         match self {
-            Self::Relay { payload, .. }
-                if payload.len() > 40_000
-                    || !payload
-                        .bytes()
-                        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)) =>
-            {
+            Self::Diagnostic { payload, .. } if !valid_diagnostic(payload) => {
                 Err(ChatError::InvalidFrame)
             }
             Self::Signal { payload, .. }
-                if !matches!(payload["kind"].as_str(), Some("key" | "sdp" | "ice")) =>
+                if !matches!(
+                    payload["kind"].as_str(),
+                    Some("key" | "sdp" | "ice" | "tcp")
+                ) =>
             {
                 Err(ChatError::InvalidFrame)
             }
@@ -74,15 +93,26 @@ impl Outgoing {
     }
 }
 
+fn valid_diagnostic(payload: &Value) -> bool {
+    // The coordinator owns the evolving event/field allowlist; IPC bounds the envelope and requires an event.
+    payload.is_object()
+        && payload["event"]
+            .as_str()
+            .is_some_and(|event| !event.is_empty() && event.len() <= DIAGNOSTIC_EVENT_LIMIT)
+}
+
 pub(super) enum Command {
     Attach {
+        bulk: Option<tauri::ipc::Channel<tauri::ipc::Response>>,
         client_id: String,
         deliver: Box<dyn Fn(Batch) -> bool + Send>,
     },
     Detach(String),
     Reconnect(ReconnectRequest),
     Send(SendRequest),
+    Bulk(super::bulk::BulkSend),
     Ack(AckRequest),
+    BulkAck(AckRequest),
 }
 
 #[derive(Clone, Serialize)]
@@ -91,6 +121,7 @@ pub(super) enum Event {
     Reset,
     Disconnected,
     Ready,
+    Closed { code: u16 },
     Message { data: String },
 }
 

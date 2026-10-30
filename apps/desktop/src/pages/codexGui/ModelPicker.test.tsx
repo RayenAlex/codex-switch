@@ -20,7 +20,7 @@ let controller: GuiController;
 function Fixture({ catalog }: { catalog: Model[] }) {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   const { usage } = useUsageStatus(true);
-  useEffect(() => { controller.setProviderModels(catalog); }, [catalog]);
+  useEffect(() => { controller.setModels(catalog); }, [catalog]);
   return <><span>{usage?.totalTokens ?? "刷新中"}</span><ModelPicker models={state.models}
     model={state.settings.model} effort={state.settings.effort} onChange={controller.settings} disabled={false} /></>;
 }
@@ -69,6 +69,27 @@ it("updates an open menu and accepts selections while usage polling waits for a 
   expect(controller.getSnapshot().settings.model).toBe("deepseek-v3");
 });
 
+it("opens without fetching and displays model changes received while open", async () => {
+  const onChange = vi.fn();
+  let finish!: (models: Model[]) => void;
+  const pending = new Promise<Model[]>((resolve) => { finish = resolve; });
+  const onRetry = vi.fn();
+  void pending.then((models) => render(models));
+  const render = (catalog: Model[]) => root.render(<ModelPicker models={catalog} model={models[0].model}
+    effort="high" disabled={false} onChange={onChange} onRetry={onRetry} />);
+  await act(async () => render([models[0]]));
+  await act(async () => container.querySelector<HTMLButtonElement>("button")!.click());
+  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="选择模型"]')!.click());
+  expect(onRetry).not.toHaveBeenCalled();
+  const released = { ...models[1], id: "gpt-6.1-sol", model: "gpt-6.1-sol", displayName: "GPT-6.1 Sol" };
+  await act(async () => finish([models[0], released]));
+  const option = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]'))
+    .find((button) => button.textContent === "GPT-6.1 Sol")!;
+  expect(option.disabled).toBe(false);
+  await act(async () => option.click());
+  expect(onChange).toHaveBeenCalledWith({ model: "gpt-6.1-sol", effort: "high" });
+});
+
 it("shows a concrete initial selection and restores the recommended effort by name", async () => {
   const catalog = [{ ...models[0], displayName: "Kimi K3",
     supportedReasoningEfforts: ["low", "high", "max"].map((reasoningEffort) => ({ reasoningEffort, description: "" })) }];
@@ -85,4 +106,47 @@ it("shows a concrete initial selection and restores the recommended effort by na
   await act(async () => trigger.click());
   await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="恢复推荐推理强度"]')!.click());
   expect(onChange).toHaveBeenLastCalledWith({ model: "kimi-k3", effort: "high" });
+});
+
+it("offers retry after an initial load fails and returns to loading while retrying", async () => {
+  const retry = vi.fn();
+  const render = (error?: string) => root.render(<ModelPicker models={[]} model="" effort=""
+    disabled onChange={vi.fn()} onRetry={retry} error={error} />);
+  await act(async () => render());
+  const trigger = container.querySelector<HTMLButtonElement>("button")!;
+  expect(trigger.textContent).toBe("正在加载模型…");
+  expect(trigger.disabled).toBe(true);
+  await act(async () => render("offline"));
+  expect(trigger.textContent).toBe("模型加载失败，点击重试");
+  expect(trigger.disabled).toBe(false);
+  await act(async () => trigger.click());
+  expect(retry).toHaveBeenCalledOnce();
+  expect(document.querySelector('[role="menu"]')).toBeNull();
+  await act(async () => render());
+  expect(trigger.disabled).toBe(true);
+  expect(trigger.getAttribute("aria-busy")).toBe("true");
+});
+
+it("distinguishes an empty catalog from loading and offers a retry", async () => {
+  const retry = vi.fn();
+  await act(async () => root.render(<ModelPicker models={[]} model="" effort="" disabled={false}
+    onChange={vi.fn()} onRetry={retry} />));
+  const trigger = container.querySelector<HTMLButtonElement>("button")!;
+  expect(trigger.textContent).toBe("暂无可用模型，点击重试");
+  expect(trigger.disabled).toBe(false);
+  await act(async () => trigger.click());
+  expect(retry).toHaveBeenCalledOnce();
+});
+
+it("offers retry instead of selecting stale models after an account switch fails", async () => {
+  const retry = vi.fn();
+  const change = vi.fn();
+  await act(async () => root.render(<ModelPicker models={models} model={models[0].model} effort="high"
+    disabled onChange={change} onRetry={retry} error="offline" />));
+  const trigger = container.querySelector<HTMLButtonElement>("button")!;
+  expect(trigger.textContent).toBe("模型加载失败，点击重试");
+  expect(trigger.disabled).toBe(false);
+  await act(async () => trigger.click());
+  expect(retry).toHaveBeenCalledOnce();
+  expect(change).not.toHaveBeenCalled();
 });

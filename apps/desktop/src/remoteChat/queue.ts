@@ -1,6 +1,6 @@
 import { getGuiController } from '../pages/codexGui/session';
 import { composerPatch } from '../../../../shared/remote-chat/composer';
-import { queueTextPreview, type QueueSnapshot } from '../../../../shared/remote-chat/queue';
+import { queueTextPreview, type QueueSnapshot, type QueueEnqueueResult } from '../../../../shared/remote-chat/queue';
 import type { GuiController } from '../pages/codexGui/controller';
 import type { GuiState, SkillReference } from '../pages/codexGui/types';
 import { remoteAttachments } from '../../../../shared/remote-chat/composerAttachments';
@@ -62,6 +62,7 @@ export class RemoteQueue {
     if (source === this.source) return this.snapshot;
     this.source = source;
     this.snapshot = { revision: this.snapshot.revision + 1,
+      cancelledIds: [...this.controller().queue.cancelledMessages()],
       threads: Object.fromEntries(Object.entries(source).filter(([, messages]) => messages.length)
         .map(([id, messages]) => [id, messages.map((item) => ({
           id: item.id, text: queueTextPreview(item.text || item.attachments?.map((file) => file.name).join('、') || ''),
@@ -87,7 +88,7 @@ export class RemoteQueue {
     if (body.operation === 'queueRead') return this.read();
     const threadId = identifier(body.threadId);
     if (body.operation === 'queueEnqueue') return this.enqueue(controller, threadId, body, mode);
-    if (body.operation === 'queueFlush') await controller.queue.flush(threadId);
+    if (body.operation === 'queueFlush') await controller.queue.flush(threadId, true);
     else {
       const id = identifier(body.id);
       if (body.operation === 'queueEdit') return this.edit({ controller, threadId, id, mode });
@@ -96,15 +97,16 @@ export class RemoteQueue {
       } else if (body.operation === 'queueRemove') controller.queue.remove(threadId, id);
       else if (body.operation === 'queueSendNow') {
         if (controller.getSnapshot().conversations[threadId]?.activeTurn) await controller.queue.steer(threadId, id);
-        else await controller.queue.flush(threadId);
+        else await controller.queue.flush(threadId, true);
       } else throw new Error('当前手机端暂不支持此操作。');
     }
+    await controller.queueJournal.saved();
     return this.read();
   }
 
-  private edit({ controller, threadId, id, mode }: {
+  private async edit({ controller, threadId, id, mode }: {
     controller: GuiController; threadId: string; id: string; mode: ConnectionMode;
-  }): QueueEditResult {
+  }): Promise<QueueEditResult> {
     const item = controller.getSnapshot().queued[threadId]?.find((message) => message.id === id);
     if (!item || item.busy) throw new Error('这条消息已开始发送或已被移除。');
     // Validate before removing: a desktop-only or oversized image must not lose the queued message.
@@ -116,19 +118,39 @@ export class RemoteQueue {
     } }, 'queue-edit', mode).next();
     const draft = controller.queue.take(threadId, id);
     if (!draft) throw new Error('这条消息已开始发送或已被移除。');
+    await controller.queueJournal.saved();
     return { ...this.read(), draft };
   }
 
   private async enqueue(controller: GuiController, threadId: string,
-    body: Record<string, unknown>, mode: ConnectionMode) {
+    body: Record<string, unknown>, mode: ConnectionMode): Promise<QueueEnqueueResult> {
+    const release = controller.retainConversation(threadId);
+    try { return await this.enqueueRetained({ controller, threadId, body, mode }); }
+    finally { release(); }
+  }
+
+  private async enqueueRetained({ controller, threadId, body, mode }: {
+    controller: GuiController; threadId: string; body: Record<string, unknown>; mode: ConnectionMode;
+  }): Promise<QueueEnqueueResult> {
     const input = messageInput(body, mode);
     const patch = composerPatch(Object.fromEntries(['model', 'effort', 'access']
       .filter((key) => body[key] !== undefined).map((key) => [key, body[key]])));
-    const settings = { ...controller.getSnapshot().settings, ...patch };
     await controller.loadRemoteThread(threadId);
+    await controller.modelCatalog.ready();
+    const selected = await controller.modelSettings.ready(threadId);
+    if ((patch.model && patch.model !== selected.model) || (patch.effort && patch.effort !== selected.effort)) {
+      throw new Error('模型已更新，请确认后重新发送。');
+    }
+    const settings = { ...controller.getSnapshot().settings, ...patch, ...selected };
     if (!controller.queue.enqueue(threadId, input, settings)) throw new Error('待发送消息已满，请稍后再添加。');
+    const enqueuedId = controller.getSnapshot().queued[threadId].at(-1)?.id;
+    try { await controller.queueJournal.saved(); }
+    catch {
+      controller.queue.hold(threadId);
+      throw new Error('保存结果尚未确认，请先检查电脑上的待发送消息。');
+    }
     void controller.queue.flush(threadId);
-    return this.read();
+    return { ...this.read(), enqueuedId };
   }
 }
 

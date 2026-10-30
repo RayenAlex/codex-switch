@@ -7,6 +7,14 @@ on:
         description: "Existing release tag, for example v0.1.0"
         required: true
         type: string
+      linux_only:
+        description: "Rebuild Linux packages for an existing draft release"
+        type: boolean
+        default: false
+      unix_only:
+        description: "Rebuild macOS and Linux packages only; keep the existing release draft"
+        type: boolean
+        default: false
   push:
     tags:
       - "v*"
@@ -17,6 +25,12 @@ permissions:
 concurrency:
   group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
   cancel-in-progress: false
+
+env:
+  CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+  # Check/test dependencies do not need full debug symbols. Release profiles stay unchanged.
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG: '0'
 
 jobs:
   create-release:
@@ -31,7 +45,7 @@ jobs:
         uses: actions/github-script@v9
         env:
           TAG_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          RELEASE_NAME: "Codex Switch ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          RELEASE_NAME: "Remote AI ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
           PRERELEASE: ${{ contains(github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name, '-') }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -41,12 +55,15 @@ jobs:
             const tag = process.env.TAG_NAME;
             const boilerplate = "Windows, macOS, Linux, Android, and iOS build artifacts are attached below.";
 
-            try {
-              const { data: release } = await github.rest.repos.getReleaseByTag({
-                owner,
-                repo,
-                tag,
-              });
+            // Tag lookup omits drafts; retries must reuse the draft and its uploaded assets.
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner,
+              repo,
+              per_page: 100,
+            });
+            const existingRelease = releases.find((release) => release.tag_name === tag);
+            if (existingRelease) {
+              const release = existingRelease;
               const update = {};
               if (release.name !== process.env.RELEASE_NAME) {
                 update.name = process.env.RELEASE_NAME;
@@ -71,8 +88,6 @@ jobs:
               core.setOutput("release_draft", String(release.draft));
               core.info(`Using existing release ${release.id} for ${tag}.`);
               return release.id.toString();
-            } catch (error) {
-              if (error.status !== 404) throw error;
             }
 
             const { data: release } = await github.rest.repos.createRelease({
@@ -96,34 +111,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: macos-aarch64
-            platform: macos-latest
-            releasePlatform: macos
-            args: "--target aarch64-apple-darwin"
-            rustTargets: "aarch64-apple-darwin,x86_64-apple-darwin"
-          - name: macos-x86_64
-            platform: macos-latest
-            releasePlatform: macos
-            args: "--target x86_64-apple-darwin"
-            rustTargets: "aarch64-apple-darwin,x86_64-apple-darwin"
-          - name: ubuntu-x86_64
-            platform: ubuntu-22.04
-            releasePlatform: linux
-            args: ""
-            rustTargets: ""
-          - name: windows-x86_64
-            platform: windows-latest
-            releasePlatform: windows
-            args: ""
-            rustTargets: ""
-            msvcArch: "amd64"
-          - name: windows-aarch64
-            platform: windows-latest
-            releasePlatform: windows
-            args: "--target aarch64-pc-windows-msvc"
-            rustTargets: "aarch64-pc-windows-msvc"
-            msvcArch: "amd64_arm64"
+        # The Windows video helper requires Visual Studio 2022.
+        include: >-
+          ${{ fromJSON(inputs.linux_only && '[
+            {"name":"ubuntu-x86_64","platform":"ubuntu-22.04","releasePlatform":"linux","args":"","rustTargets":""}
+          ]' || inputs.unix_only && '[
+            {"name":"macos-aarch64","platform":"macos-latest","releasePlatform":"macos",
+             "args":"--target aarch64-apple-darwin","rustTargets":"aarch64-apple-darwin,x86_64-apple-darwin"},
+            {"name":"macos-x86_64","platform":"macos-latest","releasePlatform":"macos",
+             "args":"--target x86_64-apple-darwin","rustTargets":"aarch64-apple-darwin,x86_64-apple-darwin"},
+            {"name":"ubuntu-x86_64","platform":"ubuntu-22.04","releasePlatform":"linux","args":"","rustTargets":""}
+          ]' || '[
+            {"name":"macos-aarch64","platform":"macos-latest","releasePlatform":"macos",
+             "args":"--target aarch64-apple-darwin","rustTargets":"aarch64-apple-darwin,x86_64-apple-darwin"},
+            {"name":"macos-x86_64","platform":"macos-latest","releasePlatform":"macos",
+             "args":"--target x86_64-apple-darwin","rustTargets":"aarch64-apple-darwin,x86_64-apple-darwin"},
+            {"name":"ubuntu-x86_64","platform":"ubuntu-22.04","releasePlatform":"linux","args":"","rustTargets":""},
+            {"name":"windows-x86_64","platform":"windows-2022","releasePlatform":"windows",
+             "args":"","rustTargets":"","msvcArch":"amd64"},
+            {"name":"windows-aarch64","platform":"windows-2022","releasePlatform":"windows",
+             "args":"--target aarch64-pc-windows-msvc","rustTargets":"aarch64-pc-windows-msvc","msvcArch":"amd64_arm64"}
+          ]') }}
 
     steps:
       - name: Checkout
@@ -135,13 +143,76 @@ jobs:
         if: startsWith(matrix.name, 'ubuntu')
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils \
+            squashfs-tools xvfb xauth dbus-x11 x11-utils protobuf-compiler libprotobuf-dev clang cmake strace \
+            pkg-config libclang-dev libxcb1-dev libxrandr-dev libdbus-1-dev libpipewire-0.3-dev \
+            libwayland-dev libegl-dev meson ninja-build
+
+      # xcap's PipeWire bindings need newer headers than Ubuntu 22.04 provides.
+      # Build a private SDK without replacing the runner's runtime or raising the glibc baseline.
+      - name: Prepare Linux screen capture SDK
+        if: startsWith(matrix.name, 'ubuntu')
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/pipewire-1.0.5.tar.bz2"
+          source="$RUNNER_TEMP/pipewire-1.0.5"
+          sdk="$RUNNER_TEMP/pipewire-sdk"
+          curl -fL --retry 3 \
+            https://archive.ubuntu.com/ubuntu/pool/main/p/pipewire/pipewire_1.0.5.orig.tar.bz2 \
+            -o "$archive"
+          checksum=d5e5f3d0b8460e5711c1571c500156fd61768ba55a062eaeb94356abdb955a56
+          echo "$checksum  $archive" | sha256sum --check --strict
+          tar -xjf "$archive" -C "$RUNNER_TEMP"
+          meson setup "$source/build" "$source" --prefix "$sdk" --libdir lib \
+            --buildtype release --wrap-mode nofallback -Dauto_features=disabled \
+            -Dsession-managers=[] -Dpipewire-jack=disabled \
+            -Dpipewire-v4l2=disabled -Dtests=disabled -Dexamples=disabled \
+            -Ddbus=disabled -Dflatpak=disabled -Dsystemd-user-service=disabled
+          meson compile -C "$source/build"
+          meson install -C "$source/build"
+          PKG_CONFIG_PATH="$sdk/lib/pkgconfig" pkg-config --exact-version=1.0.5 libpipewire-0.3
+          echo "PKG_CONFIG_PATH=$sdk/lib/pkgconfig" >> "$GITHUB_ENV"
+
+      # Ubuntu 22.04 ships protoc 3.12; EasyTier requires stable proto3 optional support.
+      - name: Install Linux connectivity protocol compiler
+        if: startsWith(matrix.name, 'ubuntu')
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/protoc-29.3-linux-x86_64.zip"
+          destination="$RUNNER_TEMP/protoc-29.3"
+          curl -fL --retry 3 \
+            https://github.com/protocolbuffers/protobuf/releases/download/v29.3/protoc-29.3-linux-x86_64.zip \
+            -o "$archive"
+          checksum=3e866620c5be27664f3d2fa2d656b5f3e09b5152b42f1bedbf427b333e90021a
+          echo "$checksum  $archive" | sha256sum --check --strict
+          unzip -q "$archive" -d "$destination"
+          "$destination/bin/protoc" --version
+          echo "$destination/bin" >> "$GITHUB_PATH"
+          echo "PROTOC=$destination/bin/protoc" >> "$GITHUB_ENV"
+          echo "PROTOC_INCLUDE=$destination/include" >> "$GITHUB_ENV"
+
+      - name: Install macOS connectivity build dependencies
+        if: startsWith(matrix.name, 'macos')
+        run: brew install protobuf
+
+      - name: Install Windows connectivity build dependencies
+        if: startsWith(matrix.name, 'windows')
+        run: choco install protoc --no-progress -y
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: lts/*
           cache: npm
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/admin-go/go.mod
+          cache-dependency-path: apps/admin-go/go.sum
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -157,13 +228,125 @@ jobs:
       - name: Cache Rust build artifacts
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: "./apps/desktop/src-tauri -> target"
+          # Cross-compilation targets can share a runner host, but need separate caches.
+          key: desktop-${{ matrix.name }}
+          cache-bin: false
+          cache-on-failure: true
+          workspaces: |
+            apps/desktop/src-tauri
+            apps/desktop/src-tauri/installer-helper
 
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Run checks
-        run: npm run check
+      # Process-wide history stores outlive temporary app fixtures, and native peer
+      # engines keep background state. Separate processes prevent cross-test leakage.
+      - name: Install isolated Rust test runner
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      # Peer readiness requires a measured, nonzero RTT. Same-host Linux sockets can
+      # finish below the microsecond timer resolution; model a small LAN delay instead.
+      - name: Model Linux peer network latency
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo tc qdisc add dev lo root netem delay 1ms
+          tc qdisc show dev lo
+
+      - name: Diagnose Linux peer discovery
+        if: runner.os == 'Linux' && inputs.linux_only
+        shell: bash
+        run: |
+          set -euo pipefail
+          ip -brief address
+          ip route
+          sudo iptables -S
+          sudo ip6tables -S
+          cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml \
+            --test codex_switch_lib_tests --no-run
+          strace -f -e trace=network -s 96 -o "$RUNNER_TEMP/linux-peer-network.log" \
+            cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml \
+              --test codex_switch_lib_tests \
+              native_seed_serves_verified_cache_over_a_discovered_direct_connection -- --nocapture
+
+      - name: Upload Linux peer diagnostic trace
+        if: always() && runner.os == 'Linux' && inputs.linux_only
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-peer-network
+          path: ${{ runner.temp }}/linux-peer-network.log
+          if-no-files-found: ignore
+
+      # The large CodeMirror/jsdom fixtures exceed Vitest's default five seconds on shared runners.
+      # Keep every admin check, with a bounded integration-test budget and no concurrent workspace builds.
+      - name: Check admin UI
+        shell: bash
+        working-directory: apps/admin-ui
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit -p tsconfig.json
+          npm run test -- --testTimeout 30000
+          npm run build
+
+      - name: Run checks in isolated test processes
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The UDP round-trip fixture exercises the full IPv4 datagram size.
+          # Darwin defaults to 9216 bytes, rejecting that fixture before it reaches the app.
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            sudo sysctl -w net.inet.udp.maxdgram=65535
+          fi
+          npx lerna run check --ignore @codex-switch/backend --ignore @codex-switch/admin-ui --stream
+          npm run check:backend
+          cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
+          cargo nextest run --locked --manifest-path apps/desktop/src-tauri/Cargo.toml \
+            --test-threads 1 --no-fail-fast
+          cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --doc
+          node scripts/check-installer-helper.mjs
+          node scripts/check-installer-fixture.mjs
+
+      # Git Bash prepends its own link.exe and shadows the configured MSVC linker.
+      - name: Run Windows checks in isolated test processes
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          npx lerna run check --ignore @codex-switch/backend --ignore @codex-switch/admin-ui --stream
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run check:backend
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo nextest run --locked --manifest-path apps/desktop/src-tauri/Cargo.toml `
+            --test-threads 1 --no-fail-fast
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --doc
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/check-installer-helper.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/check-installer-fixture.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Prepare desktop video runtime
+        if: startsWith(matrix.name, 'windows') || startsWith(matrix.name, 'macos')
+        run: node scripts/prepare-remote-desktop-runtime.mjs
+
+      # tauri-action invokes Tauri directly, so build:app's service preparation is not run.
+      # These files must exist before Rust embeds their integrity manifest.
+      - name: Prepare Windows unattended service runtime
+        if: matrix.name == 'windows-x86_64'
+        run: >-
+          node --input-type=module -e
+          "import { prepareDesktopService } from './scripts/prepare-desktop-service.mjs';
+          await prepareDesktopService();"
+
+      - name: Test Linux AppImage preparation
+        if: startsWith(matrix.name, 'ubuntu')
+        run: node --test scripts/prepare-linux-appimage.test.mjs
 
       - name: Build and upload release assets
         uses: tauri-apps/tauri-action@v1
@@ -181,7 +364,47 @@ jobs:
           uploadUpdaterJson: false
           updaterJsonPreferNsis: true
 
+      - name: Checkout current Windows package verifier
+        if: matrix.name == 'windows-x86_64'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          sparse-checkout: |
+            scripts/verify-windows-service.mjs
+            scripts/verify-windows-service.test.mjs
+          sparse-checkout-cone-mode: false
+
+      - name: Verify packaged Windows unattended service
+        if: matrix.name == 'windows-x86_64'
+        shell: pwsh
+        run: |
+          node --test .release-tools/scripts/verify-windows-service.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Windows service verifier tests failed' }
+          $installers = @(Get-ChildItem apps/desktop/src-tauri/target/release/bundle/msi -Filter '*.msi')
+          if ($installers.Count -ne 1) { throw 'Expected one Windows x64 MSI' }
+          $destination = Join-Path $env:RUNNER_TEMP 'windows-service-verification'
+          $arguments = '/a "{0}" /qn TARGETDIR="{1}"' -f $installers[0].FullName, $destination
+          $process = Start-Process msiexec.exe -ArgumentList $arguments -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "MSI extraction failed: $($process.ExitCode)" }
+          $executables = @(Get-ChildItem $destination -Recurse -Filter csw.exe)
+          if ($executables.Count -ne 1) { throw 'Expected one packaged Windows executable' }
+          node .release-tools/scripts/verify-windows-service.mjs $executables[0].DirectoryName
+          if ($LASTEXITCODE -ne 0) { throw 'Windows service package verification failed' }
+
+      # A successful build is insufficient: mode 0770 launchers can work for
+      # the builder but fail for other users. Gate publication on the final image.
+      - name: Verify Linux AppImage permissions and startup
+        if: startsWith(matrix.name, 'ubuntu')
+        shell: bash
+        run: |
+          set -euo pipefail
+          for appimage in apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage; do
+            python3 scripts/verify-linux-appimage.py "$appimage"
+          done
+
   native-android:
+    if: ${{ !inputs.linux_only && !inputs.unix_only }}
     name: Build Android APK
     needs: create-release
     runs-on: ubuntu-latest
@@ -211,6 +434,7 @@ jobs:
         run: npm ci
 
       - name: Install Android NDK
+        id: android-ndk
         shell: bash
         run: |
           set -euo pipefail
@@ -231,6 +455,7 @@ jobs:
           for attempt in 1 2 3; do
             if "$sdkmanager" "ndk;$ndk_version" \
               && [[ -f "$android_sdk_root/ndk/$ndk_version/source.properties" ]]; then
+              echo "version=$ndk_version" >> "$GITHUB_OUTPUT"
               exit 0
             fi
 
@@ -244,6 +469,21 @@ jobs:
           echo "::error::Failed to install NDK $ndk_version after 3 attempts."
           exit 1
 
+      - name: Install Rust connectivity toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      - name: Cache Android Rust dependencies and cargo-ndk
+        uses: swatinem/rust-cache@v2
+        with:
+          key: android-ndk-${{ steps.android-ndk.outputs.version }}-cargo-ndk-4.1.2-all-abis
+          workspaces: crates/chat-connectivity
+      - name: Install connectivity build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler libprotobuf-dev clang cmake
+          cargo install cargo-ndk --version 4.1.2 --locked
+
       - name: Type-check native app
         run: npm run check -w @codex-switch/native
 
@@ -251,13 +491,42 @@ jobs:
         working-directory: apps/native
         run: npm run prebuild:android
 
+      - name: Cache Gradle downloads
+        uses: actions/cache@v5
+        with:
+          # Cache downloaded modules and Gradle distributions, not ABI-dependent task outputs.
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper
+          key: >-
+            gradle-downloads-${{ runner.os }}-java17-${{
+              hashFiles('package-lock.json', 'apps/native/android/**/*.gradle*',
+                'apps/native/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-downloads-${{ runner.os }}-java17-
+
       - name: Build release APK
         working-directory: apps/native
         run: |
           chmod +x android/gradlew
           cd android
           ./gradlew assembleRelease --no-daemon --max-workers=2 \
+            --no-build-cache --rerun-tasks \
+            -PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64 \
             -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=768m"
+
+      # Release retries use current validation tooling while application sources stay at the immutable tag.
+      - name: Checkout release validation tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: release-validation
+          sparse-checkout: apps/native/scripts/verify-apk.cjs
+          sparse-checkout-cone-mode: false
+
+      - name: Verify APK native libraries
+        run: >-
+          node release-validation/apps/native/scripts/verify-apk.cjs
+          apps/native/android/app/build/outputs/apk/release/app-release.apk
 
       - name: Prepare APK asset
         env:
@@ -282,12 +551,14 @@ jobs:
           fail_on_unmatched_files: true
 
   native-ios:
+    if: ${{ !inputs.linux_only && !inputs.unix_only }}
     name: Build iOS app
     needs: create-release
     # React Native 0.79's fmt pod is not compatible with Xcode 26 yet.
     runs-on: macos-15
     env:
       NODE_PATH: ${{ github.workspace }}/apps/native/node_modules
+      IOS_BUNDLE_IDENTIFIER: ${{ vars.IOS_BUNDLE_IDENTIFIER || 'com.codexswitch.mobile' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -303,12 +574,41 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install Rust connectivity toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+      - name: Install connectivity build dependencies
+        run: brew install protobuf
+      - name: Identify Apple build toolchain
+        id: apple-cache
+        shell: bash
+        run: echo "version=$(xcodebuild -version | shasum -a 256 | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Cache iOS Rust dependencies
+        uses: swatinem/rust-cache@v2
+        with:
+          # Match chat-connectivity.yml so new tags can read the default branch cache.
+          shared-key: chat-connectivity-macos-15-${{ steps.apple-cache.outputs.version }}
+          cache-bin: false
+          workspaces: crates/chat-connectivity
+
       - name: Type-check native app
         run: npm run check -w @codex-switch/native
 
       - name: Generate iOS project
         working-directory: apps/native
         run: npm run prebuild:ios
+
+      - name: Cache CocoaPods downloads
+        uses: actions/cache@v5
+        with:
+          # Always regenerate Pods and the app; only reuse downloaded dependency sources.
+          path: ~/Library/Caches/CocoaPods
+          key: >-
+            cocoapods-downloads-${{ runner.os }}-${{ runner.arch }}-${{
+              hashFiles('package-lock.json', 'apps/native/ios/Podfile',
+                'apps/native/ios/Podfile.properties.json', 'apps/native/plugins/**/*.podspec') }}
+          restore-keys: cocoapods-downloads-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Install iOS Pods
         working-directory: apps/native/ios
@@ -317,7 +617,7 @@ jobs:
       - name: Build unsigned iOS Release app
         working-directory: apps/native
         run: >-
-          xcodebuild -workspace ios/CodexSwitch.xcworkspace -scheme CodexSwitch
+          xcodebuild -workspace ios/RemoteAI.xcworkspace -scheme RemoteAI
           -configuration Release -sdk iphoneos -derivedDataPath build
           CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
 
@@ -325,7 +625,7 @@ jobs:
         working-directory: apps/native
         run: >-
           ditto -c -k --sequesterRsrc --keepParent
-          build/Build/Products/Release-iphoneos/CodexSwitch.app
+          build/Build/Products/Release-iphoneos/RemoteAI.app
           CodexSwitch-ios-unsigned.app.zip
 
       - name: Upload workflow artifact
@@ -346,12 +646,22 @@ jobs:
           fail_on_unmatched_files: true
 
   dream-skin-resources:
+    if: ${{ !inputs.linux_only && !inputs.unix_only }}
     name: Publish Dream Skin resources
     uses: ./.github/workflows/dream-skin-resources.yml
     with:
       ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
+  coze-runtime:
+    if: ${{ !inputs.linux_only && !inputs.unix_only }}
+    name: Publish independent Coze runtime
+    uses: ./.github/workflows/coze-runtime.yml
+    with:
+      ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+    secrets: inherit
+
   publish-release:
+    if: ${{ !inputs.linux_only && !inputs.unix_only }}
     name: Publish GitHub Release
     needs:
       - create-release
@@ -359,6 +669,7 @@ jobs:
       - native-android
       - native-ios
       - dream-skin-resources
+      - coze-runtime
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

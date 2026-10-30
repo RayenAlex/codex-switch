@@ -1,8 +1,11 @@
+import { useThemeColor } from '../theme/store';
+import { createThemedStyles } from '../theme/styles';
 import { forwardRef, type ReactNode } from 'react';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import {  useWindowDimensions, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import DrawerLayout, { DrawerKeyboardDismissMode, DrawerLockMode, DrawerPosition, DrawerState, DrawerType,
   type DrawerLayoutMethods } from 'react-native-gesture-handler/ReanimatedDrawerLayout';
+import { nativeTextSelection } from './nativeTextSelection';
 
 export type ChatDrawerMethods = DrawerLayoutMethods;
 interface Props {
@@ -17,22 +20,28 @@ const MIN_SWIPE_DISTANCE = 10;
 export const ChatDrawer = forwardRef<ChatDrawerMethods, Props>(function ChatDrawer(
   { children, navigation, enabled, onOpen, onClose, onMoving }, ref,
 ) {
+  const drawerStyles = useDrawerStyles();
+  const color = useThemeColor();
   const width = Math.min(useWindowDimensions().width * 0.88, 360);
   return <GestureHandlerRootView style={drawerStyles.root}>
     <DrawerLayout ref={ref} drawerWidth={width} drawerPosition={DrawerPosition.LEFT} drawerType={DrawerType.FRONT}
-      drawerBackgroundColor="#fff"
+      drawerBackgroundColor={color('#fff', 'surface')}
       edgeWidth={EDGE_WIDTH} minSwipeDistance={MIN_SWIPE_DISTANCE}
       drawerLockMode={enabled ? DrawerLockMode.UNLOCKED : DrawerLockMode.LOCKED_CLOSED}
       keyboardDismissMode={DrawerKeyboardDismissMode.ON_DRAG} overlayColor="rgba(6, 20, 15, 0.45)"
-      drawerContainerStyle={drawerStyles.panel} onDrawerOpen={onOpen} onDrawerClose={onClose}
-      onDrawerStateChanged={(state) => { if (state !== DrawerState.IDLE) onMoving(); }}
+      drawerContainerStyle={drawerStyles.panel} onDrawerOpen={() => { nativeTextSelection?.dismiss(); onOpen(); }}
+      onDrawerClose={onClose} onDrawerStateChanged={(state) => {
+        if (state === DrawerState.IDLE) return;
+        nativeTextSelection?.dismiss();
+        onMoving();
+      }}
       renderNavigationView={() => <View style={drawerStyles.root}>{navigation}</View>}>
       {children}
     </DrawerLayout>
   </GestureHandlerRootView>;
 });
 
-const drawerStyles = StyleSheet.create({
+const useDrawerStyles = createThemedStyles(() => ({
   root: { flex: 1 },
   panel: { borderTopRightRadius: 20, borderBottomRightRadius: 20, overflow: 'hidden' },
-});
+}));

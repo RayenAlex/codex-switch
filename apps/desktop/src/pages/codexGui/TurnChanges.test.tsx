@@ -9,7 +9,8 @@ import type { Conversation, Item, Turn } from "./types";
 
 let root: Root;
 let container: HTMLDivElement;
-const panel = { open: vi.fn(), update: vi.fn(), close: vi.fn(), visible: false };
+const panel = { open: vi.fn(), update: vi.fn(), close: vi.fn(), visible: false, showingChanges: true,
+  openFile: vi.fn(), openWebsite: vi.fn(), setConversationChanges: vi.fn() };
 const patch = "@@ -1 +1,2 @@\n-old\n+new\n+extra\n";
 const netDiff = `diff --git a/src/example.ts b/src/example.ts
 --- a/src/example.ts
@@ -40,7 +41,7 @@ async function render(items: Item[], extra: Partial<Turn> = {}, previous: Turn[]
 }
 
 function cards() { return container.querySelectorAll("section[aria-label]"); }
-function badge() { return container.querySelector<HTMLButtonElement>('button[aria-label*="个文件已更改"]'); }
+function badge() { return container.querySelector<HTMLButtonElement>('button[aria-label^="查看本轮修改：已编辑"]'); }
 
 it("shows only the final summary when item edits and the net diff describe the same files", async () => {
   await render([edit, { id: "command", type: "commandExecution", command: "npm test", status: "failed" }],
@@ -60,7 +61,7 @@ it("shows only the final summary when item edits and the net diff describe the s
 it("updates a compact summary during edits and shows the file list only when the turn finishes", async () => {
   await render([edit]);
   expect(cards()).toHaveLength(0);
-  expect(badge()?.textContent).toBe("1 个文件已更改+2−1");
+  expect(badge()?.textContent).toBe("已编辑 1 个文件+2−1");
   await act(async () => badge()!.click());
   expect(panel.open).toHaveBeenCalledWith(expect.objectContaining({
     title: "本轮修改", files: [expect.objectContaining({ path: "F:\\project\\src\\example.ts" })],
@@ -69,10 +70,10 @@ it("updates a compact summary during edits and shows the file list only when the
     changes: [{ path: "src/other.ts", kind: { type: "add" }, diff: "other" }] };
   await render([edit, second]);
   expect(cards()).toHaveLength(0);
-  expect(badge()?.textContent).toBe("2 个文件已更改+3−1");
+  expect(badge()?.textContent).toBe("已编辑 2 个文件+3−1");
   await render([edit, second], { diff: netDiff });
   expect(cards()).toHaveLength(0);
-  expect(badge()?.textContent).toBe("1 个文件已更改+2−1");
+  expect(badge()?.textContent).toBe("已编辑 1 个文件+2−1");
   expect(panel.update).toHaveBeenLastCalledWith(expect.objectContaining({
     files: [expect.objectContaining({ path: "src/example.ts", raw: netDiff })],
   }));
@@ -97,7 +98,7 @@ it("keeps pending, failed, and declined edits as activities without claiming app
 
 it("counts repeated edits to the same path as one file", async () => {
   await render([edit, { ...edit, id: "edit-again" }]);
-  expect(badge()?.textContent).toBe("1 个文件已更改+4−2");
+  expect(badge()?.textContent).toBe("已编辑 1 个文件+4−2");
 });
 
 it.each(["interrupted", "failed"])("shows the applied changes as a list after a %s turn", async (status) => {

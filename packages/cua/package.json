@@ -1,0 +1,13 @@
+{
+  "name": "@remoteai/cua",
+  "version": "0.37.0-remoteai.2",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "prepare:source": "node prepare.mjs",
+    "record:source": "node prepare.mjs --record",
+    "build": "node build.mjs",
+    "test": "node test.mjs"
+  }
+}

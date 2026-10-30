@@ -1,5 +1,6 @@
-import type { QueueSnapshot } from '../queue';
+import type { QueueEnqueueResult, QueueSnapshot } from '../queue';
 import type { SendInput, Thread } from './types';
+import { currentRunningTurn } from '../../chat/runningTurn';
 
 const UNSUPPORTED_OPERATION = '当前手机端暂不支持此操作。';
 type Request = <T>(body: Record<string, unknown>) => Promise<T>;
@@ -22,12 +23,12 @@ export class QueueConnection {
     }
   }
 
-  async enqueue(thread: Thread, input: SendInput): Promise<QueueSnapshot | null> {
+  async enqueue(thread: Thread, input: SendInput): Promise<QueueEnqueueResult | null> {
     const generation = this.generation;
     if (this.supported) {
-      return this.request<QueueSnapshot>({ operation: 'queueEnqueue', threadId: thread.id, ...input });
+      return this.request<QueueEnqueueResult>({ operation: 'queueEnqueue', threadId: thread.id, ...input });
     }
-    const running = thread.turns?.find((turn) => turn.status === 'inProgress');
+    const running = currentRunningTurn(thread.turns);
     if (running) {
       await this.request({ operation: 'steer', threadId: thread.id, turnId: running.id,
         text: input.text, images: input.images ?? [], skills: input.skills ?? [] });

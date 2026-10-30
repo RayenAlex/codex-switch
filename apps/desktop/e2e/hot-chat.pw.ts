@@ -8,6 +8,9 @@ import type { ChatSessions as Sessions } from '../../admin/src/modules/devices/c
 import type {} from './hot-chat-harness';
 
 const require = createRequire(import.meta.url);
+const MAX_HEARTBEAT_GAP_MS = 500;
+const { DEFAULT_CHAT_POLICY } = require('../../../shared/chat/chatPolicy') as
+  typeof import('../../../shared/chat/chatPolicy');
 const { WebSocketServer } = createRequire(new URL('../../admin/package.json', import.meta.url))('ws') as {
   WebSocketServer: typeof Server;
 };
@@ -18,8 +21,11 @@ let server: Server;
 let sessions: Sessions;
 let endpoint: string;
 let available: boolean;
+let relayDelay: number;
+const delayedFrames = new Set<ReturnType<typeof setTimeout>>();
 test.beforeEach(async () => {
   available = true;
+  relayDelay = 0;
   sessions = new ChatSessions();
   server = new WebSocketServer({ port: 0, host: '127.0.0.1' });
   await once(server, 'listening');
@@ -30,7 +36,13 @@ test.beforeEach(async () => {
     socket.on('message', (raw) => {
       try {
         const frame = JSON.parse(raw.toString());
-        if (joined) sessions.route(socket, frame);
+        if (joined && frame.type === 'relay' && relayDelay) {
+          const timer = setTimeout(() => {
+            delayedFrames.delete(timer);
+            try { sessions.route(socket, frame); } catch { socket.close(4001); }
+          }, relayDelay);
+          delayedFrames.add(timer);
+        } else if (joined) sessions.route(socket, frame);
         else {
           joined = true;
           sessions.join(socket, { role: frame.role, ownerId: 'owner', deviceId: 'computer',
@@ -42,8 +54,101 @@ test.beforeEach(async () => {
   });
 });
 test.afterEach(async () => {
+  for (const timer of delayedFrames) clearTimeout(timer);
+  delayedFrames.clear();
   for (const client of server.clients) client.terminate();
   await new Promise<void>((resolve) => server.close(() => resolve()));
+});
+
+test('keeps slow relay usable without reconnecting when P2P is unavailable', async ({ context }) => {
+  relayDelay = 2000;
+  const pc = await context.newPage();
+  const phone = await context.newPage();
+  await pc.goto(`/e2e/hot-chat-harness.html?role=desktop&relayOnly&socket=${encodeURIComponent(endpoint)}`);
+  await expect(pc.locator('#status')).toHaveText('registered');
+  await phone.goto(`/e2e/hot-chat-harness.html?role=mobile&relayOnly&socket=${encodeURIComponent(endpoint)}`);
+  await expect(phone.locator('#status')).toHaveText('relay', { timeout: 10_000 });
+  const beats = await phone.evaluate(() => window.hotChat.stats().beats);
+  for (const text of ['slow relay request', 'still connected']) {
+    expect(await phone.evaluate((value) => window.hotChat.request(value), text)).toEqual({ text });
+  }
+  await phone.waitForTimeout(6000);
+  expect(await phone.evaluate(() => window.hotChat.stats().beats)).toBeGreaterThan(beats + 100);
+  expect(await phone.evaluate(() => window.hotChat.stats().readyCount)).toBe(1);
+  for (const page of [pc, phone]) {
+    await expect(page.locator('#status')).toHaveText('relay');
+    expect(await page.evaluate(() => window.hotChat.errors)).toEqual([]);
+    const modes = await page.evaluate(() => window.hotChat.modes);
+    expect(modes.slice(modes.indexOf('relay'))).toEqual(['relay']);
+  }
+});
+
+test('keeps relay usable while a twelve-second negotiation completes with the original peer', async ({ context }) => {
+  const pc = await context.newPage();
+  const phone = await context.newPage();
+  await pc.goto(`/e2e/hot-chat-harness.html?role=desktop&signalDelay=12000&socket=${encodeURIComponent(endpoint)}`);
+  await expect(pc.locator('#status')).toHaveText('registered');
+  await phone.goto(`/e2e/hot-chat-harness.html?role=mobile&socket=${encodeURIComponent(endpoint)}`);
+  await expect(phone.locator('#status')).toHaveText('relay', { timeout: 5000 });
+  const before = await phone.evaluate(() => window.hotChat.stats().beats);
+  expect(await phone.evaluate(() => window.hotChat.request('during negotiation')))
+    .toEqual({ text: 'during negotiation' });
+  await expect(phone.locator('#status')).toHaveText('direct', { timeout: 25_000 });
+  await expect(pc.locator('#status')).toHaveText('direct');
+  for (const page of [pc, phone]) {
+    expect(await page.evaluate(() => window.hotChat.stats().peerCreations)).toBe(1);
+    expect(await page.evaluate(() => window.hotChat.errors)).toEqual([]);
+  }
+  expect(await phone.evaluate(() => window.hotChat.stats().beats)).toBeGreaterThan(before + 10);
+  expect(await phone.evaluate(() => window.hotChat.stats().readyCount)).toBe(1);
+  expect(await phone.evaluate(() => window.hotChat.request('after negotiation')))
+    .toEqual({ text: 'after negotiation' });
+});
+
+test('recovers the same direct channel after a short outage while relay carries requests', async ({ context }) => {
+  const pc = await context.newPage();
+  const phone = await context.newPage();
+  await pc.goto(`/e2e/hot-chat-harness.html?role=desktop&socket=${encodeURIComponent(endpoint)}`);
+  await expect(pc.locator('#status')).toHaveText('registered');
+  await phone.goto(`/e2e/hot-chat-harness.html?role=mobile&socket=${encodeURIComponent(endpoint)}`);
+  await expect(phone.locator('#status')).toHaveText('direct', { timeout: 12_000 });
+  // The old policy immediately replaced healthy peers older than ten seconds after a lost probe.
+  await phone.waitForTimeout(8000);
+  await phone.evaluate(() => window.hotChat.dropDirect(true));
+  await expect(phone.locator('#status')).toHaveText('relay', { timeout: 5000 });
+  expect(await phone.evaluate(() => window.hotChat.request('during outage'))).toEqual({ text: 'during outage' });
+  await phone.evaluate(() => window.hotChat.dropDirect(false));
+  await expect(phone.locator('#status')).toHaveText('direct', { timeout: 8000 });
+  for (const page of [pc, phone]) {
+    expect(await page.evaluate(() => window.hotChat.stats().peerCreations)).toBe(1);
+    expect(await page.evaluate(() => window.hotChat.errors)).toEqual([]);
+  }
+  expect(await phone.evaluate(() => window.hotChat.stats().readyCount)).toBe(1);
+});
+
+test('applies policy broadcasts to an active negotiation without interrupting relay', async ({ context }) => {
+  const pc = await context.newPage();
+  const phone = await context.newPage();
+  await pc.goto(`/e2e/hot-chat-harness.html?role=desktop&signalDelay=60000&socket=${encodeURIComponent(endpoint)}`);
+  await expect(pc.locator('#status')).toHaveText('registered');
+  await phone.goto(`/e2e/hot-chat-harness.html?role=mobile&socket=${encodeURIComponent(endpoint)}`);
+  await expect(phone.locator('#status')).toHaveText('relay', { timeout: 5000 });
+  const publish = (seconds: number) => {
+    const policy = { ...DEFAULT_CHAT_POLICY, p2pNegotiationTimeoutSeconds: seconds,
+      p2pRetryIntervalSeconds: seconds, p2pDisconnectGraceSeconds: seconds };
+    for (const client of server.clients) client.send(JSON.stringify({ type: 'chat-policy', policy }));
+  };
+  publish(1);
+  await expect.poll(() => phone.evaluate(() => window.hotChat.stats().peerCreations), { timeout: 3000 })
+    .toBeGreaterThan(1);
+  publish(Number.MAX_SAFE_INTEGER);
+  await phone.waitForTimeout(300);
+  const attempts = await phone.evaluate(() => window.hotChat.stats().peerCreations);
+  await phone.waitForTimeout(2500);
+  expect(await phone.evaluate(() => window.hotChat.stats().peerCreations)).toBe(attempts);
+  expect(await phone.evaluate(() => window.hotChat.request('updated policy'))).toEqual({ text: 'updated policy' });
+  expect(await phone.evaluate(() => window.hotChat.stats().readyCount)).toBe(1);
+  expect(await phone.evaluate(() => window.hotChat.errors)).toEqual([]);
 });
 
 for (const [path, mib] of [['large.apk', 21], ['lan-100mb.bin', 100]] as const) {
@@ -136,7 +241,7 @@ test('keeps a real conversation alive through relay loss, coordinator restart an
     await phone.waitForTimeout(1500);
 
     const text = 'stream 中文😀'.repeat(20_000);
-    const before = await phone.evaluate(() => window.hotChat.stats().beats);
+    const before = await phone.evaluate(() => window.hotChat.measureHeartbeat());
     const streaming = pc.evaluate((value) => window.hotChat.stream(value), text);
     await phone.waitForTimeout(100);
     await phone.evaluate(() => window.hotChat.blockDirect(true));
@@ -144,7 +249,10 @@ test('keeps a real conversation alive through relay loss, coordinator restart an
     await streaming;
     await expect.poll(() => phone.evaluate(() => window.hotChat.events.length)).toBe(1);
     expect(await phone.evaluate(() => window.hotChat.events[0])).toEqual({ text });
-    expect(await phone.evaluate(() => window.hotChat.stats().beats)).toBeGreaterThan(before + 10);
+    // Fast transfers may finish in fewer than ten ticks; measure progress and stalls instead of duration.
+    const heartbeat = await phone.evaluate(() => window.hotChat.stats());
+    expect(heartbeat.beats).toBeGreaterThan(before);
+    expect(heartbeat.maxHeartbeatGapMs).toBeLessThan(MAX_HEARTBEAT_GAP_MS);
     expect(await phone.evaluate(() => window.hotChat.request('relay request'))).toEqual({ text: 'relay request' });
 
     await phone.evaluate(() => window.hotChat.blockDirect(false));

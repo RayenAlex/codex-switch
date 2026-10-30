@@ -1,21 +1,32 @@
+import { useComposerSuggestion } from '../../../../shared/chat/useComposerSuggestion';
+import { ComposerSuggestion } from './ComposerSuggestion';
+import { ComposerInput } from './ComposerInput';
 import { t, useLanguage } from '../i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowUp, ChevronDown, File, Pause, Play, Plus, SlidersHorizontal, Square, Target, X, Zap } from 'lucide-react';
+import { ArrowUp, ChevronDown, File, Folder, MessageSquare, Pause, Play, Plus,
+  SlidersHorizontal, Square, X } from 'lucide-react';
 import { COMPOSER_ACTION_LABELS } from '../../../../shared/remote-chat/composerAction';
 import { composerLabel } from '../../../../shared/remote-chat/composer';
-import { formatTokens } from '../../../../shared/remote-chat/usage';
+import { requestSpeedSuffix } from '../../../../shared/remote-chat/requestSpeed';
 import { useDesktopLayout } from '../useDesktopLayout';
 import { ComposerAccess, ComposerDesktopStatus } from './ComposerDesktopControls';
 import { ComposerModelPicker } from './ComposerModelPicker';
+import { ComposerSpeedIndicator } from './ComposerSpeedIndicator';
 import { ChatSettings } from './ChatSettings';
+import { ModelRefreshButton } from './ModelRefreshButton';
+import { ComposerFooter } from './ComposerFooter';
+import { ComposerGoal } from './ComposerGoal';
 import { ChatAttachmentPreviews } from './ChatAttachments';
 import { pickChatImages } from './pickChatImages';
 import { ChatImageEditor } from './ChatImageEditor';
 import { ChatUploadProgress } from './ChatUploadProgress';
+import { itemUploadProgress } from '../../../../shared/remote-chat/uploadProgress';
 import { ChatQueue } from './ChatQueue';
 import { ComposerQuotes } from './ChatQuotes';
 import { ComposerAddMenu, ComposerPluginMenu, ChatCommandMenu, type ComposerAddAction } from './ComposerMenus';
 import { ComposerProjectFiles } from './ComposerProjectFiles';
+import { ComposerConversationMenu } from './ComposerConversationMenu';
+import { ComposerFileMenu } from './ComposerFileMenu';
 import { useComposerState } from './useComposerState';
 import type { ComposerProps } from './composerProps';
 import './composer.css';
@@ -37,6 +48,12 @@ export function ChatComposer(props: ComposerProps) {
   const fileInput = useRef<HTMLInputElement>(null);
   const pickerThread = useRef(threadId);
   const dock = useRef<HTMLDivElement>(null);
+  const suggestion = useComposerSuggestion({ source: props.suggestions, value: draft.text,
+    blocked: !active || !ready || sending || props.running || props.compacting || settingsBusy || busy
+      || draft.hasContent || attachments.items.length > 0 || state.hasQuotes || state.readingClipboard
+      || state.queueEditor.loading || menu.open || adding || settings || !!projectFiles || goalMode.enabled,
+    fill: text => { draft.setText(text); menu.setSelection({ start: text.length, end: text.length });
+      menu.input.current?.focus(); } });
   const editing = draft.images.find(image => image.id === editingId);
   const readCatalog = useCallback(() => loadCatalog(cwd), [loadCatalog, cwd]);
   useEffect(() => { if (!active || busy || !editing) setEditingId(null); }, [active, busy, editing]);
@@ -75,13 +92,15 @@ export function ChatComposer(props: ComposerProps) {
   const label = composerLabel(models, selection, t);
   const closeMenus = () => { menu.close(); setAdding(false); };
   const showSettings = () => { closeMenus(); setSettings(true); };
-  const placeholder = desktop ? t('描述任务，或输入 / 选择命令和技能…') : t('发消息…');
+  const placeholder = desktop ? t('描述任务，% 引用文件，@ 引用对话，/ 选择命令和技能…')
+    : t('% 引用文件，@ 引用对话…');
   return <div className="chat-composer-dock" ref={dock} onKeyDown={event => {
     if (event.defaultPrevented || event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (event.key === 'Escape') { setAdding(false); menu.close(); }
   }}>
-    {queue && <ChatQueue {...queue} {...state.queueEditor} />}
-    <form className={`chat-composer${compact && !desktop ? ' is-compact' : ''}`}
+    {props.projectPicker}
+    {queue && <ChatQueue {...queue} {...state.queueEditor} editDisabled={state.queueEditor.editDisabled || busy} />}
+    <form className={`chat-composer${compact && !desktop && !suggestion.text ? ' is-compact' : ''}`}
       onSubmit={event => { event.preventDefault(); void state.submit(); }}>
       <input ref={photoInput} type="file" accept="image/*" multiple hidden aria-label={t("选择相册图片")}
         onChange={event => { pickPhotos(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
@@ -93,32 +112,60 @@ export function ChatComposer(props: ComposerProps) {
       }} />
       {state.error && <p role="alert" className="chat-error">{t(state.error)}</p>}
       {desktop && settingsError && <p role="alert" className="chat-error">{t(settingsError)}
-        <button type="button" className="chat-button" disabled={settingsBusy}
+        <ModelRefreshButton ready={ready} refreshModels={props.refreshModels} />
+        <button type="button" className="chat-button" disabled={!ready || !models.length}
           onClick={() => { void updateSettings(selection); }}>{t('重新保存')}</button></p>}
       {props.compacting && <p role="status" className="chat-muted">{t("正在压缩上下文…")}</p>}
-      {(draft.picking || attachments.busy) && <p role="status" className="chat-muted">{t("正在添加附件…")}</p>}
-      <ChatUploadProgress progress={uploadProgress} reconnecting={!ready} />
+      {(draft.picking || attachments.busy || state.readingClipboard || state.drop.reading)
+        && <p role="status" className="chat-muted">{t("正在添加附件…")}</p>}
       {(adding || menu.open) && <div className="chat-composer-popover" onKeyDown={event => {
         if (event.defaultPrevented || event.nativeEvent.isComposing || event.keyCode === 229) return;
         if (event.key === 'Escape') { setAdding(false); menu.close(); menu.input.current?.focus(); }
-      }}>{adding ? <ComposerAddMenu busy={busy} choose={chooseAdd} />
-        : menu.plugins ? <ComposerPluginMenu catalog={catalog} query={menu.query} load={readCatalog}
+      }}>{adding && <ComposerAddMenu busy={busy} choose={chooseAdd} />}
+        {!adding && menu.conversations && props.loadConversations && <ComposerConversationMenu
+          key={threadId} input={menu.input} query={menu.query} threadId={threadId} ready={ready && !busy}
+          load={props.loadConversations} close={menu.close}
+          choose={reference => { if (attachments.add(reference)) menu.consumeTrigger(); }} />}
+        {!adding && menu.plugins && <ComposerPluginMenu catalog={catalog} query={menu.query} load={readCatalog}
           input={menu.input} close={menu.close}
-          chooseSkill={menu.choose} choosePlugin={plugin => { attachments.addPlugin(plugin); menu.consumeTrigger(); }} />
-          : <ChatCommandMenu catalog={catalog} query={menu.query} skillsOnly={menu.skillsOnly} input={menu.input}
+          chooseSkill={menu.choose}
+          choosePlugin={plugin => { attachments.addPlugin(plugin); menu.consumeTrigger(); }} />}
+        {!adding && menu.files && <ComposerFileMenu key={`${threadId}:${cwd}`} input={menu.input}
+          query={menu.query} threadId={threadId} cwd={cwd} ready={ready && !busy} load={loadFiles} close={menu.close}
+          choose={reference => { if (attachments.add(reference)) menu.consumeTrigger(); }} />}
+        {!adding && !menu.plugins && !menu.conversations && !menu.files && <ChatCommandMenu
+            catalog={catalog} query={menu.query} skillsOnly={menu.skillsOnly} input={menu.input}
             compactReason={props.compactReason} choose={menu.choose} compact={() => { void menu.runCompact(); }}
             goal={() => { menu.consumeTrigger(); goalMode.enter(); }} close={menu.close} />}</div>}
-      <div className="chat-composer-field" aria-hidden={settings || undefined}>
+      <div className="chat-composer-field" aria-hidden={settings || undefined}
+        ref={state.dropTarget} {...state.drop.handlers} data-file-dragging={state.drop.dragging || undefined}>
         <div className="chat-composer-content">
           <ChatAttachmentPreviews images={draft.images} busy={busy} remove={draft.removeImage}
+            upload={sending ? uploadProgress : undefined} reconnecting={!ready}
             add={() => setAdding(true)} edit={id => { menu.input.current?.blur(); setEditingId(id); }} />
           <div className="chat-composer-capsules">{attachments.items.map((item, index) =>
-            <span className="chat-capsule" key={`${item.path}:${index}`}><File size={14} />
-              <span title={item.name}>{item.name}</span><button type="button" aria-label={t("移除{value1}", { value1: item.name })}
+            <span className="chat-capsule" key={`${item.path}:${index}`}>
+              {item.kind === 'conversation' && <MessageSquare size={14} />}
+              {item.kind === 'folder' && <Folder size={14} />}
+              {item.kind !== 'conversation' && item.kind !== 'folder' && <File size={14} />}
+              <span title={item.name}>{item.kind === 'conversation' ? `@${item.name}` : item.name}</span>
+              {item.data && <ChatUploadProgress inline reconnecting={!ready}
+                progress={itemUploadProgress(sending ? uploadProgress : undefined, 'attachment', index)} />}
+              <button type="button" aria-label={t("移除{value1}", { value1: item.name })}
                 disabled={busy} onClick={() => attachments.remove(item)}><X size={14} /></button></span>)}</div>
           <ComposerQuotes disabled={busy} />
-          <textarea ref={menu.input} aria-label={t("聊天消息")} value={draft.text} maxLength={100_000} rows={1}
-            readOnly={state.queueEditor.loading} onPaste={state.paste} onChange={event => {
+          {(goalMode.enabled || goal) && <ComposerGoal key={`goal:${threadId}:${active}`}
+            goal={goalMode.enabled ? null : goal} draft={draft.text}
+            disabled={sending || goalBusy || (!!goal && !ready)} remove={state.removeGoal}
+            beforeOpen={() => { closeMenus(); menu.input.current?.blur(); }} />}
+          <ComposerSuggestion text={suggestion.text} accept={suggestion.accept} />
+          <ComposerInput ref={menu.input} aria-label={t("聊天消息")} value={draft.text} maxLength={100_000} rows={1}
+            readOnly={state.queueEditor.loading}
+            onBeforeInput={suggestion.dismiss} onCompositionStart={suggestion.dismiss}
+            onCompositionEnd={suggestion.restore}
+            onPaste={event => { suggestion.dismiss(); state.paste(event); }} onChange={event => {
+              if (event.target.value) suggestion.dismiss();
+              else suggestion.restore();
               draft.setText(event.target.value);
               menu.setSelection({ start: event.target.selectionStart, end: event.target.selectionEnd });
             }}
@@ -127,6 +174,10 @@ export function ChatComposer(props: ComposerProps) {
             placeholder={ready ? (goalMode.enabled ? t("描述想完成的目标…") : placeholder) : t("连接后发消息")}
             onKeyDown={event => {
               if (event.defaultPrevented || event.nativeEvent.isComposing || event.keyCode === 229) return;
+              if (event.key === 'Tab' && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey
+                && !menu.open && suggestion.accept()) { event.preventDefault(); return; }
+              if (event.key.length === 1 && !event.ctrlKey && !event.metaKey) suggestion.dismiss();
+              state.pasteKeyDown(event);
               if (event.key === 'Escape') { menu.close(); setAdding(false); return; }
               if (event.key !== 'Enter' || event.shiftKey || event.altKey) return;
               if (!desktop && !(event.ctrlKey || event.metaKey)) return;
@@ -141,19 +192,18 @@ export function ChatComposer(props: ComposerProps) {
           {desktop && <ComposerAccess key={`${threadId}:${active}`} selection={selection}
             settingsBusy={settingsBusy} updateSettings={updateSettings} beforeOpen={closeMenus} />}
           <div className="chat-composer-trailing">
-            {(goalMode.enabled || goal) && <span className="chat-goal-capsule"><Target size={15} /><span>{t("目标")}</span>
-              <button type="button" aria-label={t("退出目标模式")} disabled={sending || goalBusy || (!!goal && !ready)}
-                onClick={state.removeGoal}><X size={13} /></button></span>}
             {desktop && <ComposerDesktopStatus key={`status:${threadId}:${cwd}:${active}`} props={props}
               beforeOpen={closeMenus} />}
             {desktop ? <ComposerModelPicker key={`model:${threadId}:${cwd}:${active}`} models={models}
-              selection={selection} updateSettings={updateSettings} beforeOpen={closeMenus} />
+              ready={ready} refreshModels={props.refreshModels}
+              selection={selection} updateSettings={updateSettings} settingsBusy={settingsBusy} beforeOpen={closeMenus} />
               : <button type="button" className="chat-model" onPointerDown={event => event.preventDefault()}
-              aria-label={t("{value1}{value2}，聊天设置", { value1: label, value2: selection.speed === 'fast' ? t("，快速模式") : '' })}
+              aria-label={t("{value1}{value2}，聊天设置", {
+                value1: label, value2: requestSpeedSuffix(selection.speed, t) })}
               onClick={showSettings}>
               {compact && <SlidersHorizontal size={20} />}
-              {!compact && <><span>{label}</span>
-                {selection.speed === 'fast' && <Zap size={14} aria-label={t("快速模式")} />}<ChevronDown size={12} /></>}
+              {!compact && <><span>{label}</span><ComposerSpeedIndicator speed={selection.speed} />
+                <ChevronDown size={12} /></>}
             </button>}
             <button type="submit" className="chat-composer-submit" aria-label={t(COMPOSER_ACTION_LABELS[action])}
               onPointerDown={event => event.preventDefault()} aria-busy={state.pausing || sending} disabled={actionDisabled}>
@@ -163,9 +213,9 @@ export function ChatComposer(props: ComposerProps) {
         </div>
       </div>
     </form>
-    {desktop && <div className="chat-composer-hint"><span>{t('Enter 发送 · Shift + Enter 换行')}</span>
-      {!!tokenUsage?.total.totalTokens && <span>{formatTokens(tokenUsage.total.totalTokens)} tokens</span>}
-    </div>}
+    <ComposerFooter desktop={desktop} cliVersion={props.cliVersion}
+      connectionInfo={props.connectionInfo} tokenUsage={tokenUsage}
+      readConversationMetrics={props.readConversationMetrics} threadId={threadId} active={active && ready} />
     {active && !busy && editing && <ChatImageEditor key={editing.id} image={editing}
       save={url => draft.replaceImage(editing, url)} close={() => setEditingId(null)} />}
     {projectFiles && <ComposerProjectFiles imagesOnly={projectFiles === 'photos'} threadId={threadId} cwd={cwd}
@@ -173,8 +223,10 @@ export function ChatComposer(props: ComposerProps) {
         attachments.add({ kind: 'file', name: file.name, path: file.path }); setProjectFiles(null);
       }} />}
     {!desktop && settings && <ChatSettings models={models} selection={selection} threadId={threadId}
+      connection={props.connection}
       contextSettings={props.contextSettings} readUsage={readUsage} tokenUsage={tokenUsage}
-      saving={settingsBusy} error={settingsError} ready={ready}
+      readConversationMetrics={props.readConversationMetrics}
+      saving={settingsBusy} error={settingsError} ready={ready} refreshModels={props.refreshModels}
       updateSettings={updateSettings} onClose={() => setSettings(false)} />}
   </div>;
 }

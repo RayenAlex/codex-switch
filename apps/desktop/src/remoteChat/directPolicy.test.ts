@@ -10,6 +10,9 @@ import { guiApi } from '../pages/codexGui/api';
 import { pickChatImages } from '../../../web/src/chat/pickChatImages';
 import { ReliableDelivery } from '../../../../shared/remote-chat/delivery';
 
+vi.mock('../pages/codexGui/composerBridge', () => ({ guiComposer: {
+  validateSend: async () => ({ model: 'model', effort: 'high', access: 'workspace-write' }),
+} }));
 vi.mock('../pages/codexGui/api', () => ({ guiApi: { request: vi.fn(), connect: vi.fn() } }));
 afterEach(() => { setChatConnectionMode('offline'); setChatPolicy(DEFAULT_CHAT_POLICY); vi.resetAllMocks(); });
 
@@ -84,4 +87,11 @@ it('keeps original web image bytes on P2P without applying the source, compressi
   setChatConnectionMode('relay');
   expect(() => validateChatImages([image.url])).toThrow('较大');
   await expect(pickChatImages([file], 8)).rejects.toThrow('1 MB');
+});
+
+it('corrects P2P web file metadata without changing the original PNG payload', async () => {
+  setChatConnectionMode('direct');
+  const bytes = Uint8Array.from('\x89PNG\r\n\x1a\noriginal-pixels', character => character.charCodeAt(0));
+  const [image] = await pickChatImages([new File([bytes], 'photo.jpg', { type: 'image/jpeg' })], 8);
+  expect(image.url).toBe(`data:image/png;base64,${Buffer.from(bytes).toString('base64')}`);
 });

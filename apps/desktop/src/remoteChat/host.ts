@@ -2,7 +2,8 @@ import { guiApi } from '../pages/codexGui/api';
 import { CHAT_POLICY_MESSAGE, setChatPolicy } from '../../../../shared/remote-chat/policy';
 import { keyPair } from '../../../../shared/remote-chat/cipher';
 import { ChatLink } from '../../../../shared/remote-chat/link';
-import { RtcPeer } from '../../../../shared/remote-chat/rtcPeer';
+import { createDesktopPeer } from './peer';
+import { createDesktopNativePath } from './nativePath';
 import { parseMessage, type ConnectionMode, type IceServer, type Signal }
   from '../../../../shared/remote-chat/protocol';
 import { ChatOperations } from './operations';
@@ -18,12 +19,20 @@ import { subscribeGuiEvent } from '../pages/codexGui/webEvents';
 import { acknowledgedMessages } from './acknowledgedMessages';
 import { guiAccountBalances } from './guiAccountBalances';
 import { NativeChatTransport, type HostTransportEvent } from './nativeTransport';
+import { connectionDetails } from './connectionDetails';
+import { RelayQuota } from '../../../../shared/remote-chat/relayUsage';
+import { BulkSource } from './bulkSource';
+import { BULK_OPERATION } from '../../../../shared/remote-chat/bulkControl';
+import { AssistanceHostAccess } from '../remoteAssistance/hostAccess';
 
 export class ChatHost {
+  private readonly assistance = new AssistanceHostAccess(id => this.drop(id));
+  private quota = new RelayQuota();
   private readonly transport: NativeChatTransport;
   private generation = 0;
   private readonly leases = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly links = new Map<string, ChatLink>();
+  private readonly bulkSources = new Map<string, BulkSource>();
   private readonly connectedSessions = new Set<string>();
   private operations = new ChatOperations();
   private stream = new EventStream((event) => this.broadcast(event));
@@ -35,6 +44,8 @@ export class ChatHost {
   private readonly unsubscribeMessages: () => void;
   private readonly unsubscribeBalances: () => void;
   private closed = false;
+  private diagnosticsEnabled = false;
+  private bulkRelayAvailable = false;
 
   constructor(private readonly onConnectionChange: (connected: boolean) => void) {
     this.transport = new NativeChatTransport((event) => this.transportEvent(event));
@@ -43,7 +54,7 @@ export class ChatHost {
     });
     this.unsubscribeMessages = acknowledgedMessages.subscribe((event) => {
       this.stream.receive(this.operations.prepareEvent(event));
-    });
+    }, () => this.links.size > 0);
     this.unsubscribeQueue = remoteQueue.subscribe((snapshot) => {
       this.broadcast({ method: QUEUE_EVENT, params: snapshot });
     });
@@ -70,8 +81,12 @@ export class ChatHost {
   private transportEvent(event: HostTransportEvent) {
     if (this.closed) return;
     this.generation = event.generation;
+    if (event.type === 'bulk') {
+      this.links.get(event.sessionId)?.bulk?.receive(event.bytes, 'relay'); return;
+    }
     if (event.type === 'reset') { this.resetSessions(); return; }
     if (event.type === 'disconnected') {
+      this.diagnosticsEnabled = false;
       for (const link of this.links.values()) link.setRelayAvailable(false);
     }
     if (event.type === 'message') {
@@ -82,6 +97,11 @@ export class ChatHost {
   }
 
   private resetSessions() {
+    this.assistance.reset();
+    for (const source of this.bulkSources.values()) source.close();
+    this.bulkSources.clear();
+    connectionDetails.reset();
+    this.quota = new RelayQuota();
     const links = [...this.links.values()];
     this.links.clear();
     this.connectedSessions.clear();
@@ -90,17 +110,21 @@ export class ChatHost {
     for (const link of links) link.close();
     this.stream.close();
     this.stream = new EventStream((event) => this.broadcast(event));
+    this.operations.release();
     this.operations = new ChatOperations();
     this.onConnectionChange(false);
   }
 
   private lease(sessionId: string, expiresAt: unknown) {
     if (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt)) throw new Error('Invalid lease');
+    this.links.get(sessionId)?.renew(expiresAt);
     clearTimeout(this.leases.get(sessionId));
     this.leases.set(sessionId, setTimeout(() => this.drop(sessionId), Math.max(0, expiresAt - Date.now())));
   }
   private broadcast(event: unknown) {
-    for (const link of this.links.values()) void link.send({ kind: 'event', event }).catch(() => link.close());
+    for (const [id, link] of this.links) {
+      if (!this.assistance.restricted(id)) void link.send({ kind: 'event', event }).catch(() => link.close());
+    }
   }
 
   private send(message: object) {
@@ -114,40 +138,76 @@ export class ChatHost {
 
   private async receive(data: string) {
     const message = parseMessage(data);
-    if (message.type === CHAT_POLICY_MESSAGE) { setChatPolicy(message.policy); return; }
+    if (message.type === CHAT_POLICY_MESSAGE) {
+      this.bulkRelayAvailable = message.fileBulkV1 === true;
+      this.diagnosticsEnabled = message.connectionDiagnostics === 1;
+      setChatPolicy(message.policy); return;
+    }
+    if (message.type === 'desktop-ice' && Array.isArray(message.desktopIceServers)) {
+      for (const id of this.links.keys()) {
+        this.operations.desktop.register(id, message.desktopIceServers as IceServer[]);
+      }
+      return;
+    }
+    if (this.quota.receive(message)) {
+      connectionDetails.quota(this.quota.usage, this.quota.blocked);
+      for (const link of this.links.values()) link.setRelayQuotaBlocked(this.quota.blocked);
+      return;
+    }
     const sessionId = message.sessionId;
     if (typeof sessionId !== 'string') return;
+    if (message.type === 'relay-traffic') { connectionDetails.traffic(sessionId, message); return; }
     if (message.type === 'peer-open') { this.open(sessionId, message); return; }
     const link = this.links.get(sessionId);
     if (!link) return;
     if (message.type === 'resumed') {
       this.lease(sessionId, message.expiresAt);
-      link.setRelayAvailable(true);
+      if (Array.isArray(message.desktopIceServers)) {
+        this.operations.desktop.register(sessionId, message.desktopIceServers as IceServer[], Number(message.expiresAt));
+      }
+      if (message.renewed !== true) link.setRelayAvailable(true);
     }
     if (message.type === 'peer-offline') link.setRelayAvailable(false);
     if (message.type === 'signal') await link.acceptSignal(message.payload as Signal);
     if (message.type === 'relay' && typeof message.payload === 'string') link.receive(message.payload);
     if (message.type === 'relay-ready') link.enableRelay();
-    if (message.type === 'peer-close') { link.close(); this.links.delete(sessionId); }
+    if (message.type === 'peer-close') this.drop(sessionId);
   }
 
   private open(sessionId: string, message: Record<string, unknown>) {
-    if (this.links.size >= 4 || this.links.has(sessionId)) return;
-    if (message.transportVersion === 2 && typeof message.resumeToken === 'string') {
-      this.lease(sessionId, message.expiresAt);
-    }
+    // The authenticated coordinator applies the configured limit before sending peer-open.
+    if (this.links.has(sessionId)) return;
+    if (!this.assistance.admit(sessionId, message.assistanceId)) { this.endSession(sessionId); return; }
+    this.operations.desktop.register(sessionId, (message.desktopIceServers ?? message.iceServers) as IceServer[],
+      typeof message.expiresAt === 'number' ? message.expiresAt : undefined);
     const keys = keyPair((size) => crypto.getRandomValues(new Uint8Array(size)));
     const link = new ChatLink({
+      binaryBulk: true,
+      bulkRelay: { available: () => this.bulkRelayAvailable && this.transport.ready,
+        send: bytes => this.transport.sendBulk(sessionId, [bytes]),
+        sendBatch: records => this.transport.sendBulk(sessionId, records) },
       sessionId, desktop: true, secret: keys.secret, publicKey: String(message.publicKey),
-      transportVersion: Number(message.transportVersion), reconnectRelay: () => this.transport.reconnect(),
+      transportVersion: Number(message.transportVersion),
+      diagnosticsEnabled: () => this.diagnosticsEnabled,
       iceServers: message.iceServers as IceServer[],
-      createPeer: (options) => new RtcPeer(options, () => new RTCPeerConnection({ iceServers: options.iceServers })),
+      tcp: message.tcpPunch as import('../../../../shared/remote-chat/tcp/types').TcpPunchConfig | undefined,
+      createPeer: createDesktopPeer,
+      createNativePath: createDesktopNativePath,
+      nativeTraversal: message.nativeTraversal as import('../../../../shared/remote-chat/nativePath').NativeTraversalConfig,
       signal: (frame) => this.send(frame), relayBuffered: () => this.transport.bufferedAmount,
       mode: (mode) => this.updateConnection(sessionId, mode),
       error: () => this.drop(sessionId),
       message: (request) => {
-        if (request.kind !== 'request') return;
-        void this.operations.execute(request, link.connectionMode).then((response) => {
+        if (request.kind !== 'request' || this.closed || this.links.get(sessionId) !== link) return;
+        const denied = this.assistance.denied(sessionId, request);
+        if (denied) { void link.send(denied).catch(() => link.close()); return; }
+        // This namespace is added by Rust from its cloud identity, never from a mobile request.
+        const terminalOwner = typeof message.terminalOwner === 'string' ? message.terminalOwner : sessionId;
+        const bulk = request.method === 'request'
+          && (request.body as { operation?: string })?.operation === BULK_OPERATION;
+        const response = bulk ? this.bulkSources.get(sessionId)!.execute(request)
+          : this.operations.execute(request, link.connectionMode, sessionId, terminalOwner);
+        void response.then((response) => {
           // A history response may include buffered fragments. Deliver those first to avoid replaying them afterward.
           this.stream.flush();
           return link.send(response);
@@ -156,11 +216,21 @@ export class ChatHost {
     });
     keys.secret.fill(0);
     this.links.set(sessionId, link);
+    this.operations.attachMappingStreams(sessionId, link);
+    this.bulkSources.set(sessionId, new BulkSource(link, sessionId));
+    if (message.transportVersion === 2 && typeof message.resumeToken === 'string') {
+      this.lease(sessionId, message.expiresAt);
+    }
+    this.operations.desktop.diagnose(sessionId, link.reportDiagnostic);
+    this.operations.desktop.nativeMedia(sessionId, id => link.openNativeMedia(id));
+    connectionDetails.open(sessionId, message.clientInfo);
+    if (this.quota.blocked) link.setRelayQuotaBlocked(true);
     this.send({ type: 'signal', sessionId, payload: { kind: 'key', key: keys.publicKey } });
   }
 
   private updateConnection(sessionId: string, mode: ConnectionMode) {
     if (this.closed || !this.links.has(sessionId)) return;
+    connectionDetails.update(sessionId, { mode });
     if (mode === 'direct' || mode === 'relay') this.connectedSessions.add(sessionId);
     else this.connectedSessions.delete(sessionId);
     this.onConnectionChange(this.connectedSessions.size > 0);
@@ -168,6 +238,10 @@ export class ChatHost {
   }
 
   private drop(sessionId: string) {
+    this.assistance.release(sessionId);
+    this.bulkSources.get(sessionId)?.close(); this.bulkSources.delete(sessionId);
+    this.operations.release(sessionId);
+    connectionDetails.remove(sessionId);
     const link = this.links.get(sessionId);
     this.links.delete(sessionId);
     clearTimeout(this.leases.get(sessionId));
@@ -180,8 +254,12 @@ export class ChatHost {
 
   close() {
     if (this.closed) return;
+    this.assistance.close();
     for (const sessionId of this.links.keys()) this.endSession(sessionId);
     this.closed = true;
+    for (const source of this.bulkSources.values()) source.close();
+    this.bulkSources.clear();
+    connectionDetails.reset();
     for (const lease of this.leases.values()) clearTimeout(lease);
     this.leases.clear();
     this.connectedSessions.clear();
@@ -194,6 +272,7 @@ export class ChatHost {
     this.unsubscribeMessages();
     this.unsubscribeBalances();
     this.stream.close();
+    this.operations.release();
     for (const link of this.links.values()) link.close();
     this.links.clear();
     this.transport.close();

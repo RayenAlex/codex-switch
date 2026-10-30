@@ -1,4 +1,5 @@
 use super::super::home_migration::{migrate_between_homes, HomeMigrationError};
+use super::super::home_migration_provider::MigrationDestination;
 use super::*;
 
 pub(super) fn source_fixture() -> Fixture {
@@ -14,7 +15,10 @@ pub(super) fn migrate(
 ) -> Result<MigrationReport, HomeMigrationError> {
     migrate_between_homes(
         &source.home,
-        &target.home,
+        MigrationDestination {
+            path: &target.home,
+            model_provider: None,
+        },
         &source.bin,
         ids.iter().map(|id| id.to_string()).collect(),
     )
@@ -70,7 +74,15 @@ fn failed_target_history_restore_returns_original_session_to_source() {
     let before = source.dump(THREAD);
     let bytes = fs::read(source.snapshot().path).unwrap();
     target.sql(HISTORY, "ALTER TABLE thread_items RENAME TO suspended");
-    assert!(migrate(&source, &target, &[THREAD]).is_err());
+    let error = migrate(&source, &target, &[THREAD]).unwrap_err();
+    assert!(error.to_string().contains("保存目标对话"));
+    assert!(error.to_string().contains("数据格式不兼容"));
+    assert!(error.to_string().contains("本次更改已撤销"));
+    let HomeMigrationError::Failed(failure) = error else {
+        panic!("expected failure")
+    };
+    assert_eq!(failure.session_id.as_deref(), Some(THREAD));
+    assert!(failure.detail.contains("数据格式已变化"));
     assert_eq!(source.dump(THREAD), before);
     assert_eq!(fs::read(source.snapshot().path).unwrap(), bytes);
     assert!(index_values(&source.home).unwrap().contains_key(THREAD));
@@ -84,7 +96,15 @@ fn same_home_alias_and_empty_selection_are_rejected_without_writes() {
     let before = source.dump(THREAD);
     let alias = source.home.join(".");
     assert!(matches!(
-        migrate_between_homes(&source.home, &alias, &source.bin, vec![THREAD.into()]),
+        migrate_between_homes(
+            &source.home,
+            MigrationDestination {
+                path: &alias,
+                model_provider: None
+            },
+            &source.bin,
+            vec![THREAD.into()]
+        ),
         Err(HomeMigrationError::SameHome)
     ));
     let target = source_fixture();
@@ -113,9 +133,19 @@ fn uninitialized_target_keeps_original_conversation() {
     let target = source.root.join("new-home");
     fs::create_dir_all(&target).unwrap();
     let before = source.dump(THREAD);
-    assert!(
-        migrate_between_homes(&source.home, &target, &source.bin, vec![THREAD.into()]).is_err()
-    );
+    let error = migrate_between_homes(
+        &source.home,
+        MigrationDestination {
+            path: &target,
+            model_provider: None,
+        },
+        &source.bin,
+        vec![THREAD.into()],
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("目标尚未准备好"));
+    assert!(error.to_string().contains("启动一次 Codex"));
+    assert!(!error.to_string().contains("关闭"));
     assert_eq!(source.dump(THREAD), before);
     assert!(source.snapshot().path.exists());
 }

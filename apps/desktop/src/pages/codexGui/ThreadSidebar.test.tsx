@@ -7,6 +7,7 @@ import { GuiController } from "./controller";
 import { guiApi } from "./api";
 import { ThreadSidebar } from "./ThreadSidebar";
 import { initialState } from "./preferences";
+import { conversation } from "./events";
 import type { GuiState } from "./types";
 import styles from "./styles.module.less";
 
@@ -44,6 +45,30 @@ afterEach(async () => {
   container.remove(); controller.dispose(); vi.restoreAllMocks(); vi.unstubAllGlobals();
 });
 
+it.each(["ready", "offline"] as const)("opens local search only from its connected header button: %s", async connection => {
+  state = { ...state, connection };
+  await render();
+  const search = container.querySelector<HTMLButtonElement>('button[aria-label="搜索对话"]')!;
+  expect(search.disabled).toBe(connection !== "ready");
+  expect(document.querySelector('input[aria-label="搜索对话"]')).toBeNull();
+  await act(async () => search.click());
+  expect(Boolean(document.querySelector('[role="dialog"]'))).toBe(connection === "ready");
+  expect(container.querySelector('input[aria-label="搜索对话"]')).toBeNull();
+});
+
+it("clears the local search when closing the dialog while preserving the archive scope", async () => {
+  const filter = vi.spyOn(controller, "filter").mockImplementation(() => {});
+  state = { ...state, search: "会话", archived: true };
+  await render();
+  const search = container.querySelector<HTMLButtonElement>('button[aria-label="搜索对话"]')!;
+  await act(async () => search.click());
+  expect(document.querySelector<HTMLInputElement>('input[aria-label="搜索对话"]')!.value).toBe("会话");
+  const close = document.querySelector<HTMLButtonElement>('.ant-modal-close')!;
+  await act(async () => close.click());
+  expect(filter).toHaveBeenCalledExactlyOnceWith("", true);
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+});
+
 it("offers a compact confirmation and sends the selected conversation to trash", async () => {
   await render();
   await openThreadMenu();
@@ -54,7 +79,7 @@ it("offers a compact confirmation and sends the selected conversation to trash",
   const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
   expect(dialog.style.width).toBe("400px");
   expect(dialog.textContent).toContain("会话管理");
-  expect(dialog.textContent).toContain("指定的 Codex Home");
+  expect(dialog.textContent).toContain("这条对话及其所有子对话将一起移入回收站");
   await act(async () => button("移入回收站").click());
   expect(controller.deleteThread).toHaveBeenCalledWith("one");
 });
@@ -67,6 +92,34 @@ it("disables deletion while Codex reports an active reply", async () => {
     .find((entry) => entry.textContent === "删除")!;
   expect(remove.getAttribute("aria-disabled")).toBe("true");
   expect(controller.deleteThread).not.toHaveBeenCalled();
+});
+
+it("places create branch above archive and branches the right-clicked conversation", async () => {
+  const fork = vi.spyOn(controller, "forkConversation").mockResolvedValue(true);
+  const select = vi.spyOn(controller, "select").mockResolvedValue();
+  await render();
+  await openThreadMenu();
+  const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+  expect(items.map((entry) => entry.textContent)).toEqual(["置顶", "重命名", "创建分支", "归档", "删除"]);
+  await act(async () => items.find((entry) => entry.textContent === "创建分支")!.click());
+  expect(fork).toHaveBeenCalledExactlyOnceWith("one");
+  expect(select).not.toHaveBeenCalled();
+});
+
+it.each<Partial<GuiState>>([
+  { connection: "offline" }, { forking: "other" }, { sending: true }, { archived: true },
+  { compacting: "one" }, { pendingRequest: { threadId: "one", startedAtMs: 1 } },
+  { threads: [{ id: "one", cwd: "D:/project", preview: "会话示例", updatedAt: 1, status: { type: "active" } }] },
+])("disables branching while the conversation is unavailable: %j", async (patch) => {
+  const fork = vi.spyOn(controller, "forkConversation").mockResolvedValue(true);
+  state = { ...state, ...patch };
+  await render();
+  await openThreadMenu();
+  const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+    .find((entry) => entry.textContent === "创建分支")!;
+  expect(item.getAttribute("aria-disabled")).toBe("true");
+  await act(async () => item.click());
+  expect(fork).not.toHaveBeenCalled();
 });
 
 it("selects on left click and opens management actions only on right click", async () => {
@@ -153,6 +206,7 @@ function scrollList() {
   const list = container.querySelector<HTMLDivElement>(`.${styles.threadList}`)!;
   Object.defineProperties(list, { clientHeight: { configurable: true, value: 400 },
     scrollHeight: { configurable: true, value: 1000 } });
+  list.dispatchEvent(new Event("scroll"));
   const scroll = (top: number) => act(async () => {
     list.scrollTop = top;
     list.dispatchEvent(new Event("scroll", { bubbles: true }));
@@ -163,7 +217,7 @@ function scrollList() {
   return { list, scroll, wheel };
 }
 
-it("loads near the bottom without a button and keeps rapid scrolling single-flight", async () => {
+it("refills at 70% of the buffered screen without a hint or overlapping requests", async () => {
   let finish!: () => void;
   const refresh = vi.spyOn(controller, "refresh").mockImplementation(() => new Promise<void>((resolve) => {
     finish = resolve;
@@ -171,11 +225,12 @@ it("loads near the bottom without a button and keeps rapid scrolling single-flig
   state = { ...state, cursor: "next" };
   await render();
   expect(button("加载更多")).toBeUndefined();
-  expect(container.textContent).toContain("向下滚动，查看更多");
+  expect(container.textContent).not.toContain("向下滚动，查看更多");
+  expect(container.querySelector('[role="status"]')).toBeNull();
   const { scroll, wheel } = scrollList();
-  await scroll(200);
+  await scroll(479);
   expect(refresh).not.toHaveBeenCalled();
-  await scroll(490);
+  await scroll(480);
   await scroll(510);
   await wheel(50);
   expect(refresh).toHaveBeenCalledExactlyOnceWith(true);
@@ -190,17 +245,15 @@ it("loads near the bottom without a button and keeps rapid scrolling single-flig
   await act(async () => finish());
 });
 
-it("ignores upward scrolling and pauses pagination while loading, disconnected, or exhausted", async () => {
+it("pauses pagination while loading, disconnected, or exhausted", async () => {
   const refresh = vi.spyOn(controller, "refresh").mockResolvedValue();
   state = { ...state, cursor: "next", loading: true };
   await render();
   const { scroll, wheel } = scrollList();
   await scroll(500);
-  state = { ...state, loading: false };
-  await render();
   await scroll(490);
   await wheel(-50);
-  state = { ...state, connection: "offline" };
+  state = { ...state, loading: false, connection: "offline" };
   await render();
   await wheel(50);
   state = { ...state, connection: "ready", cursor: null };
@@ -233,8 +286,41 @@ it("opens feature pages during a reply without creating or changing a conversati
   expect(button("会话示例").closest("." + styles.selected)).toBeNull();
   await act(async () => button("定时任务").click());
   expect(onNavigate).toHaveBeenCalledExactlyOnceWith("scheduled-tasks");
+  const navigation = container.querySelector('nav[aria-label="Codex GUI 导航"]')!;
+  expect([...navigation.querySelectorAll("button")].map((entry) => entry.textContent))
+    .toEqual(["新对话", "定时任务", "插件", "对话迁移"]);
+  await act(async () => button("对话迁移").click());
+  expect(onNavigate).toHaveBeenLastCalledWith("conversation-migration");
   expect(start).not.toHaveBeenCalled();
   expect(select).not.toHaveBeenCalled();
+});
+
+it.each(["D:/project", ""])("temporarily promotes running chats within %j before folding older rows", async (cwd) => {
+  state = { ...state, threads: Array.from({ length: 7 }, (_, index) => ({
+    id: `chat-${index}`, cwd, name: `聊天 ${index}`, preview: "", updatedAt: 7 - index,
+  })) };
+  const titles = () => [...container.querySelectorAll(`.${styles.threadTitle}`)].map((entry) => entry.textContent);
+  await render();
+  expect(titles()).toEqual(["聊天 0", "聊天 1", "聊天 2", "聊天 3", "聊天 4"]);
+  state = { ...state, pendingRequest: { threadId: "chat-6", startedAtMs: 1 } };
+  await render();
+  expect(titles()).toEqual(["聊天 6", "聊天 0", "聊天 1", "聊天 2", "聊天 3"]);
+  state = { ...state, pendingRequest: undefined, conversations: {
+    "chat-6": { ...conversation(state.threads[6]), activeTurn: "turn" },
+  } };
+  await render();
+  expect(titles()[0]).toBe("聊天 6");
+  state = { ...state, threads: state.threads.map((thread) => thread.id === "chat-5"
+    ? { ...thread, status: { type: "active" } } : thread) };
+  await render();
+  expect(titles()).toEqual(["聊天 5", "聊天 6", "聊天 0", "聊天 1", "聊天 2"]);
+  await act(async () => button("展开显示").click());
+  state = { ...state, conversations: {}, threads: state.threads.map((thread) => ({
+    ...thread, status: { type: "idle" },
+  })) };
+  await render();
+  expect(titles()).toEqual(Array.from({ length: 7 }, (_, index) => `聊天 ${index}`));
+  expect(state.threads.map((thread) => thread.id)).toEqual(Array.from({ length: 7 }, (_, index) => `chat-${index}`));
 });
 
 it("returns to the conversation when selecting the already selected thread from a feature page", async () => {

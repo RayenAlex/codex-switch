@@ -1,14 +1,15 @@
+import { getLocale } from "../i18n";
+import { guiText } from "../i18n/guiText";
 import { useEffect, useMemo, useState } from "react";
 import { Tooltip } from "antd";
-import { Signal } from "lucide-react";
 import {
   loadDailyTokenUsage,
-  loadRecentProxySessionLatency,
   loadTokenUsageEntries,
   subscribeToTokenUsageChanges,
 } from "../api/backend";
 import type { Language, Translate } from "../i18n";
-import type { DailyTokenUsage, Provider, ProxySessionLatencySummary } from "../types";
+import type { DailyTokenUsage, Provider } from "../types";
+import { ProxyConversationMetrics } from "./ProxyConversationMetrics";
 import { formatCompactTokenCount } from "../utils/tokenContext";
 import {
   estimateTokenCost,
@@ -22,7 +23,9 @@ import {
   FAST_MODE_COST_MULTIPLIER_EVENT,
   FAST_MODE_COST_MULTIPLIER_STORAGE_KEY,
 } from "../utils/tokenCostFastMode";
-import { LONG_CONTEXT_COST_EVENT, LONG_CONTEXT_COST_STORAGE_KEY } from "../utils/tokenCostLongContext";
+import {
+  LONG_CONTEXT_COST_EVENT, LONG_CONTEXT_COST_STORAGE_KEY, MODEL_LONG_CONTEXT_THRESHOLD_STORAGE_KEY,
+} from "../utils/tokenCostLongContext";
 import { useTokenCostDisplaySettings } from "./TokenCostUnitSettings";
 import {
   DailyTokenUsageTooltip,
@@ -32,25 +35,6 @@ import {
 
 const DAYS_PER_WEEK = 7;
 const TOKEN_USAGE_MORE_THRESHOLD = 100_000_000;
-const EMPTY_PROXY_SESSION_LATENCY: ProxySessionLatencySummary = {
-  totalFirstResponseTimeMs: 0,
-  requestCount: 0,
-};
-
-type ConversationLatencyLevel = "good" | "warning" | "poor" | "unknown";
-
-function formatAverageConversationLatency(summary: ProxySessionLatencySummary) {
-  if (!summary.requestCount) return "—";
-  return `${(summary.totalFirstResponseTimeMs / summary.requestCount / 1_000).toFixed(1)}s`;
-}
-
-function conversationLatencyLevel(summary: ProxySessionLatencySummary): ConversationLatencyLevel {
-  if (!summary.requestCount) return "unknown";
-  const averageSeconds = summary.totalFirstResponseTimeMs / summary.requestCount / 1_000;
-  if (averageSeconds < 2) return "good";
-  if (averageSeconds < 3) return "warning";
-  return "poor";
-}
 
 function dateKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -123,9 +107,6 @@ export function TokenUsageHeatmap({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [calendarVersion, setCalendarVersion] = useState(0);
-  const [proxySessionLatency, setProxySessionLatency] = useState<ProxySessionLatencySummary>(
-    EMPTY_PROXY_SESSION_LATENCY,
-  );
   const columns = useMemo(() => calendarWeeks(weeks), [calendarVersion, weeks]);
   const today = dateKey(new Date());
 
@@ -167,7 +148,8 @@ export function TokenUsageHeatmap({
     const refreshStoredMultiplier = (event: StorageEvent) => {
       if (event.storageArea !== window.localStorage
         || (event.key !== null && event.key !== FAST_MODE_COST_MULTIPLIER_STORAGE_KEY
-          && event.key !== LONG_CONTEXT_COST_STORAGE_KEY)) return;
+          && event.key !== LONG_CONTEXT_COST_STORAGE_KEY
+          && event.key !== MODEL_LONG_CONTEXT_THRESHOLD_STORAGE_KEY)) return;
       invalidateCustomTokenCostRulesCache();
       void refresh();
     };
@@ -188,29 +170,6 @@ export function TokenUsageHeatmap({
     };
   }, [providers, refreshSeconds, weeks]);
 
-  useEffect(() => {
-    let active = true;
-    let refreshing = false;
-    const refresh = async () => {
-      if (refreshing) return;
-      refreshing = true;
-      try {
-        const summary = await loadRecentProxySessionLatency();
-        if (active) setProxySessionLatency(summary);
-      } catch {
-        if (active) setProxySessionLatency(EMPTY_PROXY_SESSION_LATENCY);
-      } finally {
-        refreshing = false;
-      }
-    };
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 2_000);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
-  }, []);
-
   const totals = useMemo(
     () => new Map(entries.map((entry) => [entry.date, entry])),
     [entries],
@@ -220,9 +179,9 @@ export function TokenUsageHeatmap({
     () => columns.flat().reduce((sum, date) => sum + (totals.get(dateKey(date))?.totalTokens ?? 0), 0),
     [columns, totals],
   );
-  const numberFormat = useMemo(() => new Intl.NumberFormat(language === "zh" ? "zh-CN" : "en-US"), [language]);
+  const numberFormat = useMemo(() => new Intl.NumberFormat(getLocale(language)), [language]);
   const tokenCostDisplay = useTokenCostDisplaySettings();
-  const dateFormat = useMemo(() => new Intl.DateTimeFormat(language === "zh" ? "zh-CN" : "en-US", {
+  const dateFormat = useMemo(() => new Intl.DateTimeFormat(getLocale(language), {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -253,27 +212,14 @@ export function TokenUsageHeatmap({
             {t("table.todayEstimatedCost")}{language === "zh" ? "：" : ": "}
             <b>{formatEstimatedCost(todayEstimatedCost, tokenCostDisplay)}</b>
           </span>
-          <Tooltip title={t("table.averageConversationLatencyTooltip", {
-            requests: proxySessionLatency.requestCount,
-          })} styles={{ root: { maxWidth: 400 } }}>
-            <span
-              className={`conversation-latency-indicator is-${conversationLatencyLevel(proxySessionLatency)}`}
-              aria-label={`${t("table.averageConversationLatencyLabel")}: ${
-                formatAverageConversationLatency(proxySessionLatency)
-              }`}
-            >
-              <span>{t("table.averageConversationLatencyLabel")}{language === "zh" ? "：" : ": "}</span>
-              <Signal size={13} strokeWidth={2.5} aria-hidden="true" />
-              <strong>{formatAverageConversationLatency(proxySessionLatency)}</strong>
-            </span>
-          </Tooltip>
+          <ProxyConversationMetrics language={language} t={t} />
         </div>
       </div>
       <div className="token-heatmap-chart">
         <div className="token-heatmap-weekdays" aria-hidden="true">
-          <span>{language === "zh" ? "一" : "M"}</span>
-          <span>{language === "zh" ? "三" : "W"}</span>
-          <span>{language === "zh" ? "五" : "F"}</span>
+          <span>{(language === "ru" ? guiText("一", {}, language) : language === "zh" ? "一" : "M")}</span>
+          <span>{(language === "ru" ? guiText("三", {}, language) : language === "zh" ? "三" : "W")}</span>
+          <span>{(language === "ru" ? guiText("五", {}, language) : language === "zh" ? "五" : "F")}</span>
         </div>
         <div className="token-heatmap-content">
           <div className="token-heatmap-scroll">

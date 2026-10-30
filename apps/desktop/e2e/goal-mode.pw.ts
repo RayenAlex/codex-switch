@@ -7,12 +7,19 @@ test('selects goal mode from slash search and removes the capsule without losing
     let result: unknown = {};
     if (command === 'codex_gui_cli_status') result = { version: '0.1.0' };
     if (command === 'codex_gui_connect') result = [];
+    if (command === 'codex_gui_queue_read') result = { revision: 0, threads: {} };
+    if (command === 'codex_gui_queue_save') result = args.snapshot;
     if (command === 'codex_gui_events') result = { cursor: { streamId: 'test', sequence: 1 }, reset: false, events: [] };
     if (command === 'codex_gui_model_settings') result = { threadId: null, selection: null, revision: 0 };
     if (command === 'codex_gui_usage_summary') result = { totalTokens: 0, estimatedCostUsd: 0,
       primaryRemainingPercent: null, primaryRemainingAggregated: false, providerEstimatedCost: null };
     if (command === 'codex_gui_request') result = { data: args.request.operation === 'plugins'
       ? { marketplaces: [], marketplaceLoadErrors: [] } : { data: [], nextCursor: null } };
+    if (command === 'codex_gui_request' && args.request.operation === 'models') result = { data: {
+      data: [{ id: 'test-model', model: 'test-model', displayName: '测试模型', isDefault: true,
+        defaultReasoningEffort: 'medium', supportedReasoningEfforts: [{ reasoningEffort: 'medium' }] }],
+      nextCursor: null,
+    } };
     await route.fulfill({ json: { ok: true, result } });
   });
   await page.setViewportSize({ width: 1280, height: 800 });

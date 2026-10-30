@@ -1,5 +1,11 @@
 import 'react-native-gesture-handler';
+import { createThemedStyles } from './src/theme/styles';
+import { loadTheme, useThemeMode, useThemeColor } from './src/theme/preference';
+import { t, useLanguage } from './src/i18n';
+import { loadLanguage } from './src/i18n/preference';
+import { LoginLanguagePicker } from './src/settings/LanguageSheet';
 import './src/chat/backgroundConnection';
+import { mergeRemoteModelState, type RemoteModelTarget } from '../../shared/remote-chat/modelTarget';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
@@ -13,7 +19,6 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -59,21 +64,23 @@ import { mergeRefreshedUsage, mergeServerAccounts } from './src/utils/accounts';
 import { AccountCard } from './src/accounts/AccountCard';
 import { AccountOverview, AccountToolbar } from './src/accounts/AccountOverview';
 import { displayDate, maskEmail, resetLabel } from './src/accounts/formatters';
-import { styles as accountStyles } from './src/accounts/styles';
+import { useStyles as useAccountStyles } from './src/accounts/styles';
 import { AdminArea } from './src/admin/AdminArea';
 import { AccountDetailsDrawer } from './src/accounts/AccountDetailsDrawer';
 import { AddAccountSheet } from './src/components/AddAccountSheet';
 import { AppToastHost, Toast } from './src/components/AppToast';
 import { BottomSheet } from './src/components/BottomSheet';
 import { DeviceManagementList } from './src/devices/DeviceManagementList';
+import { useRevokeDesktopService } from './src/devices/useRevokeDesktopService';
 import { RemoteModelSwitchSheet } from './src/components/RemoteModelSwitchSheet';
 import { QuotaConsumptionSheet } from './src/components/QuotaConsumptionSheet';
 import { TotpPage } from './src/totp/TotpPage';
-import { pageStyles as totpPageStyles } from './src/totp/pageStyles';
+import { usePageStyles as useTotpPageStyles } from './src/totp/pageStyles';
 import { ChatPage } from './src/chat/ChatPage';
 import { palette as chatPalette } from './src/chat/styles';
 import { useChatNotificationNavigation } from './src/chat/useChatNotificationNavigation';
 import { SettingsPage } from './src/settings/SettingsPage';
+import { DownloadManagerPage } from './src/downloads/DownloadManagerPage';
 import { useTotpVault } from './src/totp/useTotpVault';
 import {
   createDeviceStatusReceiver,
@@ -83,7 +90,11 @@ import {
 } from './src/realtime/deviceStatus';
 import { installDownloadedAndroidUpdate } from './src/update/appUpdate';
 import { useAndroidUpdateDownloadState } from './src/update/useAndroidUpdateDownloadState';
+import { StartupUpdatePrompt } from './src/update/StartupUpdatePrompt';
+import { useIdleAppUpdate } from './src/update/useIdleAppUpdate';
 import { AboutPage } from './src/about/AboutPage';
+import { AgreementConsent } from './src/auth/AgreementConsent';
+import { useAgreementConsent } from '../../shared/legal/useAgreementConsent';
 
 const COLORS = {
   ink: '#13231c',
@@ -106,21 +117,26 @@ class StartupErrorBoundary extends Component<{ children: ReactNode }, { error: E
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('Codex Switch startup error', error, info.componentStack);
+    console.error('Remote AI startup error', error, info.componentStack);
   }
 
   render() {
     if (!this.state.error) return this.props.children;
-    return <SafeAreaView style={styles.startupError}>
-      <Text style={styles.startupErrorTitle}>应用启动失败</Text>
-      <Text style={styles.startupErrorMessage}>请关闭应用后重试；若问题持续，请重新安装最新版本。</Text>
-      <Text selectable style={styles.startupErrorDetail}>{this.state.error.message}</Text>
-    </SafeAreaView>;
+    return <StartupError error={this.state.error} />;
   }
 }
 
+function StartupError({ error }: { error: Error }) {
+  const styles = useStyles();
+  return <SafeAreaView style={styles.startupError}>
+    <Text style={styles.startupErrorTitle}>{t("应用启动失败")}</Text>
+    <Text style={styles.startupErrorMessage}>{t("请关闭应用后重试；若问题持续，请重新安装最新版本。")}</Text>
+    <Text selectable style={styles.startupErrorDetail}>{error.message}</Text>
+  </SafeAreaView>;
+}
+
 function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : '发生未知错误，请稍后重试';
+  return error instanceof Error ? error.message : t("发生未知错误，请稍后重试");
 }
 
 function applyRemoteModelSwitch(
@@ -129,10 +145,7 @@ function applyRemoteModelSwitch(
 ): RemoteDevice[] {
   return devices.map((device) => device.deviceId === result.deviceId
     ? {
-      ...device,
-      activeAccountId: result.activeAccountId ?? device.activeAccountId,
-      activeProviderId: result.activeProviderId ?? null,
-      activeProviderGroup: result.activeProviderGroup ?? null,
+      ...mergeRemoteModelState(device, result),
       online: result.online,
       lastSeenAt: new Date().toISOString(),
     }
@@ -146,6 +159,10 @@ function usageColor(remaining: number) {
 }
 
 function LoginScreen({ initialBaseUrl, onLoggedIn }: { initialBaseUrl: string; onLoggedIn: (session: AuthSession) => void }) {
+  const styles = useStyles();
+  const color = useThemeColor();
+  useLanguage();
+  const consent = useAgreementConsent();
   const [baseUrl, setBaseUrl] = useState(initialBaseUrl);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -158,57 +175,65 @@ function LoginScreen({ initialBaseUrl, onLoggedIn }: { initialBaseUrl: string; o
       const session = await login(baseUrl, email, password);
       onLoggedIn(session);
     } catch (error) {
-      Toast.fail(`无法登录：${errorMessage(error)}`);
+      Toast.fail(t("无法登录：{value1}", { value1: errorMessage(error) }));
     } finally {
       setSubmitting(false);
     }
   }, [baseUrl, email, onLoggedIn, password]);
 
+  const requestLogin = () => {
+    if (!submitting) void consent.request('login', submit);
+  };
+
   return <KeyboardAvoidingView style={styles.flex} behavior={Platform.select({ ios: 'padding', android: undefined })}>
     <SafeAreaView style={styles.flex}>
       <ScrollView contentContainerStyle={styles.loginScroll} keyboardShouldPersistTaps="handled">
         <View style={styles.logoMark}><Text style={styles.logoGlyph}>↺</Text></View>
-        <Text style={styles.loginTitle}>Codex Switch</Text>
-        <Text style={styles.loginSubtitle}>登录后查看你的官方账号用量</Text>
+        <Text style={styles.loginTitle}>Remote AI</Text>
+        <Text style={styles.loginSubtitle}>{t("登录后查看你的官方账号用量")}</Text>
+        <LoginLanguagePicker />
         <View style={styles.loginCard}>
           <View style={styles.fieldLabelRow}>
-            <Text style={styles.fieldLabel}>云端服务器地址</Text>
+            <Text style={styles.fieldLabel}>{t("云端服务器地址")}</Text>
             {!usingOfficialServer ? <Pressable accessibilityRole="button" disabled={submitting}
               onPress={() => setBaseUrl(DEFAULT_CLOUD_BASE_URL)} style={({ pressed }) => [styles.officialServerButton, pressed && styles.pressed]}>
-              <Text style={styles.officialServerButtonText}>使用官方服务器</Text>
+              <Text style={styles.officialServerButtonText}>{t("使用官方服务器")}</Text>
             </Pressable> : null}
           </View>
           <TextInput value={baseUrl} onChangeText={setBaseUrl} autoCapitalize="none" autoCorrect={false}
-            keyboardType="url" placeholder={DEFAULT_CLOUD_BASE_URL} placeholderTextColor="#98a9a0"
+            keyboardType="url" placeholder={DEFAULT_CLOUD_BASE_URL} placeholderTextColor={color("#98a9a0", 'muted')}
             style={styles.input} editable={!submitting} />
-          <Text style={styles.fieldHint}>填写部署 Codex Switch 后端的根地址</Text>
-          <Text style={styles.fieldLabel}>邮箱</Text>
+          <Text style={styles.fieldHint}>{t("填写部署 Remote AI 后端的根地址")}</Text>
+          <Text style={styles.fieldLabel}>{t("邮箱")}</Text>
           <TextInput value={email} onChangeText={setEmail} autoCapitalize="none" autoCorrect={false}
-            autoComplete="email" keyboardType="email-address" placeholder="name@example.com" placeholderTextColor="#98a9a0"
+            autoComplete="email" keyboardType="email-address" placeholder="name@example.com" placeholderTextColor={color("#98a9a0", 'muted')}
             style={styles.input} editable={!submitting} />
-          <Text style={styles.fieldLabel}>密码</Text>
+          <Text style={styles.fieldLabel}>{t("密码")}</Text>
           <TextInput value={password} onChangeText={setPassword} secureTextEntry autoComplete="password"
-            placeholder="输入密码" placeholderTextColor="#98a9a0" style={styles.input} editable={!submitting}
-            onSubmitEditing={() => void submit()} />
+            placeholder={t("输入密码")} placeholderTextColor={color("#98a9a0", 'muted')} style={styles.input} editable={!submitting}
+            onSubmitEditing={requestLogin} />
+          <AgreementConsent consent={consent} disabled={submitting} />
           <Pressable accessibilityRole="button" style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed, submitting && styles.disabled]}
-            disabled={submitting} onPress={() => void submit()}>
-            {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>登录并查看</Text>}
+            disabled={submitting} onPress={requestLogin}>
+            {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{t("登录并查看")}</Text>}
           </Pressable>
         </View>
-        <Text style={styles.securityNote}>登录令牌仅保存于本机的系统安全存储中。</Text>
+        <Text style={styles.securityNote}>{t("登录令牌仅保存于本机的系统安全存储中。")}</Text>
       </ScrollView>
     </SafeAreaView>
   </KeyboardAvoidingView>;
 }
 
 function CompactPrimaryUsage({ usage }: { usage?: UsageWindow | null }) {
+  const styles = useStyles();
+  useLanguage();
   if (!usage) {
     return <>
       <View style={styles.compactUsageRow}>
         <View style={styles.compactProgressTrack} />
         <Text style={styles.compactUsageUnavailable}>--</Text>
       </View>
-      <Text style={styles.compactResetText}>主用量窗口暂不可用</Text>
+      <Text style={styles.compactResetText}>{t("主用量窗口暂不可用")}</Text>
     </>;
   }
   const remaining = Math.max(0, Math.min(100, Math.round(usage.remainingPercent)));
@@ -230,6 +255,8 @@ function AccountCardContent({
   account: AccountSummary;
   privateMode: boolean;
 }) {
+  const styles = useStyles();
+  useLanguage();
   const email = privateMode ? maskEmail(account.email) : account.email;
   return <View style={styles.compactAccountContent}>
     <View style={styles.compactAccountHeader}>
@@ -275,6 +302,10 @@ function Dashboard({
   onSwitch: (deviceId: string, accountId: string) => Promise<boolean>;
   onAccountUpdated: (account: AccountSummary) => void;
 }) {
+  const accountStyles = useAccountStyles();
+  const color = useThemeColor();
+  const styles = useStyles();
+  useLanguage();
   const [privateMode, setPrivateMode] = useState(true);
   const [detailAccountId, setDetailAccountId] = useState<string | null>(null);
   const [addAccountOpen, setAddAccountOpen] = useState(false);
@@ -290,7 +321,7 @@ function Dashboard({
   return <>
     <ScrollView style={accountStyles.page} contentContainerStyle={accountStyles.scroll}
       refreshControl={<RefreshControl refreshing={syncingServer}
-        onRefresh={() => void onRefreshServer()} tintColor={COLORS.green} />}>
+        onRefresh={() => void onRefreshServer()} tintColor={color(COLORS.green, 'accent')} />}>
       <AccountOverview accountCount={accounts.length}
         onlineDeviceCount={devices.filter((device) => device.online).length}
         refreshBusy={refreshBusy} refreshingUsage={refreshingUsage} consumingQuota={consumingQuota}
@@ -298,24 +329,24 @@ function Dashboard({
         onTogglePrivacy={() => setPrivateMode((current) => !current)}
         onRefreshUsage={() => void onRefreshUsage()} onConsumeQuota={() => setQuotaConsumptionOpen(true)} />
       <AccountToolbar updatedAt={displayDate(latestUpdate)} onAddAccount={() => setAddAccountOpen(true)} />
-      {loading ? <View style={styles.loadingBox}><ActivityIndicator size="large" color={COLORS.green} /><Text style={styles.loadingText}>正在读取账户概览…</Text></View> : null}
+      {loading ? <View style={styles.loadingBox}><ActivityIndicator size="large" color={color(COLORS.green, 'accent')} /><Text style={styles.loadingText}>{t("正在读取账户概览…")}</Text></View> : null}
       {!loading && accounts.length === 0 ? <View style={styles.emptyBox}>
-        <Text style={styles.emptyTitle}>还没有可展示的账号</Text>
-        <Text style={styles.emptyText}>点击“添加账户”，使用 ChatGPT 完成授权后即可查看账号。</Text>
+        <Text style={styles.emptyTitle}>{t("还没有可展示的账号")}</Text>
+        <Text style={styles.emptyText}>{t("点击“添加账户”，使用 ChatGPT 完成授权后即可查看账号。")}</Text>
       </View> : null}
       {!loading && accounts.map((account) => <AccountCard key={account.id} account={account}
         privateMode={privateMode}
-        switchBusy={Boolean(switchingAccountId)}
-        switching={switchingAccountId === account.id}
-        onOpenDetails={(selectedAccount) => setDetailAccountId(selectedAccount.id)}
-        onOpenSwitch={setSwitchAccount} />)}
+        onOpenDetails={(selectedAccount) => setDetailAccountId(selectedAccount.id)} />)}
     </ScrollView>
     <AccountDetailsDrawer
-      account={detailAccount}
+      account={switchAccount ? null : detailAccount}
       devices={devices}
       privateMode={privateMode}
       refreshing={refreshBusy}
+      switchBusy={Boolean(switchingAccountId)}
+      switching={switchingAccountId === detailAccount?.id}
       onClose={() => setDetailAccountId(null)}
+      onOpenSwitch={setSwitchAccount}
       onRefresh={onRefreshAccount}
       session={session}
       syncing={syncingServer}
@@ -343,6 +374,7 @@ function Dashboard({
 }
 
 function AndroidUpdateInstallPrompt() {
+  useLanguage();
   const downloadState = useAndroidUpdateDownloadState();
   const promptedVersion = useRef<string | null>(null);
 
@@ -350,15 +382,15 @@ function AndroidUpdateInstallPrompt() {
     if (downloadState.status !== 'downloaded' || promptedVersion.current === downloadState.version) return;
     promptedVersion.current = downloadState.version;
     Alert.alert(
-      '更新已下载',
-      `Codex Switch ${downloadState.version} 已下载完成，现在安装吗？`,
+      t("更新已下载"),
+      t("Remote AI {value1} 已下载完成，现在安装吗？", { value1: downloadState.version }),
       [
-        { text: '稍后', style: 'cancel' },
+        { text: t("稍后"), style: 'cancel' },
         {
-          text: '立即安装',
+          text: t("立即安装"),
           onPress: () => {
             void installDownloadedAndroidUpdate(downloadState.path)
-              .catch((error) => Toast.fail(`无法打开系统安装器：${errorMessage(error)}`));
+              .catch((error) => Toast.fail(t("无法打开系统安装器：{value1}", { value1: errorMessage(error) })));
           },
         },
       ],
@@ -381,6 +413,9 @@ function OpenAiAuthAccountDrawer({
   onClose: () => void;
   onSelect: (deviceId: string, accountId: string) => Promise<boolean>;
 }) {
+  const styles = useStyles();
+  const color = useThemeColor();
+  useLanguage();
   const handleSelect = useCallback(async (accountId: string) => {
     if (
       !device
@@ -394,9 +429,9 @@ function OpenAiAuthAccountDrawer({
 
   return <BottomSheet
     visible={Boolean(device)}
-    title="选择代理登录态账号"
+    title={t("选择代理登录态账号")}
     subtitle={device
-      ? `${device.name} · 选择后会更新 PC 代理登录态并重启 ChatGPT/Codex`
+      ? t("{value1} · 选择后会更新 PC 代理登录态并重启 ChatGPT/Codex", { value1: device.name })
       : undefined}
     onClose={onClose}
     dismissible={!switchingAccountId}
@@ -408,8 +443,8 @@ function OpenAiAuthAccountDrawer({
       showsVerticalScrollIndicator={false}
     >
       {!accounts.length ? <View style={styles.switchDeviceEmpty}>
-        <Text style={styles.switchDeviceEmptyTitle}>暂无可选账号</Text>
-        <Text style={styles.switchDeviceEmptyText}>请先在桌面端添加并同步账号。</Text>
+        <Text style={styles.switchDeviceEmptyTitle}>{t("暂无可选账号")}</Text>
+        <Text style={styles.switchDeviceEmptyText}>{t("请先在桌面端添加并同步账号。")}</Text>
       </View> : accounts.map((account) => {
         const current = device?.openaiAuthAccountId === account.id;
         const switching = switchingAccountId === account.id;
@@ -417,8 +452,8 @@ function OpenAiAuthAccountDrawer({
         return <Pressable
           key={account.id}
           accessibilityRole="button"
-          accessibilityLabel={`${account.email}${current ? '，当前代理登录态账号' : ''}`}
-          accessibilityHint={current ? undefined : '设为这台设备的代理登录态账号'}
+          accessibilityLabel={`${account.email}${current ? t("，当前代理登录态账号") : ''}`}
+          accessibilityHint={current ? undefined : t("设为这台设备的代理登录态账号")}
           accessibilityState={{ disabled, selected: current }}
           disabled={disabled}
           onPress={() => void handleSelect(account.id)}
@@ -431,10 +466,10 @@ function OpenAiAuthAccountDrawer({
         >
           <AccountCardContent account={account} privateMode={false} />
           {switching
-            ? <ActivityIndicator color={COLORS.green} size="small" />
+            ? <ActivityIndicator color={color(COLORS.green, 'accent')} size="small" />
             : current
               ? <View style={styles.openAiAuthAccountCurrentBadge}>
-                <Text style={styles.openAiAuthAccountCurrentText}>当前</Text>
+                <Text style={styles.openAiAuthAccountCurrentText}>{t("当前")}</Text>
               </View>
               : null}
         </Pressable>;
@@ -444,6 +479,7 @@ function OpenAiAuthAccountDrawer({
 }
 
 function DeviceManagementPage({
+  session,
   accounts,
   providers,
   devices,
@@ -459,6 +495,7 @@ function DeviceManagementPage({
   onSwitchProviderGroup,
   onSetOpenAiAuthAccount,
 }: {
+  session: AuthSession;
   accounts: AccountSummary[];
   providers: RemoteProviderSummary[];
   devices: RemoteDevice[];
@@ -469,11 +506,13 @@ function DeviceManagementPage({
   switchingOpenAiAuth: { deviceId: string; accountId: string } | null;
   onRefresh: () => Promise<void>;
   onDelete: (deviceId: string) => Promise<void>;
-  onSwitchAccount: (deviceId: string, accountId: string) => Promise<boolean>;
-  onSwitchProvider: (deviceId: string, providerId: string) => Promise<boolean>;
+  onSwitchAccount: (deviceId: string, accountId: string, target?: RemoteModelTarget) => Promise<boolean>;
+  onSwitchProvider: (deviceId: string, providerId: string, target?: RemoteModelTarget) => Promise<boolean>;
   onSwitchProviderGroup: (deviceId: string, group: string) => Promise<boolean>;
   onSetOpenAiAuthAccount: (deviceId: string, accountId: string) => Promise<boolean>;
 }) {
+  useLanguage();
+  const revokeService = useRevokeDesktopService(session);
   const [openAiAuthDeviceId, setOpenAiAuthDeviceId] = useState<string | null>(null);
   const [modelDeviceId, setModelDeviceId] = useState<string | null>(null);
   const sortedDevices = useMemo(() => [...devices].sort((left, right) => {
@@ -488,12 +527,12 @@ function DeviceManagementPage({
   const confirmDelete = useCallback((device: RemoteDevice) => {
     if (device.online || deletingDeviceId) return;
     Alert.alert(
-      '删除设备',
-      `确定删除“${device.name}”吗？删除后，该设备下次登录桌面端时会重新出现在这里。`,
+      t("删除设备"),
+      t("确定删除“{value1}”吗？删除后，该设备下次登录桌面端时会重新出现在这里。", { value1: device.name }),
       [
-        { text: '取消', style: 'cancel' },
+        { text: t("取消"), style: 'cancel' },
         {
-          text: '删除',
+          text: t("删除"),
           style: 'destructive',
           onPress: () => void onDelete(device.deviceId),
         },
@@ -512,6 +551,7 @@ function DeviceManagementPage({
       switchingAuthDeviceId={switchingOpenAiAuth?.deviceId ?? null}
       onRefresh={onRefresh}
       onDelete={confirmDelete}
+      onRevokeService={revokeService}
       onSwitchModel={setModelDeviceId}
       onSelectAuthAccount={setOpenAiAuthDeviceId}
     />
@@ -526,6 +566,7 @@ function DeviceManagementPage({
       onSelect={onSetOpenAiAuthAccount}
     />
     <RemoteModelSwitchSheet
+      key={modelDeviceId ?? 'closed'}
       device={modelDevice}
       accounts={accounts}
       providers={providers}
@@ -542,45 +583,51 @@ function DeviceManagementPage({
   </>;
 }
 
-type AppPage = 'accounts' | 'devices' | 'chat' | 'totp' | 'admin' | 'settings' | 'about' | 'token-summary';
+type AppPage = 'accounts' | 'devices' | 'chat' | 'totp' | 'admin' | 'settings' | 'about'
+  | 'token-summary' | 'downloads';
 const DEFAULT_APP_PAGE: AppPage = 'chat';
 
 function BottomNavigation({ activePage, onChange }: {
   activePage: AppPage;
   onChange: (page: AppPage) => void;
 }) {
+  const resolveThemeColor = useThemeColor();
+  const styles = useStyles();
+  const totpPageStyles = useTotpPageStyles();
+  useLanguage();
   const settingsActive = ['admin', 'about', 'settings'].includes(activePage);
-  return <View style={styles.bottomNavigation} accessibilityRole="tablist">
+  // Keep the home-indicator area inside the navigation background.
+  return <SafeAreaView edges={['bottom']} style={styles.bottomNavigation} accessibilityRole="tablist">
     <Pressable accessibilityRole="tab" accessibilityState={{ selected: activePage === 'chat' }}
       onPress={() => onChange('chat')} style={styles.navItem}>
-      <Ionicons name="chatbubble-outline" size={23} color={activePage === 'chat' ? '#00c98b' : '#858991'} />
-      <Text style={[styles.navText, activePage === 'chat' && styles.navTextActive]}>聊天</Text>
+      <Ionicons name="chatbubble-outline" size={23} color={activePage === 'chat' ? resolveThemeColor('#00c98b', 'accent') : resolveThemeColor('#858991', 'muted')} />
+      <Text style={[styles.navText, activePage === 'chat' && styles.navTextActive]}>{t("聊天")}</Text>
     </Pressable>
     <Pressable accessibilityRole="tab" accessibilityState={{ selected: activePage === 'accounts' }}
       onPress={() => onChange('accounts')} style={styles.navItem}>
       <Ionicons name={activePage === 'accounts' ? 'people' : 'people-outline'}
-        size={23} color={activePage === 'accounts' ? '#00c98b' : '#858991'} />
-      <Text style={[styles.navText, activePage === 'accounts' && styles.navTextActive]}>账号</Text>
+        size={23} color={activePage === 'accounts' ? resolveThemeColor('#00c98b', 'accent') : resolveThemeColor('#858991', 'muted')} />
+      <Text style={[styles.navText, activePage === 'accounts' && styles.navTextActive]}>{t("账号")}</Text>
     </Pressable>
     <Pressable accessibilityRole="tab" accessibilityState={{ selected: activePage === 'devices' }}
       onPress={() => onChange('devices')} style={styles.navItem}>
-      <Ionicons name="server-outline" size={23} color={activePage === 'devices' ? '#00c98b' : '#858991'} />
-      <Text style={[styles.navText, activePage === 'devices' && styles.navTextActive]}>设备</Text>
+      <Ionicons name="server-outline" size={23} color={activePage === 'devices' ? resolveThemeColor('#00c98b', 'accent') : resolveThemeColor('#858991', 'muted')} />
+      <Text style={[styles.navText, activePage === 'devices' && styles.navTextActive]}>{t("设备")}</Text>
     </Pressable>
     <Pressable accessibilityRole="tab" accessibilityState={{ selected: activePage === 'totp' }}
       onPress={() => onChange('totp')} style={styles.navItem}>
       <View style={activePage === 'totp' ? totpPageStyles.activeTab : totpPageStyles.tab}>
         <Ionicons name={activePage === 'totp' ? 'shield-checkmark' : 'shield-checkmark-outline'}
-          size={23} color={activePage === 'totp' ? '#008956' : '#858991'} />
+          size={23} color={activePage === 'totp' ? resolveThemeColor('#008956', 'accent') : resolveThemeColor('#858991', 'muted')} />
         <Text style={[styles.navText, activePage === 'totp' && styles.navTextActive]}>2FA</Text>
       </View>
     </Pressable>
     <Pressable accessibilityRole="tab" accessibilityState={{ selected: settingsActive }}
       onPress={() => onChange('settings')} style={styles.navItem}>
-      <Ionicons name="settings" size={23} color={settingsActive ? '#00c98b' : '#858991'} />
-      <Text style={[styles.navText, settingsActive && styles.navTextActive]}>设置</Text>
+      <Ionicons name="settings" size={23} color={settingsActive ? resolveThemeColor('#00c98b', 'accent') : resolveThemeColor('#858991', 'muted')} />
+      <Text style={[styles.navText, settingsActive && styles.navTextActive]}>{t("设置")}</Text>
     </Pressable>
-  </View>;
+  </SafeAreaView>;
 }
 
 function DeviceSwitchDrawer({ account, devices, switching, onClose, onSwitch }: {
@@ -590,6 +637,9 @@ function DeviceSwitchDrawer({ account, devices, switching, onClose, onSwitch }: 
   onClose: () => void;
   onSwitch: (deviceId: string, accountId: string) => Promise<boolean>;
 }) {
+  const styles = useStyles();
+  const color = useThemeColor();
+  useLanguage();
   const [pendingDeviceId, setPendingDeviceId] = useState<string | null>(null);
 
   const handleSwitch = useCallback(async (deviceId: string) => {
@@ -604,15 +654,15 @@ function DeviceSwitchDrawer({ account, devices, switching, onClose, onSwitch }: 
 
   return <BottomSheet
     visible={Boolean(account)}
-    title="选择切换设备"
-    subtitle={account ? `切换到 ${account.email}` : undefined}
+    title={t("选择切换设备")}
+    subtitle={account ? t("切换到 {value1}", { value1: account.email }) : undefined}
     onClose={onClose}
     dismissible={!switching}
   >
     <ScrollView style={styles.switchDeviceScroll} showsVerticalScrollIndicator={false}>
       {!devices.length ? <View style={styles.switchDeviceEmpty}>
-        <Text style={styles.switchDeviceEmptyTitle}>暂无可用设备</Text>
-        <Text style={styles.switchDeviceEmptyText}>请先在 PC 端登录同一个云端账号并保持应用运行。</Text>
+        <Text style={styles.switchDeviceEmptyTitle}>{t("暂无可用设备")}</Text>
+        <Text style={styles.switchDeviceEmptyText}>{t("请先在 PC 端登录同一个云端账号并保持应用运行。")}</Text>
       </View> : devices.map((device) => {
         const current = !device.activeProviderId && device.activeAccountId === account?.id;
         const disabled = switching || !device.online || current;
@@ -632,13 +682,13 @@ function DeviceSwitchDrawer({ account, devices, switching, onClose, onSwitch }: 
           <View style={[styles.deviceStatusDot, device.online ? styles.deviceOnline : styles.deviceOffline]} />
           <View style={styles.switchDeviceInfo}>
             <Text style={styles.switchDeviceName} numberOfLines={1}>{device.name}</Text>
-            <Text style={styles.switchDeviceMeta}>{device.online ? '在线' : '离线'} · {device.platform}</Text>
+            <Text style={styles.switchDeviceMeta}>{device.online ? t("在线") : t("离线")} · {device.platform}</Text>
           </View>
           {pendingDeviceId === device.deviceId
-            ? <ActivityIndicator color={COLORS.green} size="small" />
+            ? <ActivityIndicator color={color(COLORS.green, 'accent')} size="small" />
             : <View style={[styles.switchDeviceAction, current && styles.switchDeviceActionCurrent]}>
               <Text style={[styles.switchDeviceActionText, current && styles.switchDeviceActionTextCurrent]}>
-                {current ? '当前' : device.online ? '切换' : '不可用'}
+                {current ? t("当前") : device.online ? t("切换") : t("不可用")}
               </Text>
             </View>}
         </Pressable>;
@@ -648,6 +698,11 @@ function DeviceSwitchDrawer({ account, devices, switching, onClose, onSwitch }: 
 }
 
 function AppContent() {
+  const styles = useStyles();
+  const color = useThemeColor();
+  const totpPageStyles = useTotpPageStyles();
+  const accountStyles = useAccountStyles();
+  useLanguage();
   const [session, updateSession] = useState<AuthSession | null>(null);
   const sessionRef = useRef(session);
   const setSession = useCallback((next: AuthSession | null) => {
@@ -727,10 +782,10 @@ function AppContent() {
       const failedCount = refreshedAccounts.filter((account) => Boolean(account.usage.error)).length;
       setAccounts((current) => mergeRefreshedUsage(current, refreshedAccounts));
       lastUsageRefreshAtRef.current = Date.now();
-      if (!quiet && failedCount === 0) Toast.success('所有账号用量已刷新');
-      if (!quiet && failedCount > 0) Toast.fail(`${failedCount} 个账号用量刷新失败`);
+      if (!quiet && failedCount === 0) Toast.success(t("所有账号用量已刷新"));
+      if (!quiet && failedCount > 0) Toast.fail(t("{value1} 个账号用量刷新失败", { value1: failedCount }));
     } catch (error) {
-      if (!quiet) Toast.fail(`刷新用量失败：${errorMessage(error)}`);
+      if (!quiet) Toast.fail(t("刷新用量失败：{value1}", { value1: errorMessage(error) }));
     } finally {
       refreshingRef.current = false;
       setRefreshingUsage(false);
@@ -751,9 +806,9 @@ function AppContent() {
           ? { ...candidate, plan: usage.plan ?? candidate.plan, usage }
           : candidate
       )));
-      Toast.success('当前账号用量已刷新');
+      Toast.success(t("当前账号用量已刷新"));
     } catch (error) {
-      Toast.fail(`刷新用量失败：${errorMessage(error)}`);
+      Toast.fail(t("刷新用量失败：{value1}", { value1: errorMessage(error) }));
     } finally {
       refreshingAccountIdRef.current = null;
       setRefreshingAccountId(null);
@@ -765,7 +820,7 @@ function AppContent() {
     const selectedIdSet = new Set(accountIds);
     const targets = quotaConsumptionTargets(accounts.filter((account) => selectedIdSet.has(account.id)));
     if (!targets.length) {
-      Toast.fail('没有可从手机直接消耗额度的账号');
+      Toast.fail(t("没有可从手机直接消耗额度的账号"));
       return;
     }
     refreshingRef.current = true;
@@ -781,16 +836,16 @@ function AppContent() {
       }
       const consumedCount = result.consumedAccounts.length;
       const issues: string[] = [];
-      if (result.failures.length) issues.push(`${result.failures.length} 个账号消耗额度失败`);
-      if (usageRefreshFailures) issues.push(`${usageRefreshFailures} 个账号用量刷新失败`);
+      if (result.failures.length) issues.push(t("{value1} 个账号消耗额度失败", { value1: result.failures.length }));
+      if (usageRefreshFailures) issues.push(t("{value1} 个账号用量刷新失败", { value1: usageRefreshFailures }));
       if (issues.length) {
-        const completed = consumedCount ? `已完成 ${consumedCount} 个账号的额度消耗；` : '';
+        const completed = consumedCount ? t("已完成 {value1} 个账号的额度消耗；", { value1: consumedCount }) : '';
         Toast.fail(`${completed}${issues.join('，')}`);
       } else {
-        Toast.success(`已完成 ${consumedCount} 个账号的额度消耗并刷新用量`);
+        Toast.success(t("已完成 {value1} 个账号的额度消耗并刷新用量", { value1: consumedCount }));
       }
     } catch (error) {
-      Toast.fail(`批量消耗额度失败：${errorMessage(error)}`);
+      Toast.fail(t("批量消耗额度失败：{value1}", { value1: errorMessage(error) }));
     } finally {
       refreshingRef.current = false;
       setConsumingQuota(false);
@@ -843,7 +898,7 @@ function AppContent() {
               || devicesResult.status === 'rejected'
               || providersResult.status === 'rejected'
               || profileResult.status === 'rejected') {
-              Toast.fail('暂时无法同步云端数据，登录状态已保留');
+              Toast.fail(t("暂时无法同步云端数据，登录状态已保留"));
             }
           }
         }
@@ -852,7 +907,7 @@ function AppContent() {
           await clearSession();
           if (mounted) setSession(null);
         } else if (mounted) {
-          Toast.fail('读取本地登录信息失败，请重新打开应用');
+          Toast.fail(t("读取本地登录信息失败，请重新打开应用"));
         }
       } finally {
         if (mounted) {
@@ -992,7 +1047,9 @@ function AppContent() {
   useEffect(() => {
     // Android's system Back action also covers the edge-swipe gesture. Keep
     // top-level tabs in the app before allowing the Activity to finish.
-    if (!session || activePage === DEFAULT_APP_PAGE || activePage === 'admin') return undefined;
+    if (!session || activePage === DEFAULT_APP_PAGE || activePage === 'admin' || activePage === 'downloads') {
+      return undefined;
+    }
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       setActivePage(activePage === 'about' ? 'settings' : DEFAULT_APP_PAGE);
       return true;
@@ -1010,7 +1067,7 @@ function AppContent() {
         setAccounts(nextAccounts);
         lastUsageRefreshAtRef.current = Date.now();
       })
-      .catch((error) => Toast.fail(`读取账户失败：${errorMessage(error)}`))
+      .catch((error) => Toast.fail(t("读取账户失败：{value1}", { value1: errorMessage(error) })))
       .finally(() => setLoading(false));
     void fetchRemoteDevices(nextSession)
       .then((nextDevices) => {
@@ -1018,13 +1075,13 @@ function AppContent() {
         setDevices(nextDevices);
         setDevicesLoaded(true);
       })
-      .catch((error) => Toast.fail(`读取设备失败：${errorMessage(error)}`));
+      .catch((error) => Toast.fail(t("读取设备失败：{value1}", { value1: errorMessage(error) })));
     void fetchRemoteProviders(nextSession)
       .then(setProviders)
-      .catch((error) => Toast.fail(`读取 Provider 失败：${errorMessage(error)}`));
+      .catch((error) => Toast.fail(t("读取 Provider 失败：{value1}", { value1: errorMessage(error) })));
     void fetchUserProfile(nextSession)
       .then(setProfile)
-      .catch((error) => Toast.fail(`读取用户身份失败：${errorMessage(error)}`));
+      .catch((error) => Toast.fail(t("读取用户身份失败：{value1}", { value1: errorMessage(error) })));
   }, []);
 
   const handleGlobalRefreshMinutesChange = useCallback(async (minutes: number) => {
@@ -1037,7 +1094,7 @@ function AppContent() {
     const device = devices.find((candidate) => candidate.deviceId === deviceId);
     if (!device) return;
     if (device.online) {
-      Toast.fail('请先退出该设备上的桌面端，再删除设备');
+      Toast.fail(t("请先退出该设备上的桌面端，再删除设备"));
       return;
     }
 
@@ -1045,7 +1102,7 @@ function AppContent() {
     try {
       await deleteRemoteDevice(session, deviceId);
       setDevices((current) => current.filter((candidate) => candidate.deviceId !== deviceId));
-      Toast.success('设备已删除');
+      Toast.success(t("设备已删除"));
     } catch (error) {
       if (isSessionExpiredError(error)) {
         await clearSession();
@@ -1056,7 +1113,7 @@ function AppContent() {
         setProviders([]);
         setActivePage(DEFAULT_APP_PAGE);
       } else {
-        Toast.fail(`删除失败：${errorMessage(error)}`);
+        Toast.fail(t("删除失败：{value1}", { value1: errorMessage(error) }));
         void fetchRemoteDevices(session).then(setDevices).catch(() => undefined);
       }
     } finally {
@@ -1069,9 +1126,9 @@ function AppContent() {
     setRestartingDeviceId(deviceId);
     try {
       await restartRemoteDeviceCodex(session, deviceId);
-      Toast.success('目标 PC 上的 ChatGPT/Codex 已重启');
+      Toast.success(t("目标 PC 上的 ChatGPT/Codex 已重启"));
     } catch (error) {
-      Toast.fail(`重启失败：${errorMessage(error)}`);
+      Toast.fail(t("重启失败：{value1}", { value1: errorMessage(error) }));
     } finally {
       setRestartingDeviceId(null);
     }
@@ -1081,40 +1138,41 @@ function AppContent() {
     const device = devices.find((candidate) => candidate.deviceId === deviceId);
     const canRestartRemotely = device?.capabilities?.includes('restart-codex') ?? false;
     const content = canRestartRemotely
-      ? '已在官方模型与第三方 Provider 间切换。立即重启目标 PC 上的 ChatGPT/Codex 以加载当前模型。'
-      : '已在官方模型与第三方 Provider 间切换。请在目标 PC 上手动重启 ChatGPT/Codex。';
+      ? t("已在官方模型与第三方 Provider 间切换。立即重启目标 PC 上的 ChatGPT/Codex 以加载当前模型。")
+      : t("已在官方模型与第三方 Provider 间切换。请在目标 PC 上手动重启 ChatGPT/Codex。");
     Alert.alert(
-      '重启以加载当前模型？',
+      t("重启以加载当前模型？"),
       content,
       canRestartRemotely
         ? [
-          { text: '稍后', style: 'cancel' },
+          { text: t("稍后"), style: 'cancel' },
           {
-            text: '立即重启',
+            text: t("立即重启"),
             style: 'destructive',
             onPress: () => void restartCodexOnDevice(deviceId),
           },
         ]
-        : [{ text: '知道了' }],
+        : [{ text: t("知道了") }],
     );
   }, [devices, restartCodexOnDevice]);
 
   const handleRemoteSwitch = useCallback(async (
     deviceId: string,
     accountId: string,
+    target: RemoteModelTarget = 'proxy',
   ): Promise<boolean> => {
     if (!session || switchingAccountId) return false;
     setSwitchingAccountId(accountId);
     try {
-      const result = await switchRemoteDeviceAccount(session, deviceId, accountId);
+      const result = await switchRemoteDeviceAccount(session, deviceId, accountId, target);
       setDevices((current) => applyRemoteModelSwitch(current, result));
-      Toast.success('PC 端已切换到官方模型');
+      Toast.success(target === 'gui' ? t("Codex GUI 模型已切换") : t("代理接口模型已切换"));
       if (result.requiresRestart) {
         setTimeout(() => promptModelRestart(deviceId), 0);
       }
       return true;
     } catch (error) {
-      Toast.fail(`切换失败：${errorMessage(error)}`);
+      Toast.fail(t("切换失败：{value1}", { value1: errorMessage(error) }));
       void fetchRemoteDevices(session).then(setDevices).catch(() => undefined);
       return false;
     } finally {
@@ -1125,19 +1183,20 @@ function AppContent() {
   const handleRemoteProviderSwitch = useCallback(async (
     deviceId: string,
     providerId: string,
+    target: RemoteModelTarget = 'proxy',
   ): Promise<boolean> => {
     if (!session || switchingProvider) return false;
     setSwitchingProvider({ deviceId, providerId });
     try {
-      const result = await switchRemoteDeviceProvider(session, deviceId, providerId);
+      const result = await switchRemoteDeviceProvider(session, deviceId, providerId, target);
       setDevices((current) => applyRemoteModelSwitch(current, result));
-      Toast.success('PC 端已切换到第三方 Provider');
+      Toast.success(target === 'gui' ? t("Codex GUI 模型已切换") : t("代理接口模型已切换"));
       if (result.requiresRestart) {
         setTimeout(() => promptModelRestart(deviceId), 0);
       }
       return true;
     } catch (error) {
-      Toast.fail(`切换失败：${errorMessage(error)}`);
+      Toast.fail(t("切换失败：{value1}", { value1: errorMessage(error) }));
       void fetchRemoteDevices(session).then(setDevices).catch(() => undefined);
       return false;
     } finally {
@@ -1154,11 +1213,11 @@ function AppContent() {
     try {
       const result = await switchRemoteDeviceProviderGroup(session, deviceId, group);
       setDevices((current) => applyRemoteModelSwitch(current, result));
-      Toast.success(`PC 端已启动分组“${group}”`);
+      Toast.success(t("PC 端已启动分组“{value1}”", { value1: group }));
       if (result.requiresRestart) setTimeout(() => promptModelRestart(deviceId), 0);
       return true;
     } catch (error) {
-      Toast.fail(`切换失败：${errorMessage(error)}`);
+      Toast.fail(t("切换失败：{value1}", { value1: errorMessage(error) }));
       void fetchRemoteDevices(session).then(setDevices).catch(() => undefined);
       return false;
     } finally {
@@ -1173,7 +1232,7 @@ function AppContent() {
     if (!session || switchingOpenAiAuth) return false;
     const device = devices.find((candidate) => candidate.deviceId === deviceId);
     if (!device?.online) {
-      Toast.fail('设备已离线，暂时无法控制代理登录态账号');
+      Toast.fail(t("设备已离线，暂时无法控制代理登录态账号"));
       return false;
     }
 
@@ -1188,7 +1247,7 @@ function AppContent() {
           lastSeenAt: new Date().toISOString(),
         }
         : candidate));
-      Toast.success('PC 端代理登录态账号已更新');
+      Toast.success(t("PC 端代理登录态账号已更新"));
       return true;
     } catch (error) {
       if (isSessionExpiredError(error)) {
@@ -1200,7 +1259,7 @@ function AppContent() {
         setProviders([]);
         setActivePage(DEFAULT_APP_PAGE);
       } else {
-        Toast.fail(`更新代理登录态失败：${errorMessage(error)}`);
+        Toast.fail(t("更新代理登录态失败：{value1}", { value1: errorMessage(error) }));
         void fetchRemoteDevices(session).then(setDevices).catch(() => undefined);
       }
       return false;
@@ -1223,22 +1282,26 @@ function AppContent() {
     setActivePage(DEFAULT_APP_PAGE);
   }, []);
 
-  if (initializing) return <View style={styles.boot}><StatusBar style="dark" /><ActivityIndicator size="large" color={COLORS.green} /><Text style={styles.bootText}>Codex Switch</Text></View>;
+  const showBottomNavigation = activePage !== 'token-summary' && activePage !== 'downloads';
+  if (initializing) return <View style={styles.boot}><ThemeStatusBar /><ActivityIndicator size="large" color={color(COLORS.green, 'accent')} /><Text style={styles.bootText}>Remote AI</Text></View>;
   if (!session) return <View style={styles.app}>
-    <LoginScreen initialBaseUrl={DEFAULT_CLOUD_BASE_URL} onLoggedIn={handleLogin} />
+    <ThemeStatusBar /><LoginScreen initialBaseUrl={DEFAULT_CLOUD_BASE_URL} onLoggedIn={handleLogin} />
   </View>;
-  return <SafeAreaView style={[styles.app, activePage === 'totp' && totpPageStyles.page,
+  return <SafeAreaView edges={showBottomNavigation ? ['top', 'left', 'right'] : undefined}
+    style={[styles.app, activePage === 'totp' && totpPageStyles.page,
     activePage === 'accounts' && accountStyles.page,
     activePage === 'chat' && styles.chatCanvas,
-    (activePage === 'settings' || activePage === 'about') && styles.settingsCanvas]}>
-    <StatusBar style="dark" />
+    (activePage === 'settings' || activePage === 'about' || activePage === 'downloads') && styles.settingsCanvas]}>
+    <ThemeStatusBar />
     <ChatPage session={session} devices={devices} active={activePage === 'chat' || activePage === 'token-summary'}
       devicesLoaded={devicesLoaded}
       tokenSummary={activePage === 'token-summary'} openTokenSummary={() => setActivePage('token-summary')}
       closeTokenSummary={() => setActivePage('chat')}
       notification={chatNotification.target} notificationError={chatNotification.error}
       notificationHandled={chatNotification.handled} />
-    {activePage === 'chat' || activePage === 'token-summary' ? null : activePage === 'accounts'
+    {activePage === 'downloads' && <DownloadManagerPage session={session} onBack={() => setActivePage('settings')} />}
+    {activePage === 'chat' || activePage === 'token-summary' || activePage === 'downloads'
+      ? null : activePage === 'accounts'
       ? <Dashboard session={session} accounts={accounts} devices={devices} loading={loading}
         syncingServer={syncingServer} refreshingUsage={refreshingUsage} consumingQuota={consumingQuota}
         refreshingAccountId={refreshingAccountId} switchingAccountId={switchingAccountId}
@@ -1248,7 +1311,7 @@ function AppContent() {
           account.id === updated.id ? { ...account, ...updated } : account
         )))} />
       : activePage === 'devices'
-        ? <DeviceManagementPage accounts={accounts} providers={providers} devices={devices}
+        ? <DeviceManagementPage session={session} accounts={accounts} providers={providers} devices={devices}
           refreshing={syncingServer} deletingDeviceId={deletingDeviceId}
           switchingAccountId={switchingAccountId} switchingProvider={switchingProvider}
           switchingOpenAiAuth={switchingOpenAiAuth} onRefresh={refreshServerData}
@@ -1266,63 +1329,87 @@ function AppContent() {
                 onGlobalRefreshMinutesChange={handleGlobalRefreshMinutesChange}
                 onOpenAbout={() => setActivePage('about')}
                 onOpenAdmin={() => setActivePage('admin')}
+                onOpenDownloads={() => setActivePage('downloads')}
                 onLogout={handleLogout}
                 totpManager={totpManager} />}
-    {activePage !== 'token-summary' && <BottomNavigation activePage={activePage} onChange={setActivePage} />}
+    {showBottomNavigation && <BottomNavigation activePage={activePage} onChange={setActivePage} />}
   </SafeAreaView>;
 }
 
+function ThemeStatusBar() {
+  const mode = useThemeMode();
+  return <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />;
+}
+
 export default function App() {
+  useLanguage();
+  const updateActivity = useIdleAppUpdate();
+  const [languageReady, setLanguageReady] = useState(false);
+  useEffect(() => { void Promise.all([loadLanguage(), loadTheme()]).finally(() => setLanguageReady(true)); }, []);
+  if (!languageReady) return null;
   return <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+    <View style={{ flex: 1 }} onTouchStart={updateActivity}>
     <StartupErrorBoundary>
       <AndroidUpdateInstallPrompt />
+      <StartupUpdatePrompt />
       <AppContent />
     </StartupErrorBoundary>
     <AppToastHost />
+    </View>
   </SafeAreaProvider>;
 }
 
-const styles = StyleSheet.create({
-  settingsCanvas: { backgroundColor: '#fff' },
-  chatCanvas: { backgroundColor: chatPalette.background },
-  flex: { flex: 1 }, app: { flex: 1, backgroundColor: COLORS.canvas }, boot: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.canvas, gap: 12 }, bootText: { color: COLORS.ink, fontSize: 18, fontWeight: '700' }, startupError: { flex: 1, padding: 28, justifyContent: 'center', backgroundColor: COLORS.canvas }, startupErrorTitle: { color: COLORS.ink, fontSize: 22, fontWeight: '800' }, startupErrorMessage: { color: COLORS.muted, fontSize: 15, lineHeight: 22, marginTop: 12 }, startupErrorDetail: { color: COLORS.danger, fontSize: 12, marginTop: 20 },
-  loginScroll: { flexGrow: 1, backgroundColor: COLORS.canvas, padding: 28, justifyContent: 'center' }, logoMark: { width: 58, height: 58, borderRadius: 18, backgroundColor: '#a7e733', justifyContent: 'center', alignItems: 'center', alignSelf: 'center', marginBottom: 18, shadowColor: '#4f7915', shadowOpacity: 0.18, shadowRadius: 14, elevation: 4 }, logoGlyph: { color: '#184122', fontSize: 34, fontWeight: '900' }, loginTitle: { color: COLORS.ink, fontSize: 30, fontWeight: '800', textAlign: 'center' }, loginSubtitle: { color: COLORS.muted, fontSize: 15, textAlign: 'center', marginTop: 8, marginBottom: 30 }, loginCard: { backgroundColor: COLORS.card, borderColor: COLORS.border, borderWidth: 1, borderRadius: 18, padding: 20, shadowColor: '#314c3d', shadowOpacity: 0.06, shadowRadius: 18, elevation: 2 }, fieldLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 36 }, fieldLabel: { color: COLORS.ink, fontSize: 14, fontWeight: '700', marginBottom: 8, marginTop: 14 }, officialServerButton: { paddingVertical: 6, paddingHorizontal: 9, borderRadius: 8, backgroundColor: COLORS.paleBlue, marginTop: 6 }, officialServerButtonText: { color: '#168da2', fontWeight: '700', fontSize: 12 }, fieldHint: { color: COLORS.muted, fontSize: 12, marginTop: 8 }, input: { height: 48, borderColor: '#cbdcd0', borderWidth: 1, borderRadius: 10, paddingHorizontal: 13, color: COLORS.ink, fontSize: 16, backgroundColor: '#fbfdfb' }, primaryButton: { height: 50, justifyContent: 'center', alignItems: 'center', borderRadius: 11, backgroundColor: COLORS.cyan, marginTop: 24, shadowColor: COLORS.cyan, shadowOpacity: 0.22, shadowRadius: 10, elevation: 3 }, primaryButtonText: { color: '#fff', fontWeight: '800', fontSize: 16 }, pressed: { opacity: 0.82 }, disabled: { opacity: 0.6 }, securityNote: { color: COLORS.muted, fontSize: 12, textAlign: 'center', marginTop: 18 },
-  loadingBox: { backgroundColor: COLORS.card, borderRadius: 16, padding: 38, alignItems: 'center', gap: 14, borderWidth: 1, borderColor: COLORS.border }, loadingText: { color: COLORS.muted }, emptyBox: { backgroundColor: COLORS.card, borderRadius: 16, padding: 28, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border }, emptyTitle: { color: COLORS.ink, fontWeight: '800', fontSize: 17 }, emptyText: { color: COLORS.muted, textAlign: 'center', marginTop: 9, lineHeight: 20 },
+const useStyles = createThemedStyles((color) => ({
+  settingsCanvas: { backgroundColor: color('#fff', 'surface') },
+  chatCanvas: { backgroundColor: color(chatPalette.background, 'canvas') },
+  flex: { flex: 1 }, app: { flex: 1, backgroundColor: color(COLORS.canvas, 'canvas') }, boot: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: color(COLORS.canvas, 'canvas'), gap: 12 }, bootText: { color: color(COLORS.ink, 'ink'), fontSize: 18, fontWeight: '700' }, startupError: { flex: 1, padding: 28, justifyContent: 'center', backgroundColor: color(COLORS.canvas, 'canvas') }, startupErrorTitle: { color: color(COLORS.ink, 'ink'), fontSize: 22, fontWeight: '800' }, startupErrorMessage: { color: color(COLORS.muted, 'muted'), fontSize: 15, lineHeight: 22, marginTop: 12 }, startupErrorDetail: { color: color(COLORS.danger, 'danger'), fontSize: 12, marginTop: 20 },
+  loginScroll: { flexGrow: 1, backgroundColor: color(COLORS.canvas, 'canvas'), padding: 28, justifyContent: 'center' }, logoMark: { width: 58, height: 58, borderRadius: 18, backgroundColor: '#a7e733', justifyContent: 'center', alignItems: 'center', alignSelf: 'center', marginBottom: 18, shadowColor: '#4f7915', shadowOpacity: 0.18, shadowRadius: 14, elevation: 4 }, logoGlyph: { color: color('#184122', 'accent'), fontSize: 34, fontWeight: '900' }, loginTitle: { color: color(COLORS.ink, 'ink'), fontSize: 30, fontWeight: '800', textAlign: 'center' }, loginSubtitle: { color: color(COLORS.muted, 'muted'), fontSize: 15, textAlign: 'center', marginTop: 8, marginBottom: 30 }, loginCard: { backgroundColor: color(COLORS.card, 'surface'), borderColor: color(COLORS.border, 'border'), borderWidth: 1, borderRadius: 18, padding: 20, shadowColor: '#314c3d', shadowOpacity: 0.06, shadowRadius: 18, elevation: 2 }, fieldLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 36 }, fieldLabel: { color: color(COLORS.ink, 'ink'), fontSize: 14, fontWeight: '700', marginBottom: 8, marginTop: 14 }, officialServerButton: { paddingVertical: 6, paddingHorizontal: 9, borderRadius: 8, backgroundColor: color(COLORS.paleBlue, 'infoSoft'), marginTop: 6 }, officialServerButtonText: { color: color('#168da2', 'info'), fontWeight: '700', fontSize: 12 }, fieldHint: { color: color(COLORS.muted, 'muted'), fontSize: 12, marginTop: 8 }, input: { height: 48, borderColor: color('#cbdcd0', 'border'), borderWidth: 1, borderRadius: 10, paddingHorizontal: 13, color: color(COLORS.ink, 'ink'), fontSize: 16, backgroundColor: color('#fbfdfb', 'surface') }, primaryButton: { height: 50, justifyContent: 'center', alignItems: 'center', borderRadius: 11, backgroundColor: color(COLORS.cyan, 'info'), marginTop: 24, shadowColor: color(COLORS.cyan, 'info'), shadowOpacity: 0.22, shadowRadius: 10, elevation: 3 }, primaryButtonText: { color: '#fff', fontWeight: '800', fontSize: 16 }, pressed: { opacity: 0.82 }, disabled: { opacity: 0.6 }, securityNote: { color: color(COLORS.muted, 'muted'), fontSize: 12, textAlign: 'center', marginTop: 18 },
+  loadingBox: { backgroundColor: color(COLORS.card, 'surface'), borderRadius: 16, padding: 38, alignItems: 'center', gap: 14, borderWidth: 1, borderColor: color(COLORS.border, 'border') }, loadingText: { color: color(COLORS.muted, 'muted') }, emptyBox: { backgroundColor: color(COLORS.card, 'surface'), borderRadius: 16, padding: 28, alignItems: 'center', borderWidth: 1, borderColor: color(COLORS.border, 'border') }, emptyTitle: { color: color(COLORS.ink, 'ink'), fontWeight: '800', fontSize: 17 }, emptyText: { color: color(COLORS.muted, 'muted'), textAlign: 'center', marginTop: 9, lineHeight: 20 },
   openAiAuthAccountScroll: { maxHeight: 610 },
   openAiAuthAccountScrollContent: { paddingBottom: 8 },
-  openAiAuthAccountCardCurrent: { borderColor: '#7fd1ba', backgroundColor: '#f0faf6' },
-  openAiAuthAccountCurrentBadge: { flexShrink: 0, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, backgroundColor: COLORS.paleGreen, borderWidth: 1, borderColor: '#bde8d8' },
-  openAiAuthAccountCurrentText: { color: '#128368', fontSize: 11, fontWeight: '900' },
-  accountCard: { minHeight: 102, flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: COLORS.card, borderColor: COLORS.border, borderWidth: 1, borderRadius: 16, paddingVertical: 14, paddingLeft: 16, paddingRight: 14, marginBottom: 12, shadowColor: '#456152', shadowOpacity: 0.04, shadowRadius: 8, elevation: 1 },
-  accountCardPressed: { backgroundColor: '#f2f8f4', borderColor: '#bcd7c5' },
+  openAiAuthAccountCardCurrent: { borderColor: color('#7fd1ba', 'border'), backgroundColor: color('#f0faf6', 'canvas') },
+  openAiAuthAccountCurrentBadge: { flexShrink: 0, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, backgroundColor: color(COLORS.paleGreen, 'accentSoft'), borderWidth: 1, borderColor: color('#bde8d8', 'border') },
+  openAiAuthAccountCurrentText: { color: color('#128368', 'accent'), fontSize: 11, fontWeight: '900' },
+  accountCard: { minHeight: 102, flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: color(COLORS.card, 'surface'), borderColor: color(COLORS.border, 'border'), borderWidth: 1, borderRadius: 16, paddingVertical: 14, paddingLeft: 16, paddingRight: 14, marginBottom: 12, shadowColor: '#456152', shadowOpacity: 0.04, shadowRadius: 8, elevation: 1 },
+  accountCardPressed: { backgroundColor: color('#f2f8f4', 'canvas'), borderColor: color('#bcd7c5', 'border') },
   compactAccountContent: { flex: 1, minWidth: 0, justifyContent: 'center' },
   compactAccountHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  compactPlanBadge: { flexShrink: 0, maxWidth: 86, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: COLORS.paleGreen, borderWidth: 1, borderColor: '#bde8d8' },
-  compactPlanText: { color: '#128368', fontSize: 11, fontWeight: '800' },
-  compactAccountEmail: { flex: 1, minWidth: 0, color: COLORS.ink, fontWeight: '800', fontSize: 15 },
+  compactPlanBadge: { flexShrink: 0, maxWidth: 86, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: color(COLORS.paleGreen, 'accentSoft'), borderWidth: 1, borderColor: color('#bde8d8', 'border') },
+  compactPlanText: { color: color('#128368', 'accent'), fontSize: 11, fontWeight: '800' },
+  compactAccountEmail: { flex: 1, minWidth: 0, color: color(COLORS.ink, 'ink'), fontWeight: '800', fontSize: 15 },
   compactUsageRow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
-  compactProgressTrack: { flex: 1, height: 7, borderRadius: 10, overflow: 'hidden', backgroundColor: '#dbe8e0' },
+  compactProgressTrack: { flex: 1, height: 7, borderRadius: 10, overflow: 'hidden', backgroundColor: color('#dbe8e0', 'elevated') },
   compactRemaining: { width: 38, textAlign: 'right', fontWeight: '800', fontSize: 12 },
-  compactUsageUnavailable: { width: 38, color: COLORS.muted, textAlign: 'right', fontSize: 12 },
-  compactResetText: { color: COLORS.muted, fontSize: 11, marginTop: 8 },
+  compactUsageUnavailable: { width: 38, color: color(COLORS.muted, 'muted'), textAlign: 'right', fontSize: 12 },
+  compactResetText: { color: color(COLORS.muted, 'muted'), fontSize: 11, marginTop: 8 },
   progressFill: { height: '100%', borderRadius: 10 },
   switchDeviceScroll: { maxHeight: 440, marginBottom: 12 },
-  switchDeviceRow: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 11, marginBottom: 10 },
-  switchDeviceRowCurrent: { borderColor: '#8fdccf', backgroundColor: COLORS.paleBlue },
+  switchDeviceRow: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderColor: color(COLORS.border, 'border'), borderRadius: 14, backgroundColor: color('#fff', 'surface'), paddingHorizontal: 14, paddingVertical: 11, marginBottom: 10 },
+  switchDeviceRowCurrent: { borderColor: color('#8fdccf', 'border'), backgroundColor: color(COLORS.paleBlue, 'infoSoft') },
   switchDeviceRowDisabled: { opacity: 0.58 },
   deviceStatusDot: { width: 9, height: 9, borderRadius: 5 },
   deviceOnline: { backgroundColor: '#32d19b' },
-  deviceOffline: { backgroundColor: '#a8b2ac' },
+  deviceOffline: { backgroundColor: color('#a8b2ac', 'elevated') },
   switchDeviceInfo: { flex: 1, minWidth: 0 },
-  switchDeviceName: { color: COLORS.ink, fontSize: 14, fontWeight: '800' },
-  switchDeviceMeta: { color: COLORS.muted, fontSize: 11, marginTop: 4 },
-  switchDeviceAction: { minWidth: 52, height: 30, borderRadius: 8, backgroundColor: COLORS.paleBlue, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
-  switchDeviceActionCurrent: { backgroundColor: '#c7eee8' },
-  switchDeviceActionText: { color: '#168da2', fontSize: 12, fontWeight: '800' },
-  switchDeviceActionTextCurrent: { color: '#14806f' },
-  switchDeviceEmpty: { minHeight: 150, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, backgroundColor: COLORS.canvas, padding: 20 },
-  switchDeviceEmptyTitle: { color: COLORS.ink, fontSize: 16, fontWeight: '800' },
-  switchDeviceEmptyText: { color: COLORS.muted, fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 7 },
-  settingsTitle: { color: COLORS.ink, fontSize: 28, fontWeight: '800' }, settingsSubtitle: { color: COLORS.muted, fontSize: 13, marginTop: 4 }, sectionLabel: { color: COLORS.muted, fontSize: 13, fontWeight: '700', marginLeft: 3, marginBottom: 9, marginTop: 2 },
-  bottomNavigation: { flexDirection: 'row', backgroundColor: COLORS.card, borderTopWidth: 1, borderTopColor: COLORS.border, shadowColor: '#314c3d', shadowOpacity: 0.08, shadowRadius: 8, elevation: 10 }, navItem: { flex: 1, minHeight: 58, alignItems: 'center', justifyContent: 'center', gap: 2 }, navText: { color: '#7b8c82', fontSize: 11, fontWeight: '700' }, navTextActive: { color: COLORS.green },
-});
+  switchDeviceName: { color: color(COLORS.ink, 'ink'), fontSize: 14, fontWeight: '800' },
+  switchDeviceMeta: { color: color(COLORS.muted, 'muted'), fontSize: 11, marginTop: 4 },
+  switchDeviceAction: { minWidth: 52, height: 30, borderRadius: 8, backgroundColor: color(COLORS.paleBlue, 'infoSoft'), alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  switchDeviceActionCurrent: { backgroundColor: color('#c7eee8', 'accentSoft') },
+  switchDeviceActionText: { color: color('#168da2', 'info'), fontSize: 12, fontWeight: '800' },
+  switchDeviceActionTextCurrent: { color: color('#14806f', 'accent') },
+  switchDeviceEmpty: { minHeight: 150, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: color(COLORS.border, 'border'), borderRadius: 14, backgroundColor: color(COLORS.canvas, 'canvas'), padding: 20 },
+  switchDeviceEmptyTitle: { color: color(COLORS.ink, 'ink'), fontSize: 16, fontWeight: '800' },
+  switchDeviceEmptyText: { color: color(COLORS.muted, 'muted'), fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 7 },
+  settingsTitle: { color: color(COLORS.ink, 'ink'), fontSize: 28, fontWeight: '800' }, settingsSubtitle: { color: color(COLORS.muted, 'muted'), fontSize: 13, marginTop: 4 }, sectionLabel: { color: color(COLORS.muted, 'muted'), fontSize: 13, fontWeight: '700', marginLeft: 3, marginBottom: 9, marginTop: 2 },
+  bottomNavigation: {
+    flexDirection: 'row', backgroundColor: color(COLORS.card, 'surface'), borderTopWidth: 1, borderTopColor: color(COLORS.border, 'border'),
+    shadowColor: '#314c3d', shadowOpacity: 0.08, shadowRadius: 8, elevation: 10,
+  },
+  navItem: { flex: 1, minHeight: 58, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  // Give Android room to draw every glyph instead of using the exact intrinsic text width.
+  navText: {
+    alignSelf: 'stretch', textAlign: 'center', paddingHorizontal: 4, includeFontPadding: true,
+    color: color('#7b8c82', 'muted'), fontSize: 11, lineHeight: 18, fontWeight: '700',
+  },
+  navTextActive: { color: color(COLORS.green, 'accent') },
+}));

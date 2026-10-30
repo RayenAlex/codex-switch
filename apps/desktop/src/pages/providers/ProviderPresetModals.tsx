@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { backendText } from "../../../../../shared/i18n/backend/translateBackendMessage";
 import { AutoComplete, Button, Input, Select } from "antd";
 import { Bot, RefreshCw, Save, X } from "lucide-react";
 import { fetchDeepSeekModels } from "../../api/backend";
@@ -7,12 +8,12 @@ import { CONTEXT_WINDOW_OPTIONS, modelOptions, normalizeModels, parseContextWind
 import { ProviderFastModeSupportControl } from "./ProviderFormFields";
 import type { ProviderModalProps } from "./ProviderModal";
 export function OpenAiProviderModal({ provider, saving, onClose, onSave, t }: ProviderModalProps) {
-  const [name, setName] = useState("Codex Switch");
+  const [name, setName] = useState("Remote AI");
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
 
   useEffect(() => {
-    setName(provider?.name ?? "Codex Switch");
+    setName(provider?.name ?? "Remote AI");
     setBaseUrl(provider?.baseUrl ?? "");
     setApiKey("");
   }, [provider]);
@@ -56,7 +57,7 @@ export function OpenAiProviderModal({ provider, saving, onClose, onSave, t }: Pr
         <p>{t("providers.openai.description")}</p>
         <div className="provider-form">
           <label htmlFor="openai-provider-name">{t("providers.form.name")}</label>
-          <Input id="openai-provider-name" value={name} disabled={saving} placeholder="Codex Switch"
+          <Input id="openai-provider-name" value={name} disabled={saving} placeholder="Remote AI"
             onChange={(event) => setName(event.target.value)} />
           <label htmlFor="openai-provider-base-url">{t("providers.openai.baseUrl")}</label>
           <Input id="openai-provider-base-url" value={baseUrl} disabled={saving}
@@ -126,7 +127,7 @@ export function DeepSeekProviderModal({ provider, saving, onClose, onSave, t }: 
     } catch (error) {
       if (requestId !== modelRequestId.current) return;
       setModelsError(t("providers.deepSeek.modelsFetchFailed", {
-        error: String(error).replace(/^Error:\s*/, ""),
+        error: backendText(String(error).replace(/^Error:\s*/, "")),
       }));
     } finally {
       if (requestId === modelRequestId.current) setModelsLoading(false);

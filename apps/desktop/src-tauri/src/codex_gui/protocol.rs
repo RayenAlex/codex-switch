@@ -18,10 +18,16 @@ const PAGE_SIZE: u64 = 50;
     rename_all_fields = "camelCase"
 )]
 pub(crate) enum GuiRequest {
+    CozeCatalog,
+    DownloadBrowse(super::downloads::Browse),
+    DownloadOpen(super::downloads::Open),
+    PreviewOpen(super::preview_download::Open),
     GenerateTitle(super::title_generation::TitleRequest),
+    SuggestNextPrompt(super::prediction::PredictionRequest),
     FileOpen(super::file_stream::StreamOpen),
     FileRead(super::file_stream::StreamRead),
     FileClose(super::file_stream::StreamClose),
+    FileManifest(super::file_stream::bulk::ManifestRead),
     VideoOpen(super::file_stream::StreamOpen),
     VideoRead(super::file_stream::StreamRead),
     VideoClose(super::file_stream::StreamClose),
@@ -31,10 +37,14 @@ pub(crate) enum GuiRequest {
         max_bytes: Option<u64>,
     },
     ProjectFiles(super::project_files::ProjectFilesRequest),
+    ProjectFileRead(super::project_editor::Target),
+    ProjectFileWrite(super::project_editor::Save),
+    ProjectEntryAction(super::project_entries::Request),
     ProjectDirectories {
         directory: String,
     },
     EditMessage(super::message_edit::EditRequest),
+    DeleteMessage(super::message_edit::DeleteRequest),
     ImagePreview {
         thread_id: String,
         source: String,
@@ -44,6 +54,7 @@ pub(crate) enum GuiRequest {
     },
     Models {
         cursor: Option<String>,
+        cache_only: Option<bool>,
     },
     Skills {
         cwd: Option<String>,
@@ -127,6 +138,7 @@ pub(crate) enum GuiRequest {
         messages: Vec<PromptInput>,
         model: Option<String>,
         effort: Option<String>,
+        cwd: Option<String>,
     },
     Rename {
         thread_id: String,
@@ -211,19 +223,28 @@ impl GuiRequest {
     // Only this closed set of methods is exposed to the WebView.
     pub(super) fn into_rpc(self) -> Result<(&'static str, Value)> {
         match self {
+            Self::DownloadBrowse(_) | Self::DownloadOpen(_) | Self::PreviewOpen(_) => {
+                Err(GuiError::InvalidRequest)
+            }
             Self::GenerateTitle(_) => Err(GuiError::InvalidRequest),
+            Self::SuggestNextPrompt(_) => Err(GuiError::InvalidRequest),
             Self::VideoOpen(_)
             | Self::VideoRead(_)
             | Self::VideoClose(_)
             | Self::FileOpen(_)
             | Self::FileRead(_)
-            | Self::FileClose(_) => Err(GuiError::InvalidRequest),
+            | Self::FileClose(_)
+            | Self::FileManifest(_) => Err(GuiError::InvalidRequest),
             Self::ProjectFiles(_) => Err(GuiError::InvalidRequest),
+            Self::ProjectFileRead(_) | Self::ProjectFileWrite(_) | Self::ProjectEntryAction(_) => {
+                Err(GuiError::InvalidRequest)
+            }
             Self::ProjectDirectories { .. } => Err(GuiError::InvalidRequest),
             Self::TextPreview { .. } => Err(GuiError::InvalidRequest),
-            Self::EditMessage(_) => Err(GuiError::InvalidRequest),
+            Self::EditMessage(_) | Self::DeleteMessage(_) => Err(GuiError::InvalidRequest),
             // Image previews are served locally, never forwarded as an app-server operation.
             Self::ImagePreview { .. } => Err(GuiError::InvalidRequest),
+            Self::CozeCatalog => Err(GuiError::InvalidRequest),
             Self::Plugins { cwd } => {
                 if let Some(cwd) = &cwd {
                     directory(cwd)?;
@@ -249,7 +270,10 @@ impl GuiRequest {
                     json!({"cwds": cwd.into_iter().collect::<Vec<_>>(), "forceReload": true}),
                 ))
             }
-            Self::Models { cursor } => {
+            Self::Models { cursor, cache_only } => {
+                if cache_only.unwrap_or(false) {
+                    return Err(GuiError::InvalidRequest);
+                }
                 Ok(("model/list", json!({"limit": PAGE_SIZE, "cursor": cursor})))
             }
             Self::List {
@@ -380,13 +404,14 @@ impl GuiRequest {
                 messages,
                 model,
                 effort,
+                cwd,
             } => batch_params(
                 thread_id,
                 messages,
                 TurnOptions {
                     model,
                     effort,
-                    cwd: None,
+                    cwd,
                     access,
                 },
             ),

@@ -26,42 +26,53 @@ fn discover_running_chatgpt_or_codex_path() -> Option<String> {
 
 pub(crate) fn refresh_and_get_chatgpt_launch_target<R: Runtime>(
     app: &tauri::AppHandle<R>,
-) -> Option<ChatGptLaunchTarget> {
+) -> Result<Option<ChatGptLaunchTarget>, String> {
+    if let Some(executable) = crate::chatgpt_launch::configured_executable(app)
+        .map_err(|error| error.to_string())?
+    {
+        return Ok(Some(ChatGptLaunchTarget { executable }));
+    }
     refresh_local_codex_path(app);
 
     #[cfg(target_os = "windows")]
     {
-        let saved_target = resolve_paths(app)
+        // The managed runtime resolves the official installation when no hint exists.
+        // Do not run an unbounded PowerShell package lookup before that same discovery.
+        Ok(resolve_paths(app)
             .ok()
             .and_then(|paths| read_state(&paths).local_codex_path)
             .filter(|path| Path::new(path).is_file())
             .map(|path| ChatGptLaunchTarget {
                 executable: path.into(),
-            });
-        saved_target.or_else(official_default_chatgpt_target)
+            }))
     }
 
     #[cfg(not(target_os = "windows"))]
     {
-        None
+        Ok(None)
     }
 }
 
-#[cfg(target_os = "windows")]
-fn official_default_chatgpt_target() -> Option<ChatGptLaunchTarget> {
-    windows_powershell_line(concat!(
-        "(Get-AppxPackage -Name OpenAI.Codex -ErrorAction SilentlyContinue | ",
-        "Select-Object -First 1 -ExpandProperty InstallLocation)"
-    ))
-    .and_then(|path| {
-        let target = Path::new(&path).join("app").join("ChatGPT.exe");
-        target
-            .is_file()
-            .then(|| target.as_os_str().to_string_lossy().into_owned())
-    })
-    .map(|path| ChatGptLaunchTarget {
-        executable: path.into(),
-    })
+/// Reuse automatic installation discovery without applying the user's override.
+pub(crate) fn detect_chatgpt_launch_path<R: Runtime>(app: &tauri::AppHandle<R>) -> Option<String> {
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
+    if let Some(path) = crate::dream_skin_native::detect_chatgpt_executable() {
+        return Some(path.display().to_string());
+    }
+    #[cfg(target_os = "windows")]
+    return resolve_paths(app).ok()
+        .and_then(|paths| read_state(&paths).local_codex_path)
+        .filter(|path| Path::new(path).is_file());
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = app;
+        std::env::var_os("PATH").and_then(|paths| {
+            std::env::split_paths(&paths)
+                .flat_map(|directory| [directory.join(CHATGPT_COMMAND), directory.join(LEGACY_CODEX_COMMAND)])
+                .find(|path| path.is_file())
+                .map(|path| path.display().to_string())
+        })
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -71,15 +82,8 @@ pub(crate) fn chatgpt_or_codex_is_running() -> Result<bool, String> {
 
 #[cfg(unix)]
 pub(crate) fn chatgpt_or_codex_is_running() -> Result<bool, String> {
-    for name in [CHATGPT_COMMAND, LEGACY_CODEX_COMMAND] {
-        match Command::new("pgrep").args(["-x", name]).status() {
-            Ok(status) if status.success() => return Ok(true),
-            Ok(_) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-            Err(error) => return Err(format!("检查 ChatGPT/Codex 进程失败：{error}")),
-        }
-    }
-    Ok(false)
+    Ok([CHATGPT_COMMAND, LEGACY_CODEX_COMMAND, "ChatGPT", "Codex"]
+        .into_iter().any(client_unix::is_running))
 }
 
 #[cfg(target_os = "windows")]

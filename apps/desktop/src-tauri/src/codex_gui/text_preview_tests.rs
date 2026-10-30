@@ -54,7 +54,7 @@ fn reads_full_utf8_and_empty_files() {
 }
 
 #[test]
-fn rejects_escape_binary_large_missing_and_directory_targets() {
+fn rejects_binary_large_missing_and_directory_targets() {
     let fixture = Fixture::new();
     fs::write(fixture.0.join("outside.txt"), "private").unwrap();
     fs::write(fixture.root().join("binary"), [0, 1, 2]).unwrap();
@@ -64,21 +64,14 @@ fn rejects_escape_binary_large_missing_and_directory_targets() {
         vec![b'a'; DEFAULT_TEXT_BYTES as usize + 1],
     )
     .unwrap();
-    for path in [
-        "../outside.txt",
-        "binary",
-        "invalid",
-        "large",
-        "missing",
-        ".",
-    ] {
+    for path in ["binary", "invalid", "large", "missing", "."] {
         assert!(read_text(&fixture.root(), path).is_err(), "{path}");
     }
     assert!(read_text(
         &fixture.root(),
         fixture.0.join("outside.txt").to_str().unwrap()
     )
-    .is_err());
+    .is_ok());
 }
 
 #[test]
@@ -101,10 +94,28 @@ fn rejects_urls_network_shares_device_paths_and_streams() {
 
 #[cfg(unix)]
 #[test]
-fn rejects_symlinks_outside_workspace() {
+fn previews_local_symlinks_outside_workspace() {
     let fixture = Fixture::new();
     let outside = fixture.0.join("outside.txt");
     fs::write(&outside, "private").unwrap();
     std::os::unix::fs::symlink(outside, fixture.root().join("link")).unwrap();
-    assert!(read_text(&fixture.root(), "link").is_err());
+    assert_eq!(read_text(&fixture.root(), "link").unwrap().text, "private");
+}
+
+#[test]
+fn previews_external_csv_without_recorded_file_changes() {
+    let fixture = Fixture::new();
+    let path = fixture.0.join("中车 WMS.csv");
+    let csv = "\u{feff}序号,功能\r\n1,入库\r\n";
+    fs::write(&path, csv).unwrap();
+    let thread = serde_json::json!({"cwd": fixture.root()});
+    for source in [path.to_str().unwrap(), "../中车 WMS.csv"] {
+        assert_eq!(
+            read_thread_text(&thread, source, csv.len() as u64)
+                .unwrap()
+                .text,
+            csv
+        );
+        assert!(read_thread_text(&thread, source, csv.len() as u64 - 1).is_err());
+    }
 }

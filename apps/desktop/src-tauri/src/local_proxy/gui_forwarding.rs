@@ -13,13 +13,28 @@ struct Attempt {
 pub(super) fn forward<R: Runtime>(
     mut request: GuiProxyRequest<'_, R>,
 ) -> Result<UpstreamPayload, String> {
+    if matches!(
+        header_value(
+            request.headers,
+            crate::codex_config::LOCAL_PROXY_REQUEST_PURPOSE_HEADER,
+        ),
+        Some(
+            crate::codex_config::HELP_REQUEST_PURPOSE
+                | crate::codex_config::GIT_MESSAGE_REQUEST_PURPOSE
+        )
+    ) {
+        return forward_help(request);
+    }
     let route = gui_auto_switch::prepare(request.app, request.session_id)
         .map_err(|error| error.to_string())?;
     let target = selected_target(request.app, &route.selection)?;
     let attempt = RefCell::new(Attempt { route, target });
     let started_at = Instant::now();
-    request.body = inject_system_prompts(filter_system_prompts(request.body));
-    let result = retry_upstream_request(
+    request.body =
+        gui_system_prompts::apply(request.app, request.body).map_err(|error| error.to_string())?;
+    let aggregate = matches!(attempt.borrow().target, ActiveTarget::Aggregate(_));
+    let result = retry_upstream_request_for_target(
+        aggregate,
         upstream_429_retry_timeout(request.app)?,
         || {
             let mut attempt = attempt.borrow_mut();
@@ -43,6 +58,67 @@ pub(super) fn forward<R: Runtime>(
         attach_token_usage_capture(request.app, context(&request, &target, started_at), result);
     append_proxy_diagnostic_result(request.app, diagnostic, &result, started_at.elapsed());
     result
+}
+
+fn forward_help<R: Runtime>(request: GuiProxyRequest<'_, R>) -> Result<UpstreamPayload, String> {
+    use crate::codex_gui::account_selection::{self, GuiAccountSelection};
+    let snapshot = account_selection::snapshot(request.app).map_err(|error| error.to_string())?;
+    let expected = header_value(
+        request.headers,
+        crate::codex_config::HELP_ACCOUNT_REVISION_HEADER,
+    )
+    .and_then(|value| value.parse::<u64>().ok());
+    if expected != Some(snapshot.revision) {
+        return Err("Codex account changed before the help request".into());
+    }
+    let target = help_target(request.app, &snapshot.selection, &request.body)?;
+    let account_id = match &snapshot.selection {
+        GuiAccountSelection::Account(id) => Some(id.as_str()),
+        _ => None,
+    };
+    let started_at = Instant::now();
+    let result = forward_active_request(ActiveForwardRequest {
+        app: request.app,
+        method: request.method,
+        url: request.url,
+        headers: request.headers,
+        body: request.body.clone(),
+        target: &target,
+        session_id: request.session_id,
+        account_id_override: account_id,
+    })
+    .map(|mut payload| {
+        if let Some(account) = payload.token_usage_account.as_mut() {
+            account.auto_switch_eligible = false;
+            account.concurrent_request_started_at = None;
+        }
+        payload
+    });
+    attach_token_usage_capture(request.app, context(&request, &target, started_at), result)
+}
+
+fn help_target<R: Runtime>(
+    app: &tauri::AppHandle<R>,
+    selection: &crate::codex_gui::account_selection::GuiAccountSelection,
+    body: &[u8],
+) -> Result<ActiveTarget, String> {
+    let mut target = selected_target(app, selection)?;
+    let body: Value = serde_json::from_slice(body).map_err(|error| {
+        request_error::RequestError::json(request_error::Stage::Request, &error).wire()
+    })?;
+    let model = requested_model(&body).ok_or("Missing help model")?;
+    if let ActiveTarget::Provider(provider) = &mut target {
+        if !providers::supports_explicit_model(provider, model) {
+            return Err("The selected provider does not support the help model".into());
+        }
+        provider.model = model.to_owned();
+    }
+    if let ActiveTarget::Aggregate(aggregate) = &target {
+        if aggregate.config.model != model {
+            return Err("The selected aggregate does not support the help model".into());
+        }
+    }
+    Ok(target)
 }
 
 fn context<R: Runtime>(

@@ -8,13 +8,19 @@ import { downloadFixture, fileDownloadResponse } from './file-download-fixture';
 const query = new URLSearchParams(location.search);
 const desktop = query.get('role') === 'desktop';
 const endpoint = query.get('socket')!;
+const signalDelay = Number(query.get('signalDelay') ?? 0);
 const keys = keyPair((size) => crypto.getRandomValues(new Uint8Array(size)));
 const events: unknown[] = [];
 const errors: string[] = [];
 const modes: string[] = [];
 const rtc = new Set<RTCPeerConnection>();
-let blocked = false;
+let blocked = query.has('relayOnly');
+let dropDirect = false;
+let peerCreations = 0;
 let beats = 0;
+let lastHeartbeatAt = performance.now();
+let maxHeartbeatGapMs = 0;
+const HEARTBEAT_INTERVAL_MS = 20;
 let readyCount = 0;
 let executions = 0;
 let packets = 0;
@@ -23,21 +29,32 @@ let link: ChatLink | undefined;
 let resume: { sessionId: string; resumeToken: string } | undefined;
 let socket: WebSocket | undefined;
 let pcReconnect: ReturnType<typeof setTimeout> | undefined;
-setInterval(() => { beats += 1; }, 20);
+setInterval(() => {
+  const now = performance.now();
+  maxHeartbeatGapMs = Math.max(maxHeartbeatGapMs, now - lastHeartbeatAt);
+  lastHeartbeatAt = now;
+  beats += 1;
+}, HEARTBEAT_INTERVAL_MS);
 
 function mode(value: string) { modes.push(value); document.querySelector('#status')!.textContent = value; }
 function createPeer(options: PeerOptions) {
   if (blocked) throw new Error('Test network unavailable');
-  return new RtcPeer({ ...options, channel: (channel) => options.channel({
+  return new RtcPeer({ ...options,
+    signal: (signal) => {
+      if (signalDelay) setTimeout(() => options.signal(signal), signalDelay);
+      else options.signal(signal);
+    },
+    channel: (channel) => options.channel({
     get readyState() { return channel.readyState; },
     get bufferedAmount() { return channel.bufferedAmount; },
-    send: (data) => channel.send(data), close: () => channel.close(),
+    send: (data) => { if (!dropDirect) channel.send(data); }, close: () => channel.close(),
     onOpen: (callback) => channel.onOpen(callback), onClose: (callback) => channel.onClose(callback),
     onMessage: (callback) => channel.onMessage((data) => {
       packets += 1; if (data.startsWith('[')) batches += 1; callback(data);
     }),
   }) }, () => {
     const peer = new RTCPeerConnection({ iceServers: options.iceServers });
+    peerCreations += 1;
     rtc.add(peer);
     return peer;
   });
@@ -107,7 +124,10 @@ declare global {
     hotChat: { events: unknown[]; modes: string[]; errors: string[];
       request: (text: string) => Promise<unknown>; stream: (text: string) => Promise<void>;
       blockDirect: (value: boolean) => void;
-      stats: () => { beats: number; readyCount: number; executions: number; packets: number; batches: number };
+      dropDirect: (value: boolean) => void;
+      measureHeartbeat: () => number;
+      stats: () => { beats: number; readyCount: number; executions: number; packets: number;
+        batches: number; peerCreations: number; maxHeartbeatGapMs: number };
       disconnect: () => void };
     hotDownload: (path: string) => Promise<{ size: number; hash: string; elapsedMs: number }>;
   }
@@ -115,7 +135,11 @@ declare global {
 window.hotChat = { events, modes, errors, request: (text) => phone.request('request', { text }),
   stream: async (text) => { await link?.send({ kind: 'event', event: { text } }); },
   blockDirect: (value) => { blocked = value; if (value) { for (const peer of rtc) peer.close(); rtc.clear(); } },
-  stats: () => ({ beats, readyCount, executions, packets, batches }), disconnect: () => phone.stop() };
+  dropDirect: (value) => { dropDirect = value; },
+  measureHeartbeat: () => { lastHeartbeatAt = performance.now(); maxHeartbeatGapMs = 0; return beats; },
+  stats: () => ({ beats, readyCount, executions, packets, batches, peerCreations,
+    maxHeartbeatGapMs: Math.max(maxHeartbeatGapMs, performance.now() - lastHeartbeatAt) }),
+  disconnect: () => phone.stop() };
 window.hotDownload = async (path) => {
   const started = performance.now();
   return { ...await downloadFixture(phone, path), elapsedMs: performance.now() - started };

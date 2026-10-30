@@ -1,13 +1,20 @@
 export { CHAT_POLICY_FIELDS, DEFAULT_CHAT_POLICY, parseChatPolicy, type ChatPolicy }
-  from '../../apps/admin/src/modules/chat-settings/chat-policy';
-import { DEFAULT_CHAT_POLICY, parseChatPolicy } from '../../apps/admin/src/modules/chat-settings/chat-policy';
+  from '../chat/chatPolicy';
+import { DEFAULT_CHAT_POLICY, parseChatPolicy } from '../chat/chatPolicy';
 import type { ConnectionMode } from './protocol';
+import { getInterfaceLanguage } from '../i18n/interfaceLanguage';
+import { translateText } from '../i18n/translate';
 
 export const CHAT_POLICY_MESSAGE = 'chat-policy';
 export const KIB = 1024;
 export const MIB = KIB * KIB;
 let current = { ...DEFAULT_CHAT_POLICY };
 let clientMode: ConnectionMode = 'offline';
+const policyListeners = new Set<() => void>();
+export function subscribeChatPolicy(listener: () => void) {
+  policyListeners.add(listener);
+  return () => { policyListeners.delete(listener); };
+}
 export function setChatConnectionMode(mode: ConnectionMode) { clientMode = mode; }
 export function isDirectChat(mode: ConnectionMode = clientMode) { return mode === 'direct'; }
 export function getChatPolicy(mode: ConnectionMode = clientMode) {
@@ -19,7 +26,10 @@ export function getChatPolicy(mode: ConnectionMode = clientMode) {
     fileDownloadMaxMb: Number.MAX_SAFE_INTEGER };
 }
 /** Only configuration received from the authenticated coordinator may update these limits. */
-export function setChatPolicy(value: unknown) { current = parseChatPolicy(value); }
+export function setChatPolicy(value: unknown) {
+  current = parseChatPolicy(value);
+  policyListeners.forEach(listener => listener());
+}
 export function base64Bytes(data: string) {
   const encoded = data.slice(data.indexOf(',') + 1);
   return Math.floor(encoded.length * 3 / 4) - (encoded.endsWith('==') ? 2 : Number(encoded.endsWith('=')));
@@ -43,17 +53,21 @@ export function fileUploadByteLimit(mode?: ConnectionMode) {
 export function fileUploadTotalByteLimit(mode?: ConnectionMode) {
   return Math.min(Number.MAX_SAFE_INTEGER, getChatPolicy(mode).fileUploadTotalMaxMb * MIB);
 }
+/** Upload limit or invalid attachment; lets callers show the message by type rather than by its text. */
+export class UploadPolicyError extends Error {}
 export function checkFileUploadSize(bytes: number, mode?: ConnectionMode) {
   if (bytes > fileUploadByteLimit(mode)) {
-    throw new Error(`单个文件不能超过 ${current.fileUploadMaxMb} MB，请选择较小的文件。`);
+    throw new UploadPolicyError(translateText(getInterfaceLanguage(), '单个文件不能超过 {value1} MB，请选择较小的文件。',
+      { value1: current.fileUploadMaxMb }));
   }
 }
 export class DownloadPolicyError extends Error {}
 export function fileDownloadByteLimit(mode?: ConnectionMode) {
   return Math.min(Number.MAX_SAFE_INTEGER, getChatPolicy(mode).fileDownloadMaxMb * MIB);
 }
-export function checkDownloadSize(bytes: number) {
-  if (bytes > fileDownloadByteLimit()) {
-    throw new DownloadPolicyError(`文件超过 ${current.fileDownloadMaxMb} MB，无法下载。`);
+export function checkDownloadSize(bytes: number, mode?: ConnectionMode) {
+  if (bytes > fileDownloadByteLimit(mode)) {
+    throw new DownloadPolicyError(translateText(getInterfaceLanguage(), '文件超过 {value1} MB，无法下载。',
+      { value1: current.fileDownloadMaxMb }));
   }
 }

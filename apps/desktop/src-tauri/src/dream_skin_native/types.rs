@@ -33,7 +33,7 @@ use crate::dream_skin::{
 };
 
 const NATIVE_RUNTIME_VERSION: &str = "2.0.0";
-const SKIN_VERSION: &str = "1.2.2";
+const SKIN_VERSION: &str = "1.2.3";
 const DEFAULT_CDP_PORT: u16 = 9335;
 const CDP_COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
 const CODEX_RENDERER_START_TIMEOUT: Duration = Duration::from_secs(30);
@@ -225,7 +225,6 @@ static RUNTIME_LAUNCHING: AtomicBool = AtomicBool::new(false);
 #[derive(Clone)]
 struct RuntimePaths {
     bundled_root: PathBuf,
-    codex_paths: Option<crate::storage::Paths>,
 }
 
 struct MonitorControl {

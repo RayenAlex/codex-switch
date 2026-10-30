@@ -175,6 +175,7 @@ fn official_models_endpoint_preserves_client_version_query() {
 #[test]
 fn proxy_diagnostic_entry_redacts_response_body_content() {
     let provider = ProviderProfile {
+        request_options: Default::default(),
         id: "responses".to_string(),
         kind: ProviderKind::Custom,
         name: "Responses Gateway".to_string(),
@@ -231,6 +232,7 @@ fn proxy_diagnostic_entry_redacts_response_body_content() {
 #[test]
 fn proxy_diagnostic_entry_redacts_non_responses_body_content() {
     let provider = ProviderProfile {
+        request_options: Default::default(),
         id: "chat".to_string(),
         kind: ProviderKind::Custom,
         name: "Chat Gateway".to_string(),
@@ -382,6 +384,11 @@ fn official_responses_body_applies_service_tier_to_existing_request() {
 
 #[test]
 fn proxy_service_tier_api_accepts_only_supported_values() {
+    for (name, tier) in [("default", ProxyServiceTier::Default),
+        ("priority", ProxyServiceTier::Priority), ("ultrafast", ProxyServiceTier::Ultrafast)] {
+        assert_eq!(serde_json::from_value::<ProxyServiceTier>(json!(name)).unwrap(), tier);
+    }
+    assert!(serde_json::from_value::<ProxyServiceTier>(json!("invalid")).is_err());
     assert_eq!(
         parse_proxy_service_tier(&json!({ "service_tier": "default" })),
         Ok(ProxyServiceTier::Default)
@@ -393,6 +400,10 @@ fn proxy_service_tier_api_accepts_only_supported_values() {
     assert_eq!(
         parse_proxy_service_tier(&json!({ "service_tier": "fast" })),
         Ok(ProxyServiceTier::Priority)
+    );
+    assert_eq!(
+        parse_proxy_service_tier(&json!({ "service_tier": "ultrafast" })),
+        Ok(ProxyServiceTier::Ultrafast)
     );
 }
 
@@ -419,6 +430,7 @@ fn effective_request_speed_uses_override_then_request_then_standard_default() {
 
 #[test]
 fn proxy_speed_stays_explicit_through_toggles_restarts_and_openai_login() {
+    let _guard = GUI_SPEED_TEST_LOCK.lock().unwrap();
     set_proxy_service_tier(ProxyServiceTier::default());
     assert_proxy_speed_matches_forwarded_requests("default");
     assert!(!update_proxy_service_tier_for_openai_auth(Some(
@@ -427,6 +439,8 @@ fn proxy_speed_stays_explicit_through_toggles_restarts_and_openai_login() {
 
     assert!(set_proxy_service_tier_by_name("priority"));
     assert_proxy_speed_matches_forwarded_requests("priority");
+    assert!(set_proxy_service_tier_by_name("ultrafast"));
+    assert_proxy_speed_matches_forwarded_requests("ultrafast");
     assert!(set_proxy_service_tier_by_name("default"));
     assert_proxy_speed_matches_forwarded_requests("default");
 
@@ -630,6 +644,11 @@ fn openai_provider_models_request_is_forwarded_with_api_key() {
     }
     handle.join().unwrap();
 
+    let actual: Value = serde_json::from_slice(&actual).unwrap();
+    let mut expected: Value = serde_json::from_slice(&expected).unwrap();
+    for model in expected["models"].as_array_mut().unwrap() {
+        model["use_responses_lite"] = json!(false);
+    }
     assert_eq!(actual, expected);
 }
 

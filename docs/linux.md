@@ -5,7 +5,7 @@
 
 ## 安装 Linux 包
 
-从 [Releases](https://github.com/piperhex/codex-switch/releases) 下载 Linux x64 安装包。
+从 [Releases](https://github.com/piperhex/remoteai/releases) 下载 Linux x64 安装包。
 Ubuntu 优先使用 `.deb`，无需安装 Node.js、npm 或 Rust。
 下面的 `codex-switch.deb` 代表下载的文件，请替换为实际文件名；路径中有空格时保留引号。
 
@@ -16,7 +16,7 @@ command -v csw
 ```
 
 使用 `apt install` 安装本地包可以同时处理系统依赖。安装后命令是 `csw`，通常位于 `/usr/bin/csw`。
-有桌面环境时，可从应用菜单打开 Codex Switch，或运行：
+有桌面环境时，可从应用菜单打开 Remote AI，或运行：
 
 ```bash
 csw
@@ -31,6 +31,33 @@ chmod +x "./CodexSwitch.AppImage"
 
 同样需要将文件名替换为实际名称。AppImage 若提示缺少系统库或 FUSE，可改用 `.deb` 安装。
 后面的后台服务示例使用 `.deb` 提供的 `/usr/bin/csw`。
+
+### 界面语言
+
+首次启动时，中文系统默认显示中文，其他语言环境默认显示英文。
+应用跟随桌面环境提供的系统语言；Linux 的 `LANG`、`LC_MESSAGES`、`LC_ALL` 会影响这一设置。
+也可在 **设置 / Settings → 语言 / Language** 中选择中文、英文或俄文，已保存的选择优先于系统语言。
+
+### AppImage 提示 `AppRun.wrapped: Permission denied`
+
+已确认 v1.6.17 和 v1.6.18 的 AppImage 内部启动文件缺少其他用户的执行权限，
+在保留包内文件归属的解包或沙箱环境中可能无法打开窗口。仅给外层 `.AppImage` 文件添加执行权限无法修复它。
+遇到这个错误时，Ubuntu 用户可先改用同版本的 `.deb`。
+
+需要继续使用原 AppImage 时，可以在自己的用户目录解包后启动；以下操作不需要 `sudo`：
+
+```bash
+mkdir -p "$HOME/remote-ai-appimage"
+cd "$HOME/remote-ai-appimage"
+# 将下面路径替换为下载的 AppImage 文件路径。
+chmod +x "$HOME/Downloads/CodexSwitch.AppImage"
+"$HOME/Downloads/CodexSwitch.AppImage" --appimage-extract
+chmod 755 squashfs-root/AppRun.wrapped
+./squashfs-root/AppRun
+```
+
+源码中的打包修复会在生成安装包和签名前设置正确权限，发布流程也会检查成品权限并验证窗口启动。
+这不会更改已经发布的 v1.6.17、v1.6.18 安装包。
 
 ## 无桌面服务器启动
 
@@ -55,12 +82,12 @@ xvfb-run -a dbus-run-session -- csw --headless --port=18080
 
 以下示例使用已有的 `ubuntu` 用户，家目录为 `/home/ubuntu`。
 如果你的用户名不同，请同步修改 `User`、`Group`、`WorkingDirectory` 和 `HOME`。
-先退出同一用户启动的其他 Codex Switch 实例，避免单实例机制把启动请求交给已有进程。
+先退出同一用户启动的其他 Remote AI 实例，避免单实例机制把启动请求交给已有进程。
 
 ```bash
 sudo tee /etc/systemd/system/codex-switch.service >/dev/null <<'EOF'
 [Unit]
-Description=Codex Switch web interface
+Description=Remote AI web interface
 Wants=network-online.target
 After=network-online.target
 StartLimitIntervalSec=120
@@ -127,7 +154,7 @@ ssh -N -L 18080:127.0.0.1:18080 ubuntu@SERVER_IP
 
 ### 方式二：监听 `0.0.0.0`
 
-可以先通过 SSH 隧道进入网页，在 **设置 → 网页版 Codex Switch 监听端口** 中保存端口，
+可以先通过 SSH 隧道进入网页，在 **设置 → 网页版 Remote AI 监听端口** 中保存端口，
 开启“监听局域网”，再点击“复制网页版访问密钥”。也可在服务器上直接配置：
 
 1. 停止后台服务。
@@ -184,7 +211,7 @@ PY
 
 进入网页后，可导入账号 JSON，或在“三方模型及中转”中配置服务商地址、密钥和模型。
 无桌面服务器优先使用浏览器上传账号文件；需要本机窗口或桌面应用的操作仍取决于服务器环境。
-网页中的配置和任务作用于运行 Codex Switch 的服务器。
+网页中的配置和任务作用于运行 Remote AI 的服务器。
 
 ### 开启代理的局域网监听
 
@@ -220,7 +247,7 @@ curl -H "Authorization: Bearer $PROXY_API_KEY" \
 unset PROXY_API_KEY
 ```
 
-### Codex Switch 的出站网络代理
+### Remote AI 的出站网络代理
 
 如果服务器通过 Clash 等代理访问上游，在 **设置 → 网络代理** 中启用并填写其实际监听地址。
 例如 Clash 的 HTTP 代理确实运行在服务器 `127.0.0.1:7890` 时：

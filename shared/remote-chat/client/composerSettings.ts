@@ -1,4 +1,4 @@
-import { COMPOSER_FIELDS, DEFAULT_COMPOSER, composerPatch, type ComposerModelsResponse,
+import { COMPOSER_FIELDS, DEFAULT_COMPOSER, MODEL_CATALOG_ERROR, composerPatch, type ComposerModelsResponse,
   type ComposerSettings, type ComposerSnapshot } from '../composer';
 import { resolveModelSelection } from '../../../apps/desktop/src/pages/codexGui/modelSelection';
 import type { ChatState } from './types';
@@ -15,14 +15,19 @@ interface Entry {
   saving?: Promise<void>;
   reading?: Promise<void>;
   failed: string;
+  readFailed: boolean;
+  catalogUnavailable: boolean;
 }
+const MODEL_RETRY_MS = 3000;
 const SAVE_ERROR = '设置尚未保存，请重试。';
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : SAVE_ERROR;
 
 /** Retains edits in their original conversation, including across navigation and reconnects. */
 export class RemoteComposerSettings {
   private scoped = false;
+  private retryTimer?: ReturnType<typeof setTimeout>;
   private generation = 0;
+  private refreshing?: Promise<void>;
   private entries = new Map<string | null, Entry>();
   constructor(private readonly host: Host) {}
 
@@ -30,7 +35,7 @@ export class RemoteComposerSettings {
   private entry(threadId: string | null) {
     let entry = this.entries.get(threadId);
     if (!entry) {
-      entry = { pending: {}, failed: '' };
+      entry = { pending: {}, failed: '', readFailed: false, catalogUnavailable: false };
       this.entries.set(threadId, entry);
     }
     return entry;
@@ -38,6 +43,9 @@ export class RemoteComposerSettings {
 
   reset() {
     this.generation++;
+    this.refreshing = undefined;
+    clearTimeout(this.retryTimer);
+    this.retryTimer = undefined;
     for (const entry of this.entries.values()) {
       if (entry.remote) entry.remote = { ...entry.remote, revision: -1 };
       entry.reading = undefined;
@@ -48,9 +56,9 @@ export class RemoteComposerSettings {
     const entry = this.entry(this.scope());
     this.host.update({ ...(entry.remote ? { models: entry.remote.models } : {}),
       settings: { ...(entry.remote?.settings ?? DEFAULT_COMPOSER), ...entry.pending },
-      settingsBusy: Boolean(entry.reading || entry.saving || entry.failed
-        || Object.keys(entry.pending).length || (this.scoped && !entry.remote)),
-      settingsError: entry.failed });
+      settingsBusy: Boolean(entry.remote?.syncing || entry.reading || entry.saving || entry.failed || entry.readFailed
+        || entry.catalogUnavailable || Object.keys(entry.pending).length || (this.scoped && !entry.remote)),
+      settingsError: entry.failed || (entry.catalogUnavailable ? MODEL_CATALOG_ERROR : '') });
   }
 
   receive(snapshot: ComposerSnapshot) {
@@ -61,17 +69,32 @@ export class RemoteComposerSettings {
     const id = this.scoped ? snapshot.threadId! : null;
     const entry = this.entry(id);
     if (snapshot.revision < (entry.remote?.revision ?? -1)) return;
-    entry.remote = snapshot;
+    const wasSyncing = entry.remote?.syncing;
+    entry.catalogUnavailable = !snapshot.models.length;
+    // Older hosts may publish empty results as success. Keep the display, but wait for a valid catalog before saving.
+    entry.remote = entry.catalogUnavailable && entry.remote?.models.length
+      ? { ...snapshot, models: entry.remote.models, settings: entry.remote.settings } : snapshot;
+    if (!entry.catalogUnavailable && !snapshot.syncing && entry.readFailed) {
+      entry.failed = '';
+      entry.readFailed = false;
+    }
     if (id === this.scope()) this.show();
+    if (!entry.catalogUnavailable && (wasSyncing || Object.keys(entry.pending).length)) {
+      queueMicrotask(() => this.flush());
+    }
   }
 
-  async load(): Promise<void> {
+  async load(refresh = false): Promise<void> {
     const threadId = this.host.snapshot().selected?.id ?? null;
     const entry = this.entry(this.scope());
     if (entry.reading) return entry.reading;
     const generation = this.generation;
-    const reading = this.read(threadId, generation).catch((error: unknown) => {
-      if (generation === this.generation) entry.failed = errorMessage(error);
+    const reading = this.read(threadId, generation, refresh).catch((error: unknown) => {
+      if (generation === this.generation) {
+        entry.failed = errorMessage(error);
+        entry.readFailed = true;
+        this.scheduleReadRetry();
+      }
       throw error;
     }).finally(() => {
       if (entry.reading === reading) entry.reading = undefined;
@@ -82,8 +105,22 @@ export class RemoteComposerSettings {
     return reading;
   }
 
-  private async read(threadId: string | null, generation: number) {
-    const result = await this.host.request<ComposerModelsResponse>({ operation: 'models', threadId });
+  /** Wait for an in-flight poll, then discover once; subsequent polls remain passive. */
+  refreshModels = (): Promise<void> => {
+    if (this.refreshing) return this.refreshing;
+    if (!this.host.ready()) return Promise.resolve();
+    const generation = this.generation;
+    clearTimeout(this.retryTimer);
+    this.retryTimer = undefined;
+    const refreshing = Promise.resolve(this.entry(this.scope()).reading).catch(() => undefined).then(() => {
+      if (generation === this.generation && this.host.ready()) return this.load(true);
+    }).finally(() => { if (this.refreshing === refreshing) this.refreshing = undefined; });
+    return this.refreshing = refreshing;
+  };
+
+  private async read(threadId: string | null, generation: number, refresh: boolean) {
+    const result = await this.host.request<ComposerModelsResponse>({
+      operation: refresh ? 'modelsRefresh' : 'models', threadId });
     if (generation !== this.generation) return;
     const wasScoped = this.scoped;
     if (result.composer) {
@@ -97,12 +134,15 @@ export class RemoteComposerSettings {
       this.receive({ models: result.data, revision: 0,
         settings: { ...this.host.snapshot().settings, ...selection } });
     }
-    this.entry(this.scoped ? threadId : null).failed = '';
+    const entry = this.entry(this.scoped ? threadId : null);
+    entry.failed = '';
+    entry.readFailed = false;
+    if (entry.catalogUnavailable) this.scheduleReadRetry();
     // Navigation can finish before the initial host-capability response arrives.
     if (!wasScoped && this.scoped && threadId !== (this.host.snapshot().selected?.id ?? null)) void this.select();
   }
 
-  select(inherit?: Pick<ComposerSettings, 'model' | 'effort'>): Promise<void> {
+  select(inherit?: Pick<ComposerSettings, 'model' | 'effort' | 'access'>): Promise<void> {
     if (!this.scoped) return Promise.resolve();
     if (inherit) this.set(inherit);
     this.show();
@@ -120,19 +160,24 @@ export class RemoteComposerSettings {
     entry.pending = { ...entry.pending, ...patch };
     entry.failed = '';
     this.show();
+    if (entry.catalogUnavailable) {
+      void this.load().catch(() => { /* The failed read is shown by the settings panel. */ });
+      return;
+    }
     this.flush();
   }
 
   flush() {
     for (const [id, entry] of this.entries) {
-      if (!entry.failed) void this.save(id);
+      if (!entry.failed && !entry.readFailed) void this.save(id);
     }
   }
 
   private async save(id: string | null): Promise<void> {
     const entry = this.entry(id);
     if (entry.saving) return entry.saving;
-    if (!this.host.ready() || entry.reading || !Object.keys(entry.pending).length) return;
+    if (!this.host.ready() || entry.reading || entry.remote?.syncing || entry.catalogUnavailable
+      || !Object.keys(entry.pending).length) return;
     const generation = this.generation;
     const patch = { ...entry.pending };
     const saving = this.write({ id, patch, generation }).catch((error: unknown) => {
@@ -153,7 +198,8 @@ export class RemoteComposerSettings {
     const snapshot = await this.host.request<ComposerSnapshot>({ operation: 'composerSet', settings: patch,
       ...(this.scoped ? { threadId: id } : {}) });
     if (generation !== this.generation) return;
-    if (!snapshot?.settings || !Number.isSafeInteger(snapshot.revision)
+    if (!snapshot?.settings || !Array.isArray(snapshot.models) || !snapshot.models.length
+      || !Number.isSafeInteger(snapshot.revision)
       || (this.scoped && snapshot.threadId !== id)) throw new Error('电脑尚未确认设置，请重试。');
     const entry = this.entry(id);
     for (const field of COMPOSER_FIELDS) {
@@ -167,13 +213,30 @@ export class RemoteComposerSettings {
     if (!this.scoped) return;
     const entry = this.entry(threadId);
     entry.remote = { threadId, settings, models: this.host.snapshot().models, revision: -1 };
-    entry.pending = { model: settings.model, effort: settings.effort };
+    entry.pending = { model: settings.model, effort: settings.effort, access: settings.access };
     await this.save(threadId);
     if (Object.keys(entry.pending).length) throw new Error(entry.failed || SAVE_ERROR);
   }
 
+  private scheduleReadRetry() {
+    if (this.retryTimer) return;
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = undefined;
+      const entry = this.entry(this.scope());
+      if (!this.host.ready() || (!entry.readFailed && !entry.catalogUnavailable)) return;
+      void this.load().catch(() => undefined);
+    }, MODEL_RETRY_MS);
+  }
+
   retry() {
-    for (const entry of this.entries.values()) entry.failed = '';
+    const entry = this.entry(this.scope());
+    if (entry.readFailed || entry.catalogUnavailable) {
+      this.scheduleReadRetry();
+      return;
+    }
+    for (const item of this.entries.values()) {
+      if (!item.readFailed) item.failed = '';
+    }
     this.flush();
   }
 }

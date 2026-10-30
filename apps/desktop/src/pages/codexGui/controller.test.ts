@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GuiEvent, Request, Thread } from "./types";
 import { GuiController } from "./controller";
 import { guiApi } from "./api";
+import { testModels } from "./testModels";
 
 vi.mock("./api", () => ({ guiApi: { connect: vi.fn(), request: vi.fn(), subscribe: vi.fn(), respond: vi.fn() } }));
 const thread: Thread = { id: "one", cwd: "D:/project", preview: "hello", updatedAt: 1, turns: [] };
@@ -17,12 +18,30 @@ beforeEach(() => {
     return vi.fn<() => void>();
   });
   vi.mocked(guiApi.request).mockImplementation(async (request) => {
-    if (request.operation === "list" || request.operation === "models") return { data: [], nextCursor: null };
+    if (request.operation === "models") return { data: testModels, nextCursor: null };
+    if (request.operation === "list") return { data: [], nextCursor: null };
     return { thread };
   });
 });
 
 describe("Codex GUI controller", () => {
+  it("permits chatting while unattended setup waits and after it fails", async () => {
+    const controller = new GuiController();
+    await controller.connect();
+    receive({ method: "computerUse/setup", params: { computerUseSetup: "ready" } });
+    receive({ method: "unattended/setup", params: { unattendedSetup: "installing" } });
+    const original = vi.mocked(guiApi.request).getMockImplementation()!;
+    vi.mocked(guiApi.request).mockImplementation(async (request) => request.operation === "send"
+      ? { turn: { id: "reply", status: "completed", items: [] } } : original(request));
+    expect(await controller.send("continue during setup", [])).toBe(true);
+    receive({ method: "unattended/setup", params: { unattendedSetup: "failed" } });
+    expect(controller.getSnapshot()).toMatchObject({ connection: "ready", computerUseSetup: "ready",
+      unattendedSetup: "failed", error: "", approvals: [] });
+    expect(await controller.send("continue after cancellation", [])).toBe(true);
+    expect(guiApi.connect).toHaveBeenCalledTimes(1);
+    controller.dispose();
+  });
+
   it("keeps setup single-flight and permits chatting after assistant installation fails", async () => {
     const controller = new GuiController();
     let finish!: (events: GuiEvent[]) => void;
@@ -33,7 +52,7 @@ describe("Codex GUI controller", () => {
     const connection = controller.connect();
     await Promise.resolve();
     expect(controller.connect()).toBe(connection);
-    expect(controller.getSnapshot().computerUseSetup).toBe("installing");
+    await vi.waitFor(() => expect(controller.getSnapshot().computerUseSetup).toBe("installing"));
     expect(await controller.send("wait", [])).toBe(false);
     receive({ method: "computerUse/setup", params: { computerUseSetup: "failed" } });
     finish([]);
@@ -102,6 +121,23 @@ describe("Codex GUI controller", () => {
     restored.newConversation(); restored.dispose();
     expect(new GuiController().getSnapshot().selected).toBeNull();
   });
+
+  it("creates and sends a new conversation with the last permission after reopening", async () => {
+    const previous = new GuiController();
+    await previous.connect(); await previous.select(thread.id);
+    previous.settings({ access: "danger-full-access" }); previous.dispose();
+    const controller = new GuiController();
+    await controller.connect(); controller.newConversation();
+    expect(controller.getSnapshot().settings.access).toBe("danger-full-access");
+    const original = vi.mocked(guiApi.request).getMockImplementation()!;
+    vi.mocked(guiApi.request).mockImplementation(async (request) => request.operation === "send"
+      ? { turn: { id: "reply", status: "completed", items: [] } } : original(request));
+    expect(await controller.send("hello", [])).toBe(true);
+    for (const operation of ["start", "send"]) {
+      expect(guiApi.request).toHaveBeenCalledWith(expect.objectContaining({ operation, access: "danger-full-access" }));
+    }
+    controller.dispose();
+  });
   it("reloads a live conversation after a browser connection gap", async () => {
     const controller = new GuiController();
     await controller.connect();
@@ -114,6 +150,19 @@ describe("Codex GUI controller", () => {
     receive({ method: "connection/restored", params: {} });
     await controller.connect();
     expect(guiApi.request).toHaveBeenCalledWith({ operation: "read", threadId: thread.id });
+    expect(controller.getSnapshot().connection).toBe("ready");
+    controller.dispose();
+  });
+
+  it("refreshes after an automatic CLI update while reusing the replacement connection", async () => {
+    const controller = new GuiController();
+    await controller.connect();
+    await controller.select(thread.id);
+    vi.mocked(guiApi.connect).mockClear();
+    receive({ method: "connection/updated", params: {} });
+    await controller.connect();
+    expect(guiApi.connect).toHaveBeenCalledExactlyOnceWith({ reuseExisting: true });
+    expect(controller.getSnapshot().selected).toBe(thread.id);
     expect(controller.getSnapshot().connection).toBe("ready");
     controller.dispose();
   });

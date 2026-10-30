@@ -1,0 +1,8 @@
+@import (reference) '../../../../shared/chat/threadScrollbar.less';
+
+.chat-sidebar.chat-sidebar-resizable { flex: 0 0 auto; width: 236px; }
+.chat-sidebar .chat-thread-list, .chat-drawer .chat-thread-list {
+  .thread-scrollbar(var(--chat-muted));
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}

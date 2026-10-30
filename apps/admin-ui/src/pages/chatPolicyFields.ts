@@ -3,6 +3,33 @@ type Copy = [string, string];
 export interface PolicyField { key: keyof typeof CHAT_POLICY_FIELDS; label: Copy; hint: Copy; unit: Copy }
 export interface PolicySection { key: string; title: Copy; hint: Copy; fields: PolicyField[] }
 export const POLICY_SECTIONS: PolicySection[] = [
+  { key: 'connections', title: ['聊天连接', 'Chat connections'],
+    hint: ['保存后对新连接生效，已有连接不受影响。',
+      'Changes apply to new connections after saving. Existing connections stay active.'], fields: [
+    { key: 'chatSessionLimit', label: ['每台电脑的聊天连接上限', 'Chat connection limit per computer'],
+      hint: ['默认 5 个，至少 1 个。同一设备打开多个聊天连接会分别计数。',
+        'Default: 5; minimum: 1. Multiple chat connections from the same device count separately.'],
+      unit: ['个', 'connections'] },
+  ] },
+  { key: 'p2p', title: ['P2P 连接', 'P2P connection'],
+    hint: ['保存后立即应用到在线客户端。时间以秒为单位，数值不设上限。',
+      'Changes apply to connected clients immediately. Times are in seconds, with no upper cap.'], fields: [
+    { key: 'p2pNegotiationTimeoutSeconds', label: ['直连协商等待时间', 'Direct connection timeout'],
+      hint: ['每次尝试直连的最长等待时间，期间可通过中转聊天',
+        'How long each direct connection attempt can take while chat continues over relay'], unit: ['秒', 's'] },
+    { key: 'p2pRetryIntervalSeconds', label: ['直连重试间隔', 'Direct connection retry interval'],
+      hint: ['两次直连尝试之间至少间隔多久', 'Minimum time between direct connection attempts'], unit: ['秒', 's'] },
+    { key: 'p2pDisconnectGraceSeconds', label: ['断线恢复等待时间', 'Connection recovery grace period'],
+      hint: ['直连短暂失去响应后，等待恢复多久再重新连接',
+        'How long to wait for an unresponsive direct connection to recover before reconnecting'], unit: ['秒', 's'] },
+  ] },
+  { key: 'relayConnection', title: ['中继连接', 'Relay connection'],
+    hint: ['保存后立即应用到在线客户端。', 'Changes apply to connected clients immediately.'], fields: [
+    { key: 'relayHeartbeatTimeoutSeconds', label: ['无响应等待时间', 'Response timeout'],
+      hint: ['默认 30 秒。中继连接持续无响应超过此时间后自动重连，至少 1 秒。',
+        'Default: 30 seconds; minimum: 1. Reconnect when the relay remains unresponsive for this long.'],
+      unit: ['秒', 's'] },
+  ] },
   { key: 'relay', title: ['Relay 传输', 'Relay transfer'],
     hint: ['默认不限。填 -1 表示不限，填正整数可设置每个连接的上限。',
       'Unlimited by default. Enter -1 for no limit, or a positive whole number for each connection.'], fields: [
@@ -47,5 +74,17 @@ export const POLICY_SECTIONS: PolicySection[] = [
       hint: ['允许查看的最大文本文件大小', 'Maximum text file size for preview'], unit: ['MB', 'MB'] },
     { key: 'fileDownloadMaxMb', label: ['文件下载上限', 'File download limit'],
       hint: ['允许下载的最大文件大小', 'Maximum file size for download'], unit: ['MB', 'MB'] },
+  ] },
+  { key: 'downloads', title: ['文件下载', 'File downloads'],
+    hint: ['选择下载方式，并调整兼容模式的传输数量。',
+      'Choose the download mode and adjust simultaneous transfers in compatibility mode.'], fields: [
+    { key: 'fileBulkEnabled', label: ['文件校验下载（试用）', 'Verified downloads (preview)'],
+      hint: ['开启后，新下载可使用文件校验和断点恢复。关闭后，正在使用此方式的下载会暂停。',
+        'New downloads can use file verification and resume. Turning this off pauses downloads using this mode.'],
+      unit: ['', ''] },
+    { key: 'fileDownloadWindowSize', label: ['同时传输分块数', 'Concurrent download chunks'],
+      hint: ['仅用于兼容模式，保存后对当前下载生效。每个文件默认 5 块，可设为 1–12 块。',
+        'Compatibility mode only; applies to current downloads after saving. Default: 5 chunks per file; range: 1–12.'],
+      unit: ['块', 'chunks'] },
   ] },
 ];

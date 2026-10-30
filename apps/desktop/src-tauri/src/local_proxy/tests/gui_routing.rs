@@ -2,6 +2,7 @@
 fn gui_provider_request_keeps_its_account_while_shared_switches_and_polling_continue() {
     use crate::storage::write_json_atomic;
     let app = breakdown_responsiveness_test_app();
+    app.manage(crate::codex_gui::web::WebEventState::default());
     let paths = resolve_paths(app.handle()).unwrap();
     let root = paths.state_file.parent().unwrap().to_path_buf();
     let server = Server::http("127.0.0.1:0").unwrap();
@@ -25,12 +26,13 @@ fn gui_provider_request_keeps_its_account_while_shared_switches_and_polling_cont
     };
     write_state(&paths, &shared).unwrap();
     let session_id = format!("gui-routing-{}", uuid::Uuid::new_v4());
-    let headers = vec![("thread-id".into(), session_id.clone())];
+    let mut headers = lite_test_headers();
+    headers.push(("thread-id".into(), session_id.clone()));
     let guard = begin_proxy_session_request(&headers, None, br#"{"input":"hello"}"#, None);
     let (received, incoming) = mpsc::channel();
     let (release, released) = mpsc::channel();
     let upstream = thread::spawn(move || {
-        let request = server
+        let mut request = server
             .recv_timeout(Duration::from_secs(5))
             .unwrap()
             .unwrap();
@@ -40,6 +42,8 @@ fn gui_provider_request_keeps_its_account_while_shared_switches_and_polling_cont
             .find(|header| header.field.equiv("Authorization"))
             .unwrap();
         assert_eq!(auth.value.as_str(), "Bearer gui-credential");
+        let body: Value = serde_json::from_reader(request.as_reader()).unwrap();
+        assert_eq!(body["reasoning"]["context"], "all_turns");
         received.send(()).unwrap();
         released.recv_timeout(Duration::from_secs(5)).unwrap();
         request
@@ -61,11 +65,20 @@ fn gui_provider_request_keeps_its_account_while_shared_switches_and_polling_cont
         .unwrap()
     });
     incoming.recv_timeout(Duration::from_secs(5)).unwrap();
+    // The remote command shares this service: validate and publish while a request is in flight.
+    use crate::codex_gui::account_selection::{self, GuiAccountSelection};
+    let selected = GuiAccountSelection::Provider("gui-provider".into());
+    assert_eq!(account_selection::switch_account(app.handle(), selected.clone()).unwrap(), selected);
+    assert!(account_selection::switch_account(
+        app.handle(), GuiAccountSelection::Provider("../missing".into()),
+    ).is_err());
+    assert_eq!(read_state(&paths).active_provider_id, shared.active_provider_id);
     shared.active_provider_id = Some("another-shared-provider".into());
     write_state(&paths, &shared).unwrap();
     tauri::async_runtime::block_on(gui_context::record_usage(&json!({
         "threadId": session_id,
-        "tokenUsage": {"modelContextWindow": 285_000, "last": {"totalTokens": 15_000}}
+        "tokenUsage": {"modelContextWindow": 285_000, "contextTokens": 247_017,
+            "last": {"totalTokens": 206_357}}
     })));
     for _ in 0..3 {
         assert!(active_proxy_session_ids().unwrap().contains(&session_id));
@@ -77,9 +90,14 @@ fn gui_provider_request_keeps_its_account_while_shared_switches_and_polling_cont
         );
         let session = proxy_sessions().lock().unwrap()[&session_id].metadata_snapshot();
         assert_eq!(session.gui_context.unwrap().capacity, Some(285_000));
-        assert_eq!(session.context_tokens, Some(15_000));
+        assert_eq!(session.context_tokens, Some(247_017));
         assert_eq!(session.active_requests, 1);
     }
+    tauri::async_runtime::block_on(gui_context::record_usage(&json!({
+        "threadId": session_id,
+        "tokenUsage": {"modelContextWindow": 285_000, "last": {"totalTokens": 15_000}}
+    })));
+    assert_eq!(proxy_sessions().lock().unwrap()[&session_id].context_tokens, Some(15_000));
     release.send(()).unwrap();
     let payload = worker.join().unwrap();
     assert_eq!(payload.status, 200);

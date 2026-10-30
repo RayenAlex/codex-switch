@@ -1,13 +1,7 @@
-import { messages } from './messages';
 import { getLanguage } from './language';
+import { translateText, type TranslationValues } from '../../../../shared/i18n/translate';
 
 export { getLanguage, getLocale, setLanguage, useLanguage } from './language';
+export { LANGUAGE_OPTIONS, languageLabel } from '../../../../shared/i18n/language';
 export type { Language } from './language';
-type Values = Record<string, string | number>;
-
-/** Translate application copy only; conversation content and user data must stay verbatim. */
-export function t(source: string, values: Values = {}): string {
-  const template = getLanguage() === 'en' && Object.hasOwn(messages, source) ? messages[source] : source;
-  return template.replace(/\{(\w+)\}/g, (placeholder, key: string) =>
-    Object.prototype.hasOwnProperty.call(values, key) ? String(values[key]) : placeholder);
-}
+export const t = (source: string, values?: TranslationValues): string => translateText(getLanguage(), source, values);

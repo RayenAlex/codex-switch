@@ -12,10 +12,46 @@ use tauri::Runtime;
 use tungstenite::{stream::MaybeTlsStream, Error as WebSocketError, Message, WebSocket};
 
 use crate::cloud::RemoteControlConfig;
+use crate::codex_gui::account_selection::{self, GuiAccountSelection};
+
+mod account_usage;
+mod app_update;
 
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 enum ServerMessage {
+    AccountUsage {
+        #[serde(rename = "commandId")]
+        command_id: String,
+        #[serde(rename = "accountId")]
+        account_id: String,
+        action: account_usage::UsageAction,
+    },
+    UpdatePeerOffer(crate::update_peers::Offer),
+    UpdatePeerOffers(crate::update_peers::Offers),
+    UpdatePeerUnavailable {
+        #[serde(rename = "requestId")]
+        request_id: String,
+    },
+    UpdatePeerCancel {
+        #[serde(rename = "sessionId")]
+        session_id: String,
+    },
+    RemoteCommand {
+        #[serde(rename = "commandId")]
+        command_id: String,
+        request: crate::remote_command::CommandRequest,
+    },
+    RemoteCommandCancel {
+        #[serde(rename = "commandId")]
+        command_id: String,
+    },
+    AppUpdate {
+        #[serde(rename = "commandId")]
+        command_id: String,
+        action: app_update::UpdateAction,
+        version: Option<String>,
+    },
     Authenticated {
         #[serde(rename = "deviceId")]
         _device_id: String,
@@ -47,29 +83,73 @@ enum ServerMessage {
         #[serde(rename = "commandId")]
         command_id: String,
     },
+    SwitchGuiAccount {
+        #[serde(rename = "commandId")]
+        command_id: String,
+        #[serde(rename = "accountId")]
+        account_id: String,
+    },
+    SwitchGuiProvider {
+        #[serde(rename = "commandId")]
+        command_id: String,
+        #[serde(rename = "providerId")]
+        provider_id: String,
+    },
+    SwitchAggregate {
+        #[serde(rename = "commandId")]
+        command_id: String,
+        #[serde(rename = "aggregateId")]
+        aggregate_id: String,
+    },
+    SwitchGuiAggregate {
+        #[serde(rename = "commandId")]
+        command_id: String,
+        #[serde(rename = "aggregateId")]
+        aggregate_id: String,
+    },
 }
 
 pub(crate) fn start<R: Runtime>(app: tauri::AppHandle<R>) {
-    thread::spawn(move || loop {
-        match crate::cloud::remote_control_config(&app) {
-            Ok(Some(config)) => {
-                if let Err(error) = run_connection(&app, config) {
-                    eprintln!("remote account control disconnected: {error}");
+    thread::spawn(move || {
+        let mut update_peers = crate::update_peers::Bridge::new(&app);
+        loop {
+            match crate::cloud::remote_control_config(&app) {
+                Ok(Some(config)) => {
+                    if let Err(error) = run_connection(&app, config, &mut update_peers) {
+                        eprintln!("remote account control disconnected: {error}");
+                    }
                 }
+                Ok(None) => update_peers.signed_out(),
+                Err(error) => eprintln!("remote account control is unavailable: {error}"),
             }
-            Ok(None) => {}
-            Err(error) => eprintln!("remote account control is unavailable: {error}"),
+            update_peers.disconnected();
+            thread::sleep(Duration::from_secs(3));
         }
-        thread::sleep(Duration::from_secs(3));
     });
 }
 
 fn run_connection<R: Runtime>(
     app: &tauri::AppHandle<R>,
     config: RemoteControlConfig,
+    update_peers: &mut crate::update_peers::Bridge,
 ) -> Result<(), String> {
+    update_peers.server(&config.websocket_url);
     let (mut socket, _) = connect_remote_websocket(&config.websocket_url)?;
     set_read_timeout(socket.get_mut(), Some(Duration::from_secs(2)))?;
+    let remote_commands_enabled = crate::remote_command::host::enabled();
+    let mut capabilities = vec![
+        "provider-switch",
+        "provider-group-switch",
+        "restart-codex",
+        "gui-model-switch",
+        "aggregate-switch",
+        "gui-aggregate-switch",
+        "app-update",
+        "account-usage",
+    ];
+    if remote_commands_enabled {
+        capabilities.push("remote-command");
+    }
     socket
         .send(Message::Text(
             json!({
@@ -84,7 +164,15 @@ fn run_connection<R: Runtime>(
                 "activeProviderId": config.active_provider_id,
                 "activeProviderGroup": config.active_provider_group,
                 "localProxyRunning": config.local_proxy_running,
-                "capabilities": ["provider-switch", "provider-group-switch", "restart-codex"],
+                "guiAccountId": match &config.gui_selection {
+                    GuiAccountSelection::Account(id) => Some(id), _ => None,
+                },
+                "guiProviderId": match &config.gui_selection {
+                    GuiAccountSelection::Provider(id) => Some(id.clone()),
+                    GuiAccountSelection::Aggregate(id) => Some(crate::aggregate_api::active_id(id)),
+                    _ => None,
+                },
+                "capabilities": capabilities,
             })
             .to_string()
             .into(),
@@ -92,12 +180,56 @@ fn run_connection<R: Runtime>(
         .map_err(|error| format!("Could not authenticate WebSocket: {error}"))?;
 
     let mut last_ping = Instant::now();
+    let mut updates = app_update::UpdateBridge::new(app);
+    let mut commands = crate::remote_command::host::CommandHost::new();
+    let account_usage = account_usage::UsageHost::new();
+    update_peers.connected();
     loop {
+        for response in updates
+            .responses()
+            .into_iter()
+            .chain(commands.responses())
+            .chain(account_usage.responses())
+            .chain(update_peers.responses())
+        {
+            socket
+                .send(Message::Text(response.to_string().into()))
+                .map_err(|error| format!("Could not send update status: {error}"))?;
+        }
         match socket.read() {
             Ok(Message::Text(text)) => {
                 let message = serde_json::from_str::<ServerMessage>(&text)
                     .map_err(|error| format!("Invalid remote control message: {error}"))?;
                 match message {
+                    ServerMessage::AccountUsage {
+                        command_id,
+                        account_id,
+                        action,
+                    } => {
+                        account_usage.request(app.clone(), command_id, (account_id, action));
+                    }
+                    ServerMessage::UpdatePeerOffer(offer) => update_peers.offer(offer),
+                    ServerMessage::UpdatePeerOffers(offers) => update_peers.offers(offers),
+                    ServerMessage::UpdatePeerUnavailable { request_id } => {
+                        update_peers.unavailable(&request_id)
+                    }
+                    ServerMessage::UpdatePeerCancel { session_id } => {
+                        update_peers.cancel(&session_id)
+                    }
+                    ServerMessage::RemoteCommand {
+                        command_id,
+                        request,
+                    } => commands.request(command_id, request),
+                    ServerMessage::RemoteCommandCancel { command_id } => {
+                        commands.cancel(&command_id)
+                    }
+                    ServerMessage::AppUpdate {
+                        command_id,
+                        action,
+                        version,
+                    } => {
+                        updates.request(command_id, action, version)?;
+                    }
                     ServerMessage::SwitchAccount {
                         command_id,
                         account_id,
@@ -110,12 +242,46 @@ fn run_connection<R: Runtime>(
                         command_id,
                         provider_id,
                     } => handle_provider_switch(app, &mut socket, command_id, provider_id)?,
+                    ServerMessage::SwitchAggregate {
+                        command_id,
+                        aggregate_id,
+                    } => {
+                        let result = crate::aggregate_api::switch_blocking(app, &aggregate_id);
+                        send_command_result(&mut socket, command_id, result, "Aggregate switch")?;
+                    }
+                    ServerMessage::SwitchGuiAggregate {
+                        command_id,
+                        aggregate_id,
+                    } => handle_gui_switch(
+                        app,
+                        &mut socket,
+                        command_id,
+                        GuiAccountSelection::Aggregate(aggregate_id),
+                    )?,
                     ServerMessage::SwitchProviderGroup { command_id, group } => {
                         handle_provider_group_switch(app, &mut socket, command_id, group)?
                     }
                     ServerMessage::RestartCodex { command_id } => {
                         handle_codex_restart(app, &mut socket, command_id)?
                     }
+                    ServerMessage::SwitchGuiAccount {
+                        command_id,
+                        account_id,
+                    } => handle_gui_switch(
+                        app,
+                        &mut socket,
+                        command_id,
+                        GuiAccountSelection::Account(account_id),
+                    )?,
+                    ServerMessage::SwitchGuiProvider {
+                        command_id,
+                        provider_id,
+                    } => handle_gui_switch(
+                        app,
+                        &mut socket,
+                        command_id,
+                        GuiAccountSelection::Provider(provider_id),
+                    )?,
                     ServerMessage::Authenticated { .. } => {}
                 }
             }
@@ -139,15 +305,22 @@ fn run_connection<R: Runtime>(
         }
 
         let next = crate::cloud::remote_control_config(app)?;
-        if next.as_ref().is_none_or(|next| {
-            next.websocket_url != config.websocket_url
-                || next.access_token != config.access_token
-                || next.active_account_id != config.active_account_id
-                || next.openai_auth_account_id != config.openai_auth_account_id
-                || next.active_provider_id != config.active_provider_id
-                || next.active_provider_group != config.active_provider_group
-                || next.local_proxy_running != config.local_proxy_running
-        }) {
+        if remote_commands_enabled != crate::remote_command::host::enabled()
+            || next.as_ref().is_none_or(|next| {
+                next.websocket_url != config.websocket_url
+                    || next.access_token != config.access_token
+                    || next.active_account_id != config.active_account_id
+                    || next.openai_auth_account_id != config.openai_auth_account_id
+                    || next.active_provider_id != config.active_provider_id
+                    || next.active_provider_group != config.active_provider_group
+                    || next.local_proxy_running != config.local_proxy_running
+                    || next.gui_selection != config.gui_selection
+            })
+        {
+            match next.as_ref() {
+                Some(next) => update_peers.server(&next.websocket_url),
+                None => update_peers.signed_out(),
+            }
             let _ = socket.close(None);
             return Ok(());
         }
@@ -208,6 +381,18 @@ fn handle_codex_restart<R: Runtime>(
     send_command_result(socket, command_id, result, "Codex restart")
 }
 
+fn handle_gui_switch<R: Runtime>(
+    app: &tauri::AppHandle<R>,
+    socket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
+    command_id: String,
+    selection: GuiAccountSelection,
+) -> Result<(), String> {
+    let result = account_selection::switch_account(app, selection)
+        .map(|_| ())
+        .map_err(|error| error.to_string());
+    send_command_result(socket, command_id, result, "GUI model switch")
+}
+
 fn send_command_result(
     socket: &mut WebSocket<MaybeTlsStream<TcpStream>>,
     command_id: String,
@@ -245,40 +430,4 @@ fn set_read_timeout(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::ServerMessage;
-
-    #[test]
-    fn parses_provider_switch_and_restart_commands() {
-        let provider = serde_json::from_str::<ServerMessage>(
-            r#"{"type":"switch-provider","commandId":"command-1","providerId":"provider-1"}"#,
-        )
-        .expect("provider command should deserialize");
-        assert!(matches!(
-            provider,
-            ServerMessage::SwitchProvider {
-                command_id,
-                provider_id,
-            } if command_id == "command-1" && provider_id == "provider-1"
-        ));
-
-        let group = serde_json::from_str::<ServerMessage>(
-            r#"{"type":"switch-provider-group","commandId":"command-g","group":"Work"}"#,
-        )
-        .expect("Provider group command should deserialize");
-        assert!(matches!(
-            group,
-            ServerMessage::SwitchProviderGroup { command_id, group }
-                if command_id == "command-g" && group == "Work"
-        ));
-
-        let restart = serde_json::from_str::<ServerMessage>(
-            r#"{"type":"restart-codex","commandId":"command-2"}"#,
-        )
-        .expect("restart command should deserialize");
-        assert!(matches!(
-            restart,
-            ServerMessage::RestartCodex { command_id } if command_id == "command-2"
-        ));
-    }
-}
+mod tests;

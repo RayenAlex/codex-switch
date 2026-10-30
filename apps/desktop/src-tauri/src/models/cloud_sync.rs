@@ -55,6 +55,8 @@ pub(crate) struct ProviderFieldModifiedAt {
     #[serde(default)]
     pub(crate) api_format: String,
     #[serde(default)]
+    pub(crate) request_options: String,
+    #[serde(default)]
     pub(crate) balance_platform: String,
     #[serde(default)]
     pub(crate) balance_query_url: String,
@@ -149,6 +151,8 @@ pub(crate) struct ProviderSyncPayload {
     #[serde(default)]
     pub(crate) websocket_enabled: bool,
     pub(crate) api_format: ProviderApiFormat,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) request_options: Option<ProviderRequestOptions>,
     #[serde(default)]
     pub(crate) balance_platform: Option<ProviderBalancePlatform>,
     #[serde(default)]

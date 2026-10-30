@@ -45,6 +45,7 @@ async fn gateway_forwards_codex_websocket_frames_to_provider() {
         fast_mode_enabled: false,
         websocket_enabled: true,
         api_format: ProviderApiFormat::OpenaiResponses,
+        request_options: None,
         balance_platform: None,
         balance_query_url: None,
         balance_query_token: None,

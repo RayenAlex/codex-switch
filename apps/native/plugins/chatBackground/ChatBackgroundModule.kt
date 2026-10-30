@@ -6,10 +6,18 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.common.LifecycleState
 
 class ChatBackgroundModule(private val context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
   override fun getName() = "ChatBackground"
+
+  /** Interface-language copy for the foreground-service channel and notification. */
+  @ReactMethod
+  fun setLabels(values: ReadableMap) {
+    val labels = ChatConnectionLabels.from(values.toHashMap())
+    context.runOnUiQueueThread { ChatConnectionService.setLabels(context, labels) }
+  }
 
   @ReactMethod
   fun start(promise: Promise) {
@@ -20,6 +28,22 @@ class ChatBackgroundModule(private val context: ReactApplicationContext) : React
       promise.resolve(true)
     } catch (error: Exception) {
       promise.reject("CHAT_BACKGROUND_UNAVAILABLE", "暂时无法保持后台聊天，请重新打开应用。", error)
+    }
+  }
+
+  @ReactMethod
+  fun setPortMappingEnabled(enabled: Boolean, promise: Promise) {
+    if (enabled && context.lifecycleState != LifecycleState.RESUMED) { promise.resolve(false); return }
+    context.runOnUiQueueThread {
+      try {
+        ChatConnectionService.setPortMappingEnabled(enabled)
+        if (enabled && !ChatConnectionService.running) {
+          ContextCompat.startForegroundService(context, Intent(context, ChatConnectionService::class.java))
+        }
+        promise.resolve(true)
+      } catch (error: Exception) {
+        promise.reject("PORT_MAPPING_BACKGROUND_UNAVAILABLE", "请返回应用后重新启动映射。", error)
+      }
     }
   }
 

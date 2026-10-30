@@ -14,6 +14,8 @@ import {
 import { LANGUAGE_OPTIONS, type Language } from "../../i18n";
 import type { BubbleResetDisplay } from "../../types";
 import { AutoUpdateSettingsCard } from "./AutoUpdateSettingsCard";
+import { ChatGptLaunchPathCard } from "./ChatGptLaunchPathCard";
+import { HelpAssistantSettingsCard } from "./HelpAssistantSettingsCard";
 import type { SettingsPageProps } from "./types";
 import { ClassicBubbleVisual } from "../../components/FloatingUsageBubble/ClassicBubbleVisual";
 
@@ -383,6 +385,7 @@ export function AppearanceSettingsCards({
       <LanguageCard settings={settings} />
       <NavigationStyleCard settings={settings} />
       <ThemeCard settings={settings} />
+      <HelpAssistantSettingsCard language={settings.language} />
       <FloatingBubbleCard onOpen={() => onBubbleStyleModalOpenChange(true)} settings={settings} />
       <BubbleStyleModal
         onClose={() => onBubbleStyleModalOpenChange(false)}
@@ -399,6 +402,7 @@ export function SystemSettingsCards({ settings }: { settings: SettingsPageProps 
     <>
       <LaunchAtStartupCard settings={settings} />
       <CloseToTrayCard settings={settings} />
+      <ChatGptLaunchPathCard language={settings.language} />
       <AutoUpdateSettingsCard settings={settings} />
     </>
   );

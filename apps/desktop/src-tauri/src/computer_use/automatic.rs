@@ -1,23 +1,49 @@
-use super::{install, platform, state, ComputerError, Result, CHANGES};
+use super::{install, platform, state, upgrade, ComputerError, Result, CHANGES};
 use std::{fs, path::Path};
 
 const SETUP_DIRECTORY: &str = "gui-setup";
 
+pub(crate) enum SetupKind {
+    FirstInstall,
+    Upgrade,
+}
+
 /// Run on a blocking worker before starting the GUI's app-server.
-pub(crate) fn setup_gui(home: &Path, installing: impl FnOnce()) -> Result<()> {
+pub(crate) fn setup_gui(
+    app: &tauri::AppHandle,
+    home: &Path,
+    installing: impl FnOnce(SetupKind),
+) -> Result<()> {
     if platform::asset().is_err() {
         return Ok(());
     }
-    let _guard = CHANGES.lock().map_err(|_| ComputerError::Storage)?;
     let root = super::root()?;
-    setup_with(&root, home, || {
-        installing();
-        install::install(&root, home)
+    let mut installing = Some(installing);
+    upgrade::ensure_enabled(app, &root, home, || {
+        if let Some(installing) = installing.take() {
+            installing(SetupKind::Upgrade);
+        }
     })?;
+    let _guard = CHANGES.lock().map_err(|_| ComputerError::Storage)?;
+    setup_with(
+        &root,
+        home,
+        || {
+            if let Some(installing) = installing.take() {
+                installing(SetupKind::FirstInstall);
+            }
+        },
+        || install::install(app, &root, home),
+    )?;
     install::refresh_installed(&root, home)
 }
 
-fn setup_with(root: &Path, home: &Path, install: impl FnOnce() -> Result<()>) -> Result<()> {
+fn setup_with(
+    root: &Path,
+    home: &Path,
+    installing: impl FnOnce(),
+    install: impl FnOnce() -> Result<()>,
+) -> Result<()> {
     let marker = root.join(SETUP_DIRECTORY).join(state::home_id(home));
     if marker.try_exists().map_err(|_| ComputerError::Storage)? {
         return Ok(());
@@ -29,6 +55,7 @@ fn setup_with(root: &Path, home: &Path, install: impl FnOnce() -> Result<()>) ->
     if previously_installed {
         return Ok(());
     }
+    installing();
     install()
 }
 

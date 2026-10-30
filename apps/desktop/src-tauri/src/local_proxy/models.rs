@@ -1,4 +1,3 @@
-const MAX_OFFICIAL_MODEL_CATALOG_BYTES: u64 = 2 * 1024 * 1024;
 
 pub(crate) struct OfficialModelCatalogFetch {
     pub(crate) catalog: Value,
@@ -40,7 +39,7 @@ fn parse_official_model_catalog_payload(
         .map(|(_, value)| value.clone());
     let body = read_official_model_catalog_body(&mut payload.body)?;
     let catalog = serde_json::from_slice(&body)
-        .map_err(|error| format!("Official model catalog is invalid: {error}"))?;
+        .map_err(|error| request_error::RequestError::json(request_error::Stage::Catalog, &error).wire())?;
     Ok(OfficialModelCatalogFetch { catalog, etag })
 }
 
@@ -50,14 +49,10 @@ fn read_official_model_catalog_body(body: &mut UpstreamBody) -> Result<Vec<u8>, 
         UpstreamBody::Buffered(value) => bytes.extend_from_slice(value),
         UpstreamBody::Streaming(reader) => {
             reader
-                .take(MAX_OFFICIAL_MODEL_CATALOG_BYTES + 1)
                 .read_to_end(&mut bytes)
-                .map_err(|error| format!("Failed to read the official model catalog: {error}"))?;
+                .map_err(|error| request_error::RequestError::io(request_error::Stage::Catalog, &error).wire())?;
         }
     };
-    if bytes.len() as u64 > MAX_OFFICIAL_MODEL_CATALOG_BYTES {
-        return Err("Official model catalog is too large".to_string());
-    }
     Ok(bytes)
 }
 
@@ -108,6 +103,13 @@ fn models_payload<R: Runtime>(
         payload,
         settings.gpt_5_6_sol_context_window,
         &settings.official_model_context_windows,
+        |catalog| {
+            official_context_models::complete(
+                app,
+                catalog,
+                &settings.official_model_context_windows,
+            )
+        },
     )
 }
 
@@ -134,6 +136,7 @@ fn override_official_model_context_windows(
     mut payload: UpstreamPayload,
     global_context_window: u64,
     model_context_windows: &std::collections::BTreeMap<String, u64>,
+    complete_models: impl FnOnce(&mut Value) -> bool,
 ) -> Result<UpstreamPayload, String> {
     if payload.status != 200 {
         return Ok(payload);
@@ -148,8 +151,11 @@ fn override_official_model_context_windows(
         }
     }
     let mut catalog = serde_json::from_slice::<Value>(&body)
-        .map_err(|error| format!("Upstream model catalog is not valid JSON: {error}"))?;
-    if apply_official_context_windows(&mut catalog, global_context_window, model_context_windows) {
+        .map_err(|error| request_error::RequestError::json(request_error::Stage::Catalog, &error).wire())?;
+    let completed = complete_models(&mut catalog);
+    let updated =
+        apply_official_context_windows(&mut catalog, global_context_window, model_context_windows);
+    if completed || updated {
         body = serde_json::to_vec(&catalog)
             .map_err(|error| format!("Failed to encode model catalog: {error}"))?;
         replace_model_catalog_etags(&mut payload.response_headers, &body);
@@ -179,6 +185,8 @@ fn apply_official_context_windows(
         }
         entry["context_window"] = json!(context_window);
         entry["max_context_window"] = json!(context_window);
+        // Let Codex derive its default threshold from the new capacity, not the upstream's old limit.
+        entry["auto_compact_token_limit"] = Value::Null;
         changed = true;
     }
     changed
@@ -192,9 +200,7 @@ fn effective_official_context_window(
     model_context_windows
         .get(model)
         .copied()
-        .map_or(global_context_window, |override_window| {
-            global_context_window.min(override_window)
-        })
+        .unwrap_or(global_context_window)
 }
 
 #[cfg(test)]
@@ -204,7 +210,7 @@ fn override_model_context_window(
     context_window: u64,
 ) -> Result<UpstreamPayload, String> {
     let overrides = std::collections::BTreeMap::from([(model.to_string(), context_window)]);
-    override_official_model_context_windows(payload, context_window, &overrides)
+    override_official_model_context_windows(payload, context_window, &overrides, |_| false)
 }
 
 fn override_model_image_input(
@@ -224,7 +230,7 @@ fn override_model_image_input(
         }
     }
     let mut catalog = serde_json::from_slice::<Value>(&body)
-        .map_err(|error| format!("Upstream model catalog is not valid JSON: {error}"))?;
+        .map_err(|error| request_error::RequestError::json(request_error::Stage::Catalog, &error).wire())?;
     let Some(models) = catalog.get_mut("models").and_then(Value::as_array_mut) else {
         payload.body = UpstreamBody::Buffered(body);
         return Ok(payload);
@@ -289,7 +295,7 @@ fn aggregate_models_payload(
         content_type: Some("application/json; charset=utf-8".to_string()),
         response_headers: vec![(
             "ETag".to_string(),
-            aggregate_models_etag(&target.config, image_input_route_enabled),
+            format!("\"aggregate-{}\"", short_hash_bytes(&body)),
         )],
         body: UpstreamBody::Buffered(body),
         token_usage_service_tier: None,
@@ -297,12 +303,15 @@ fn aggregate_models_payload(
     })
 }
 
-fn aggregate_models_etag(config: &AggregateApiConfig, image_input_route_enabled: bool) -> String {
-    format!(
-        "\"aggregate-{}-{}\"",
-        short_hash_str(&config.model),
-        u8::from(image_input_route_enabled)
-    )
+fn aggregate_models_etag(
+    target: &AggregateTarget,
+    image_input_route_enabled: bool,
+) -> Option<String> {
+    let profile = aggregate_api::logical_profile(&target.config, &target.profiles).ok()?;
+    let catalog =
+        providers::model_catalog_for_provider_with_image_route(&profile, image_input_route_enabled);
+    let body = serde_json::to_vec(&catalog).ok()?;
+    Some(format!("\"aggregate-{}\"", short_hash_bytes(&body)))
 }
 
 fn provider_models_etag_with_image_route(

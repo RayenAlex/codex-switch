@@ -1,3 +1,5 @@
+import type { ChatTrafficOverview } from "./chat-traffic-types";
+
 export type Role = string;
 export type UserStatus = "active" | "disabled";
 export type Permission = string;
@@ -7,9 +9,13 @@ export type MenuKey =
   | "users"
   | "roles"
   | "officialAccounts"
+  | "officialModels"
   | "announcement"
   | "chatSettings"
+  | "updateSharing"
+  | "chatTraffic"
   | "currency"
+  | "tokenPricing"
   | "codexHomePresets"
   | "emailTemplates"
   | "skills"
@@ -282,6 +288,7 @@ export interface TelemetryFilters {
 }
 
 export interface DashboardOverview {
+  chatTraffic: ChatTrafficOverview;
   dailyActiveTrend: Array<{
     date: string;
     total: number;
@@ -395,7 +402,7 @@ export interface SyncProvider {
   contextWindow?: number | null;
   modelSelectionControlledByCodex: boolean;
   fastModeEnabled: boolean;
-  apiFormat: "openaiResponses" | "openaiChat";
+  apiFormat: "openaiResponses" | "openaiChat" | "anthropicMessages" | "geminiGenerateContent";
   lastModifiedAt?: string;
   hasApiKey: boolean;
 }

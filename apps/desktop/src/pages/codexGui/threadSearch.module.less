@@ -33,7 +33,10 @@
     &::placeholder { color: var(--muted); opacity: 1; }
   }
   &:hover { border-color: var(--green); }
-  &:focus-within { border-color: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 16%, transparent); }
+  &:focus-within {
+    border-color: var(--green);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 16%, transparent);
+  }
 }
 
 .sectionHeading {

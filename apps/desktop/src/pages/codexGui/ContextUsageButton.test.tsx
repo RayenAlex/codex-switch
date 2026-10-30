@@ -32,9 +32,19 @@ function button() { return container.querySelector<HTMLButtonElement>('[aria-lab
 async function click() { await act(async () => button().click()); }
 function content() { return document.getElementById(button().getAttribute("aria-describedby") ?? ""); }
 
+it("shows the compaction estimate while daily usage is pending and accepts a compaction decrease", async () => {
+  await render({ ...usage, last: { totalTokens: 206_357 }, contextTokens: 247_017,
+    modelContextWindow: 258_400 });
+  await click();
+  expect(content()?.textContent).toContain("96% 已用（剩余 4%）");
+  expect(content()?.textContent).toContain("已用 247K Token，共 258.4K");
+  await render({ ...usage, contextTokens: 0 });
+  expect(content()?.textContent).toContain("0% 已用（剩余 100%）");
+});
+
 it("opens while usage requests are pending, refreshes live and closes with Escape or another click", async () => {
   await render();
-  expect(vi.mocked(invoke).mock.calls.filter(([command]) => command !== "codex_gui_context_settings")).toHaveLength(2);
+  expect(vi.mocked(invoke).mock.calls.filter(([command]) => command !== "codex_gui_context_settings")).toHaveLength(1);
   expect(button().nextElementSibling?.textContent).toBe("今日");
   await click();
   expect(content()?.textContent).toContain("47% 已用（剩余 53%）");
@@ -46,7 +56,7 @@ it("opens while usage requests are pending, refreshes live and closes with Escap
   await click();
   await click();
   expect(button().getAttribute("aria-expanded")).toBe("false");
-  expect(vi.mocked(invoke).mock.calls.filter(([command]) => command !== "codex_gui_context_settings")).toHaveLength(2);
+  expect(vi.mocked(invoke).mock.calls.filter(([command]) => command !== "codex_gui_context_settings")).toHaveLength(1);
 });
 
 it("closes on conversation changes and when hidden, without reusing another conversation's statistics", async () => {

@@ -2,12 +2,39 @@ fn runtime_proxy_running() -> bool {
     crate::local_proxy::is_running()
 }
 
+fn runtime_enhancements_enabled() -> bool {
+    crate::client_integration::enabled_for(runtime_proxy_running())
+}
+
+fn ensure_skin_allowed() -> Result<(), String> {
+    if runtime_enhancements_enabled() {
+        return Ok(());
+    }
+    Err("请先在设置中开启「ChatGPT 增强功能」，再使用皮肤。".to_string())
+}
+
+fn is_skin_surface_url(value: &str) -> bool {
+    let Ok(url) = Url::parse(value) else {
+        return false;
+    };
+    let is_avatar_route =
+        |route: &str| route == "/avatar-overlay" || route.starts_with("/avatar-overlay/");
+    url.scheme() == "app"
+        && !url
+            .path()
+            .ends_with("/avatar-overlay-composition-surface.html")
+        && !is_avatar_route(url.path())
+        && !url
+            .query_pairs()
+            .any(|(key, route)| key == "initialRoute" && is_avatar_route(&route))
+}
+
 fn inject_target(
     target: &CdpTarget,
     port: u16,
     payload: &LoadedPayload,
     previous_script: Option<&str>,
-) -> Result<InjectedTarget, String> {
+) -> Result<Option<InjectedTarget>, String> {
     let mut session = CdpSession::connect(target, port)?;
     session.enable()?;
     if let Some(identifier) = previous_script {
@@ -15,50 +42,20 @@ fn inject_target(
     }
     let early = early_payload(payload);
     let early_script_id = session.register_early(&early)?;
-    let result = (|| -> Result<bool, String> {
-        session.evaluate(&early)?;
-        if !wait_for_codex_probe(&mut session, Duration::from_millis(1800))? {
-            return Ok(false);
-        }
-
-        let revision_json =
-            serde_json::to_string(&payload.revision).map_err(|error| error.to_string())?;
-        let early_applied = session.evaluate(&format!(
-            "window.__CODEX_DREAM_SKIN_EARLY_APPLIED__ === {revision_json}"
-        ))?;
-        if early_applied.as_bool() != Some(true) {
-            let fallback_generation =
-                serde_json::to_string(&format!("fallback:{}", payload.revision))
-                    .map_err(|error| error.to_string())?;
-            session.evaluate(&format!(
-                "window.__CODEX_DREAM_SKIN_EARLY_GENERATION__ = {fallback_generation}"
-            ))?;
-            session.evaluate(&payload.source)?;
-        }
-
-        let verification = session.evaluate(VERIFY_PAYLOAD)?;
-        if verification.get("pass").and_then(Value::as_bool) != Some(true) {
-            return Err(format!(
-                "Dream Skin target verification failed: {}",
-                serde_json::to_string(&verification).unwrap_or_default()
-            ));
-        }
-        Ok(true)
-    })();
+    let result = apply_skin_in_session(&mut session, payload, &early);
 
     match result {
-        Ok(true) => Ok(InjectedTarget {
+        Ok(true) => Ok(Some(InjectedTarget {
             revision: payload.revision.clone(),
             early_script_id,
-        }),
+        })),
         Ok(false) => {
             if let Some(identifier) = early_script_id.as_deref() {
                 session.remove_early(identifier);
             }
-            Ok(InjectedTarget {
-                revision: payload.revision.clone(),
-                early_script_id: None,
-            })
+            // A published CDP page can precede the React shell by several seconds.
+            // Leave it pending so the monitor retries when the shell is ready.
+            Ok(None)
         }
         Err(error) => {
             if let Some(identifier) = early_script_id.as_deref() {
@@ -67,6 +64,60 @@ fn inject_target(
             Err(error)
         }
     }
+}
+
+fn apply_skin_in_session(
+    session: &mut CdpSession,
+    payload: &LoadedPayload,
+    early: &str,
+) -> Result<bool, String> {
+    const SHELL_PROBE_TIMEOUT: Duration = Duration::from_millis(1800);
+    session.evaluate(early)?;
+    if !wait_for_codex_probe(session, SHELL_PROBE_TIMEOUT)? {
+        return Ok(false);
+    }
+    let revision_json =
+        serde_json::to_string(&payload.revision).map_err(|error| error.to_string())?;
+    let early_applied = session.evaluate(&format!(
+        "window.__CODEX_DREAM_SKIN_EARLY_APPLIED__ === {revision_json}"
+    ))?;
+    if early_applied.as_bool() != Some(true) {
+        let fallback_generation = serde_json::to_string(&format!("fallback:{}", payload.revision))
+            .map_err(|error| error.to_string())?;
+        session.evaluate(&format!(
+            "window.__CODEX_DREAM_SKIN_EARLY_GENERATION__ = {fallback_generation}"
+        ))?;
+        session.evaluate(&payload.source)?;
+    }
+    let verification = session.evaluate(VERIFY_PAYLOAD)?;
+    if verification.get("pass").and_then(Value::as_bool) != Some(true) {
+        return Err(format!(
+            "Dream Skin target verification failed: {verification}"
+        ));
+    }
+    Ok(true)
+}
+
+fn refresh_skin_target(
+    target: &CdpTarget,
+    port: u16,
+    payload: &LoadedPayload,
+    injected: &mut HashMap<String, InjectedTarget>,
+) -> Result<(), String> {
+    if !is_skin_surface_url(&target.url) {
+        return Ok(());
+    }
+    let current = injected.get(&target.id);
+    if current.is_some_and(|entry| entry.revision == payload.revision) {
+        return Ok(());
+    }
+    let previous_script = current.and_then(|entry| entry.early_script_id.as_deref());
+    if let Some(next) = inject_target(target, port, payload, previous_script)? {
+        injected.insert(target.id.clone(), next);
+    } else {
+        injected.remove(&target.id);
+    }
+    Ok(())
 }
 
 fn remove_target(
@@ -83,25 +134,39 @@ fn remove_target(
     Ok(())
 }
 
+#[derive(Default)]
+struct RendererMonitorState {
+    injected: HashMap<String, InjectedTarget>,
+    last_port: Option<u16>,
+    recovery: RendererRecovery,
+    last_sync_check: Option<Instant>,
+}
+
 fn monitor_iteration(
     paths: &RuntimePaths,
-    injected: &mut HashMap<String, InjectedTarget>,
-    last_port: &mut Option<u16>,
-    recovery: &mut RendererRecovery,
+    monitor: &mut RendererMonitorState,
 ) -> Result<(), String> {
+    let RendererMonitorState {
+        injected,
+        last_port,
+        recovery,
+        last_sync_check,
+    } = monitor;
     let skin_enabled = marker_path()?.is_file();
     let state = read_session();
     let Some(port) = state.port else {
         injected.clear();
         *last_port = None;
         recovery.reset();
+        *last_sync_check = None;
         return Ok(());
     };
     if *last_port != Some(port) {
         injected.clear();
         *last_port = Some(port);
+        *last_sync_check = None;
     }
-    let paused = !skin_enabled || pause_path()?.is_file();
+    let paused = !runtime_enhancements_enabled() || !skin_enabled || pause_path()?.is_file();
     let payload = if paused {
         None
     } else {
@@ -121,59 +186,47 @@ fn monitor_iteration(
             return Err(error);
         }
     };
+    maintain_renderer_sync(&targets, port, last_sync_check);
     injected.retain(|id, _| targets.iter().any(|target| &target.id == id));
     for target in targets {
-        let current = injected.get(&target.id).cloned();
-        if paused {
-            if current
-                .as_ref()
-                .is_none_or(|entry| entry.revision != "paused")
-            {
-                remove_target(
-                    &target,
-                    port,
-                    current
-                        .as_ref()
-                        .and_then(|entry| entry.early_script_id.as_deref()),
-                )?;
-                injected.insert(
-                    target.id,
-                    InjectedTarget {
-                        revision: "paused".to_string(),
-                        early_script_id: None,
-                    },
-                );
-            }
-        } else if let Some(payload) = &payload {
-            let needs_injection = current
-                .as_ref()
-                .is_none_or(|entry| entry.revision != payload.revision);
-            if needs_injection {
-                match inject_target(
-                    &target,
-                    port,
-                    payload,
-                    current
-                        .as_ref()
-                        .and_then(|entry| entry.early_script_id.as_deref()),
-                ) {
-                    Ok(next) => {
-                        injected.insert(target.id, next);
-                    }
-                    Err(error) => {
-                        eprintln!("Dream Skin target {}: {error}", target.id);
-                    }
-                }
-            }
-        }
+        refresh_monitored_skin(&target, port, payload.as_ref(), injected)?;
     }
     Ok(())
 }
 
+fn refresh_monitored_skin(
+    target: &CdpTarget,
+    port: u16,
+    payload: Option<&LoadedPayload>,
+    injected: &mut HashMap<String, InjectedTarget>,
+) -> Result<(), String> {
+    if let Some(payload) = payload {
+        if let Err(error) = refresh_skin_target(target, port, payload, injected) {
+            eprintln!("Dream Skin target {}: {error}", target.id);
+        }
+        return Ok(());
+    }
+    let current = injected.get(&target.id);
+    if current.is_some_and(|entry| entry.revision == "paused") {
+        return Ok(());
+    }
+    remove_target(
+        target,
+        port,
+        current.and_then(|entry| entry.early_script_id.as_deref()),
+    )?;
+    injected.insert(
+        target.id.clone(),
+        InjectedTarget {
+            revision: "paused".to_string(),
+            early_script_id: None,
+        },
+    );
+    Ok(())
+}
+
 fn monitor_loop(control: Arc<MonitorControl>) {
-    let mut injected = HashMap::new();
-    let mut last_port = None;
-    let mut recovery = RendererRecovery::default();
+    let mut monitor = RendererMonitorState::default();
     loop {
         let paths = {
             let guard = control
@@ -189,8 +242,7 @@ fn monitor_loop(control: Arc<MonitorControl>) {
         let Some(paths) = paths else {
             continue;
         };
-        if let Err(error) = monitor_iteration(&paths, &mut injected, &mut last_port, &mut recovery)
-        {
+        if let Err(error) = monitor_iteration(&paths, &mut monitor) {
             if !error.contains("CDP is unavailable") {
                 eprintln!("Codex renderer monitor: {error}");
             }
@@ -269,7 +321,10 @@ fn wait_for_verified(port: u16, timeout: Duration) -> Result<Vec<Value>, String>
             Ok(targets) => {
                 last_results.clear();
                 last_error.clear();
-                for target in targets {
+                for target in targets
+                    .into_iter()
+                    .filter(|target| is_skin_surface_url(&target.url))
+                {
                     match CdpSession::connect(&target, port).and_then(|mut session| {
                         session.enable()?;
                         let probe = session.evaluate(CODEX_PROBE_PAYLOAD)?;

@@ -167,6 +167,7 @@ fn model_catalog_context_override_updates_limits_and_etag() {
             "slug": GPT_5_6_SOL_MODEL,
             "context_window": 272_000,
             "max_context_window": 872_000,
+            "auto_compact_token_limit": 250_000,
             "effective_context_window_percent": 95
         }]
     });
@@ -187,6 +188,7 @@ fn model_catalog_context_override_updates_limits_and_etag() {
 
     assert_eq!(updated["models"][0]["context_window"], 1_000_000);
     assert_eq!(updated["models"][0]["max_context_window"], 1_000_000);
+    assert!(updated["models"][0]["auto_compact_token_limit"].is_null());
     assert_eq!(updated["models"][0]["effective_context_window_percent"], 95);
     assert!(payload.response_headers[0].1.starts_with("\"codex-switch-"));
 }
@@ -206,6 +208,31 @@ fn model_catalog_refresh_removes_conditional_request_headers() {
 }
 
 #[test]
+fn catalog_compaction_defaults_follow_capacity_overrides_only() {
+    let original = json!({"models": [
+        {"slug": "configured", "context_window": 272_000, "auto_compact_token_limit": 250_000},
+        {"slug": "untouched", "context_window": 272_000, "auto_compact_token_limit": 250_000}
+    ]});
+    for capacity in [1_000_000, 128_000] {
+        let mut catalog = original.clone();
+        let overrides = std::collections::BTreeMap::from([("configured".to_string(), capacity)]);
+        assert!(apply_official_context_windows(&mut catalog, 0, &overrides));
+        assert_eq!(catalog["models"][0]["context_window"], capacity);
+        assert_eq!(catalog["models"][0]["max_context_window"], capacity);
+        assert!(catalog["models"][0]["auto_compact_token_limit"].is_null());
+        assert_eq!(catalog["models"][1], original["models"][1]);
+    }
+    let mut catalog = original.clone();
+    assert!(!apply_official_context_windows(&mut catalog, 0, &Default::default()));
+    assert_eq!(catalog, original);
+    assert!(apply_official_context_windows(&mut catalog, 1_000_000, &Default::default()));
+    for model in catalog["models"].as_array().unwrap() {
+        assert_eq!(model["context_window"], 1_000_000);
+        assert!(model["auto_compact_token_limit"].is_null());
+    }
+}
+
+#[test]
 fn gpt_5_6_sol_context_window_validation_uses_whole_k_increments() {
     assert!(validate_gpt_5_6_sol_context_window(272_000).is_ok());
     assert!(validate_gpt_5_6_sol_context_window(1_000_000).is_ok());
@@ -214,7 +241,7 @@ fn gpt_5_6_sol_context_window_validation_uses_whole_k_increments() {
 }
 
 #[test]
-fn official_model_context_window_uses_the_lower_of_global_and_model_override() {
+fn official_model_context_window_prefers_model_override_over_global() {
     let overrides = std::collections::BTreeMap::from([
         ("gpt-5.6-sol".to_string(), 128_000),
         ("gpt-5.5".to_string(), 400_000),
@@ -226,7 +253,7 @@ fn official_model_context_window_uses_the_lower_of_global_and_model_override() {
     );
     assert_eq!(
         effective_official_context_window(272_000, &overrides, "gpt-5.5"),
-        272_000
+        400_000
     );
     assert_eq!(
         effective_official_context_window(1_050_000, &overrides, "gpt-5.6-sol"),
@@ -333,14 +360,20 @@ fn responses_request_converts_image_input_to_chat_content() {
 }
 
 #[test]
-fn deepseek_reasoning_preserves_all_codex_effort_levels() {
-    for effort in ["low", "medium", "high", "xhigh", "max"] {
+fn deepseek_reasoning_maps_codex_effort_levels() {
+    for (effort, expected) in [
+        ("low", "low"),
+        ("medium", "high"),
+        ("high", "high"),
+        ("xhigh", "high"),
+        ("max", "max"),
+    ] {
         let responses = json!({ "reasoning": { "effort": effort } });
         let mut chat = json!({});
 
         apply_deepseek_reasoning(&responses, &mut chat);
 
-        assert_eq!(chat["reasoning_effort"], effort);
+        assert_eq!(chat["reasoning_effort"], expected);
         assert_eq!(chat["thinking"]["type"], "enabled");
     }
 }
@@ -359,6 +392,7 @@ fn deepseek_none_disables_thinking_without_effort() {
 #[test]
 fn provider_image_generation_request_preserves_gpt_image_model() {
     let provider = ProviderProfile {
+        request_options: Default::default(),
         id: "images".to_string(),
         kind: ProviderKind::Custom,
         name: "Images".to_string(),

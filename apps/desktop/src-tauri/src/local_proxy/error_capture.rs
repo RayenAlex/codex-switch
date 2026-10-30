@@ -1,9 +1,18 @@
 use serde_json::Value;
 
+use super::error_capture_diagnostics::{CaptureDiagnostics, Observation};
+use super::stream_completion::{CompletionEvent, StreamCompletion};
+
 const MAX_CAPTURE_BYTES: usize = 64 * 1024;
 const MAX_ERROR_MESSAGE_CHARS: usize = 1000;
 const GENERIC_UPSTREAM_ERROR: &str = "The upstream service returned an error.";
-const INTERRUPTED_STREAM_ERROR: &str = "The upstream response ended before it was complete.";
+const INTERRUPTED_STREAM_ERROR: &str = "上游已结束传输，但没有发送完整的响应结束事件。";
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CapturePurpose {
+    Diagnostics,
+    MemberHealth,
+}
 
 /// A structured failure found in bytes already read from the upstream response.
 #[derive(Debug, PartialEq, Eq)]
@@ -14,36 +23,69 @@ pub(super) struct ProxyCapturedError {
 
 /// Observes response bytes without consuming the transport or retaining normal conversation text.
 pub(super) struct ErrorCapture {
+    purpose: CapturePurpose,
     event_stream: bool,
     http_status: u16,
     buffer: Vec<u8>,
+    buffer_bytes: u64,
     line_length: usize,
     last_byte: Option<u8>,
     reported: bool,
-    terminal: bool,
+    completion: StreamCompletion,
     finished: bool,
+    diagnostics: CaptureDiagnostics,
 }
 
 impl ErrorCapture {
     pub(super) fn new(event_stream: bool, http_status: u16) -> Self {
         Self {
+            purpose: CapturePurpose::Diagnostics,
             event_stream,
             http_status,
             buffer: Vec::new(),
+            buffer_bytes: 0,
             line_length: 0,
             last_byte: None,
             reported: false,
-            terminal: false,
+            completion: StreamCompletion::default(),
             finished: false,
+            diagnostics: CaptureDiagnostics::default(),
+        }
+    }
+
+    /// Output limits and content filtering complete a healthy request without a service failure.
+    pub(super) fn new_for_health(event_stream: bool, http_status: u16) -> Self {
+        Self {
+            purpose: CapturePurpose::MemberHealth,
+            ..Self::new(event_stream, http_status)
         }
     }
 
     pub(super) fn terminal_seen(&self) -> bool {
-        self.terminal
+        self.completion.seen()
+    }
+
+    pub(super) fn for_endpoint(mut self, path: &str) -> Self {
+        if super::is_responses_endpoint(super::request_path(path)) {
+            self.completion.require_responses();
+        }
+        self
+    }
+
+    pub(super) fn completion_unverified(&self) -> bool {
+        self.completion.unverified()
     }
 
     pub(super) fn error_seen(&self) -> bool {
         self.reported
+    }
+
+    pub(super) fn diagnostic_summary(&self) -> Value {
+        let mut summary = self.diagnostics.summary();
+        summary["pendingBytes"] = self.buffer_bytes.into();
+        summary["pendingCaptureTruncated"] = (self.buffer_bytes > self.buffer.len() as u64).into();
+        summary["completionUnverified"] = self.completion_unverified().into();
+        summary
     }
 
     /// Returns at most one failure for this response, including across subsequent calls.
@@ -53,6 +95,7 @@ impl ErrorCapture {
             return errors;
         }
         if !self.event_stream {
+            self.buffer_bytes = self.buffer_bytes.saturating_add(bytes.len() as u64);
             let remaining = MAX_CAPTURE_BYTES.saturating_sub(self.buffer.len());
             self.buffer
                 .extend_from_slice(&bytes[..bytes.len().min(remaining)]);
@@ -82,11 +125,14 @@ impl ErrorCapture {
         self.finished = true;
         if self.event_stream {
             self.finish_event(&mut errors);
-            if !self.reported && (self.http_status >= 400 || !self.terminal) {
+            if !self.reported
+                && (self.http_status >= 400
+                    || (!self.terminal_seen() && !self.completion_unverified()))
+            {
                 let message = if self.http_status >= 400 {
                     http_error_message(self.http_status)
                 } else {
-                    INTERRUPTED_STREAM_ERROR.to_string()
+                    super::error_messages::localized(INTERRUPTED_STREAM_ERROR).to_string()
                 };
                 self.report(message, None, &mut errors);
             }
@@ -94,11 +140,41 @@ impl ErrorCapture {
             self.finish_json(&mut errors);
         }
         self.buffer.clear();
+        self.buffer_bytes = 0;
+        errors
+    }
+
+    /// Preserve the actual read failure instead of treating every network error as ordinary EOF.
+    pub(super) fn finish_with_error(&mut self, error: &std::io::Error) -> Vec<ProxyCapturedError> {
+        if self.finished || self.reported {
+            return Vec::new();
+        }
+        let mut errors = Vec::new();
+        self.finished = true;
+        if self.event_stream {
+            self.finish_event(&mut errors);
+            if self.reported {
+                return errors;
+            }
+        }
+        self.report(
+            super::request_error::RequestError::io(super::request_error::Stage::Read, error)
+                .to_string(),
+            None,
+            &mut errors,
+        );
         errors
     }
 
     fn finish_json(&mut self, errors: &mut Vec<ProxyCapturedError>) {
         let value = serde_json::from_slice::<Value>(&self.buffer).ok();
+        let expected_incomplete = self.health_incomplete_is_terminal(
+            value.as_ref().map(json_event_type).unwrap_or_default(),
+            value.as_ref(),
+        );
+        if expected_incomplete {
+            self.completion.complete();
+        }
         let message = if self.http_status >= 400 {
             Some(
                 value
@@ -106,11 +182,20 @@ impl ErrorCapture {
                     .and_then(structured_error_message)
                     .unwrap_or_else(|| http_error_message(self.http_status)),
             )
+        } else if expected_incomplete {
+            None
         } else {
             value
                 .as_ref()
                 .and_then(|value| sse_error_message(json_event_type(value), Some(value)))
         };
+        self.diagnostics.observe(Observation {
+            event_type: value.as_ref().map(json_event_type).unwrap_or_default(),
+            value: value.as_ref(),
+            bytes: &self.buffer,
+            total_bytes: self.buffer_bytes,
+            failure: message.is_some(),
+        });
         if let Some(message) = message {
             self.report(
                 message,
@@ -121,6 +206,7 @@ impl ErrorCapture {
     }
 
     fn push_byte(&mut self, byte: u8) {
+        self.buffer_bytes = self.buffer_bytes.saturating_add(1);
         if self.buffer.len() < MAX_CAPTURE_BYTES {
             self.buffer.push(byte);
         }
@@ -156,17 +242,44 @@ impl ErrorCapture {
         } else {
             payload_type
         };
-        let terminal = data.trim() == "[DONE]"
-            || is_terminal_event(event)
-            || is_terminal_event(event_type)
-            || value.as_ref().is_some_and(chat_completion_finished);
-        let failure = sse_error_message(event_type, value.as_ref());
+        self.completion.observe(CompletionEvent {
+            name: event,
+            data: &data,
+            value: value.as_ref(),
+            truncated: self.buffer_bytes > self.buffer.len() as u64,
+        });
+        let expected_incomplete = self.health_incomplete_is_terminal(event_type, value.as_ref());
+        let failure = if expected_incomplete {
+            None
+        } else {
+            sse_error_message(event_type, value.as_ref())
+        };
         let status = value.as_ref().and_then(structured_error_status);
-        self.terminal |= terminal;
+        if expected_incomplete {
+            self.completion.complete();
+        }
+        self.diagnostics.observe(Observation {
+            event_type: if data.trim() == "[DONE]" {
+                "[DONE]"
+            } else {
+                event_type
+            },
+            value: value.as_ref(),
+            bytes: &self.buffer,
+            total_bytes: self.buffer_bytes,
+            failure: failure.is_some(),
+        });
         self.buffer.clear();
+        self.buffer_bytes = 0;
         if let Some(message) = failure {
             self.report(message, status, errors);
         }
+    }
+
+    fn health_incomplete_is_terminal(&self, event_type: &str, value: Option<&Value>) -> bool {
+        self.purpose == CapturePurpose::MemberHealth
+            && self.http_status < 400
+            && value.is_some_and(|value| expected_incomplete(event_type, value))
     }
 
     fn report(
@@ -177,6 +290,7 @@ impl ErrorCapture {
     ) {
         self.reported = true;
         self.buffer.clear();
+        self.buffer_bytes = 0;
         errors.push(ProxyCapturedError {
             message: message.chars().take(MAX_ERROR_MESSAGE_CHARS).collect(),
             status_code: (self.http_status >= 400)
@@ -202,29 +316,6 @@ fn sse_event_data(block: &str) -> String {
         .map(str::trim_start)
         .collect::<Vec<_>>()
         .join("\n")
-}
-
-fn is_terminal_event(event_type: &str) -> bool {
-    matches!(
-        event_type,
-        "response.completed"
-            | "message_stop"
-            | "image_generation.completed"
-            | "image_edit.completed"
-    )
-}
-
-fn chat_completion_finished(value: &Value) -> bool {
-    value
-        .get("choices")
-        .and_then(Value::as_array)
-        .is_some_and(|choices| {
-            choices.iter().any(|choice| {
-                choice
-                    .get("finish_reason")
-                    .is_some_and(|reason| !reason.is_null())
-            })
-        })
 }
 
 fn json_event_type(value: &Value) -> &str {
@@ -253,13 +344,7 @@ fn sse_error_message(event_type: &str, value: Option<&Value>) -> Option<String> 
             None => "The upstream response was incomplete.".to_string(),
         });
     }
-    let explicit_error = value.is_some_and(|value| {
-        ["/error", "/response/error"].iter().any(|path| {
-            value
-                .pointer(path)
-                .is_some_and(|error| error.is_object() || nonempty_string(error).is_some())
-        })
-    });
+    let explicit_error = value.is_some_and(has_explicit_error);
     if !matches!(event_type, "error" | "response.failed") && !explicit_error {
         return None;
     }
@@ -268,6 +353,33 @@ fn sse_error_message(event_type: &str, value: Option<&Value>) -> Option<String> 
             .and_then(structured_error_message)
             .unwrap_or_else(|| GENERIC_UPSTREAM_ERROR.to_string()),
     )
+}
+
+fn expected_incomplete(event_type: &str, value: &Value) -> bool {
+    if event_type != "response.incomplete"
+        || has_explicit_error(value)
+        || matches!(json_event_type(value), "error" | "response.failed")
+        || ["/status", "/response/status"]
+            .iter()
+            .any(|path| value.pointer(path).and_then(Value::as_str) == Some("failed"))
+    {
+        return false;
+    }
+    [
+        "/response/incomplete_details/reason",
+        "/incomplete_details/reason",
+    ]
+    .iter()
+    .find_map(|path| value.pointer(path).and_then(nonempty_string))
+    .is_some_and(|reason| matches!(reason, "max_output_tokens" | "content_filter"))
+}
+
+fn has_explicit_error(value: &Value) -> bool {
+    ["/error", "/response/error"].iter().any(|path| {
+        value
+            .pointer(path)
+            .is_some_and(|error| error.is_object() || nonempty_string(error).is_some())
+    })
 }
 
 fn structured_error_message(value: &Value) -> Option<String> {
@@ -323,3 +435,11 @@ fn http_error_message(status: u16) -> String {
 #[cfg(test)]
 #[path = "error_capture_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "error_capture_diagnostic_tests.rs"]
+mod diagnostic_tests;
+
+#[cfg(test)]
+#[path = "error_capture_health_tests.rs"]
+mod health_tests;

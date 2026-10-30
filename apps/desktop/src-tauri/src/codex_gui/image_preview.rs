@@ -1,23 +1,22 @@
-//! Preview workspace images and exact image references recorded by the task's app server.
+//! Preview local images on the authenticated computer and validated public image URLs.
 use std::{
     fs::File,
-    io::Read,
+    io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
 };
 
-use base64::{engine::general_purpose::STANDARD, Engine};
+use base64::engine::general_purpose::STANDARD;
+#[cfg(test)]
+use base64::Engine;
 use image::ImageFormat;
 use serde_json::json;
 
 use super::{
     client::Client,
     error::{GuiError, Result},
+    image_thumbnail::{preview_task, ImageVariant},
     protocol::{thread_params, GuiResponse},
 };
-
-#[path = "image_references.rs"]
-mod references;
-use references::image_references;
 
 const DEFAULT_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
 const MAX_SOURCE_LENGTH: usize = 4096;
@@ -56,40 +55,23 @@ pub(super) async fn preview(
     };
     if source.starts_with("data:image/") {
         // Inline bytes grant no filesystem access; use the same input validation as attachments.
-        let data = tauri::async_runtime::spawn_blocking(move || {
+        let data = preview_task(move || {
             super::images::input_limited(source.clone(), limit)?;
             render_limited(source, options)
         })
-        .await
-        .map_err(|_| GuiError::ImagePreview)??;
+        .await?;
         return Ok(GuiResponse {
             data: json!({ "url": data }),
         });
     }
-    let mut params = thread_params(thread_id.clone())?;
-    params["includeTurns"] = json!(true);
+    let params = thread_params(thread_id)?;
     // Read the actual workspace before the presentation layer hides projectless paths.
     let response = client.request("thread/read", params).await?;
     let workspace = response["thread"]["cwd"]
         .as_str()
         .ok_or(GuiError::ImagePreview)?;
     let workspace = PathBuf::from(workspace);
-    let generated = client.home.join("generated_images").join(thread_id);
-    let data = tauri::async_runtime::spawn_blocking(move || {
-        let references = image_references(&response["thread"]);
-        let original = read_image(
-            &source,
-            &workspace,
-            ReadOptions {
-                generated: &generated,
-                references: &references,
-                max_bytes: limit,
-            },
-        )?;
-        render_limited(original, options)
-    })
-    .await
-    .map_err(|_| GuiError::ImagePreview)??;
+    let data = preview_task(move || read_image(&source, &workspace, options)).await?;
     Ok(GuiResponse {
         data: json!({ "url": data }),
     })
@@ -115,49 +97,19 @@ pub(super) fn source_path(source: &str) -> Result<PathBuf> {
         PathBuf::from(source)
     };
     // Do not turn model-provided image references into network shares or device access.
-    let text = path.to_string_lossy();
-    if text.replace('\\', "/").starts_with("//") || text.contains("://") {
-        return Err(GuiError::ImagePreview);
-    }
+    super::local_file::validate(&path.to_string_lossy()).map_err(|_| GuiError::ImagePreview)?;
     Ok(path)
 }
 
-fn within(path: &Path, root: &Path) -> bool {
-    root.canonicalize().is_ok_and(|root| path.starts_with(root))
-}
-
-fn matches_reference(path: &Path, workspace: &Path, references: &[String]) -> bool {
-    // Grant only the recorded file, never its parent directory or arbitrary message text.
-    references.iter().any(|source| {
-        source_path(source)
-            .and_then(|source| {
-                workspace
-                    .join(source)
-                    .canonicalize()
-                    .map_err(|_| GuiError::ImagePreview)
-            })
-            .is_ok_and(|reference| reference == path)
-    })
-}
-
-struct ReadOptions<'a> {
-    generated: &'a Path,
-    references: &'a [String],
-    max_bytes: u64,
-}
-
-fn read_image(source: &str, workspace: &Path, options: ReadOptions<'_>) -> Result<String> {
+fn read_image(source: &str, workspace: &Path, options: PreviewOptions) -> Result<String> {
     let source = source_path(source)?;
-    let path = workspace
-        .join(source)
-        .canonicalize()
+    let path = super::local_file::resolve(workspace, &source.to_string_lossy())
         .map_err(|_| GuiError::ImagePreview)?;
-    if !within(&path, workspace)
-        && !within(&path, options.generated)
-        && !matches_reference(&path, workspace, options.references)
-    {
-        return Err(GuiError::ImagePreview);
-    }
+    render_file(&path, options)
+}
+
+/// Local previews have no transport byte cap; remote callers can supply their own policy limit.
+pub(super) fn render_file(path: &Path, options: PreviewOptions) -> Result<String> {
     let extension = path
         .extension()
         .and_then(|value| value.to_str())
@@ -166,30 +118,52 @@ fn read_image(source: &str, workspace: &Path, options: ReadOptions<'_>) -> Resul
     if !["png", "jpg", "jpeg", "webp", "gif"].contains(&extension.as_str()) {
         return Err(GuiError::ImagePreview);
     }
-    encode_image(&path, options.max_bytes)
+    let limit = options.max_bytes.unwrap_or(u64::MAX).max(1);
+    let file = open_image(path, limit)?;
+    match options.variant {
+        ImageVariant::Thumbnail => super::image_thumbnail::render_file(file),
+        ImageVariant::Original => encode_file(file, limit),
+    }
 }
 
-pub(super) fn encode_image(path: &Path, max_bytes: u64) -> Result<String> {
+#[cfg(test)]
+fn encode_image(path: &Path, max_bytes: u64) -> Result<String> {
+    encode_file(open_image(path, max_bytes)?, max_bytes)
+}
+
+fn open_image(path: &Path, max_bytes: u64) -> Result<File> {
     let file = File::open(path).map_err(|_| GuiError::ImagePreview)?;
     let metadata = file.metadata().map_err(|_| GuiError::ImagePreview)?;
     if !metadata.is_file() || metadata.len() == 0 || metadata.len() > max_bytes {
         return Err(GuiError::ImagePreview);
     }
-    let mut bytes = Vec::new();
-    file.take(max_bytes.saturating_add(1))
-        .read_to_end(&mut bytes)
-        .map_err(|_| GuiError::ImagePreview)?;
-    if bytes.len() as u64 > max_bytes {
-        return Err(GuiError::ImagePreview);
-    }
-    let mime = match image::guess_format(&bytes).map_err(|_| GuiError::ImagePreview)? {
+    Ok(file)
+}
+
+fn encode_file(mut file: File, max_bytes: u64) -> Result<String> {
+    const FORMAT_HEADER_BYTES: usize = 16;
+    let mut header = [0; FORMAT_HEADER_BYTES];
+    let size = file.read(&mut header).map_err(|_| GuiError::ImagePreview)?;
+    let mime = match image::guess_format(&header[..size]).map_err(|_| GuiError::ImagePreview)? {
         ImageFormat::Png => "image/png",
         ImageFormat::Jpeg => "image/jpeg",
         ImageFormat::WebP => "image/webp",
         ImageFormat::Gif => "image/gif",
         _ => return Err(GuiError::ImagePreview),
     };
-    Ok(format!("data:{mime};base64,{}", STANDARD.encode(bytes)))
+    file.seek(SeekFrom::Start(0))
+        .map_err(|_| GuiError::ImagePreview)?;
+    // Originals are requested explicitly. Stream into the final URL without retaining another
+    // full-size source buffer or copying the encoded string again with format!.
+    let prefix = format!("data:{mime};base64,").into_bytes();
+    let mut output = base64::write::EncoderWriter::new(prefix, &STANDARD);
+    let copied = std::io::copy(&mut file.take(max_bytes.saturating_add(1)), &mut output)
+        .map_err(|_| GuiError::ImagePreview)?;
+    if copied > max_bytes {
+        return Err(GuiError::ImagePreview);
+    }
+    let encoded = output.finish().map_err(|_| GuiError::ImagePreview)?;
+    String::from_utf8(encoded).map_err(|_| GuiError::ImagePreview)
 }
 
 #[cfg(test)]

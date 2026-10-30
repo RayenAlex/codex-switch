@@ -2,7 +2,10 @@
 
 mod database;
 mod models;
+#[cfg(test)]
+mod pagination_tests;
 mod sanitize;
+mod schema;
 #[cfg(test)]
 mod tests;
 mod worker;
@@ -10,7 +13,7 @@ mod worker;
 use std::sync::OnceLock;
 use tauri::{AppHandle, Manager, Runtime};
 
-pub(crate) use models::{ErrorLogPage, ErrorLogSource};
+pub(crate) use models::{ErrorLogPage, ErrorLogPagination, ErrorLogSource};
 use models::{ListQuery, LogError};
 use worker::LogService;
 
@@ -42,6 +45,15 @@ pub(crate) fn record_proxy_error(message: &str, status_code: Option<u16>) {
     }
 }
 
+/// Queue Codex operation diagnostics without blocking the UI; the worker redacts sensitive values.
+pub(crate) fn record_codex_error(message: &str) {
+    if let Some(service) = SERVICE.get() {
+        service.record_codex(message);
+    } else {
+        eprintln!("{}", sanitize_diagnostic_message(message));
+    }
+}
+
 fn service() -> Result<&'static LogService, LogError> {
     SERVICE.get().ok_or(LogError::Unavailable)
 }
@@ -52,13 +64,15 @@ pub(crate) fn sanitize_diagnostic_message(message: &str) -> String {
 }
 
 /// Returns a bounded snapshot after preceding queued writes, entirely on the database worker.
-pub(crate) fn export_proxy_errors() -> Result<ErrorLogPage, String> {
+pub(crate) fn export_errors(source: ErrorLogSource) -> Result<ErrorLogPage, String> {
     service()
         .and_then(|service| {
             service.list(ListQuery {
                 limit: models::MAX_ENTRIES as u32,
                 before_id: None,
-                source: Some(ErrorLogSource::Proxy),
+                source: Some(source),
+                offset: 0,
+                snapshot_id: None,
             })
         })
         .map_err(|error| error.to_string())
@@ -69,8 +83,11 @@ pub(crate) async fn list_error_logs(
     limit: Option<u32>,
     before_id: Option<i64>,
     source: Option<ErrorLogSource>,
+    pagination: Option<ErrorLogPagination>,
 ) -> Result<ErrorLogPage, String> {
-    let query = ListQuery::new(limit, before_id, source).map_err(|error| error.to_string())?;
+    let query = ListQuery::new(limit, before_id, source)
+        .and_then(|query| query.with_pagination(pagination))
+        .map_err(|error| error.to_string())?;
     background(move || service()?.list(query)).await
 }
 

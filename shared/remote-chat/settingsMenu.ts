@@ -14,6 +14,7 @@ export function settingOptions(field: SettingField, models: Model[], selection: 
   if (field === 'speed') return [
     { value: 'normal', label: '普通模式' },
     { value: 'fast', label: '快速模式', description: '与电脑端同步，对后续消息生效。' },
+    { value: 'ultrafast', label: 'Ultrafast 模式', description: '与电脑端同步，对后续消息生效。' },
   ];
   if (field === 'access') return ACCESS_OPTIONS;
   if (field === 'model') return models.map((model) => ({
@@ -38,5 +39,5 @@ export function settingValue(field: SettingField, models: Model[], selection: Co
 export function settingsNotice({ saving, ready, error }: { saving: boolean; ready: boolean; error: string }) {
   if (error) return error;
   if (!saving) return '';
-  return ready ? '正在保存设置…' : '已保留选择，连接后自动保存。';
+  return ready ? '正在同步设置…' : '已保留选择，连接后自动保存。';
 }

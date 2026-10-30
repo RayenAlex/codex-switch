@@ -1,25 +1,34 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Keyboard, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useComposerSuggestion } from '../../../../shared/chat/useComposerSuggestion';
+import { useComposerFileReferences } from '../../../../shared/chat/ChatFileReferences';
+import { ComposerSuggestion } from './ComposerSuggestion';
+import type { PromptSuggestionSource } from '../../../../shared/chat/nextPromptSuggestion';
+import { ComposerInput } from './ComposerInput';
+import { t, useLanguage } from '../i18n';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Keyboard, Pressable, ScrollView, Text, View } from 'react-native';
 import { ChatSettings } from './ChatSettings';
+import type { ChatConnectionProps } from './ChatProfileMenu';
 import { ComposerGoal } from './ComposerGoal';
 import { useGoalMode } from '../../../../shared/remote-chat/client/useGoalMode';
 import type { RemoteGoals } from '../../../../shared/remote-chat/client/goals';
 import type { ThreadGoal } from '../../../desktop/src/pages/codexGui/goalTypes';
 import type { ReadUsage } from '../../../../shared/remote-chat/usage';
+import type { ReadConversationMetrics } from '../../../../shared/remote-chat/conversationMetrics';
 import type { ContextSettingsApi } from '../../../../shared/remote-chat/contextSettings';
 import { ComposerActionButton } from './ComposerActionButton';
-import Feather from '@expo/vector-icons/Feather';
-import { modelLabelTail } from './modelLabel';
+import { ComposerModelButton } from './ComposerModelButton';
 import { ComposerAddMenu, type ComposerAddAction } from './ComposerAddMenu';
 import { ComposerPopover } from './ComposerPopover';
 import { ComposerPluginMenu } from './ComposerPluginMenu';
+import { ComposerConversationMenu } from './ComposerConversationMenu';
+import type { ConversationSearch } from '../../../../shared/chat/useConversationCandidates';
 import { ComposerReferences } from './ComposerReferences';
-import { ComposerUploadProgress } from './ComposerUploadProgress';
 import type { UploadProgress } from '../../../../shared/remote-chat/uploadProgress';
 import { ComposerQuotes } from './ComposerQuotes';
 import { useChatQuotes } from './ChatQuotes';
 import { replyWithQuotes } from './replyQuotes';
 import { ComposerProjectFiles } from './ComposerProjectFiles';
+import { ComposerFileMenu } from './ComposerFileMenu';
 import { useComposerAttachments } from './useComposerAttachments';
 import type { RemoteComposerCatalog } from '../../../../shared/remote-chat/composerCatalog';
 import type { ProjectFilesRequest, ProjectFilesResponse } from '../../../../shared/remote-chat/projectFiles';
@@ -32,13 +41,16 @@ import { useComposerMenu } from './useComposerMenu';
 import type { SkillCatalogState } from './skillCatalog';
 import { useChatDraft } from '../../../../shared/remote-chat/client/useChatDraft';
 import type { Model, SendInput, ThreadTokenUsage } from './types';
-import { styles } from './styles';
-import { composerLabel, type ComposerSettings } from '../../../../shared/remote-chat/composer';
+import { useStyles } from './styles';
+import type { ComposerSettings } from '../../../../shared/remote-chat/composer';
 import { ChatQueue } from './ChatQueue';
 import type { QueueProps } from '../../../../shared/remote-chat/client/queueProps';
 import { useQueueEditor } from '../../../../shared/remote-chat/client/useQueueEditor';
 
 interface Props {
+  projectPicker?: ReactNode;
+  suggestions?: PromptSuggestionSource;
+  connection: ChatConnectionProps;
   upload?: UploadProgress;
   reconnecting?: boolean;
   goals?: RemoteGoals;
@@ -48,12 +60,14 @@ interface Props {
   contextSettings: ContextSettingsApi;
   tokenUsage?: ThreadTokenUsage;
   readUsage: ReadUsage;
+  readConversationMetrics: ReadConversationMetrics;
   usageActive: boolean;
   models: Model[];
   selection: ComposerSettings;
   settingsBusy: boolean;
   settingsError: string;
   updateSettings: (settings: Partial<ComposerSettings>) => Promise<void>;
+  refreshModels: () => Promise<void>;
   threadId: string | null;
   active: boolean;
   ready: boolean;
@@ -69,12 +83,16 @@ interface Props {
   compact: () => Promise<boolean>;
   loadCatalog: (cwd: string) => Promise<RemoteComposerCatalog>;
   loadFiles: (options: ProjectFilesRequest) => Promise<ProjectFilesResponse>;
+  loadConversations: ConversationSearch;
 }
 
-export function ChatComposer({ models, selection, settingsBusy, settingsError, updateSettings,
-  readUsage, usageActive, tokenUsage, contextSettings, queue, goals, goal, goalBusy,
+export function ChatComposer({ projectPicker, suggestions, models, selection, settingsBusy, settingsError,
+  updateSettings, refreshModels,
+  readUsage, readConversationMetrics, usageActive, tokenUsage, contextSettings, connection, queue, goals, goal, goalBusy,
   threadId, active, ready, sending, running, upload, reconnecting = false, interrupted = false, send, interrupt,
-  catalog, cwd, compactReason, compacting, compact, loadCatalog, loadFiles }: Props) {
+  catalog, cwd, compactReason, compacting, compact, loadCatalog, loadFiles, loadConversations }: Props) {
+  const styles = useStyles();
+  useLanguage();
   const [settings, setSettings] = useState(false);
   const goalMode = useGoalMode(threadId, sending);
   useEffect(() => { if (active && ready && threadId) void goals?.load(threadId); }, [goals, threadId, active, ready]);
@@ -111,12 +129,22 @@ export function ChatComposer({ models, selection, settingsBusy, settingsError, u
       menu.setSelection({ start: message.text.length, end: message.text.length });
       requestAnimationFrame(() => menu.input.current?.focus());
     } });
-  const compactField = !goalMode.enabled && !goal && !draft.text.length && !hasDraft && !photos.busy && !photos.error;
+  const suggestion = useComposerSuggestion({ source: suggestions, value: draft.text,
+    blocked: !active || !usageActive || disabled || sending || running || hasDraft || photos.busy || attachments.busy
+      || queueEditor.loading || menu.open || adding || settings || !!projectFiles || goalMode.enabled,
+    fill: text => { draft.setText(text); menu.setSelection({ start: text.length, end: text.length });
+      menu.input.current?.focus(); } });
+  const compactField = !suggestion.text && !goalMode.enabled && !goal && !draft.text.length && !hasDraft
+    && !photos.busy && !photos.error;
   useEffect(() => { if (!active) { setSettings(false); setAdding(false); setProjectFiles(null); } }, [active]);
   useEffect(() => { setSettings(false); setAdding(false); setProjectFiles(null); setAttachmentError(''); }, [threadId]);
   useEffect(() => { setProjectFiles(null); }, [cwd]);
   const action = composerAction({ running: running && !hasDraft, interrupted: interrupted && !goalMode.enabled, hasDraft });
   const attachmentBusy = sending || photos.busy || attachments.busy || queueEditor.loading;
+  useComposerFileReferences({ scope: `${threadId ?? ''}:${cwd}`,
+    enabled: active && !disabled && !attachmentBusy && !goalMode.enabled, add: attachments.add,
+    addQuote: quote => quoteDraft?.add({ ...quote, role: 'tool' }) ?? false,
+    focus: () => menu.input.current?.focus() });
   const cannotSend = disabled || attachmentBusy || goalBusy || (goalMode.enabled && running)
     || (action === 'send' && !hasDraft);
   const actionDisabled = action === 'pause' ? !ready || pausing : cannotSend;
@@ -133,8 +161,8 @@ export function ChatComposer({ models, selection, settingsBusy, settingsError, u
     const size = submittedPhotos.reduce((total, photo) => total + photo.dataUrl.length, 0)
       + submittedAttachments.reduce((total, item) => total + (item.data?.length ?? 0), 0);
     try { validateUploadedFiles(submittedAttachments); }
-    catch (cause) { setAttachmentError(cause instanceof Error ? cause.message : '文件无法发送，请重新选择。'); return; }
-    if (size > chatAttachmentDataLimit()) { setAttachmentError('附件总大小过大，请减少照片或文件后再试。'); return; }
+    catch (cause) { setAttachmentError(cause instanceof Error ? cause.message : t("文件无法发送，请重新选择。")); return; }
+    if (size > chatAttachmentDataLimit()) { setAttachmentError(t("附件总大小过大，请减少照片或文件后再试。")); return; }
     setAttachmentError('');
     const text = replyWithQuotes(action === 'continue' ? CONTINUE_MESSAGE : draft.text, submittedQuotes);
     const sent = await draft.submit({ text, goalMode: goalMode.enabled,
@@ -157,8 +185,15 @@ export function ChatComposer({ models, selection, settingsBusy, settingsError, u
   };
   const menuContent = () => {
     if (adding) return <ComposerAddMenu busy={attachmentBusy} choose={chooseAdd} />;
+    if (menu.files) return <ComposerFileMenu key={`${threadId}:${cwd}`} query={menu.query}
+      threadId={threadId} cwd={cwd} ready={ready && !attachmentBusy} load={loadFiles} close={menu.close}
+      choose={reference => { if (attachments.add(reference)) menu.consumeTrigger(); }} />;
+    if (menu.conversations) return <ComposerConversationMenu key={threadId} query={menu.query}
+      threadId={threadId} ready={ready && !attachmentBusy} load={loadConversations} close={menu.close}
+      choose={reference => { if (attachments.add(reference)) menu.consumeTrigger(); }} />;
     if (menu.plugins) return <ComposerPluginMenu catalog={catalog} query={menu.query} load={readCatalog}
-      chooseSkill={menu.choose} choosePlugin={(plugin) => { attachments.addPlugin(plugin); menu.consumeTrigger(); }} />;
+      chooseSkill={menu.choose}
+      choosePlugin={plugin => { if (attachments.addPlugin(plugin)) menu.consumeTrigger(); }} />;
     return <ChatCommandMenu catalog={catalog} query={menu.query} skillsOnly={menu.skillsOnly}
       compactReason={compactReason} choose={menu.choose}
       goal={goals ? () => { menu.consumeTrigger(); goalMode.enter(); } : undefined}
@@ -166,13 +201,13 @@ export function ChatComposer({ models, selection, settingsBusy, settingsError, u
   };
   return <View style={styles.composerDock}>
     {queue && <ChatQueue {...queue} {...queueEditor} />}
+    {projectPicker}
     <View style={[styles.composer, compactField && styles.composerCompact]}>
-    {!!draft.error && <Text accessibilityRole="alert" style={styles.error}>{draft.error}</Text>}
-    {compacting && <Text style={styles.subtitle}>正在压缩上下文…</Text>}
+    {!!draft.error && <Text accessibilityRole="alert" style={styles.error}>{t(draft.error)}</Text>}
+    {compacting && <Text style={styles.subtitle}>{t("正在压缩上下文…")}</Text>}
     {!!(attachmentError || attachments.error) && <Text accessibilityRole="alert" style={styles.error}>
-      {attachmentError || attachments.error}</Text>}
-    {attachments.busy && <Text style={styles.status}>正在读取文件…</Text>}
-    <ComposerUploadProgress progress={sending ? upload : undefined} reconnecting={reconnecting} />
+      {t(attachmentError || attachments.error)}</Text>}
+    {attachments.busy && <Text style={styles.status}>{t("正在读取文件…")}</Text>}
     {(adding || menu.open) && <ComposerPopover anchor={anchor} anchorHeight={anchorHeight} wide={!adding}
       close={() => { setAdding(false); menu.close(); }}>
       {menuContent()}
@@ -181,37 +216,36 @@ export function ChatComposer({ models, selection, settingsBusy, settingsError, u
       onLayout={({ nativeEvent }) => setAnchorHeight(nativeEvent.layout.height)}>
       <ScrollView style={styles.composerContent} keyboardShouldPersistTaps="always" nestedScrollEnabled
         contentContainerStyle={styles.composerContentInner}>
-      <ChatPhotoPicker photos={photos} disabled={sending} active={active} />
-      <ComposerReferences items={attachments.items} disabled={attachmentBusy} remove={attachments.remove} />
+      <ChatPhotoPicker photos={photos} disabled={sending} active={active}
+        upload={sending ? upload : undefined} reconnecting={reconnecting} />
+      <ComposerReferences items={attachments.items} disabled={attachmentBusy} remove={attachments.remove}
+        upload={sending ? upload : undefined} reconnecting={reconnecting} />
       <ComposerQuotes disabled={sending} active={active} />
-      <TextInput ref={menu.input} accessibilityLabel="聊天消息"
-        style={[styles.input, compactField && styles.inputCompact]}
+      {(goalMode.enabled || goal) && <ComposerGoal key={`goal:${threadId}:${active}`}
+        goal={goalMode.enabled ? null : goal} draft={draft.text}
+        disabled={sending || !!goalBusy || (!!goal && !ready)} remove={() => {
+          if (goal && threadId && goals) void goals.clear(threadId).then(cleared => { if (cleared) goalMode.exit(); });
+          else goalMode.exit();
+        }} />}
+      <ComposerSuggestion text={suggestion.text} accept={suggestion.accept} />
+      <ComposerInput ref={menu.input} accessibilityLabel={t("聊天消息")} compact={compactField}
         multiline value={draft.text} maxLength={100_000} selection={menu.selection} editable={!queueEditor.loading}
-        placeholderTextColor="#999999" underlineColorAndroid="transparent"
         onSelectionChange={(event) => menu.setSelection(event.nativeEvent.selection)}
-        onChangeText={draft.setText} placeholder={ready ? (goalMode.enabled ? '描述想完成的目标…' : '发消息…') : '连接后发消息'} />
+        onChangeText={text => {
+          if (text) suggestion.dismiss(); else suggestion.restore();
+          draft.setText(text);
+        }}
+        placeholder={ready ? (goalMode.enabled ? t("描述想完成的目标…")
+          : t("% 引用文件，@ 引用对话…")) : t("连接后发消息")} />
       </ScrollView>
       <View pointerEvents="box-none" style={[styles.composerActions, compactField && styles.composerActionsCompact]}>
-        <Pressable accessibilityRole="button" accessibilityLabel="添加内容" style={styles.composerAdd}
+        <Pressable accessibilityRole="button" accessibilityLabel={t("添加内容")} style={styles.composerAdd}
           accessibilityState={{ expanded: adding }} onPress={() => { menu.close(); setAdding((current) => !current); }}>
           <Text style={styles.composerAddText}>+</Text>
         </Pressable>
         <View style={styles.composerTrailing}>
-          {(goalMode.enabled || goal) && <ComposerGoal disabled={sending || !!goalBusy || (!!goal && !ready)}
-            remove={() => {
-              if (goal && threadId && goals) void goals.clear(threadId).then((cleared) => { if (cleared) goalMode.exit(); });
-              else goalMode.exit();
-            }} />}
-          <Pressable accessibilityRole="button" style={[styles.composerModel, compactField && styles.composerModelCompact]}
-            accessibilityLabel={`${composerLabel(models, selection)}${selection.speed === 'fast' ? '，快速模式' : ''}，聊天设置`}
-            onPress={() => setSettings(true)}>
-            {compactField ? <Feather name="sliders" size={19} color={styles.composerModelText.color} /> : <>
-            <Text numberOfLines={1} ellipsizeMode="head" style={styles.composerModelText}>
-              {modelLabelTail(composerLabel(models, selection))}</Text>
-            {selection.speed === 'fast' && <Feather name="zap" size={14}
-              color={styles.composerModelText.color} accessibilityLabel="快速模式" />}
-            <Feather name="chevron-down" size={12} color={styles.composerModelText.color} /></>}
-          </Pressable>
+          <ComposerModelButton models={models} selection={selection} compact={compactField}
+            onPress={() => setSettings(true)} />
           <ComposerActionButton action={action} disabled={actionDisabled} busy={pausing || sending}
             onPress={() => { void submit(); }} />
         </View>
@@ -219,12 +253,13 @@ export function ChatComposer({ models, selection, settingsBusy, settingsError, u
     </View>
     {projectFiles && <ComposerProjectFiles imagesOnly={projectFiles === 'photos'} threadId={threadId} cwd={cwd}
       load={loadFiles} close={() => setProjectFiles(null)} choose={(file) => {
-        attachments.addFile({ kind: 'file', name: file.name, path: file.path }); setProjectFiles(null);
+        if (attachments.add({ kind: 'file', name: file.name, path: file.path })) setProjectFiles(null);
       }} />}
-    {settings && <ChatSettings models={models} selection={selection}
+    {settings && <ChatSettings models={models} selection={selection} connection={connection}
       threadId={threadId} contextSettings={contextSettings}
       readUsage={readUsage} usageActive={active && usageActive} tokenUsage={tokenUsage}
-      saving={settingsBusy} error={settingsError} ready={ready}
+      readConversationMetrics={readConversationMetrics}
+      saving={settingsBusy} error={settingsError} ready={ready} refreshModels={refreshModels}
       updateSettings={updateSettings} onClose={() => setSettings(false)} />}
   </View></View>;
 }

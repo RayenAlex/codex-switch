@@ -21,7 +21,8 @@ const DEFAULT_HEIGHT: f64 = 760.0;
 const DEFAULT_WIDTH_RATIO: f64 = 0.8;
 #[cfg(not(target_os = "macos"))]
 const MAX_DEFAULT_WIDTH: f64 = 1600.0;
-const MIN_WIDTH: f64 = 960.0;
+// Keep this in sync with the main window's minWidth in tauri.conf.json.
+const MIN_WIDTH: f64 = 1200.0;
 const MIN_HEIGHT: f64 = 680.0;
 const SCREEN_MARGIN: f64 = 24.0;
 
@@ -97,7 +98,7 @@ pub(crate) async fn set_close_to_tray<R: Runtime>(
 }
 
 pub(crate) fn restore_or_set_default<R: Runtime>(app: &App<R>) -> tauri::Result<()> {
-    let Some(window) = app.get_webview_window("main") else {
+    let Some(window) = app.get_window("main") else {
         return Ok(());
     };
 
@@ -119,7 +120,7 @@ pub(crate) fn restore_or_set_default<R: Runtime>(app: &App<R>) -> tauri::Result<
         state
     } else {
         set_default_size(app.handle(), &window)?;
-        capture_webview_window(&window).unwrap_or(MainWindowState {
+        capture_initial_window(&window).unwrap_or(MainWindowState {
             x: 0,
             y: 0,
             width: MIN_WIDTH as u32,
@@ -135,10 +136,7 @@ pub(crate) fn restore_or_set_default<R: Runtime>(app: &App<R>) -> tauri::Result<
     Ok(())
 }
 
-fn set_default_size<R: Runtime>(
-    app: &AppHandle<R>,
-    window: &tauri::WebviewWindow<R>,
-) -> tauri::Result<()> {
+fn set_default_size<R: Runtime>(app: &AppHandle<R>, window: &Window<R>) -> tauri::Result<()> {
     let Some(monitor) = window.current_monitor()?.or(app.primary_monitor()?) else {
         return Ok(());
     };
@@ -164,7 +162,7 @@ fn set_default_size<R: Runtime>(
 
 #[cfg(target_os = "macos")]
 pub(crate) fn reset_to_default_size<R: Runtime>(app: &AppHandle<R>) {
-    if let Some(window) = app.get_webview_window("main") {
+    if let Some(window) = app.get_window("main") {
         if let Err(error) = set_default_size(app, &window) {
             eprintln!("failed to reset main window size: {error}");
         }
@@ -253,7 +251,7 @@ fn capture_window<R: Runtime>(window: &Window<R>) -> Option<MainWindowState> {
     is_sane(state).then_some(state)
 }
 
-fn capture_webview_window<R: Runtime>(window: &tauri::WebviewWindow<R>) -> Option<MainWindowState> {
+fn capture_initial_window<R: Runtime>(window: &Window<R>) -> Option<MainWindowState> {
     let position = window.outer_position().ok()?;
     let size = window.inner_size().ok()?;
     let state = MainWindowState {
@@ -378,7 +376,7 @@ mod tests {
                 height: 1040,
             },
         ];
-        let saved = state(1500, 100, 1000, 700);
+        let saved = state(1500, 100, 1280, 700);
 
         assert_eq!(fit_to_work_areas(saved, &screens), Some(saved));
     }
@@ -409,7 +407,7 @@ mod tests {
         }];
 
         assert_eq!(
-            fit_to_work_areas(state(2500, 100, 1000, 700), &screens),
+            fit_to_work_areas(state(2500, 100, 1280, 700), &screens),
             None
         );
     }
@@ -444,6 +442,7 @@ mod tests {
 
     #[test]
     fn uses_eighty_percent_of_the_screen_for_the_macos_default() {
-        assert_eq!(proportional_default_size(1440.0, 900.0), (1152.0, 720.0));
+        assert_eq!(proportional_default_size(1600.0, 900.0), (1280.0, 720.0));
+        assert_eq!(proportional_default_size(1440.0, 900.0), (MIN_WIDTH, 720.0));
     }
 }

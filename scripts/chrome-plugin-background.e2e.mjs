@@ -18,6 +18,15 @@ await fs.cp(source, extension, { recursive: true });
 await fs.writeFile(path.join(extension, 'background.js'), `
 import { execute } from './operations.js';
 import { initializePermissions } from './permissions.js';
+import { stopDebugging } from './driver.js';
+import { debuggerDetached } from './debugger-connections.js';
+globalThis.connectionCalls = [];
+for (const method of ['attach', 'detach']) {
+  const original = chrome.debugger[method].bind(chrome.debugger);
+  chrome.debugger[method] = (...args) => { connectionCalls.push({method,target:args[0]}); return original(...args); };
+}
+chrome.debugger.onDetach.addListener(target => { void debuggerDetached(target); });
+globalThis.stop = stopDebugging;
 const ready = initializePermissions();
 globalThis.run = async (operation, args) => { await ready; return execute({clientId:'fixture'}, {operation,args}); };
 globalThis.read = async (tabId) => (await chrome.scripting.executeScript({target:{tabId,allFrames:true},world:'MAIN',
@@ -41,6 +50,48 @@ function findReference(snapshot, role, name) {
   return line.match(/^\[([^\]]+)\]/)[1];
 }
 
+async function checkConnectionAndStop(tabId) {
+  const { evaluate } = browser;
+  await delay(500);
+  assert.deepEqual(await evaluate(`connectionCalls.filter(call=>call.target.tabId===${tabId})`),
+    [{ method: 'attach', target: { tabId } }]);
+  const failed = await evaluate(`run('click',{tabId:${tabId},ref:'expired'}).then(()=>false,()=>true)`);
+  assert.equal(failed, true);
+  await evaluate(`run('snapshot',{tabId:${tabId}})`);
+  assert.deepEqual(await evaluate(`connectionCalls.filter(call=>call.target.tabId===${tabId})`),
+    [{ method: 'attach', target: { tabId } }]);
+  await evaluate('stop()');
+  assert.equal(await evaluate(`chrome.debugger.getTargets().then(targets=>
+    targets.find(target=>target.tabId===${tabId})?.attached)`), false);
+}
+
+async function checkTaskCompletion() {
+  const { evaluate } = browser;
+  const open = () => evaluate(`run('open',{url:${JSON.stringify(url)}})`);
+  const temporary = await open();
+  const kept = await open();
+  const user = await evaluate(`chrome.tabs.create({url:${JSON.stringify(url)},active:false})`);
+  await evaluate(`chrome.tabs.group({tabIds:[${user.id}],groupId:${temporary.groupId}})`);
+  assert.equal(await evaluate(`chrome.tabGroups.get(${temporary.groupId}).then(group=>group.title)`), 'Remote AI');
+  const tabIds = [temporary.tabId, kept.tabId, user.id];
+  for (const tabId of tabIds) await evaluate(`run('snapshot',{tabId:${tabId}})`);
+  const result = await evaluate(`run('finish',${JSON.stringify({ tabIds, keepTabIds: [kept.tabId] })})`);
+  assert.deepEqual(result.closedTabIds, [temporary.tabId]);
+  assert.deepEqual(result.keptTabIds, [kept.tabId, user.id]);
+  assert.deepEqual(result.failedTabIds, []);
+  for (const tabId of tabIds) {
+    assert.ok(!await evaluate(`chrome.debugger.getTargets().then(items=>items.find(t=>t.tabId===${tabId})?.attached)`));
+  }
+  await evaluate(`chrome.tabs.remove([${kept.tabId},${user.id}])`);
+  const first = await open();
+  const second = await open();
+  const finished = await evaluate(`run('finish',{tabIds:[${first.tabId},${second.tabId}]})`);
+  assert.deepEqual(finished.closedTabIds, [first.tabId, second.tabId]);
+  assert.deepEqual(await evaluate(`chrome.tabGroups.query({})`), []);
+  assert.deepEqual(await evaluate(`chrome.storage.session.get('browserWorkTabs').then(s=>s.browserWorkTabs)`), []);
+  console.log('Passed task completion: temporary tabs and empty groups closed; kept and user tabs preserved.');
+}
+
 async function checkTab({ window, active }) {
   const { evaluate } = browser;
   const tab = await evaluate(`chrome.tabs.create(${JSON.stringify({ url, active, windowId: window.id })})`);
@@ -49,8 +100,12 @@ async function checkTab({ window, active }) {
   const beforeWindow = await evaluate(`chrome.windows.get(${window.id})`);
   const beforeActive = await evaluate(`chrome.tabs.query({active:true,windowId:${window.id}})`);
   const beforeVisibility = (await evaluate(`read(${tab.id})`))[0].visibility;
-  const run = (operation, args) => evaluate(
-    `run(${JSON.stringify(operation)},${JSON.stringify({tabId:tab.id,...args})})`);
+  const run = async (operation, args) => {
+    const result = await evaluate(`run(${JSON.stringify(operation)},${JSON.stringify({tabId:tab.id,...args})})`);
+    assert.equal(await evaluate(`chrome.debugger.getTargets().then(targets=>
+      targets.find(target=>target.tabId===${tab.id})?.attached)`), true);
+    return result;
+  };
   const action = async (operation, { role, name, frameId, ...args }) => {
     const snapshot = await run('snapshot', { ...(frameId ? { frameId } : {}) });
     return run(operation, { ref: findReference(snapshot, role, name), ...args });
@@ -82,14 +137,17 @@ async function checkTab({ window, active }) {
   assert.equal(afterWindow.state, beforeWindow.state);
   assert.equal((await evaluate(`chrome.tabs.query({active:true,windowId:${window.id}})`))[0].id, beforeActive[0].id);
   assert.equal((await evaluate(`read(${tab.id})`))[0].visibility, beforeVisibility);
+  await checkConnectionAndStop(tab.id);
   await evaluate(`chrome.tabs.remove(${tab.id})`);
-  console.log(`Passed ${active ? 'selected' : 'unselected'} tab: input and frames; window and visibility unchanged.`);
+  console.log(`Passed ${active ? 'selected' : 'unselected'} tab: one connection across input and frames;`
+    + ' stop releases it; window and visibility unchanged.');
 }
 
 try {
   browser = await launchExtensionTest({ executable, extension, profile, extensionId });
   const window = await browser.evaluate('chrome.windows.create({url:"about:blank",focused:false,state:"minimized"})');
   for (const active of [false, true]) await checkTab({ window, active });
+  await checkTaskCompletion();
 } finally {
   await browser?.close();
   server.closeAllConnections();

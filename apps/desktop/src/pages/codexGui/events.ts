@@ -5,24 +5,27 @@ import { restoreModelChanges } from "./modelChangeHistory";
 import { restoreProcessing, trackProcessing } from "./processing";
 import { trackProcessingApproval } from "./processingApprovals";
 import { mergeMessageItems } from "./sentMessages";
+import { recordRequestError, restoreRequestErrors } from "./turnRequestErrors";
+import { currentRunningTurn } from "../../../../../shared/chat/runningTurn";
 
 export function conversation(thread: Thread, previous?: Conversation): Conversation {
   const previousTurns = new Map(previous?.turns.map((turn) => [turn.id, turn]));
   const cached = cachedTurnDetails(thread.id);
   const turns = (thread.turns ?? []).map((turn) => {
     const previousTurn = previousTurns.get(turn.id);
-    return { diff: previousTurn?.diff ?? cached.get(turn.id)?.diff,
+    return restoreRequestErrors({ diff: previousTurn?.diff ?? cached.get(turn.id)?.diff,
       plan: previousTurn?.plan ?? cached.get(turn.id)?.plan,
       planExplanation: previousTurn?.planExplanation ?? cached.get(turn.id)?.planExplanation,
       retryError: previousTurn?.retryError,
       ...restoreTurnTiming(turn, previousTurn),
       items: mergeMessageItems(previousTurn?.items ?? [],
-        restoreModelChanges(turn.items ?? [], cached.get(turn.id)?.modelChanges)) };
+        restoreModelChanges(turn.items ?? [], cached.get(turn.id)?.modelChanges)) }, previousTurn);
   });
-  const active = turns.find((turn) => turn.status === "inProgress");
+  const active = currentRunningTurn(turns);
   return { thread, turns, activeTurn: active?.id ?? null,
     ...(active ? { processing: restoreProcessing(active, previous?.processing) } : {}),
-    tokens: previous?.tokens ?? 0, tokenUsage: previous?.tokenUsage, error: "" };
+    tokens: previous?.tokens ?? thread.tokenUsage?.total.totalTokens ?? 0,
+    tokenUsage: previous?.tokenUsage ?? thread.tokenUsage, error: "" };
 }
 
 function updateTurn(value: Conversation, id: string, update: (turn: Turn) => Turn): Conversation {
@@ -36,8 +39,8 @@ function updateTurn(value: Conversation, id: string, update: (turn: Turn) => Tur
 
 function mergeTurn(previous: Turn, incoming: Turn): Turn {
   // Lifecycle notifications can contain only a summary. Omitted items are not deletions.
-  return { ...previous, ...restoreTurnTiming(incoming, previous),
-    items: mergeMessageItems(previous.items, incoming.items ?? []) };
+  return restoreRequestErrors({ ...previous, ...restoreTurnTiming(incoming, previous),
+    items: mergeMessageItems(previous.items, incoming.items ?? []) });
 }
 
 function updateItem(value: Conversation, event: GuiEvent, update: (item: Item) => Item): Conversation {
@@ -119,8 +122,7 @@ function reduceConversationContent(value: Conversation, event: GuiEvent): Conver
     const turnId = params.turnId ?? value.activeTurn;
     if (!turnId) return value;
     const error = params.error ?? { message: "" };
-    return updateTurn(value, turnId, (turn) => params.willRetry
-      ? { ...turn, retryError: error, error: null } : { ...turn, error });
+    return updateTurn(value, turnId, (turn) => recordRequestError(turn, error, Boolean(params.willRetry)));
   }
   return value;
 }
@@ -130,7 +132,7 @@ export function reduceConversation(value: Conversation, event: GuiEvent): Conver
 }
 
 function syncThreadPreview(state: GuiState, thread: Thread): Thread[] {
-  const update = (entry: Thread) => ({ ...entry, preview: thread.preview,
+  const update = (entry: Thread) => ({ ...entry, turns: undefined, preview: thread.preview,
     cwd: state.projectOverrides[entry.id] ?? entry.cwd });
   if (state.threads.some((entry) => entry.id === thread.id)) {
     return state.threads.map((entry) => entry.id === thread.id ? update(entry) : entry);
@@ -149,6 +151,9 @@ export function reduceEvent(state: GuiState, event: GuiEvent): GuiState {
   }
   if (event.method === "computerUse/setup") {
     return { ...state, computerUseSetup: event.params.computerUseSetup };
+  }
+  if (event.method === "unattended/setup") {
+    return { ...state, unattendedSetup: event.params.unattendedSetup };
   }
   state = trackProcessingApproval(state, event);
   if (event.params.threadId && ["thread/goal/updated", "thread/goal/cleared"].includes(event.method)) {

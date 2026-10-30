@@ -25,7 +25,7 @@ it("shows only the model that a fixed Provider actually forwards to", () => {
     .toEqual(["deepseek-v3"]);
 });
 
-it("keeps the live Codex catalog for official accounts and upstream Codex Switch Providers", () => {
+it("keeps the live Codex catalog for official accounts and upstream Remote AI Providers", () => {
   expect(providerModels([], [])).toBeNull();
   expect(providerModels([{ ...provider, active: false }], [])).toBeNull();
   expect(providerModels([{ ...provider, kind: "openai" }], [])).toBeNull();
@@ -42,4 +42,14 @@ it("uses the aggregate's fixed model and reasoning supported by all members", ()
     modelReasoningEfforts: { "kimi-k3": ["high"] } }], [aggregate])!;
   expect(models.map((entry) => entry.model)).toEqual(["kimi-k3"]);
   expect(models[0].supportedReasoningEfforts).toEqual([{ reasoningEffort: "high", description: "" }]);
+});
+
+it("maps per-service reasoning capabilities to the aggregate's public model", () => {
+  const aggregate: AggregateApi = { id: "aggregate", name: "Pool", model: "shared",
+    memberProviderIds: ["relay", "second"], memberModels: { relay: "kimi-k3", second: "vendor/kimi" },
+    enabled: true, active: true, memberConversationCounts: {} };
+  const models = providerModels([provider, { ...provider, id: "second", active: false,
+    modelReasoningEfforts: { "vendor/kimi": ["high"] } }], [aggregate])!;
+  expect(models[0].model).toBe("shared");
+  expect(models[0].supportedReasoningEfforts.map(effort => effort.reasoningEffort)).toEqual(["high"]);
 });

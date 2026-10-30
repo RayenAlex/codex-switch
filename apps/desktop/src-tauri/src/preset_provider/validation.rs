@@ -167,7 +167,7 @@ fn parse_models(spec: &PresetSpec, payload: &Value) -> Result<Vec<String>, Strin
         .iter()
         .filter(|entry| model_entry_is_supported(spec.id, entry))
         .filter(|entry| lm_studio_model_is_supported(spec, entry))
-        .filter_map(|entry| model_id(entry).map(|model| (model, model_prefers_tools(entry))))
+        .filter_map(|entry| model_id(spec.id, entry).map(|model| (model, model_prefers_tools(entry))))
         .filter(|(model, _)| model_is_supported(spec.id, model))
         .collect::<Vec<_>>();
     if spec.model_source == ModelSource::LmStudioNative {
@@ -193,6 +193,10 @@ fn lm_studio_model_is_supported(spec: &PresetSpec, entry: &Value) -> bool {
 }
 
 fn model_entry_is_supported(id: PresetProviderId, entry: &Value) -> bool {
+    if id == PresetProviderId::Gemini {
+        return entry.get("supportedGenerationMethods").and_then(Value::as_array)
+            .is_none_or(|methods| methods.iter().any(|method| method == "generateContent"));
+    }
     if id != PresetProviderId::Mistral {
         return true;
     }
@@ -217,13 +221,21 @@ fn model_prefers_tools(entry: &Value) -> bool {
         .unwrap_or(false)
 }
 
-fn model_id(entry: &Value) -> Option<&str> {
-    entry
+fn model_id(id: PresetProviderId, entry: &Value) -> Option<&str> {
+    let model = entry
         .get("id")
         .or_else(|| entry.get("key"))
+        .or_else(|| (id == PresetProviderId::Gemini).then(|| entry.get("name")).flatten())
         .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|model| !model.is_empty())
+        .map(str::trim)?;
+    // Google's OpenAI-compatible list can return resource names such as models/gemini-2.5-pro.
+    // Normalize before filtering and deduplication; other providers may use this namespace.
+    let model = if id == PresetProviderId::Gemini {
+        model.strip_prefix("models/").unwrap_or(model)
+    } else {
+        model
+    };
+    (!model.is_empty()).then_some(model)
 }
 
 fn model_is_supported(id: PresetProviderId, model: &str) -> bool {

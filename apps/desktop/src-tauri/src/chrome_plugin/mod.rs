@@ -2,6 +2,7 @@
 mod automatic;
 pub(crate) mod commands;
 mod config;
+mod discovery;
 mod extension;
 mod identity;
 mod install;
@@ -10,6 +11,7 @@ mod native;
 mod private_storage;
 mod protocol;
 mod registration;
+mod sessions;
 mod transport;
 
 use std::{path::PathBuf, sync::Mutex};
@@ -18,7 +20,7 @@ pub(crate) use automatic::refresh_on_startup;
 static INSTALL_CHANGES: Mutex<()> = Mutex::new(());
 
 const HOST_NAME: &str = "dev.codex_switch.chrome";
-const PLUGIN_VERSION: &str = "1.2.2";
+const PLUGIN_VERSION: &str = "1.7.0";
 const MCP_SERVER: &str = "codex_switch_chrome";
 
 #[derive(Debug, thiserror::Error)]
@@ -28,7 +30,7 @@ enum BrowserError {
     #[cfg(windows)]
     #[error("未找到 Chrome，请先安装 Chrome 浏览器。")]
     ChromeNotFound,
-    #[error("未能打开 Chrome，请手动打开，在地址栏粘贴并回车。")]
+    #[error("未能打开 Chrome，请确认浏览器可正常启动后重试。")]
     ChromeLaunch,
     #[error("浏览器插件操作未完成，请重试。")]
     Storage,

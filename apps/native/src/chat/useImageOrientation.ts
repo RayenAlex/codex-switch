@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { Accelerometer } from 'expo-sensors';
@@ -12,6 +13,12 @@ const LOCKS = {
   'landscape-left': ScreenOrientation.OrientationLock.LANDSCAPE_LEFT,
   'landscape-right': ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT,
 } satisfies Record<ImageOrientation, ScreenOrientation.OrientationLock>;
+const DISPLAYED_ORIENTATIONS: Partial<Record<ScreenOrientation.Orientation, ImageOrientation>> = {
+  [ScreenOrientation.Orientation.PORTRAIT_UP]: 'portrait',
+  [ScreenOrientation.Orientation.PORTRAIT_DOWN]: 'portrait-down',
+  [ScreenOrientation.Orientation.LANDSCAPE_LEFT]: 'landscape-left',
+  [ScreenOrientation.Orientation.LANDSCAPE_RIGHT]: 'landscape-right',
+};
 
 export function useImageOrientation() {
   const [displayed, setDisplayed] = useState<ImageOrientation>('portrait');
@@ -21,6 +28,20 @@ export function useImageOrientation() {
   const busy = useRef(false);
   const mounted = useRef(true);
   const pending = useRef(Promise.resolve());
+
+  useEffect(() => {
+    let active = true;
+    const update = (value: ScreenOrientation.Orientation) => {
+      const orientation = DISPLAYED_ORIENTATIONS[value];
+      if (active && orientation) setDisplayed(orientation);
+    };
+    const subscription = ScreenOrientation.addOrientationChangeListener(event => {
+      update(event.orientationInfo.orientation);
+    });
+    void ScreenOrientation.getOrientationAsync().then(update)
+      .catch(() => console.warn('Unable to read preview orientation'));
+    return () => { active = false; subscription.remove(); };
+  }, []);
 
   useEffect(() => {
     mounted.current = true;
@@ -37,14 +58,14 @@ export function useImageOrientation() {
         candidate = next;
         if (samples >= STABLE_SAMPLES) setDevice(next);
       });
-    }).catch(() => { if (active) setError('暂时无法识别手机方向'); });
+    }).catch(() => { if (active) setError(t("暂时无法识别手机方向")); });
     return () => {
       active = false;
       mounted.current = false;
       subscription?.remove();
-      // Wait for an in-flight rotation before restoring the chat's portrait lock.
-      void pending.current.then(() => ScreenOrientation.lockAsync(LOCKS.portrait))
-        .catch(() => console.warn('Unable to restore portrait orientation'));
+      // Finish any requested rotation before allowing the chat to follow the device again.
+      void pending.current.then(() => ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.DEFAULT))
+        .catch(() => console.warn('Unable to restore automatic orientation'));
     };
   }, []);
 
@@ -57,14 +78,14 @@ export function useImageOrientation() {
     pending.current = (async () => {
       try {
         if (!await ScreenOrientation.supportsOrientationLockAsync(LOCKS[target])) {
-          if (mounted.current) setError('此方向暂不支持，请换个方向试试');
+          if (mounted.current) setError(t("此方向暂不支持，请换个方向试试"));
           return;
         }
         if (!mounted.current) return;
         await ScreenOrientation.lockAsync(LOCKS[target]);
         if (mounted.current) setDisplayed(target);
       } catch {
-        if (mounted.current) setError('旋转失败，请重试');
+        if (mounted.current) setError(t("旋转失败，请重试"));
       } finally {
         busy.current = false;
         if (mounted.current) setRotating(false);

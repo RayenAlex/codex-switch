@@ -35,7 +35,7 @@ pub(crate) use codex_config::{
     LOCAL_PROXY_PORT, LOCAL_PROXY_TOKEN,
 };
 pub(crate) const CODEX_SWITCH_CONTROL_MODEL: &str = "codex switch control";
-const LOCAL_PROXY_PROVIDER_NAME: &str = "Codex Switch Local Proxy";
+const LOCAL_PROXY_PROVIDER_NAME: &str = "Remote AI Local Proxy";
 pub(crate) const DEFAULT_OFFICIAL_MODEL: &str = "gpt-6-astra";
 pub(crate) const DEFAULT_OFFICIAL_REASONING_EFFORT: &str = "low";
 const MODEL_CATALOG_FILENAME: &str = "codex-switch-model-catalog.json";
@@ -367,6 +367,8 @@ pub(crate) struct ProviderInput {
     #[serde(default)]
     pub(crate) websocket_enabled: bool,
     pub(crate) api_format: ProviderApiFormat,
+    #[serde(default)]
+    pub(crate) request_options: Option<crate::models::ProviderRequestOptions>,
     #[serde(default)]
     pub(crate) balance_platform: Option<ProviderBalancePlatform>,
     #[serde(default)]

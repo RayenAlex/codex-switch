@@ -1,21 +1,67 @@
+import { t } from './i18n.js';
+
 const MAX_TARGETS = 64;
 const AUTO_ATTACH = { autoAttach: true, waitForDebuggerOnStart: false, flatten: true,
   filter: [{ type: 'iframe', exclude: false }] };
 
 // Chrome omits out-of-process frames from the main target's frame tree. Each child session owns a tree.
 export function createFrameSessions(target, guard) {
-  const state = { target, guard, targets: new Map(), frameSessions: new Map(), pending: new Set(), error: null };
+  const state = { target, guard, targets: new Map(), frameSessions: new Map(), pending: new Set(),
+    error: null, disposed: false };
   const listener = (source, method, params) => onEvent(state, { source, method, params });
   chrome.debugger.onEvent.addListener(listener);
   return {
     initialize: async () => { autoAttach(state); await settle(state); },
     documents: () => documents(state),
+    listen: (frameId, listener) => listen(state, frameId, listener),
+    debuggee: (frameId) => debuggee(state, frameId),
+    relatedFrames: (frameId) => relatedFrames(state, frameId),
     send: (method, params = {}, frameId) => {
-      if (frameId && !state.frameSessions.has(frameId)) throw new Error('页面框架已变化，请重新读取页面。');
+      if (frameId && !state.frameSessions.has(frameId)) throw new Error(t('frameChanged', '页面框架已变化，请重新读取页面。'));
       return command(state, { method, params, sessionId: state.frameSessions.get(frameId) });
     },
-    dispose: () => chrome.debugger.onEvent.removeListener(listener),
+    dispose: () => dispose(state, listener),
   };
+}
+
+async function dispose(state, listener) {
+  state.disposed = true;
+  chrome.debugger.onEvent.removeListener(listener);
+  await Promise.all([...state.pending]);
+  try {
+    // Disabling root auto-attach releases child frames/workers and their protocol domains.
+    // Reset root log domains too so the next read receives Chrome's retained log replay.
+    await chrome.debugger.sendCommand(state.target, 'Target.setAutoAttach', {
+      autoAttach: false, waitForDebuggerOnStart: false, flatten: true,
+    });
+    await chrome.debugger.sendCommand(state.target, 'Runtime.disable');
+    await chrome.debugger.sendCommand(state.target, 'Log.disable');
+    return true;
+  } catch {
+    // Cancellation may already have detached. Failed cleanup must not retain the connection.
+    return false;
+  }
+}
+
+function debuggee(state, frameId) {
+  if (!state.frameSessions.has(frameId)) throw new Error(t('frameChanged', '页面框架已变化，请重新读取页面。'));
+  const sessionId = state.frameSessions.get(frameId);
+  return { ...state.target, ...(sessionId ? { sessionId } : {}) };
+}
+
+function relatedFrames(state, frameId) {
+  const { sessionId } = debuggee(state, frameId);
+  return [...state.frameSessions].filter(([, owner]) => owner === sessionId).map(([id]) => id);
+}
+
+function listen(state, frameId, listener) {
+  if (!state.frameSessions.has(frameId)) throw new Error(t('frameChanged', '页面框架已变化，请重新读取页面。'));
+  const sessionId = state.frameSessions.get(frameId);
+  const handler = (source, method, params) => {
+    if (source.tabId === state.target.tabId && source.sessionId === sessionId) listener(method, params);
+  };
+  chrome.debugger.onEvent.addListener(handler);
+  return () => chrome.debugger.onEvent.removeListener(handler);
 }
 
 function onEvent(state, { source, method, params }) {
@@ -29,7 +75,7 @@ function onEvent(state, { source, method, params }) {
   }
   if (method !== 'Target.attachedToTarget' || params.targetInfo.type !== 'iframe') return;
   if (state.targets.has(params.sessionId)) return;
-  if (state.targets.size >= MAX_TARGETS) { state.error = new Error('页面框架过多，请关闭无关内容后重试。'); return; }
+  if (state.targets.size >= MAX_TARGETS) { state.error = new Error(t('tooManyFrames', '页面框架过多，请关闭无关内容后重试。')); return; }
   state.targets.set(params.sessionId, params.targetInfo.targetId);
   // Auto-attach is not recursive; nested cross-site frames need it enabled in each child session.
   autoAttach(state, params.sessionId);
@@ -37,7 +83,7 @@ function onEvent(state, { source, method, params }) {
 
 function autoAttach(state, sessionId) {
   const task = command(state, { method: 'Target.setAutoAttach', params: AUTO_ATTACH, sessionId })
-    .catch(() => { state.error = new Error('页面框架连接已变化，请重新读取页面。'); })
+    .catch(() => { state.error = new Error(t('frameConnectionChanged', '页面框架连接已变化，请重新读取页面。')); })
     .finally(() => state.pending.delete(task));
   state.pending.add(task);
 }
@@ -49,6 +95,7 @@ async function settle(state) {
 
 async function command(state, { method, params = {}, sessionId }) {
   await state.guard();
+  if (state.disposed) throw new Error(t('browserActionEnded', '浏览器操作已结束。'));
   return chrome.debugger.sendCommand({ ...state.target, ...(sessionId ? { sessionId } : {}) }, method, params);
 }
 

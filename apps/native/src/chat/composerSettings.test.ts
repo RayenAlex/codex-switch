@@ -1,5 +1,9 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { ChatController } from './controller';
+vi.mock('react-native', () => ({ Platform: { OS: 'android' }, NativeModules: {} }));
+vi.mock('../downloads/previews', () => ({ createPreviewDownloads: () => ({ dispose: vi.fn() }) }));
+vi.mock('../downloads/iosPreviews', () => ({ createIosPreviewDownloads: vi.fn() }));
+vi.mock('../downloads/manager', () => ({ downloadOwner: () => 'test-owner' }));
 import type { AuthSession } from '../types';
 import type { Thread } from './types';
 import type { ConnectionEvents } from '../../../../shared/remote-chat/client/connection';
@@ -122,6 +126,25 @@ it('synchronizes speed both ways and clears its pending save before another mess
   pc = { ...pc, revision: pc.revision + 1, settings: { ...pc.settings, speed: 'normal' } };
   mocks.events!.event({ method: COMPOSER_EVENT, params: pc });
   expect(controller.snapshot().settings.speed).toBe('normal');
+  controller.stop();
+});
+
+it('blocks sends and defers edits until the PC finishes switching the model source', async () => {
+  const controller = await existingChat();
+  pc = { ...pc, revision: pc.revision + 1, syncing: true };
+  mocks.events!.event({ method: COMPOSER_EVENT, params: pc });
+  expect(controller.snapshot().settingsBusy).toBe(true);
+  expect(await controller.send({ text: 'must wait', ...controller.snapshot().settings })).toBe(false);
+  await controller.setSettings({ effort: 'xhigh' });
+  expect(mocks.request).not.toHaveBeenCalled();
+  pc = { ...pc, revision: pc.revision + 1, syncing: false,
+    models: [pc.models[1]], settings: { ...pc.settings, model: 'second' } };
+  mocks.events!.event({ method: COMPOSER_EVENT, params: pc });
+  await vi.waitFor(() => expect(controller.snapshot().settingsBusy).toBe(false));
+  expect(controller.snapshot().settings).toMatchObject({ model: 'second', effort: 'xhigh' });
+  expect(mocks.request).toHaveBeenCalledExactlyOnceWith('request', {
+    operation: 'composerSet', settings: { effort: 'xhigh' },
+  });
   controller.stop();
 });
 

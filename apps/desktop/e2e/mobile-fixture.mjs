@@ -36,6 +36,15 @@ const httpServer = http.createServer((request, response) => {
     })().catch(() => response.writeHead(400).end('{}'));
     return;
   }
+  if (request.url === '/test/task-review' && request.method === 'POST') {
+    void (async () => {
+      let body = '';
+      for await (const chunk of request) body += chunk.toString();
+      await page.evaluate(input => window.chatTest.setReview(input), JSON.parse(body));
+      response.end('{}');
+    })().catch(() => response.writeHead(400).end('{}'));
+    return;
+  }
   if (request.url === '/test/skills' && request.method === 'POST') {
     void (async () => {
       let body = '';
@@ -81,7 +90,7 @@ const httpServer = http.createServer((request, response) => {
   }
   if (request.url === '/test/state') {
     void page.evaluate(() => window.chatTest ? ({ ...window.chatTest.demoState(), modes: window.chatTest.modes,
-      errors: window.chatTest.errors }) : null).then((state) => {
+      errors: window.chatTest.errors, desktop: window.desktopTest }) : null).then((state) => {
       if (!state) { response.writeHead(503).end('{}'); return; }
       response.setHeader('Content-Type', 'application/json');
       response.end(JSON.stringify({ ...state, connectedMobiles: mobileClients.size, mobileConnections, relayFrames }));
@@ -96,7 +105,15 @@ const httpServer = http.createServer((request, response) => {
     for (const client of mobileClients) client.terminate();
     relayFrames = 0;
     // The page load event can precede the chat harness's asynchronous initialization.
-    void page.evaluate(() => localStorage.clear()).then(() => page.reload())
+    void (async () => {
+      let body = '';
+      for await (const chunk of request) body += chunk.toString();
+      const transportVersion = body ? JSON.parse(body).transportVersion : 1;
+      const target = new URL(page.url());
+      target.searchParams.set('transportVersion', transportVersion === 2 ? '2' : '1');
+      await page.evaluate(() => localStorage.clear());
+      await page.goto(target.toString());
+    })()
       .then(() => page.waitForFunction(() => Boolean(window.chatTest)))
       .then(() => response.end('{}'))
       .catch(() => response.writeHead(503).end('{}'));
@@ -129,6 +146,7 @@ const httpServer = http.createServer((request, response) => {
     '/auth/refresh': { accessToken: 'renewed-test-token', refreshToken: 'renewed-test-refresh', user: profile },
     '/auth/me': profile,
     '/devices': { devices }, '/devices/providers': { providers: [] },
+    '/devices/providers?includeAggregates=true': { providers: [] },
     '/sync/accounts/summary': { accounts: [] },
     '/sync/accounts/web-summary': { accounts: [] },
   };
@@ -175,12 +193,16 @@ const vite = await createServer({ optimizeDeps: { entries: ['e2e/chat-harness.ht
   cacheDir: process.env.CHAT_TEST_CACHE, server: { port: uiPort, host: '127.0.0.1' } });
 await vite.listen();
 const browser = await chromium.launch({ channel: process.env.CHAT_TEST_BROWSER
-  ?? (process.platform === 'win32' ? 'msedge' : 'chromium'), headless: true });
+  ?? (process.platform === 'win32' ? 'msedge' : 'chromium'), headless: true,
+  // The emulator cannot resolve the host browser's .local candidates on its virtual NAT.
+  args: process.env.CHAT_TEST_REMOTE_DESKTOP === '1' ? ['--disable-features=WebRtcHideLocalIpsWithMdns'] : [],
+});
 page = await browser.newPage();
 page.on('pageerror', (error) => console.error(error.message));
 page.on('console', (message) => { if (message.type() === 'error') console.error(message.text()); });
 page.on('requestfailed', (request) => console.error('Fixture request failed:', request.url(), request.failure()));
-await page.goto(`http://127.0.0.1:${uiPort}/e2e/chat-harness.html?role=desktop&demo&socket=ws://127.0.0.1:${apiPort}/device-chat`,
+const desktopQuery = process.env.CHAT_TEST_REMOTE_DESKTOP === '1' ? '&remote-desktop' : '';
+await page.goto(`http://127.0.0.1:${uiPort}/e2e/chat-harness.html?role=desktop&demo${desktopQuery}&socket=ws://127.0.0.1:${apiPort}/device-chat`,
   { timeout: 60_000 });
 await page.waitForFunction(() => Boolean(window.chatTest));
 console.log(`Mobile fixture ready on port ${apiPort} (local test data only).`);

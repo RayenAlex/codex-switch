@@ -1,12 +1,22 @@
 import { t, useLanguage } from '../i18n';
-import { Children, isValidElement, type ReactNode } from 'react';
+import { Children, isValidElement, useContext, useEffect, useRef, type ReactNode } from 'react';
+import { FileEnvironmentContext } from '../../../desktop/src/pages/codexGui/fileEnvironment';
+import { RichText } from '../../../desktop/src/pages/codexGui/RichText';
+import { previewReference } from '../../../desktop/src/pages/codexGui/filePreview/references';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import { mathOptions, normalizeMathDelimiters } from '../../../../shared/chat/mathMarkdown';
+import { installTouchTextSelection } from '../../../../shared/chat/touchTextSelection';
+import 'katex/dist/katex.min.css';
+import './math.css';
 import { parseFileReference } from '../../../../shared/chat/fileReference';
 import { isInlineImage, localImageSource } from '../../../../shared/chat/imageSources';
 import { ChatCodeBlock } from './ChatCodeBlock';
 import { ChatImage } from './ChatImage';
-import { ChatFileLink } from './ChatFileLink';
+import { ChatFileContext, ChatFileLink } from './ChatFileLink';
 import { ChatMarkdownTable } from './ChatMarkdownTable';
 
 function textContent(children: ReactNode): string {
@@ -23,9 +33,15 @@ function codeBlock(children: ReactNode, desktop = false) {
   return <ChatCodeBlock text={textContent(children).replace(/\n$/, '')} language={language} desktop={desktop} />;
 }
 
+function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
+  const files = useContext(ChatFileContext);
+  const source = src && files?.basePath ? previewReference(src, files.basePath)?.path ?? src : src;
+  return <ChatImage source={source} description={alt || t("图片")} />;
+}
+
 const components: Components = {
   a: ({ children, href }) => <ChatFileLink href={href}>{children}</ChatFileLink>,
-  img: ({ src, alt }) => <ChatImage source={src} description={alt || t("图片")} />,
+  img: ({ src, alt }) => <MarkdownImage src={src} alt={alt} />,
   pre: ({ children }) => codeBlock(children),
 };
 
@@ -37,12 +53,20 @@ export function ChatMarkdown({ text, process = false, desktop = false }: {
   text: string; process?: boolean; desktop?: boolean;
 }) {
   useLanguage();
-  return <div className={`chat-markdown${process ? ' chat-process-prose' : ''}`}>
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={desktop ? desktopComponents : components}
+  const environment = useContext(FileEnvironmentContext);
+  const files = useContext(ChatFileContext);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => root.current ? installTouchTextSelection(root.current) : undefined, []);
+  if (environment && !files?.basePath) {
+    return <div className={process ? 'chat-process-prose' : undefined}><RichText text={text} /></div>;
+  }
+  return <div ref={root} className={`chat-markdown${process ? ' chat-process-prose' : ''}`}>
+    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]} rehypePlugins={[[rehypeKatex, mathOptions]]}
+      components={desktop || environment ? desktopComponents : components}
       urlTransform={(url, key) => {
         if (/^https?:\/\//i.test(url)) return url;
         if (key === 'href' && parseFileReference(url)) return url;
         return key === 'src' && (isInlineImage(url) || localImageSource(url)) ? url : '';
-      }}>{text}</ReactMarkdown>
+      }}>{normalizeMathDelimiters(text)}</ReactMarkdown>
   </div>;
 }

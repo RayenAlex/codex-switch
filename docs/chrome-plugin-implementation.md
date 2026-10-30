@@ -1,25 +1,41 @@
 # Independent Chrome plugin
 
-Codex Switch supplies its own Chrome extension and browser connection program. It does not bundle
+Remote AI supplies its own Chrome extension and browser connection program. It does not bundle
 OpenAI's proprietary Chrome plugin and does not require ChatGPT or a Node runtime to be installed.
 The plugin is available in the desktop application's community marketplace for the selected Codex Home.
 
 ## Installation and use
 
 1. Open the plugin marketplace for the intended Codex Home. The built-in Chrome assistant is prepared automatically.
-2. Follow the setup dialog to load the exported extension through Chrome's normal extension interface.
+2. Open **安装与连接** and use **前往 Chrome 应用商店** to install the
+   [published browser assistant](https://chromewebstore.google.com/detail/codex-switch-%E6%B5%8F%E8%A7%88%E5%99%A8%E5%8A%A9%E6%89%8B/ocngjhjonejkndmlkjmbgjdlghkdhpjj).
 3. Confirm that the card reports a connected browser, then send a message using that home.
    Existing GUI conversations reload changed MCP configuration before their next turn.
 4. Accept Chrome's website permissions when installing the extension. All HTTP(S) websites are allowed
-   by default. Turn off "Allow all websites" in the popup to use per-site session or remembered grants.
-5. Use the extension popup to pause control, revoke a site's permission, rename the browser profile,
-   or reconnect. The card shows connection settings and disable/enable controls together on one row.
+   by default. Turn off "Allow all websites" in the side panel's browser settings to use per-site grants.
+5. Click the extension icon to open the native Chrome side panel, then use its browser settings to
+   pause control, revoke a site's permission, rename the browser profile,
+   or reconnect. The card shows installation/connection settings and disable/enable controls together on one row.
    Explicitly disabled installations remain disabled when the card is reopened or the app is upgraded.
+
+The side panel displays the existing responsive Web app at `https://codex.onepiper.cloud/web/`,
+reusing the mobile chat, device selection, conversation list and account flow. Chat requires a Remote AI
+account and an online device; local browser settings remain available without signing in or network access.
+Chrome owns the panel layout: the webpage keeps its own viewport and scrollbar, and the panel follows
+Chrome's left/right side preference. No page styles or scroll containers are changed.
+Switching to settings keeps the chat frame alive, preserving drafts and active responses.
+Unpacked extension updates wait while any side panel is open, then retry after it closes.
+
+The hosted chat is a sandboxed cross-origin frame with no bridge to extension APIs, page content or
+browser grants. Account storage stays on the Web app's origin. The extension CSP permits only the
+official chat host and local settings frames; privileged scripts are bundled locally. The toolbar
+provides reload and open-in-tab actions for connectivity problems. This follows Chrome's
+[sandboxed iframe guidance](https://developer.chrome.com/docs/extensions/develop/migrate/improve-security).
 
 Controlled webpages display a green cursor favicon. Pausing control, revoking access or navigating
 restores the website's icon. Focusing a minimized Chrome window also restores the window.
 Unless the user explicitly requests an already-open page, the browser instructions require opening
-a new background tab in the dedicated Codex group and continuing in task-created tabs. New tabs
+a new background tab in the dedicated Remote AI group and continuing in task-created tabs. New tabs
 automatically join a group belonging to the requesting home in their window; existing user tabs and
 same-named user groups are left in place. Opening returns the tab, window and group IDs. A grouping
 failure closes only the newly created tab and reports an error. Bringing a page forward requires
@@ -28,23 +44,48 @@ restriction on existing tabs; users can still request operations on their own op
 The debugger session prepares background input with Chrome's focus emulation without activating a
 tab or bringing a window forward. A selected tab created in a minimized window can have a zero-sized
 viewport; only that session receives temporary viewport dimensions. The window remains minimized.
-Input-driven rendering is allowed to settle before detaching, with a one-second limit so background
-animation callbacks do not leave the tool waiting indefinitely. All overrides end with the session.
+Input-driven rendering is allowed to settle before restoring page overrides, with a one-second limit
+so background animation callbacks do not leave the tool waiting indefinitely. All overrides end with
+each operation. Debugger connections are reused between operations, keeping Chrome's debugging banner
+visible throughout browser work, including long gaps and recoverable action failures. Connections have
+no idle expiry; `browser_finish` ends debugging and closes the specified task-created temporary tabs.
+`keepTabIds` preserves pages requested by the user while releasing debugging. Existing user tabs and
+other tasks' tabs remain open, including user pages moved into a work group. Ownership is recorded per
+tab in session storage, rather than inferred from group names. Chrome removes groups when their last
+tab closes. The skill requires completion before replying, including after failures, and reports failed
+cleanup IDs for retry. Completion is explicit: inactivity cannot distinguish a finished task from reasoning.
+Pause, access revocation, native-host disconnect and
+Chrome's Cancel button release connections immediately. Cancel also pauses control until the user resumes
+it in the side panel's browser settings. Closing a target removes only that connection. Frame/Worker subscriptions
+and log domains are reset after each operation so repeated reads still replay retained logs. Unpacked
+extension updates wait until retained connections have been released.
 This fixes the case where input commands acknowledged a click but the background page received no
 mouse event. A fresh snapshot is still required to verify the site's actual response.
 GUI conversations support the upstream MCP tool confirmation form with single-use allow/deny choices;
 site access and tool approval remain separate controls. Chrome webpage tasks prefer the Chrome skill,
 which explicitly checks tool availability instead of assuming that an installed skill provides tools.
 
-The setup button copies `chrome://extensions/` and opens Chrome. Paste into the address bar and
-press Enter to reach extension management. Chrome rejects that internal address in external startup
-arguments, even when the browser process launches successfully. Copy or launch failures remain visible
-inside the setup dialog, and the address is also displayed for manual entry.
-The setup dialog is 680 pixels wide and adapts to narrow windows. Click the extension directory path
-to copy it before selecting the unpacked extension folder in Chrome.
+For a website task with no connection to the requested profile, the skill and MCP instructions first
+direct the agent to inspect whether Chrome is running through available app/process tools. If Chrome
+is closed and the integration was not explicitly paused or disabled, the agent launches installed
+Chrome once, preferably in the background or minimized, and retries `browser_list` for up to 30 seconds.
+Work resumes only after the requested profile connects and is not paused. An already-running browser
+without that connection, unavailable inspection/launch tools, an unclear profile or an expired wait
+requires user help. Agents preserve profiles, pause state and permissions, and never restart a running
+browser to recover a connection. `browser_list` itself remains a read-only discovery tool; launching
+Chrome uses a separate app/process tool and its existing approval rules.
 
-Chrome 125 or newer is required. The desktop supplies an unpacked extension, so its first-time setup
-includes a manual Chrome loading step. Exporting the files alone does
+The primary setup button opens the official listing directly in Chrome, without changing the clipboard.
+Store installations receive updates through Chrome Web Store. The setup dialog is 448 pixels wide,
+with at most 400 pixels of content, and adapts to narrow windows. Launch failures remain visible inside the dialog.
+
+An optional collapsed manual-install section retains unpacked installation for development or when the
+store cannot be used. Its launch button copies `chrome://extensions/` and opens Chrome; paste into the
+address bar and press Enter to reach extension management. Chrome rejects that internal address in
+external startup arguments. Click the extension directory path to copy it before selecting the unpacked
+extension folder in Chrome. Users who installed from the store do not need a second unpacked copy.
+
+Chrome 125 or newer is required. Preparing the connection and exporting the bundled files alone does
 not mean the browser extension has been installed. No browser installation policies are changed.
 
 ## Desktop upgrades and unpacked extension updates
@@ -67,11 +108,83 @@ reinstalling or selecting the extension directory again is unnecessary. Later up
 
 ## Supported operations
 
-The MCP server exposes 21 tools for connected profiles, existing tabs, opening/navigating/focusing/
-closing tabs, history, reload, accessible page snapshots, frames, click/double-click, fill, typing,
-keyboard shortcuts, scrolling, selection, checkboxes, drag/drop, screenshots and waiting for text.
+The MCP server exposes 24 tools for connected profiles, existing tabs, opening/navigating/focusing/
+closing/finishing tabs, history, reload, accessible page snapshots, frames, click/double-click, fill, typing,
+keyboard shortcuts, scrolling, selection, checkboxes, drag/drop, screenshots, console logs, workers and waiting for text.
 Snapshots provide element references that expire when the document changes. Same-origin, cross-site
 and nested frames are supported, including out-of-process Chrome child sessions.
+
+`browser_console_logs` (extension 1.5.0) reads retained page messages, uncaught JavaScript errors,
+network console errors, associated Worker logs and browser diagnostics. `source` selects `all` (default),
+`page`, `network`, `worker` or `browser`. Browser diagnostics include security, deprecation, intervention
+and rendering warnings; `type` preserves Chrome's category. Page messages belong to the main document;
+use `frameId` from `browser_frames`
+for a specific iframe. `level` selects `all`, `debug`, `log`, `info`, `warn` or
+`error`; `limit` returns up to 1–200 recent matching entries (default 100). Results include millisecond
+Unix timestamps, one-based source lines/columns and bounded stacks, including inline async parents.
+`since` includes entries at or after a Unix millisecond timestamp; `text` matches a case-sensitive
+substring in the returned message or source URL. Filters apply before the count and size limits.
+`since` is a time filter, not a lossless event cursor; entries with identical timestamps can repeat.
+Object arguments use bounded previews. When Chrome omits them, up to 20 plain objects/arrays per
+runtime are inspected through own data descriptors, without invoking getters or custom formatters.
+`objectPreviewTiming: "read"` identifies current values, which can differ from values at log time.
+Previews retain up to 10 properties and two levels; large arrays omit indexed expansion. Unsupported
+objects keep their descriptions. Unavailable/limited previews and async parents set `truncated`.
+Output is bounded by both count and serialized size;
+`truncated` reports omitted entries or shortened fields.
+
+This is an on-demand read of Chrome's retained messages, not a persistent recording. Reading does
+not clear messages. Navigation, `console.clear()` and Chrome's own retention limits can remove
+older messages. Network entries cover console failures/warnings such as HTTP errors and failed
+connections; they are not a complete request history and do not include request/response bodies.
+Chrome does not supply a frame ID on retained browser log entries, so these entries have
+`scope: "renderer"`. Every document sharing that renderer must be authorized; their IDs appear in
+`rendererFrameIds`. Use `source: "page"` to read only the selected frame's JavaScript messages.
+
+Related dedicated, nested, blob and Service Workers are read through tab-scoped child sessions.
+`browser_workers` lists running Shared/Service Workers across the selected profile, excluding
+extension/internal workers. Select a relevant `workerId` from that list and pass it instead of
+`tabId`/`frameId` to read that worker directly. Shared/Service Worker logs can involve multiple pages;
+their messages have `scope: "worker"` and a worker ID, rather than being attributed to one document.
+The list is limited to 100 workers, with bounded URLs/titles and a `truncated` flag.
+
+Worker origins are authorized separately; blob workers use their embedded website origin.
+Extension isolated worlds and workers with opaque/unidentifiable origins are excluded. Up to 32
+related workers are read per call. Live-worker replays replace their forwarded renderer messages
+to avoid duplicates; terminated workers can still have retained forwarded entries. Stopped workers
+are counted in `unavailableWorkers`; forwarded messages without an identifiable website are
+counted in `unattributedWorkerMessages`. `workersTruncated`/`forwardedTruncated` also contribute to
+the overall truncation flag. Entries are merged by timestamp before the global count/size limits.
+Reads reject document changes, recheck access and release listeners/debugger connections on failure,
+pause or cancellation. Diagnostic reads skip input focus emulation, viewport overrides and rendering
+waits. This adds no permissions or persistent storage.
+
+### Installed ChatGPT extension comparison (2026-09-22)
+
+The locally installed ChatGPT extension `hehggadaopoacecdllhhajmbjkdcmajg`, version `1.26.901.11451`,
+was inspected read-only. Its bundled background implementation exposes `tab_cdp_call` and
+`tab_cdp_events`, forwards debugger events/detachment, and retains debugger connections. This is
+static evidence of its transport capabilities, not an end-to-end test of every ChatGPT debugging tool.
+No vendor code is copied or required by this integration.
+
+The following differences remain after the diagnostic improvements:
+
+| Debugging workflow | Remote AI behavior |
+| --- | --- |
+| Continuous events and sequence cursor | On-demand retained logs; `since` narrows reads but cannot recover discarded logs. |
+| Raw DevTools calls | Dedicated operations only; no arbitrary protocol commands or breakpoint controls. |
+| Full network inspection | Console network failures only; no request timeline, headers or response bodies. |
+| Object inspection | Bounded data previews; no interactive expansion or getter execution. |
+| Async stacks | Includes inline parents; unavailable parent IDs are reported as truncated, not fetched. |
+
+The extension transport permits broader developer workflows in the reference integration. Matching
+those workflows would require an explicit session lifecycle and domain-specific access controls here;
+they are not implied by the retained-log tool.
+
+The Windows regression fixture checks a real CSP warning, plain-object/array preview contents,
+getter non-execution, time/text filters, same-process and cross-site frame logs, and unchanged window
+state/focus after each operation. It re-minimizes the task-created window after initial loading, as
+Windows can asynchronously activate a newly created browser window during startup.
 
 File upload/download, JavaScript dialogs and arbitrary JavaScript execution are not exposed as tools.
 This is an independent implementation of the core browser workflow, not exhaustive feature parity
@@ -83,7 +196,7 @@ paths are implemented but have not received equivalent live platform verificatio
 - The Manifest V3 extension owns browser access, grants and pause state. It uses the documented
   [Chrome debugger API](https://developer.chrome.com/docs/extensions/reference/api/debugger).
 - [Native Messaging](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging)
-  launches the Codex Switch executable in a dedicated helper mode. The same executable supplies
+  launches the Remote AI executable in a dedicated helper mode. The same executable supplies
   STDIO MCP with `--chrome-mcp=<client-id>`. Both modes return before Tauri/WebView startup.
 - A framed, authenticated loopback transport connects the two helpers. Requests and messages are
   bounded. Revoking a home credential cancels its pending work; disconnects do not replay actions.
@@ -96,7 +209,7 @@ paths are implemented but have not received equivalent live platform verificatio
 
 Chrome's required host permissions cover HTTP(S) websites, so ordinary installations request permission
 once and do not display an extra prompt for each website. The all-site mode applies to authenticated
-Codex Switch clients in that Chrome profile. Users can select per-site confirmation instead; those
+Remote AI clients in that Chrome profile. Users can select per-site confirmation instead; those
 additional grants are scoped to the requesting home. Neither mode bypasses Chrome's own host permissions.
 Denial, closing or expiry of a per-site permission request does not authorize access. Pause/revoke
 cancels pending work and detaches browser control. Removing host permissions in Chrome also stops
@@ -109,6 +222,75 @@ webpage content as untrusted, preserve user tabs and respect permission decision
 are masked in accessible snapshots; screenshots can still contain visible page content.
 
 ## Verification
+
+### 2026-10-18 pages opened by assistant input
+
+Input operations register pages reported by `webNavigation.onCreatedNavigationTarget` for the
+operated source tab. The listener is active only through input and its rendering wait, and is removed
+on success, failure or cancellation. The navigation source is used instead of `tabs.Tab.openerTabId`:
+in background-tab tests the latter can point to the selected tab rather than the actual source.
+This requires the `webNavigation` permission; the extension does not persist navigation URLs.
+
+Child ownership is saved before grouping, so popup windows and grouping failures remain eligible
+for explicit completion. Existing user tabs, manual children outside input, other clients' pages,
+and requested keep tabs retain their previous protections. Completion still takes exact tab IDs.
+
+`node scripts/chrome-plugin-popup-tabs.e2e.mjs` covers background clicks, `noopener` links, script
+opens, chained pages, keyboard activation, iframe links, popup windows and user/keep protection
+in an isolated Chromium profile. Tab-group unit tests also cover concurrency, duplicate events,
+self-closing pages, failed/cancelled input, and ownership/grouping storage failures.
+
+### 2026-10-14 task completion and Remote AI naming
+
+Extension 1.6.0 names its task groups Remote AI and migrates recorded groups still using the old
+default title without renaming user-created or customized groups. Connections no longer expire
+during long reasoning gaps. Recoverable action failures retain the transport after permission checks
+and protocol cleanup. `browser_finish` is serialized with operations on each target, closes only
+recorded temporary tabs selected by the caller, and preserves existing pages and requested keep tabs.
+Ownership survives extension worker restart. Legacy groups without per-tab ownership records are
+renamed but their existing tabs are not claimed or automatically closed.
+
+The isolated Chromium background fixture verifies one attach across successful actions and a stale
+reference failure followed by retry. It also verifies completion with temporary and user-owned tabs
+in the same group, explicit keep tabs, debugger detachment and automatic removal of empty groups.
+Unit tests cover long gaps, per-home connection sharing, exact tab ownership, keep/retry behavior,
+cleanup failures, worker-only completion, concurrent work and legacy-name migration.
+
+### 2026-09-30 continuous browser control indication
+
+Extension 1.5.1 retains the debugger connection across successive operations. The Windows Chrome
+fixture verifies exactly one attach and no detach across repeated snapshots, trusted input and
+same/cross-origin frame actions, including an idle gap. Explicit stop detaches; window focus,
+minimized state and tab selection stay unchanged. Real Chrome console and Worker diagnostic
+fixtures also pass with reused connections.
+
+Unit tests cover idle expiry/renewal, active-operation protection, cancellation while attaching,
+cleanup failures, and a new request racing idle cleanup. Background integration tests cover Chrome
+Cancel during active/queued work and between requests, popup pause/resume, revocation, host-permission
+removal, target closure and native-host disconnect. No connection is recreated after Cancel until
+the user resumes control.
+
+### 2026-09-21 network and Worker logs
+
+The isolated Windows Chrome fixture covers retained 404, dropped-connection and CORS request
+failures; dedicated, nested, blob, Shared and Service Worker console output; uncaught worker errors
+and promise rejections; unrelated-tab and cross-site frame isolation; forwarded-log deduplication;
+global timestamp ordering and limits; worker termination; and navigation. Unit tests exercise
+renderer-wide authorization, worker origin checks, forbidden worker targets, cancellation and cleanup.
+The compiled MCP fixture checks worker discovery and direct-worker request routing.
+
+### 2026-09-20 console log reading
+
+Real Chrome for Testing checks in an isolated Windows profile verified logs emitted before the
+first tool call, all console levels, assertions, uncaught errors and promise rejections. Repeated
+reads preserve messages; filtering and limits return the expected entries. Same-process and
+cross-site iframes return only their own logs. Button-generated logs remain readable after the
+action's debugger connection closes; clearing logs and navigating do not return old messages.
+Reading leaves the minimized window and selected tab unchanged.
+
+Extension regression tests also cover invalid options, frame/tab/session isolation, ignoring
+extension worlds, output bounds, navigation/context replacement, permission checks, cancellation
+and listener cleanup. The compiled MCP protocol test checks tool discovery and `console_logs` relay.
 
 ### 2026-09-16 default grouped pages
 
@@ -194,15 +376,22 @@ without a per-site permission prompt. The resulting form contained the entered C
 After the operations, all-site access remained enabled, the per-site grant list stayed empty and no
 permission requests were pending. The task-created page was closed after verification.
 
-The toolbar popup uses a fixed 360 x 460 CSS-pixel document with an internally scrolling site list.
-Its root dimensions do not depend on the viewport, avoiding a feedback loop with Chrome's automatic
-popup sizing. The name field and save button share one row. Browser previews of empty/long lists,
-connection errors and narrow/wide viewports retained the same outer dimensions without horizontal overflow.
+Before version 1.7.0, the toolbar popup used a fixed 360 x 460 CSS-pixel document to avoid Chrome's
+automatic popup-sizing feedback loop. Version 1.7.0 replaces it with the native side panel and responsive
+settings described above. The browser name field and save button still share one row.
 
 The tested Windows release replaced the user's installed application and restarted successfully.
 Its SHA-256 is `FD7E3A3A6F9D80E0A0DEE1382696A342884C43FA02A73D564844D1E941B9D34F`.
 This earlier release required a manual browser refresh. The automatic upgrade behavior described above
 replaces that refresh step once extension 1.2.1 or newer has been loaded.
+
+## Connection discovery
+
+Browser discovery checks all valid endpoint records in bounded parallel batches. Only successful
+status replies count toward the 32-browser result limit; stale files and rejected replies cannot
+hide later live connections. Selected browser IDs are looked up directly, independently of the list
+limit. A record is removed only when its loopback connection is explicitly refused and its contents
+are unchanged. Timeouts, protocol/authentication errors, and paused browsers preserve the record.
 
 ## Repeatable checks
 
@@ -212,10 +401,17 @@ cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
 cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test codex_switch_lib_tests
 node --test scripts/chrome-plugin.test.mjs scripts/chrome-plugin-snapshot.test.mjs scripts/chrome-plugin-frames.test.mjs
-node scripts/chrome-plugin-tab-groups.test.mjs
+node --test scripts/chrome-plugin-tab-groups.test.mjs scripts/chrome-plugin-finish.test.mjs
 node scripts/chrome-plugin-tab-indicator.test.mjs
 node --test scripts/chrome-plugin-update.test.mjs
 node --test scripts/chrome-plugin-driver.test.mjs
+node --test scripts/chrome-plugin-connections.test.mjs scripts/chrome-plugin-lifecycle.test.mjs
+node --test scripts/chrome-plugin-console.test.mjs
+node --test scripts/chrome-plugin-console-format.test.mjs
+node scripts/chrome-plugin-console.e2e.mjs
+node --test scripts/chrome-plugin-workers.test.mjs
+node scripts/chrome-plugin-diagnostics.e2e.mjs
+node scripts/chrome-plugin-sidepanel.e2e.mjs
 cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --bin csw
 node --test scripts/chrome-plugin-protocol.test.mjs
 ```
@@ -226,6 +422,13 @@ to the release executable and run `node scripts/chrome-plugin-protocol.test.mjs 
 Release builds intentionally ignore the debug-only `CSW_CHROME_TEST_ROOT` override. The full debug
 protocol fixture uses temporary credentials and a simulated extension without changing Chrome registration.
 
+The side-panel E2E uses another isolated profile and stubs only the native host connection. It verifies
+native panel opening/closing, independent scrolling, frame isolation, draft preservation, settings and
+320/600-pixel layouts. Set `CSW_CHROME_LIVE_CHAT=1` for a read-only smoke test of the hosted login page.
+For full local chat integration, start `apps/desktop/e2e/mobile-fixture.mjs` and the Web Vite server
+with `VITE_DEV_API_URL` pointing at that fixture, then set `CSW_CHROME_CHAT_TEST_URL` to its `/web/` URL.
+This mode logs in with fixture credentials, sends a test message and verifies draft preservation.
+
 `node scripts/chrome-plugin-background.e2e.mjs` tests real extension input in an isolated Chrome profile.
 Install a Playwright Chromium build or set `CSW_CHROME_TEST_BROWSER` to a Chrome for Testing executable.
 On Windows the fixture creates its own unfocused window and minimizes it, testing both selected and
@@ -233,3 +436,19 @@ unselected tabs, trusted clicks, animation updates, input, checkboxes, and same/
 It asserts that window state and tab selection are unchanged. The harness attaches raw CDP only to
 the extension worker: Playwright page setup would otherwise supply its own focus emulation and hide
 the original bug. The test does not connect to the user's native host or touch existing browser profiles.
+
+`node scripts/chrome-plugin-icon-conflict.e2e.mjs` reproduces a competing favicon observer in an
+isolated browser. The indicator defers repairs to a timer and gives up after repeated conflicts;
+Chrome's debugger banner still identifies the controlled page. This prevents synchronous observers
+from starving page reads when another extension or an old extension world restores its own icon.
+The fixture verifies page reads, reload and cleanup. Reload uses `chrome.tabs.reload` so it does not
+first require scripts or debugger commands to complete in the old document.
+
+Mouse actions display a black pointer with short movement and click animations. The overlay lives in
+an isolated world with a closed shadow root, ignores hit testing and accessibility reads, and follows
+the coordinate space of each debugger session. Background waits use the extension's timer rather
+than page animation promises. Pointer updates never observe or repeatedly repair page mutations.
+Switching frame sessions, task completion and pause remove the owned overlays; an idle timer also
+hides them if revoked website access prevents cleanup. Reduced-motion preferences skip travel.
+Run `node --test scripts/chrome-plugin-pointer.test.mjs` and `node scripts/chrome-plugin-pointer.e2e.mjs`
+to verify appearance, positioning, trusted input, same/cross-origin frames, drag, scroll and cleanup.

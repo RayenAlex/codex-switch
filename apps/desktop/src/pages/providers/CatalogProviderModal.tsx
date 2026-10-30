@@ -12,6 +12,8 @@ import { modelOptions, normalizeModels } from "./providerUtils";
 import { ProviderFastModeSupportControl } from "./ProviderFormFields";
 import type { ProviderModalProps } from "./ProviderModal";
 import { usePresetModelLoader } from "./usePresetModelLoader";
+import { useProviderRequestOptions } from "./useProviderRequestOptions";
+import { ProviderAdvancedSettings } from "./ProviderAdvancedSettings";
 
 interface CatalogProviderModalProps extends ProviderModalProps {
   presetId: ProviderPresetId;
@@ -30,6 +32,7 @@ export function CatalogProviderModal({
   t,
 }: CatalogProviderModalProps) {
   const preset = PROVIDER_CATALOG[presetId];
+  const requestOptions = useProviderRequestOptions(provider);
   const [endpointId, setEndpointId] = useState<string>(preset.endpoints[0].id);
   const [baseUrl, setBaseUrl] = useState<string>(preset.defaultBaseUrl);
   const [apiKey, setApiKey] = useState("");
@@ -73,8 +76,9 @@ export function CatalogProviderModal({
     providerId: provider?.id,
     savedCredentialAvailable,
     apiKeyRequired: preset.apiKeyRequired,
-    modelsAvailable: preset.modelsAvailable,
+    modelsAvailable: preset.modelsAvailable && !requestOptions.error,
     fallbackModels: [...endpoint.fallbackModels],
+    requestOptions: requestOptions.value,
     onModels: handleLoadedModels,
     t,
   });
@@ -102,6 +106,7 @@ export function CatalogProviderModal({
     identityIsValid
     && activeModel
     && normalizedModels.length
+    && !requestOptions.error
     && loader.credentialAvailable,
   );
   const submit = async () => {
@@ -128,11 +133,14 @@ export function CatalogProviderModal({
         normalizedModels,
         provider?.imageInputModels ?? [],
       ),
+      modelApiFormats: Object.fromEntries(Object.entries(provider?.modelApiFormats ?? {})
+        .filter(([model]) => normalizedModels.includes(model))),
       contextWindow: null,
       modelSelectionControlledByCodex: true,
       fastModeEnabled: supportsFastMode,
       apiKey: apiKey.trim() || undefined,
       apiFormat: endpoint.apiFormat,
+      requestOptions: requestOptions.value,
       balancePlatform: null,
       balanceQueryUrl: null,
       balanceQueryUsesApiKey: true,
@@ -206,6 +214,7 @@ export function CatalogProviderModal({
             onChange={setModel} />
           <div className="provider-integration-note"><span>{t(preset.noteKey)}</span></div>
         </div>
+        <ProviderAdvancedSettings options={requestOptions} saving={saving} allowFullUrl={false} t={t} />
         <div className="provider-modal-footer">
           <Button onClick={onClose} disabled={saving}>{t("providers.form.cancel")}</Button>
           <Button type="primary" icon={<Save size={14} />} loading={saving} disabled={!canSave}

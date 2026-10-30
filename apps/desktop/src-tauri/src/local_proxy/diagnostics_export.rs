@@ -56,8 +56,14 @@ fn diagnostic_export_metadata<R: Runtime>(app: &tauri::AppHandle<R>) -> String {
         "retainedFiles": 2,
         "retryTimeoutSeconds": settings.as_ref().map(|value| value.upstream_429_retry_timeout_seconds),
         "sseIdleTimeout": settings.as_ref().map(|value| value.sse_idle_timeout),
+        "responseHeaderTimeoutSeconds": settings.as_ref().map(|value| value.response_header_timeout)
+            .unwrap_or_default().duration().as_secs(),
         "responseIdleTimeoutSeconds": UPSTREAM_RESPONSE_IDLE_TIMEOUT.as_secs(),
-        "connectTimeoutSeconds": UPSTREAM_CONNECT_TIMEOUT.as_secs()
+        "connectTimeoutSeconds": UPSTREAM_CONNECT_TIMEOUT.as_secs(),
+        "uploadIdleTimeoutSeconds": UPSTREAM_UPLOAD_IDLE_TIMEOUT.as_secs(),
+        "uploadTotalTimeoutSeconds": Value::Null,
+        "networkRetryDelaySeconds": UPSTREAM_TIMEOUT_RETRY_DELAY.as_secs(),
+        "proxyTransport": settings.as_ref().map(|value| value.proxy_transport).unwrap_or_default()
     });
     format!("{metadata}\n")
 }
@@ -110,14 +116,29 @@ fn sanitize_export_errors(value: &mut Value) {
 }
 
 fn append_export_errors(output: &mut String) {
-    match crate::error_logs::export_proxy_errors() {
+    use crate::error_logs::ErrorLogSource;
+    for (source, event) in [(ErrorLogSource::Proxy, "proxy_error_history"),
+        (ErrorLogSource::Codex, "codex_error_history")] {
+        append_error_history(output, event, crate::error_logs::export_errors(source));
+    }
+}
+
+fn append_error_history(
+    output: &mut String,
+    event: &str,
+    page: Result<crate::error_logs::ErrorLogPage, String>,
+) {
+    match page {
         Ok(page) => {
             for entry in page.entries.into_iter().rev() {
-                let entry = json!({ "event": "proxy_error_history", "record": entry });
+                let entry = json!({ "event": event, "record": entry });
                 output.push_str(&entry.to_string());
                 output.push('\n');
             }
         }
-        Err(_) => output.push_str("{\"event\":\"proxy_error_history_unavailable\"}\n"),
+        Err(_) => {
+            output.push_str(&json!({ "event": format!("{event}_unavailable") }).to_string());
+            output.push('\n');
+        }
     }
 }

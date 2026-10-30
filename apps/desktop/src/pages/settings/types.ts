@@ -8,10 +8,14 @@ import type {
   CodexHomeEntry,
   CodexHomePreset,
   NetworkProxySettings,
+  Provider,
 } from "../../types";
 
 export interface SettingsPageProps {
+  providers: Provider[];
   sseIdleTimeout: ReturnType<typeof import("../../hooks/useSseIdleTimeout").useSseIdleTimeout>;
+  proxyTransport: ReturnType<typeof import("../../hooks/useProxyTransport").useProxyTransport>;
+  responseHeaderTimeout: ReturnType<typeof import("../../hooks/useResponseHeaderTimeout").useResponseHeaderTimeout>;
   info: AppInfo | null;
   autoUpdateEnabled: boolean;
   onAutoUpdateChange: (enabled: boolean) => void;

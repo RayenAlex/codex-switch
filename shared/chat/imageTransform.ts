@@ -3,7 +3,7 @@ export interface ImageTransform { scale: number; rotation: number; x: number; y:
 export const INITIAL_TRANSFORM: ImageTransform = { scale: 1, rotation: 0, x: 0, y: 0 };
 export const clampZoom = (scale: number) => {
   'worklet';
-  return Math.max(1, Math.min(8, scale));
+  return Math.max(0.5, Math.min(8, scale));
 };
 export const pointDistance = (points: Point[]) => {
   'worklet';

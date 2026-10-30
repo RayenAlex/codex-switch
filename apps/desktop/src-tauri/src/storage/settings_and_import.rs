@@ -122,19 +122,43 @@ pub(crate) fn read_app_settings<R: Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> Result<AppSettings, String> {
     let path = app_settings_path(app)?;
-    Ok(fs::read(path)
+    let mut settings = fs::read(&path)
         .ok()
         .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-        .unwrap_or_default())
+        .unwrap_or_default();
+    model_context_settings::apply_saved_context_settings(&path, &mut settings)?;
+    language_settings::apply_saved_language(&path, &mut settings);
+    settings.non_proxy_enhancements_enabled = crate::client_integration::read_preference(&path)?;
+    merge_shared_group_catalogs(&mut settings);
+    Ok(settings)
 }
+
+fn merge_shared_group_catalogs(settings: &mut AppSettings) {
+    let mut groups = Vec::new();
+    for group in settings.provider_groups.iter().chain(&settings.account_groups) {
+        let group = group.trim().to_string();
+        if !group.is_empty() && !groups.contains(&group) {
+            groups.push(group);
+        }
+    }
+    settings.provider_groups.clone_from(&groups);
+    settings.account_groups = groups;
+}
+
+static APP_SETTINGS_WRITE_LOCK: Mutex<()> = Mutex::new(());
 
 pub(crate) fn write_app_settings<R: Runtime>(
     app: &tauri::AppHandle<R>,
     settings: &AppSettings,
 ) -> Result<(), String> {
+    let _guard = APP_SETTINGS_WRITE_LOCK
+        .lock()
+        .map_err(|_| "Application settings are unavailable".to_string())?;
     let path = app_settings_path(app)?;
     let value = serde_json::to_value(settings).map_err(|error| error.to_string())?;
-    write_json_atomic(&path, &value)
+    write_json_atomic(&path, &value)?;
+    crate::cloud::remember_push_routing(app, settings);
+    Ok(())
 }
 
 fn migrate_upstream_429_retry_timeout(settings: &mut AppSettings) -> bool {
@@ -152,8 +176,23 @@ fn migrate_upstream_429_retry_timeout(settings: &mut AppSettings) -> bool {
     true
 }
 
+fn migrate_sse_idle_timeout(settings: &mut AppSettings) -> bool {
+    const LEGACY_SSE_IDLE_TIMEOUT_SECONDS: u64 = 120;
+    if settings.sse_idle_timeout_migrated {
+        return false;
+    }
+    if settings.sse_idle_timeout.timeout_seconds == LEGACY_SSE_IDLE_TIMEOUT_SECONDS {
+        settings.sse_idle_timeout.timeout_seconds =
+            crate::models::SseIdleTimeoutSettings::default().timeout_seconds;
+    }
+    // Later edits, including a custom 120 seconds, must not be migrated again.
+    settings.sse_idle_timeout_migrated = true;
+    true
+}
+
 fn apply_app_settings_version_migration(settings: &mut AppSettings, current_version: &str) -> bool {
     let mut changed = migrate_upstream_429_retry_timeout(settings);
+    changed |= migrate_sse_idle_timeout(settings);
     if settings.codex_homes.is_empty() {
         if let Some(path) = settings.codex_home.as_deref().filter(|path| !path.trim().is_empty()) {
             settings.codex_homes.push(crate::models::CodexHomeEntry {
@@ -181,6 +220,7 @@ fn apply_app_settings_version_migration(settings: &mut AppSettings, current_vers
 pub(crate) fn migrate_app_settings_for_version<R: Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> Result<(), String> {
+    model_context_settings::migrate_legacy_context_settings(app)?;
     let mut settings = read_app_settings(app)?;
     let current_version = app.package_info().version.to_string();
     let mut changed = apply_app_settings_version_migration(&mut settings, &current_version);

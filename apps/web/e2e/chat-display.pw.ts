@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import type { Item, Thread } from '../src/chat/types';
 import { screenshot } from './chat-helpers';
 
+const CONTINUE_MESSAGE = '请继续完成刚才中断的任务。';
 const code = `const message = '${'长内容'.repeat(80)}';`;
 const reply: Item = { id: 'answer', type: 'agentMessage', phase: 'final_answer', status: 'completed',
   text: '## 展示测试\n\n包含**粗体**与`行内代码`。\n\n| 项目 | 状态 |\n|---|---|\n|文本|正常|'
@@ -21,7 +22,127 @@ async function open(page: Page, value: Thread) {
 async function update(page: Page, value: Thread) {
   await page.evaluate(detail => window.dispatchEvent(new CustomEvent('display-fixture', { detail })), value);
 }
-test.beforeEach(({}, info) => test.skip(info.project.name !== 'desktop', 'PC message presentation'));
+test.beforeEach(({}, info) => test.skip(info.project.name !== 'desktop'
+  && !info.title.startsWith('preserves reading and typing')
+  && !info.title.startsWith('shows conversation references')
+  && !info.title.startsWith('clears obsolete running status')
+  && !info.title.startsWith('keeps processing with the latest turn')
+  && !info.title.startsWith('hides automatic retry'), 'PC message presentation'));
+
+test('clears obsolete running status after the PC confirms a finished reply', async ({ page }, info) => {
+  const finished = fixture([{ ...reply, text: '测试成功' }]);
+  finished.status = { type: 'notLoaded' };
+  const live: Thread = { ...finished, turns: [...finished.turns!, {
+    id: 'obsolete', status: 'inProgress', startedAt: Date.now() / 1000,
+    items: [{ id: 'wait', type: 'sleep', status: 'inProgress', durationMs: 20_000 }],
+  }] };
+  await open(page, live);
+  await expect(page.getByText('测试成功', { exact: true })).toBeVisible();
+  await expect(page.locator('.chat-processing-status')).toBeVisible();
+  await page.evaluate(detail => window.dispatchEvent(new CustomEvent('display-history-snapshot', { detail })), finished);
+  await expect(page.locator('.chat-processing-status')).toHaveCount(0);
+  await expect(page.getByText('测试成功', { exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: '消息', exact: true })).toBeEnabled();
+  await screenshot(page, info, 'history-completion-recovered');
+});
+
+test('keeps processing with the latest turn when earlier history still says running', async ({ page }, info) => {
+  const value = fixture([{ ...command, status: 'completed' }], true);
+  const old = value.turns![0];
+  old.startedAt = Date.now() / 1000 - 3600;
+  old.diff = 'diff --git a/old.txt b/old.txt\n--- a/old.txt\n+++ b/old.txt\n@@ -1 +1 @@\n-old\n+new';
+  const latest = { id: 'latest', status: 'inProgress', startedAt: Date.now() / 1000 - 5, items: [
+    { id: 'continue', type: 'userMessage', text: CONTINUE_MESSAGE },
+    { ...command, id: 'latest-command', status: 'completed', command: 'echo continued' },
+  ], diff: '' };
+  value.turns!.push(latest);
+  await open(page, value);
+  const processing = page.locator('.chat-processing-status');
+  const lastMessage = page.locator('[data-message-id="latest-command"]');
+  await expect(processing).toHaveCount(1);
+  await expect(processing).toBeInViewport();
+  await expect(processing).toContainText(/共计\d+秒/);
+  expect((await processing.boundingBox())!.y).toBeGreaterThan((await lastMessage.boundingBox())!.y);
+  await screenshot(page, info, 'continued-turn-processing');
+  latest.diff = old.diff.replaceAll('old.txt', 'latest.txt');
+  await update(page, value);
+  const summary = page.locator('[data-message-id="latest:summary"]');
+  await expect(summary).toBeVisible();
+  await expect(processing).toHaveCount(1);
+  expect((await processing.boundingBox())!.y).toBeGreaterThan((await lastMessage.boundingBox())!.y);
+  expect((await processing.boundingBox())!.y).toBeLessThan((await summary.boundingBox())!.y);
+  await page.reload();
+  await expect(processing).toBeInViewport();
+  expect((await processing.boundingBox())!.y).toBeGreaterThan((await lastMessage.boundingBox())!.y);
+  latest.status = 'completed';
+  await update(page, value);
+  await expect(processing).toHaveCount(0);
+  await expect(page.locator('[data-message-id="turn:summary"]')).toBeVisible();
+});
+
+test('shows conversation references during send, after reload and without message text', async ({ page }, info) => {
+  const name = '代理日志排查与历史记录恢复'.repeat(8);
+  const mention = { type: 'mention', name, path: 'codex-thread://logs' };
+  const value = fixture([], true);
+  const user = value.turns![0].items[0];
+  user.text = '';
+  user.localEcho = true;
+  user.content = [{ type: 'text', text: '继续这个任务' }, mention];
+  await open(page, value);
+  const bubble = page.locator('.chat-user-message');
+  const reference = bubble.locator('.chat-message-reference');
+  await expect(reference).toHaveText(`引用对话：${name}`);
+  await expect(bubble).toContainText('继续这个任务');
+  const bounds = (await reference.boundingBox())!;
+  expect(bounds.width).toBeLessThanOrEqual(400);
+  expect(bounds.height).toBeGreaterThan(40);
+  expect(await page.getByLabel('聊天记录').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await screenshot(page, info, 'sent-conversation-reference');
+  user.localEcho = false;
+  user.content = ['继续这个任务\n<codex_gui_conversation_context>' + JSON.stringify({
+    kind: 'reference', id: 'logs', name, messages: ['PRIVATE CONTEXT'],
+  }) + '</codex_gui_conversation_context>'];
+  value.turns![0].status = 'completed';
+  await update(page, value);
+  await expect(reference).toHaveCount(1);
+  await expect(bubble).not.toContainText('PRIVATE CONTEXT');
+  await page.reload();
+  await expect(reference).toHaveText(`引用对话：${name}`);
+  await expect(bubble).not.toContainText('codex_gui_conversation_context');
+  user.content = [mention, { ...mention, name: '第二个对话', path: 'codex-thread://other' }];
+  await update(page, value);
+  await expect(reference).toHaveCount(2);
+  await expect(reference.last()).toHaveText('引用对话：第二个对话');
+  await expect(bubble).not.toContainText('继续这个任务');
+});
+
+for (const status of ['interrupted', 'failed']) {
+  test(`hides automatic retry after ${status} during streaming and after reload`, async ({ page }, info) => {
+    const value = fixture([]);
+    value.turns![0].status = status;
+    value.turns![0].error = { message: 'HTTP 502' };
+    value.turns!.push({ id: 'retry', status: 'inProgress', items: [
+      { id: 'continue', type: 'userMessage', content: [{ type: 'text', text: CONTINUE_MESSAGE }] },
+      { id: 'retry-answer', type: 'agentMessage', phase: 'final_answer', text: '正在继续处理任务。' },
+    ] });
+    await open(page, value);
+    const instruction = page.getByText(CONTINUE_MESSAGE, { exact: true });
+    await expect(page.getByText('正在继续处理任务。', { exact: true })).toBeVisible();
+    await expect(instruction).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '查看报错详情' })).toBeVisible();
+    await screenshot(page, info, `retry-${status}`);
+    value.turns![1].status = 'completed';
+    await update(page, value);
+    await expect(instruction).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByText('正在继续处理任务。', { exact: true })).toBeVisible();
+    await expect(instruction).toHaveCount(0);
+    value.turns![1].items.push({ id: 'steer', type: 'userMessage',
+      content: [{ type: 'text', text: CONTINUE_MESSAGE }] });
+    await update(page, value);
+    await expect(instruction).toHaveCount(1);
+  });
+}
 
 test('copies and expands tables, wraps long code and contains overflow', async ({ page }, info) => {
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -111,19 +232,7 @@ test('shows one stop notice before the partial response and keeps the next respo
   await expect(page.getByText('后续对话正常')).toBeVisible();
 });
 
-test('preserves reading and typing during streaming and dismisses selection quotes on scroll', async ({ page }) => {
-  const value = fixture([{ ...reply, text: Array.from({ length: 80 }, (_, i) => `第 ${i + 1} 段：历史消息。`)
-    .join('\n\n'), status: 'inProgress' }], true);
-  await open(page, value);
-  const viewport = page.getByLabel('聊天记录');
-  await viewport.evaluate(node => { node.scrollTop = 400; node.dispatchEvent(new Event('scroll')); });
-  const input = page.getByRole('textbox', { name: '消息' });
-  await input.fill('保留正在输入的草稿');
-  const position = await viewport.evaluate(node => node.scrollTop);
-  value.turns![0].items[1].text += '\n\n追加的流式内容。';
-  await update(page, value);
-  expect(await viewport.evaluate(node => node.scrollTop)).toBe(position);
-  await expect(input).toHaveValue('保留正在输入的草稿');
+async function checkSelectionQuoteDismissal(page: Page) {
   const paragraph = page.locator('.chat-assistant-message p').nth(10);
   await paragraph.evaluate(node => {
     const range = document.createRange(); range.selectNodeContents(node);
@@ -132,12 +241,46 @@ test('preserves reading and typing during streaming and dismisses selection quot
   });
   const quote = page.getByRole('button', { name: '引用选中文字并回复' });
   await expect(quote).toBeVisible();
-  await viewport.evaluate(node => { node.scrollTop += 100; node.dispatchEvent(new Event('scroll')); });
+  await page.getByLabel('聊天记录').evaluate(node => {
+    node.scrollTop += 100; node.dispatchEvent(new Event('scroll'));
+  });
   await expect(quote).toHaveCount(0);
   await page.evaluate(() => document.dispatchEvent(new Event('selectionchange')));
   await expect(quote).toHaveCount(0);
+}
+
+test('preserves reading and typing during streaming and dismisses selection quotes on scroll', async ({ page }, info) => {
+  const value = fixture([{ ...reply, text: Array.from({ length: 80 }, (_, i) => `第 ${i + 1} 段：历史消息。`)
+    .join('\n\n'), status: 'inProgress' }], true);
+  await open(page, value);
+  const viewport = page.getByLabel('聊天记录');
+  const processing = viewport.locator('.chat-message-content > .chat-processing-status');
+  await expect(processing).toBeInViewport();
+  await expect(processing).toContainText(/共计.*秒/);
+  const lastReply = page.locator('.chat-assistant-message p').last();
+  const replyBounds = (await lastReply.boundingBox())!;
+  expect((await processing.boundingBox())!.y).toBeGreaterThanOrEqual(replyBounds.y + replyBounds.height);
+  await viewport.evaluate(node => { node.scrollTop = 400; node.dispatchEvent(new Event('scroll')); });
+  await expect(processing).not.toBeInViewport();
+  const input = page.getByRole('textbox', { name: '消息' });
+  await input.fill('保留正在输入的草稿');
+  const position = await viewport.evaluate(node => node.scrollTop);
+  value.turns![0].items[1].text += '\n\n追加的流式内容。';
+  await update(page, value);
+  expect(await viewport.evaluate(node => node.scrollTop)).toBe(position);
+  await expect(input).toHaveValue('保留正在输入的草稿');
+  if (info.project.name === 'desktop') await checkSelectionQuoteDismissal(page);
   await page.getByRole('button', { name: '回到底部' }).click();
   await expect(page.getByText('追加的流式内容。')).toBeVisible();
+  await expect(processing).toBeInViewport();
+  await page.screenshot({ path: info.outputPath('processing-follow.png'), animations: 'disabled' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(processing).toBeInViewport();
+  expect(await viewport.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await page.screenshot({ path: info.outputPath('processing-follow-narrow.png'), animations: 'disabled' });
+  value.turns![0].status = 'completed';
+  await update(page, value);
+  await expect(processing).toHaveCount(0);
 });
 
 test('keeps long messages readable in a narrow desktop conversation pane', async ({ page }, info) => {

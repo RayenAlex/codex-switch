@@ -9,7 +9,7 @@ import { sliceHistory, type PagedHistoryDelta } from '../../../../shared/remote-
 import { EventStream } from './eventStream';
 
 vi.mock('../pages/codexGui/api', () => ({ guiApi: { connect: vi.fn(), request: vi.fn(), respond: vi.fn() } }));
-vi.mock('../api/backend', () => ({ invoke: vi.fn() }));
+vi.mock('../api/backend', () => ({ invoke: vi.fn(), hasLocalBackend: false }));
 beforeEach(() => vi.resetAllMocks());
 afterEach(() => vi.useRealTimers());
 
@@ -80,6 +80,49 @@ async function connected(remote: Thread) {
   return { controller, stream, emit: (event: GuiEvent) => stream.receive(operations.prepareEvent(event)) };
 }
 
+it('clears stale waiting on both host and client after an interrupted turn is replaced', async () => {
+  const remote = conversation(2);
+  const { controller, stream, emit } = await connected(remote);
+  try {
+    await controller.select({ ...remote, turns: [] });
+    emit({ method: 'turn/started', params: { threadId: remote.id,
+      turn: { id: 'old', status: 'inProgress', items: [] } } });
+    emit({ method: 'item/started', params: { threadId: remote.id, turnId: 'old',
+      item: { id: 'wait', type: 'sleep', status: 'inProgress', durationMs: 20_000 } } });
+    expect(controller.snapshot().processing?.phase).toBe('wait');
+    remote.status = { type: 'notLoaded' };
+    remote.turns!.push({ id: 'continued', status: 'completed', items: [
+      { id: 'answer', type: 'agentMessage', text: '测试成功' },
+    ] });
+    for (let refresh = 0; refresh < 2; refresh++) {
+      await controller.refreshSelected();
+      expect(controller.snapshot().selected?.turns?.some(turn => turn.status === 'inProgress')).toBe(false);
+      expect(controller.snapshot().processing).toBeUndefined();
+      expect(controller.snapshot().selected?.turns?.at(-1)?.items[0].text).toBe('测试成功');
+    }
+  } finally { controller.stop(); stream.close(); }
+});
+
+it('keeps a new live turn when it starts during an idle PC history read', async () => {
+  const remote = { ...conversation(2), status: { type: 'idle' } };
+  const { controller, stream, emit } = await connected(remote);
+  try {
+    await controller.select({ ...remote, turns: [] });
+    let finish!: (value: { thread: Thread }) => void;
+    vi.mocked(guiApi.request).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const refresh = controller.refreshSelected();
+    emit({ method: 'turn/started', params: { threadId: remote.id,
+      turn: { id: 'new', status: 'inProgress', items: [] } } });
+    emit({ method: 'item/completed', params: { threadId: remote.id, turnId: 'new',
+      item: { id: 'answer', type: 'agentMessage', text: 'Still working' } } });
+    finish({ thread: remote });
+    await refresh;
+    expect(controller.snapshot().selected?.turns?.at(-1)).toMatchObject({ id: 'new', status: 'inProgress',
+      items: [{ text: 'Still working' }] });
+    expect(controller.snapshot().processing?.turnId).toBe('new');
+  } finally { controller.stop(); stream.close(); }
+});
+
 it('streams before completion even when disk history stays stale, without replaying text on refresh', async () => {
   const remote = conversation(2);
   const { controller, stream, emit } = await connected(remote);
@@ -125,6 +168,27 @@ it.each([2, 35])('loads earlier items once and ignores results after leaving (%i
   expect(controller.snapshot()).toMatchObject({ selected: null, historyLoading: false, historyLoadingMore: false });
   controller.stop();
   stream.close();
+});
+
+it('does not move an unfinished answer below subsequent steering when disk history omits it', async () => {
+  const initial = { id: 'user', type: 'userMessage', text: 'Check downloads' };
+  const remote: Thread = { id: 'chat', preview: '', cwd: '', updatedAt: 1,
+    turns: [{ id: 'active', status: 'inProgress', items: [initial] }] };
+  const { controller, stream, emit } = await connected(remote);
+  try {
+    await controller.select({ ...remote, turns: [] });
+    const partial = { id: 'partial', type: 'agentMessage', phase: 'final_answer' as const, text: 'Partial answer' };
+    const supplement = { id: 'supplement', type: 'userMessage', text: 'Add pipelining' };
+    const latest = { id: 'latest', type: 'agentMessage', phase: 'commentary' as const, text: 'Implementing it' };
+    for (const item of [partial, supplement, latest]) emit({ method: 'item/started',
+      params: { threadId: remote.id, turnId: 'active', item } });
+    remote.turns![0].items = [initial, supplement, latest];
+    for (let refresh = 0; refresh < 2; refresh++) {
+      await controller.refreshSelected();
+      expect(controller.snapshot().selected?.turns?.[0].items.map(item => item.id))
+        .toEqual(['user', 'partial', 'supplement', 'latest']);
+    }
+  } finally { controller.stop(); stream.close(); }
 });
 
 it('joins a running reply during a delayed read without losing its prefix or replaying buffered tokens', async () => {

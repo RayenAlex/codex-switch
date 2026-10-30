@@ -25,13 +25,19 @@ class Element {
   }
 
   get firstElementChild() { return this.children[0]; }
+  get nextElementSibling() {
+    return this.parentElement?.children[this.parentElement.children.indexOf(this) + 1] ?? null;
+  }
+  getClientRects() { return this.hidden ? [] : [{}]; }
   setAttribute(name, value) { this.attributes[name] = value; }
   addEventListener(name, callback) {
     if (!this.listeners.has(name)) this.listeners.set(name, new Set());
     this.listeners.get(name).add(callback);
   }
   removeEventListener(name, callback) { this.listeners.get(name)?.delete(callback); }
-  dispatch(name) { for (const callback of this.listeners.get(name) ?? []) callback(); }
+  dispatch(name) {
+    for (const callback of this.listeners.get(name) ?? []) callback({ preventDefault() {}, stopPropagation() {} });
+  }
 
   append(...children) {
     for (const child of children) {
@@ -42,6 +48,7 @@ class Element {
 
   before(element) {
     const parent = this.parentElement;
+    element.remove();
     element.parentElement = parent;
     parent.children.splice(parent.children.indexOf(this), 0, element);
   }
@@ -66,10 +73,11 @@ class Element {
   }
 }
 
-function createHarness({ dark = false, binding, fastModeAllowed = true } = {}) {
+function createHarness({ dark = false, binding, fastModeAllowed = true, speedBinding } = {}) {
   const document = new Element();
   document.documentElement = document;
   document.createElement = () => new Element();
+  document.createElementNS = () => new Element();
   const wrapper = new Element();
   const inner = new Element();
   const anchor = new Element();
@@ -86,6 +94,7 @@ function createHarness({ dark = false, binding, fastModeAllowed = true } = {}) {
     __CODEX_SWITCH_COMPOSER_STATUS_ALLOWED__: true,
     __CODEX_SWITCH_FAST_MODE_ALLOWED__: fastModeAllowed,
     codexSwitchRequestUsageSummary() { requests += 1; binding?.(); },
+    codexSwitchSetServiceTier(tier) { speedBinding?.(tier); },
   };
   const context = {
     window, document,
@@ -146,29 +155,68 @@ test("daily usage renders and keeps polling without Fast controls, and respects 
 test("shows the current API daily estimate while preserving global daily usage", () => {
   const harness = createHarness();
   const trailing = update(harness, { providerEstimatedCost: { amountUsd: 1.25, aggregated: false } });
-  assert.equal(trailing.textContent, "API 1.25USD");
+  assert.equal(trailing.textContent, "API 1.25 USD");
   assert.equal(trailing.hidden, false);
   assert.equal(trailing.style.color, "rgb(180,93,0)");
   assert.equal(harness.usage.querySelector("[data-today-tokens]").textContent, "1.2K");
-  assert.equal(harness.usage.querySelector("[data-today-cost]").textContent, "7.5USD");
-  assert.match(harness.usage.title, /当前 API 今日预估成本：1.25USD/);
-  assert.match(harness.usage.attributes["aria-label"], /当前 API 今日预估成本 1.25USD/);
+  assert.equal(harness.usage.querySelector("[data-today-cost]").textContent, "7.5 USD");
+  assert.match(harness.usage.title, /当前 API 今日预估成本：1.25 USD/);
+  assert.match(harness.usage.attributes["aria-label"], /当前 API 今日预估成本 1.25 USD/);
   assert.doesNotMatch(harness.usage.title, /钱包/);
+});
+
+test("expires disconnected usage instead of presenting old zero tokens and full quota as current", () => {
+  const harness = createHarness();
+  update(harness, { totalTokens: 0, estimatedCostUsd: 0, primaryRemainingPercent: 100 });
+  harness.advance(30000);
+  delete harness.window.codexSwitchRequestUsageSummary;
+  harness.poll();
+  assert.equal(harness.usage.querySelector("[data-today-tokens]").textContent, "--");
+  assert.equal(harness.usage.querySelector("[data-today-cost]").textContent, "待更新");
+  assert.equal(harness.usage.querySelector("[data-trailing-balance]").hidden, true);
+  assert.doesNotMatch(harness.usage.title, /100%/);
+  update(harness, { totalTokens: 5000, primaryRemainingPercent: 90 });
+  assert.equal(harness.usage.querySelector("[data-today-tokens]").textContent, "5K");
+  assert.equal(harness.usage.querySelector("[data-trailing-balance]").textContent, "90%");
+});
+
+test("unknown accounting is not converted to zero while measured zero remains valid", () => {
+  const harness = createHarness();
+  for (const value of [undefined, null, NaN, Infinity, "0"]) {
+    update(harness, { totalTokens: value, estimatedCostUsd: value });
+    assert.equal(harness.usage.querySelector("[data-today-tokens]").textContent, "--");
+    assert.equal(harness.usage.querySelector("[data-today-cost]").textContent, "待更新");
+  }
+  update(harness, { totalTokens: 0, estimatedCostUsd: 0 });
+  assert.equal(harness.usage.querySelector("[data-today-tokens]").textContent, "0");
+  assert.equal(harness.usage.querySelector("[data-today-cost]").textContent, "0 USD");
+});
+
+test("converts daily and API prices using display settings without changing USD accounting", () => {
+  const harness = createHarness();
+  const trailing = update(harness, { providerEstimatedCost: { amountUsd: 1.25, aggregated: false },
+    costDisplay: { unit: "元", usdMultiplier: 7 } });
+  assert.equal(trailing.textContent, "API 8.75 元");
+  assert.equal(harness.usage.querySelector("[data-today-cost]").textContent, "52.5 元");
+  assert.equal(harness.state.usage.estimatedCostUsd, 7.5);
+  assert.equal(harness.state.usage.providerEstimatedCost.amountUsd, 1.25);
+  update(harness, { costDisplay: { unit: "积分", usdMultiplier: 100 } });
+  assert.equal(harness.usage.querySelector("[data-today-cost]").textContent, "750 积分");
 });
 
 test("shows aggregate daily estimates in the cost color in both palettes", () => {
   for (const dark of [false, true]) {
     const harness = createHarness({ dark });
     const trailing = update(harness, { providerEstimatedCost: { amountUsd: 1234.56, aggregated: true } });
-    assert.equal(trailing.textContent, "API 1,234.56USD");
+    assert.equal(trailing.textContent, "API 1,234.56 USD");
     assert.equal(trailing.style.color, dark ? "rgb(245,177,65)" : "rgb(180,93,0)");
-    assert.match(harness.usage.title, /聚合 API 今日总预估成本：1,234.56USD/);
+    assert.match(harness.usage.title, /聚合 API 今日总预估成本：1,234.56 USD/);
   }
 });
 
 test("displays zero and small costs, and clamps negative costs", () => {
   const harness = createHarness();
-  for (const [amountUsd, expected] of [[0, "0USD"], [0.0012, "0.0012USD"], [-2, "0USD"]]) {
+  for (const [amountUsd, expected] of [[0, "0 USD"], [0.0012, "0.0012 USD"], [-2, "0 USD"]]) {
     const trailing = update(harness, { providerEstimatedCost: { amountUsd } });
     assert.equal(trailing.textContent, `API ${expected}`);
     assert.equal(trailing.hidden, false);
@@ -201,7 +249,7 @@ test("switches between provider costs and official quota without retaining the p
     assert.doesNotMatch(harness.usage.title, /当前 API|聚合 API/);
   }
   const trailing = update(harness, { providerEstimatedCost: { amountUsd: 2, aggregated: true } });
-  assert.equal(trailing.textContent, "API 2USD");
+  assert.equal(trailing.textContent, "API 2 USD");
   assert.match(harness.usage.title, /聚合 API 今日总预估成本/);
   assert.doesNotMatch(harness.usage.title, /主用量余额/);
 });
@@ -227,7 +275,7 @@ test("resumes polling after a failed response or a disconnected binding", () => 
   update(harness, { providerEstimatedCost: { amountUsd: 4 } });
   harness.flushTimeouts();
   harness.state.completeUsageRequest();
-  assert.equal(harness.usage.querySelector("[data-trailing-balance]").textContent, "API 4USD");
+  assert.equal(harness.usage.querySelector("[data-trailing-balance]").textContent, "API 4 USD");
   harness.poll();
   assert.equal(harness.requests, 2);
   const disconnected = createHarness({ binding() { throw new Error("Disconnected"); } });
@@ -290,4 +338,131 @@ test("clears old observers and all timers when reinstalling or disabling the ove
   assert.equal(harness.document.listeners.get("visibilitychange").size, 0);
   assert.equal(harness.document.querySelectorAll("[data-codex-switch-speed-selector]").length, 0);
   assert.equal(harness.state, undefined);
+});
+
+test("localizes the injected panel and updates an existing panel when language changes", () => {
+  const harness = createHarness();
+  const selector = harness.document.querySelector("[data-codex-switch-speed-selector]");
+  const controls = selector.querySelector("[data-speed-controls]");
+  const toggle = selector.querySelector("[data-speed-button]");
+  for (const [language, today, fast, cost] of [
+    ["ru", "Сегодня", "Быстрый режим", "Общая стоимость API за сегодня: 1.25 USD"],
+    ["en", "Today", "Fast mode", "Combined API estimated cost today: 1.25 USD"],
+    ["zh", "今日", "快速模式", "聚合 API 今日总预估成本：1.25 USD"],
+  ]) {
+    update(harness, { language, providerEstimatedCost: { amountUsd: 1.25, aggregated: true } });
+    assert.equal(harness.usage.querySelector("[data-today-label]").textContent, today);
+    assert.equal(controls.querySelector("[data-speed-label]"), null);
+    assert.ok(toggle.attributes["aria-label"].includes(fast));
+    assert.match(harness.usage.title, new RegExp(cost.replaceAll(".", "\\.")));
+    assert.equal(harness.usage.querySelector("[data-today-tokens]").textContent, "1.2K");
+    if (language !== "zh") {
+      assert.doesNotMatch(harness.usage.title + harness.usage.attributes["aria-label"]
+        + selector.attributes["aria-label"], /[\u4e00-\u9fff]/);
+    }
+    assert.equal(harness.document.querySelectorAll("[data-codex-switch-speed-selector]").length, 1);
+  }
+  update(harness, { language: "ru", enabled: false });
+  assert.equal(harness.usage.hidden, true);
+  assert.match(toggle.attributes["aria-label"], /Быстрый режим/);
+  update(harness, { language: "unsupported", primaryRemainingPercent: 100 });
+  assert.equal(harness.state.language, "ru");
+  assert.match(harness.usage.title, /Остаток лимита аккаунта: 100%/);
+});
+
+test("updates language during a failed usage refresh without clearing data or overlapping requests", () => {
+  const harness = createHarness();
+  update(harness, { language: "en", providerEstimatedCost: { amountUsd: 1.25, aggregated: true } });
+  const previousUsage = harness.state.usage;
+  harness.flushTimeouts();
+  harness.state.updateLanguage("ru");
+  assert.equal(harness.state.usagePending, true);
+  assert.equal(harness.state.usage, previousUsage);
+  assert.match(harness.document.querySelector("[data-speed-button]").attributes["aria-label"], /Быстрый режим/);
+  assert.equal(harness.usage.querySelector("[data-today-tokens]").textContent, "1.2K");
+  assert.match(harness.usage.title, /Общая стоимость API за сегодня: 1\.25 USD/);
+  for (let index = 0; index < 5; index += 1) harness.poll();
+  assert.equal(harness.requests, 1);
+  harness.state.completeUsageRequest();
+  assert.equal(harness.state.usage, previousUsage);
+  harness.poll();
+  assert.equal(harness.requests, 2);
+  update(harness, { language: "ru", totalTokens: 5000 });
+  assert.equal(harness.usage.querySelector("[data-today-tokens]").textContent, "5K");
+  assert.equal(harness.state.usagePending, false);
+});
+
+test("localizes Fast controls before any usage succeeds and ignores invalid language updates", () => {
+  const harness = createHarness();
+  harness.flushTimeouts();
+  harness.state.updateLanguage("ru");
+  const toggle = harness.document.querySelector("[data-speed-button]");
+  assert.equal(harness.usage.hidden, true);
+  assert.match(toggle.attributes["aria-label"], /Быстрый режим/);
+  for (const language of [null, undefined, "unsupported", "__proto__"]) {
+    harness.state.updateLanguage(language);
+    assert.equal(harness.state.language, "ru");
+  }
+  harness.state.completeUsageRequest();
+  harness.state.updateLanguage("en");
+  assert.match(toggle.attributes["aria-label"], /Fast mode/);
+  assert.equal(harness.usage.hidden, true);
+  assert.equal(harness.document.querySelectorAll("[data-codex-switch-speed-selector]").length, 1);
+});
+
+test("cycles normal, Fast and Ultrafast with the matching tier and illuminated bolts", () => {
+  const tiers = [];
+  const harness = createHarness({ speedBinding: tier => tiers.push(tier) });
+  const button = harness.document.querySelector("[data-speed-button]");
+  assert.equal(harness.document.querySelector("[data-speed-switch]"), null);
+  assert.equal(button.dataset.speed, "normal");
+  for (const [tier, speed, count, color] of [
+    ["priority", "fast", 1, "#3984ed"], ["ultrafast", "ultrafast", 2, "#9560ed"],
+    ["default", "normal", 0, "none"],
+  ]) {
+    button.dispatch("click");
+    assert.equal(button.dataset.speed, speed);
+    assert.equal(button.disabled, true);
+    assert.equal(button.attributes["aria-busy"], "true");
+    assert.equal(tiers.at(-1), tier);
+    const bolts = button.querySelectorAll("[data-speed-bolt]");
+    assert.equal(bolts.filter(bolt => bolt.attributes.class === "is-lit").length, count);
+    assert.equal(bolts[0].attributes.fill, color);
+    const requestCount = tiers.length;
+    button.dispatch("click");
+    harness.window.__CODEX_SWITCH_REFRESH_SPEED_SELECTOR__();
+    assert.equal(tiers.length, requestCount);
+    assert.equal(button.dataset.speed, speed);
+    harness.state.completeSelection(tier, true);
+    assert.equal(button.disabled, false);
+    assert.equal(button.attributes["aria-busy"], "false");
+  }
+  assert.deepEqual(tiers, ["priority", "ultrafast", "default"]);
+});
+
+test("restores the confirmed speed after rejected changes or disconnected bindings", () => {
+  const harness = createHarness();
+  const button = harness.document.querySelector("[data-speed-button]");
+  button.dispatch("click");
+  harness.state.completeSelection("priority", true);
+  button.dispatch("click");
+  harness.state.completeSelection("priority", false);
+  assert.equal(button.dataset.speed, "ultrafast");
+  harness.state.completeSelection("ultrafast", false);
+  assert.equal(button.dataset.speed, "fast");
+  assert.equal(button.disabled, false);
+  assert.match(harness.document.querySelector("[data-speed-tooltip]").textContent, /未能切换/);
+  harness.window.codexSwitchSetServiceTier = () => { throw new Error("Disconnected"); };
+  button.dispatch("click");
+  assert.equal(button.dataset.speed, "fast");
+  assert.equal(button.disabled, false);
+});
+
+test("does not request a speed change when acceleration is unavailable", () => {
+  const tiers = [];
+  const harness = createHarness({ fastModeAllowed: false, speedBinding: tier => tiers.push(tier) });
+  const button = harness.document.querySelector("[data-speed-button]");
+  button.dispatch("click");
+  assert.equal(button.disabled, true);
+  assert.deepEqual(tiers, []);
 });

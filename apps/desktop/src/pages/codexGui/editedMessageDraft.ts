@@ -1,15 +1,17 @@
-import type { Content, Conversation, MessageInput } from "./types";
+import type { Conversation, MessageInput } from "./types";
+import { visibleUserContent } from "../../../../../shared/chat/conversationContext";
 import type { MessageEdit } from "./editMessage";
 import { retainedMessageParts } from "./messageEditContent";
+import { referenceKind } from "./conversationReferences";
 
 /** Preserve attachments and steering inputs if rollback succeeds but resending fails. */
-export function editedMessageDraft(value: Conversation, edit: MessageEdit): MessageInput {
+export function editedMessageDraft(value: Pick<Conversation, 'turns'>, edit: MessageEdit): MessageInput {
   const draft: MessageInput = { text: "", images: [], skills: [], attachments: [] };
   const messages = value.turns.find((turn) => turn.id === edit.turnId)?.items ?? [];
   const text: string[] = [];
   for (const message of messages.filter((item) => item.type === "userMessage")) {
     if (message.id === edit.itemId) text.push(edit.text);
-    const parts = (message.content ?? []).filter((part): part is Content => typeof part !== "string");
+    const parts = visibleUserContent(message.content);
     const retained = retainedMessageParts(parts, message.id === edit.itemId ? edit.removedImageIndexes : []);
     for (const part of retained) {
       if (part.type === "text" && message.id !== edit.itemId && part.text) text.push(part.text);
@@ -19,7 +21,7 @@ export function editedMessageDraft(value: Conversation, edit: MessageEdit): Mess
         draft.skills.push({ name: part.name ?? "", path: part.path });
       }
       if (part.type === "mention" && part.path) draft.attachments!.push({
-        kind: part.path.startsWith("plugin://") ? "plugin" : "file", name: part.name ?? "", path: part.path,
+        kind: referenceKind(part.path), name: part.name ?? "", path: part.path,
       });
     }
     if (message.id === edit.itemId) {

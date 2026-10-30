@@ -5,30 +5,40 @@ export const REQUEST_TIMEOUT_MS = 60_000;
 export const MAX_MESSAGE_CHARS = 8 * 1024 * 1024;
 export const MAX_BUFFER_BYTES = 512 * 1024;
 export type ConnectionMode = 'connecting' | 'direct' | 'relay' | 'offline';
-export type Signal =
-  | { kind: 'key'; key: string }
+export type Signal = import('./tcp/types').TcpSignal
+  | { kind: 'key'; key: string; identity?: { key: string; signature: string } }
   | { kind: 'sdp'; type: 'offer' | 'answer'; sdp: string }
   | { kind: 'ice'; candidate: string; sdpMid: string | null; sdpMLineIndex: number | null };
-export interface IceServer { urls: string | string[] }
+export interface IceServer { urls: string | string[]; username?: string; credential?: string; nativeMedia?: boolean }
 export interface Channel {
+  readonly connectionEndpoints?: import('./connectionEndpoints').ConnectionEndpoints;
   readonly readyState: string;
   readonly bufferedAmount: number;
   send(data: string): void;
   close(): void;
   onOpen(callback: () => void): void;
   onClose(callback: () => void): void;
-  onMessage(callback: (data: string) => void): void;
+  /** Multiplexers pass the receiving path's addresses; an empty object means that path's addresses are unknown. */
+  onMessage(callback: (data: string, endpoints?: import('./connectionEndpoints').ConnectionEndpoints) => void): void;
 }
 export interface Peer {
   offer(): Promise<void>;
   accept(signal: Exclude<Signal, { kind: 'key' }>): Promise<void>;
   close(): void;
 }
+export type PeerConnectionState = 'new' | 'connecting' | 'connected' | 'disconnected' | 'failed' | 'closed';
 export interface PeerOptions {
+  bulkChannel?: (channel: import('./bulkTransport').BinaryChannel, source?: 'native') => void;
+  diagnostic?: import('./diagnostics').ConnectionDiagnostic;
+  sessionId?: string;
+  desktop?: boolean;
+  generation?: number;
+  tcp?: import('./tcp/types').TcpPunchConfig;
   iceServers: IceServer[];
   signal: (signal: Signal) => void;
   channel: (channel: Channel) => void;
   disconnected: () => void;
+  stateChanged?: (state: PeerConnectionState) => void;
 }
 export type PeerFactory = (options: PeerOptions) => Peer;
 export interface RpcRequest { kind: 'request'; id: string; method: 'connect' | 'request' | 'respond'; body?: unknown }

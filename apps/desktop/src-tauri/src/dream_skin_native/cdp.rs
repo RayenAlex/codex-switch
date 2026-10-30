@@ -281,7 +281,7 @@ fn codex_notification_expression(message: &str) -> Result<String, String> {
   content.className = 'content';
   const title = document.createElement('div');
   title.className = 'title';
-  title.textContent = 'Codex Switch';
+  title.textContent = 'Remote AI';
   const body = document.createElement('div');
   body.className = 'message';
   body.textContent = {message};
@@ -351,7 +351,9 @@ pub(crate) fn refresh_codex_models(
     let mut session = CdpSession::connect(&target, port)?;
     session.enable()?;
     let result = session.evaluate(&expression)?;
-    install_renderer_bindings(&target, port)?;
+    if result.get("refreshed").and_then(Value::as_bool) == Some(true) {
+        install_renderer_bindings(&target, port)?;
+    }
     Ok(CodexModelRefreshResult {
         refreshed: result
             .get("refreshed")

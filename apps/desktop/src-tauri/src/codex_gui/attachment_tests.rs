@@ -42,7 +42,8 @@ fn attachments_survive_single_batch_and_steering_turns() {
     let attachments = json!([
         {"kind": "file", "name": "notes.txt", "path": path},
         {"kind": "folder", "name": "project", "path": root},
-        {"kind": "plugin", "name": "Documents", "path": "plugin://documents@openai"}
+        {"kind": "plugin", "name": "Documents", "path": "plugin://documents@openai"},
+        {"kind": "coze", "name": "库存", "path": "coze://f321c884-a198-4244-ad4f-53762b3d2aba"}
     ]);
     let message = json!({"text": "", "images": [], "attachments": attachments});
     for operation in ["send", "steer", "sendBatch"] {
@@ -61,6 +62,10 @@ fn attachments_survive_single_batch_and_steering_turns() {
             format!("文件夹：{}", root.display())
         );
         assert_eq!(params["input"][4]["type"], "mention");
+        assert!(params["input"][5]["text"]
+            .as_str()
+            .unwrap()
+            .contains("coze_call"));
     }
     std::fs::remove_dir_all(root).unwrap();
 }
@@ -114,4 +119,29 @@ fn file_picker_images_use_image_input_and_share_the_image_limit() {
         rpc(json!({"operation": "send", "threadId": "one", "text": "", "images": [path]})).is_err()
     );
     std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn large_local_image_references_do_not_inherit_inline_upload_limits() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("large.jpg");
+    std::fs::File::create(&path)
+        .unwrap()
+        .set_len(24 * 1024 * 1024)
+        .unwrap();
+    let message = json!({"text": "", "images": [], "attachments": [
+        {"kind": "file", "name": "large.jpg", "path": path}
+    ]});
+    for operation in ["send", "steer", "sendBatch"] {
+        let mut request = message.clone();
+        request["operation"] = json!(operation);
+        request["threadId"] = json!("one");
+        request["turnId"] = json!("turn");
+        request["messages"] = json!([message]);
+        let (_, params) = rpc(request).unwrap();
+        assert_eq!(
+            params["input"][1],
+            json!({"type": "localImage", "path": path})
+        );
+    }
 }

@@ -41,7 +41,7 @@ pub(crate) fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(not(windows))]
     let menu = build_initial_menu(app.handle())?;
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
-        .tooltip("Codex Switch")
+        .tooltip("Remote AI")
         .show_menu_on_left_click(false)
         .on_menu_event(handle_menu_event)
         .on_tray_icon_event(|tray, event| {
@@ -94,32 +94,42 @@ fn build_initial_menu<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<Menu<R>, Box<dyn std::error::Error>> {
     let menu = Menu::new(app)?;
+    let settings = read_app_settings(app).ok();
+    let (dashboard, loading, quit) = initial_menu_labels(
+        settings
+            .as_ref()
+            .and_then(|value| value.language.as_deref()),
+    );
     menu.append(&MenuItem::with_id(
         app,
         DASHBOARD_ID,
-        "Dashboard",
+        dashboard,
         true,
         None::<&str>,
     )?)?;
     menu.append(&MenuItem::with_id(
         app,
         "tray:loading",
-        "正在加载…",
+        loading,
         false,
         None::<&str>,
     )?)?;
-    menu.append(&MenuItem::with_id(
-        app,
-        QUIT_ID,
-        "Quit",
-        true,
-        None::<&str>,
-    )?)?;
+    menu.append(&MenuItem::with_id(app, QUIT_ID, quit, true, None::<&str>)?)?;
     Ok(menu)
 }
 
+/// Labels shown until the first full menu is built; they follow the tray language policy.
+#[cfg(any(not(windows), test))]
+fn initial_menu_labels(language: Option<&str>) -> (&'static str, &'static str, &'static str) {
+    match language {
+        Some("zh") => ("Dashboard", "正在加载…", "Quit"),
+        Some("ru") => ("Обзор", "Загрузка…", "Выйти"),
+        _ => ("Dashboard", "Loading…", "Quit"),
+    }
+}
+
 pub(crate) fn show_dashboard<R: Runtime>(app: &AppHandle<R>) {
-    if let Some(window) = app.get_webview_window("main") {
+    if let Some(window) = app.get_window("main") {
         #[cfg(target_os = "macos")]
         crate::main_window::reset_to_default_size(app);
         let _ = window.unminimize();
@@ -128,9 +138,9 @@ pub(crate) fn show_dashboard<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
-fn show_settings<R: Runtime>(app: &AppHandle<R>) {
+pub(crate) fn show_settings<R: Runtime>(app: &AppHandle<R>) {
     show_dashboard(app);
-    let Some(window) = app.get_webview_window("main") else {
+    let Some(window) = app.get_webview("main") else {
         return;
     };
     if let Err(error) = window.emit(OPEN_SETTINGS_EVENT, ()) {
@@ -278,9 +288,9 @@ pub(crate) fn build_menu<R: Runtime>(
         app,
         RESTART_APP_ID,
         if chinese {
-            "重启 Codex Switch"
+            "重启 Remote AI"
         } else {
-            "Restart Codex Switch"
+            "Restart Remote AI"
         },
         true,
         None::<&str>,
@@ -292,6 +302,56 @@ pub(crate) fn build_menu<R: Runtime>(
         true,
         None::<&str>,
     )?)?;
+    if settings
+        .as_ref()
+        .and_then(|settings| settings.language.as_deref())
+        == Some("ru")
+    {
+        for (id, label) in [
+            ("tray:accounts-header", "Аккаунты"),
+            ("tray:providers-header", "Провайдеры"),
+            ("tray:providers-empty", "Нет провайдеров"),
+            ("tray:providers-error", "Не удалось загрузить провайдеров"),
+            (SETTINGS_ID, "Настройки"),
+            (DASHBOARD_ID, "Обзор"),
+            (RESTART_CHATGPT_ID, "Перезапустить ChatGPT"),
+            (RESTART_APP_ID, "Перезапустить Remote AI"),
+            (QUIT_ID, "Выйти"),
+            (
+                FLOATING_BUBBLE_TOGGLE_ID,
+                if floating_bubble_enabled {
+                    "Скрыть индикатор расхода"
+                } else {
+                    "Показать индикатор расхода"
+                },
+            ),
+        ] {
+            if let Some(item) = menu.get(id).and_then(|item| item.as_menuitem().cloned()) {
+                item.set_text(label)?;
+            }
+        }
+        if let Some(item) = menu
+            .get("tray:accounts-notice")
+            .and_then(|item| item.as_menuitem().cloned())
+        {
+            item.set_text(if item.text()? == "No accounts" {
+                "Нет аккаунтов"
+            } else {
+                "Не удалось загрузить аккаунты"
+            })?;
+        }
+        // Only the text changes; Windows owner-draw reads it again when the menu is drawn.
+        for item in menu.items()? {
+            if !item.id().as_ref().starts_with(ACCOUNT_PREFIX) {
+                continue;
+            }
+            if let Some(item) = item.as_check_menuitem() {
+                if let Some(label) = account_label::russian_account_label(&item.text()?) {
+                    item.set_text(label)?;
+                }
+            }
+        }
+    }
     Ok(menu)
 }
 
@@ -461,7 +521,25 @@ fn escape_menu_text(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_provider_model_menu_id, provider_model_menu_id};
+    use super::{initial_menu_labels, parse_provider_model_menu_id, provider_model_menu_id};
+
+    #[test]
+    fn initial_menu_follows_the_tray_language() {
+        assert_eq!(
+            initial_menu_labels(Some("zh")),
+            ("Dashboard", "正在加载…", "Quit")
+        );
+        assert_eq!(
+            initial_menu_labels(Some("ru")),
+            ("Обзор", "Загрузка…", "Выйти")
+        );
+        for language in [None, Some("en"), Some("unknown")] {
+            assert_eq!(
+                initial_menu_labels(language),
+                ("Dashboard", "Loading…", "Quit")
+            );
+        }
+    }
 
     #[test]
     fn provider_model_menu_id_round_trips_special_characters() {

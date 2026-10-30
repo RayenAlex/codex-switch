@@ -40,6 +40,19 @@ beforeEach(async () => {
   await permissionModule.initializePermissions();
 });
 
+test('reload uses the tab API without waiting for the current document or attaching a debugger', async () => {
+  storage.local.siteAccessMode = 'all';
+  const reloaded = [];
+  chrome.tabs = { get: async id => ({ id, url: 'https://example.com' }),
+    reload: async id => reloaded.push(id) };
+  assert.deepEqual(await execute({ clientId: 'test' }, { operation: 'reload', args: { tabId: 1 } }),
+    { reloaded: true });
+  assert.deepEqual(reloaded, [1]);
+  chromeWebsiteAccess = false;
+  await assert.rejects(execute({ clientId: 'test' }, { operation: 'reload', args: { tabId: 1 } }), /Chrome/);
+  assert.deepEqual(reloaded, [1], 'reload still requires website permission');
+});
+
 test('rejects browser internals, credential-bearing URLs, invalid tabs and forged operations',()=>{
   for(const url of ['file:///C:/secret','chrome://settings','javascript:alert(1)','https://user:pass@example.com']) {
     assert.throws(()=>website(url));
@@ -62,6 +75,15 @@ test('website access remains pending until the user decides and denial grants no
   await denied;
   assert.deepEqual(storage.local,{siteAccessMode:'ask'});
   assert.deepEqual(storage.session,{});
+});
+
+test('noninteractive cleanup checks never reopen a denied website permission prompt', async () => {
+  await assert.rejects(permissionModule.authorize('https://example.com', 'first', undefined, { prompt: false }), /许可/);
+  assert.deepEqual((await permissionModule.status()).pending, []);
+  storage.session.sessionGrants = [{ origin: 'https://example.com', clientId: 'first' }];
+  await permissionModule.authorize('https://example.com', 'first', undefined, { prompt: false });
+  await assert.rejects(permissionModule.authorize('https://example.com', 'second', undefined, { prompt: false }), /许可/);
+  assert.deepEqual((await permissionModule.status()).pending, []);
 });
 
 test('session grants are scoped to the selected home and permanent grants can be revoked',async()=>{

@@ -49,6 +49,8 @@ struct ProxySessionRequestState {
     #[serde(default)]
     interrupted: bool,
     first_response_time_ms: Option<u64>,
+    #[serde(default)]
+    first_token_time_ms: Option<u64>,
     response_time_ms: Option<u64>,
     usage: Option<TokenUsageValues>,
 }
@@ -168,7 +170,7 @@ enum ActiveTarget {
     Official { model: String },
     Provider(Box<ProviderProfile>),
     ProviderGroup(Vec<ProviderProfile>),
-    Aggregate(AggregateTarget),
+    Aggregate(Box<AggregateTarget>),
 }
 
 struct AggregateTarget {
@@ -210,7 +212,7 @@ struct TokenUsageContext {
     provider: String,
     provider_id: Option<String>,
     model: String,
-    service_tier: Option<String>,
+    service_tier: UsageServiceTier,
     request_hash: String,
     started_at: Instant,
     content_type: Option<String>,

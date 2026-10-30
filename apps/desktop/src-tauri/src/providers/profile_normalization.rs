@@ -133,6 +133,25 @@ fn normalize_provider_profile(mut provider: ProviderProfile) -> Result<ProviderP
         provider.group.clear();
     }
     provider.group = normalize_provider_group(&provider.group)?;
+    if crate::claude_code_provider::is_claude_code_identity(
+        provider.kind,
+        &provider.name,
+        &provider.base_url,
+        provider.api_format,
+    ) {
+        provider.api_format = ProviderApiFormat::AnthropicMessages;
+    }
+    if let Some(options) = &provider.request_options {
+        options.validate().map_err(|error| error.to_string())?;
+        if options.use_full_url {
+            let url = Url::parse(&provider.base_url).map_err(|_| "Invalid endpoint address")?;
+            if url.fragment().is_some() || !url.username().is_empty() || url.password().is_some() {
+                return Err(
+                    "Endpoint address cannot contain login details or a fragment".to_string(),
+                );
+            }
+        }
+    }
     if provider.balance_platform == Some(ProviderBalancePlatform::CodexSwitch) {
         provider.balance_query_url = Some(codex_switch_quota_url(&provider.base_url)?);
         provider.balance_query_token = None;
@@ -216,11 +235,18 @@ pub(crate) fn uses_upstream_official_models(provider: &ProviderProfile) -> bool 
     provider.kind == ProviderKind::OpenAi
 }
 
+pub(crate) fn supports_explicit_model(provider: &ProviderProfile, model: &str) -> bool {
+    uses_upstream_official_models(provider)
+        || provider.model == model
+        || provider.models.iter().any(|candidate| candidate == model)
+}
+
 fn normalize_synced_provider(mut provider: ProviderProfile) -> Result<ProviderProfile, String> {
     validate_provider_id(&provider.id)?;
     provider.name = require_non_empty("Provider name", &provider.name)?;
     provider.group = normalize_provider_group(&provider.group)?;
-    provider.base_url = normalize_base_url(&provider.base_url)?;
+    provider.base_url =
+        normalize_provider_endpoint(&provider.base_url, provider.request_options.as_ref())?;
     provider.api_key = provider.api_key.trim().to_string();
     if provider.kind != ProviderKind::OpenAi
         && provider.api_key.is_empty()
@@ -252,17 +278,55 @@ fn normalize_base_url(value: &str) -> Result<String, String> {
     if is_local_proxy_url(&url) {
         return Err(concat!(
             "Provider Base URL must be an upstream API endpoint, ",
-            "not the Codex Switch local proxy endpoint"
+            "not the Remote AI local proxy endpoint"
         )
         .to_string());
     }
     Ok(trimmed.to_string())
 }
 
+fn normalize_provider_endpoint(
+    value: &str,
+    options: Option<&crate::models::ProviderRequestOptions>,
+) -> Result<String, String> {
+    let normalized = normalize_base_url(value)?;
+    if options.is_some_and(|options| options.use_full_url) {
+        // Full endpoints may rely on a trailing slash in either the path or a query value.
+        return Ok(value.trim().to_string());
+    }
+    Ok(normalized)
+}
+
+fn retained_request_options(
+    existing: Option<&ProviderProfile>,
+    endpoint: &str,
+    requested: Option<crate::models::ProviderRequestOptions>,
+) -> Option<crate::models::ProviderRequestOptions> {
+    if requested.is_some() {
+        return requested;
+    }
+    let saved = existing?;
+    let options = saved.request_options.as_ref()?;
+    let same_endpoint = normalize_provider_endpoint(endpoint, Some(options))
+        .ok()
+        .is_some_and(|endpoint| {
+            normalize_provider_endpoint(&saved.base_url, Some(options))
+                .ok()
+                .as_deref()
+                == Some(endpoint.as_str())
+        });
+    // An explicit empty object also clears remote copies when a legacy editor changes the endpoint.
+    Some(if same_endpoint {
+        options.clone()
+    } else {
+        Default::default()
+    })
+}
+
 pub(crate) fn ensure_not_local_proxy_base_url(base_url: &str) -> Result<(), String> {
     let url = Url::parse(base_url).map_err(|error| format!("Base URL is invalid: {error}"))?;
     if is_local_proxy_url(&url) {
-        Err("Provider Base URL must be an upstream API endpoint, not the Codex Switch local proxy endpoint".to_string())
+        Err("Provider Base URL must be an upstream API endpoint, not the Remote AI local proxy endpoint".to_string())
     } else {
         Ok(())
     }
@@ -352,7 +416,8 @@ fn preserve_refreshed_auth_from(paths: &Paths, account_id: &str, source: &Path) 
     {
         return;
     }
-    if let Err(error) = crate::storage::write_managed_auth_if_newer(paths, account_id, &current_auth)
+    if let Err(error) =
+        crate::storage::write_managed_auth_if_newer(paths, account_id, &current_auth)
     {
         eprintln!("failed to preserve refreshed proxy auth for {account_id}: {error}");
     }

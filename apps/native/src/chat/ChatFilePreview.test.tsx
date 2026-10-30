@@ -4,11 +4,14 @@ import { parseFileReference, type FileReference } from '../../../../shared/chat/
 import { ChatFileProvider } from './ChatFilePreview';
 import { ChatImageFilePreview } from './ChatImageFilePreview';
 import { ImageViewer } from './ImageViewer';
+import { ImageAiToolbar } from './ImageAiToolbar';
 import { VideoViewer } from './video/VideoViewer';
+import { PreviewTransferProgress } from './PreviewTransferProgress';
 
 const state = vi.hoisted(() => ({
   file: null as FileReference | null, provider: true, ready: true,
   original: undefined as string | undefined, imageError: false, load: vi.fn(),
+  text: undefined as { path: string; text: string } | undefined,
 }));
 vi.mock('react', async importOriginal => ({
   ...await importOriginal<typeof React>(),
@@ -16,11 +19,14 @@ vi.mock('react', async importOriginal => ({
   useEffect: vi.fn(),
   useState: (initial: unknown) => state.provider
     ? [state.file, (file: FileReference | null) => { state.file = file; }]
-    : [initial, vi.fn()],
+    : [initial === undefined ? state.text : initial, vi.fn()],
   useContext: () => ({ threadId: 'thread-with-image', ready: state.ready, offline: true, load: state.load }),
+
+  useSyncExternalStore: (_subscribe: unknown, snapshot: () => unknown) => snapshot(),
 }));
 vi.mock('react-native', () => ({ ActivityIndicator: 'Spinner', Modal: 'Modal', Pressable: 'Button',
-  Text: 'Text', View: 'View', Keyboard: { dismiss: vi.fn() }, StyleSheet: {
+  Text: 'Text', View: 'View', KeyboardAvoidingView: 'View', Platform: { OS: 'android' },
+  Keyboard: { dismiss: vi.fn() }, StyleSheet: {
     create: <T,>(styles: T) => styles, absoluteFillObject: {},
   } }));
 vi.mock('react-native-gesture-handler', () => ({ GestureDetector: 'Gesture', GestureHandlerRootView: 'View' }));
@@ -30,14 +36,19 @@ vi.mock('@expo/vector-icons', () => ({ MaterialCommunityIcons: 'Icon' }));
 vi.mock('../components/BottomSheet', () => ({ BottomSheet: 'Sheet' }));
 vi.mock('../components/SheetScrollView', () => ({ SheetScrollView: 'ScrollView' }));
 vi.mock('./ChatCodeBlock', () => ({ ChatCodeBlock: 'Code' }));
+vi.mock('./ChatMarkdownPreview', () => ({ ChatMarkdownPreview: 'MarkdownPreview' }));
+vi.mock('./ChatHtmlPreview', () => ({ ChatHtmlPreview: 'Html', isHtmlPath: (path: string) => /\.html?$/i.test(path) }));
 vi.mock('./ChatCodeHighlight', () => ({ fileLanguage: () => 'text' }));
 vi.mock('./fileDownloadTarget', () => ({ nativeDownloadTarget: {} }));
+vi.mock('../downloads/useManagedDownload', () => ({ useManagedDownload: () => ({
+  label: '下载', busy: false, start: vi.fn(), cancel: vi.fn(),
+}) }));
 vi.mock('./video/VideoViewer', () => ({ VideoViewer: 'Video' }));
 vi.mock('./useImageGestures', () => ({ useImageGestures: () => ({ gesture: {}, animatedStyle: {} }) }));
 vi.mock('./useImageOrientation', () => ({ useImageOrientation: () => ({ displayed: 'portrait' }) }));
 vi.mock('./useSaveImage', () => ({ useSaveImage: () => ({ saving: false, message: '', save: vi.fn() }) }));
 vi.mock('../../../../shared/chat/useImageViewer', () => ({ useImageViewer: () => ({
-  url: state.original, error: state.imageError, fail: vi.fn(), retry: vi.fn(),
+  url: state.original, error: state.imageError, fail: vi.fn(), request: vi.fn(), loading: false, loadOriginal: state.load,
 }) }));
 
 const fileClient = { open: vi.fn(), read: vi.fn(), close: vi.fn() };
@@ -63,6 +74,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   state.file = null; state.provider = true; state.ready = true;
   state.original = undefined; state.imageError = false;
+  state.text = undefined;
   state.load.mockResolvedValue(original);
 });
 
@@ -77,7 +89,7 @@ it.each([
   expect(viewer.type).toBe(ImageViewer);
   expect(viewer.props.thumbnail).toBeUndefined();
   await expect(viewer.props.load()).resolves.toBe(original);
-  expect(state.load).toHaveBeenCalledWith('thread-with-image', parseFileReference(href)!.path, true);
+  expect(state.load).toHaveBeenCalledWith('thread-with-image', parseFileReference(href)!.path, true, undefined);
   expect(fileClient.open).not.toHaveBeenCalled();
   expect(providerProps.load).not.toHaveBeenCalled();
   viewer.props.close();
@@ -88,7 +100,7 @@ it('lets the image loader retrieve a cached original while offline', async () =>
   state.ready = false;
   const preview = openFile('./cached.png');
   await expect(ChatImageFilePreview(preview.props).props.load()).resolves.toBe(original);
-  expect(state.load).toHaveBeenCalledWith('thread-with-image', './cached.png', true);
+  expect(state.load).toHaveBeenCalledWith('thread-with-image', './cached.png', true, undefined);
 });
 
 it('preserves video playback and ordinary file previews', () => {
@@ -105,11 +117,74 @@ function descendants(value: unknown): React.ReactElement<Record<string, unknown>
   return [value, ...descendants(value.props.children)];
 }
 
-it('keeps loading visible without mounting an empty image, then displays the fetched original', () => {
+it('hides a retained device preview while another device is active', () => {
+  state.file = { path: '/project/file.ts' };
+  const hidden = ChatFileProvider({ ...providerProps, active: false });
+  expect(React.Children.toArray(hidden.props.children)).toEqual(['Conversation']);
+  const visible = ChatFileProvider({ ...providerProps, active: true });
+  expect(React.Children.toArray(visible.props.children)).toHaveLength(2);
+});
+
+it('loads and displays code in an external deployment directory using its exact path', () => {
+  const path = 'F:/codex-deploy/admin-web/source/apps/desktop/src/remoteChat/legacyLinkFailures.test.ts';
+  state.text = { path, text: 'const ready = true;\n' };
+  providerProps.load.mockResolvedValue(state.text);
+  const preview = openFile(path);
+  const component = preview.type as (props: typeof preview.props) => React.ReactElement;
+  const sheet = component(preview.props);
+  const effect = vi.mocked(React.useEffect).mock.calls.at(-1)![0];
+  const cleanup = effect();
+  expect(providerProps.load).toHaveBeenCalledWith(providerProps.threadId, path,
+    expect.objectContaining({ onProgress: expect.any(Function), signal: expect.any(AbortSignal) }));
+  expect(descendants(sheet).find(node => node.type === 'Code')?.props).toMatchObject({
+    text: state.text.text, lineNumbers: true, copyLabel: '复制文件内容',
+  });
+  cleanup?.();
+  expect(providerProps.load.mock.calls.at(-1)?.[2].signal.aborted).toBe(true);
+});
+
+it('shows the same compact, accessible progress for file and image previews', () => {
+  const preview = openFile('./source.ts');
+  const component = preview.type as (props: typeof preview.props) => React.ReactElement;
+  expect(descendants(component(preview.props)).some(node => node.type === PreviewTransferProgress)).toBe(true);
+  const tree = PreviewTransferProgress({ label: '正在读取文件…', progress: {
+    received: 3 * 1024 * 1024, total: 8 * 1024 * 1024, bytesPerSecond: 850 * 1024, status: 'downloading',
+  } });
+  expect(tree.props.accessibilityValue).toMatchObject({ now: 37, text: '37% · 3 / 8 MB · 850 KB/s' });
+  expect(descendants(tree).filter(node => node.type === 'Text').map(node => node.props.children))
+    .toEqual(['正在读取文件…', '37%', '3 / 8 MB', '850 KB/s']);
+});
+
+it.each(['./index.html', './INDEX.HTM'])('renders HTML files directly while retaining the download action: %s', path => {
+  state.text = { path, text: '<html><body>Preview</body></html>' };
+  const preview = openFile(path);
+  const component = preview.type as (props: typeof preview.props) => React.ReactElement;
+  const sheet = component(preview.props);
+  const nodes = descendants(sheet);
+  expect(nodes.find(node => node.type === 'Html')?.props.text).toBe(state.text.text);
+  expect(nodes.some(node => node.type === 'Code')).toBe(false);
+  expect((sheet.props as { actions: { label: string }[] }).actions[0].label).toBe('下载');
+});
+
+it.each(['./verification.md', 'C:/docs/README.MARKDOWN'])('opens Markdown with rendering and download: %s', path => {
+  state.text = { path, text: '# 检查结果\n\n- 已完成\n' };
+  const preview = openFile(`${path}#L3`);
+  const component = preview.type as (props: typeof preview.props) => React.ReactElement;
+  const sheet = component(preview.props);
+  const nodes = descendants(sheet);
+  expect(nodes.find(node => node.type === 'MarkdownPreview')?.props).toMatchObject({ text: state.text.text, line: 3 });
+  expect(nodes.some(node => node.type === 'Code' || node.type === 'Html')).toBe(false);
+  expect((sheet.props as { actions: { label: string }[] }).actions[0].label).toBe('下载');
+});
+
+it('offers original loading without starting it and allows an explicit save before it loads', () => {
   const props = { description: 'mobile.png', load: state.load, close: vi.fn() };
   const loading = descendants(ImageViewer(props));
   expect(loading.some(node => node.type === 'Image')).toBe(false);
-  expect(loading.some(node => node.props.children === '正在加载原图…')).toBe(true);
+  expect(loading.some(node => node.props.children === '正在加载原图…')).toBe(false);
+  expect(loading.find(node => node.type === ImageAiToolbar)?.props.originalAction)
+    .toMatchObject({ label: '查看原图', onPress: expect.any(Function) });
+  expect(loading.find(node => node.props.accessibilityLabel === '下载图片到相册')?.props.disabled).toBe(false);
   state.original = original;
   const loaded = descendants(ImageViewer(props));
   expect(loaded.find(node => node.type === 'Image')?.props.source).toEqual({ uri: original });
@@ -124,6 +199,7 @@ it('shows a retry when an image file cannot be loaded', async () => {
   await expect(props.load()).rejects.toThrow('missing');
   state.imageError = true;
   const nodes = descendants(ImageViewer(props));
-  expect(nodes.some(node => node.props.accessibilityLabel === '重新加载原图')).toBe(true);
-  expect(nodes.find(node => node.props.accessibilityLabel === '下载图片到相册')?.props.disabled).toBe(true);
+  expect(nodes.find(node => node.type === ImageAiToolbar)?.props.originalAction)
+    .toMatchObject({ label: '重新加载原图', onPress: expect.any(Function) });
+  expect(nodes.find(node => node.props.accessibilityLabel === '下载图片到相册')?.props.disabled).toBe(false);
 });

@@ -42,7 +42,7 @@ function start(args, root) {
   return child;
 }
 
-function rpc(child) {
+function rpc(child, timeout = 5000) {
   const waiting = new Map();
   let id = 0;
   createInterface({input:child.stdout}).on('line', line => {
@@ -52,7 +52,7 @@ function rpc(child) {
   });
   return (method,params={}) => new Promise((resolve,reject) => {
     const requestId = ++id;
-    const timer = setTimeout(() => { waiting.delete(requestId); reject(new Error(`Timed out: ${method}`)); },5000);
+    const timer = setTimeout(() => { waiting.delete(requestId); reject(new Error(`Timed out: ${method}`)); },timeout);
     waiting.set(requestId,response => {clearTimeout(timer);resolve(response);});
     child.stdin.write(JSON.stringify({jsonrpc:'2.0',id:requestId,method,params})+'\n');
   });
@@ -73,6 +73,24 @@ async function endpoint(root) {
     if (!names.length) return null;
     return JSON.parse(await fs.readFile(path.join(root,'endpoints',names[0]),'utf8'));
   });
+}
+
+async function addStaleRecords(root) {
+  const reservation = net.createServer();
+  await new Promise(resolve => reservation.listen(0, '127.0.0.1', resolve));
+  const port = reservation.address().port;
+  try {
+    const directory = path.join(root, 'endpoints');
+    for (let index = 1; index <= 69; index++) {
+      const id = '00000000-0000-0000-0000-' + index.toString(16).padStart(12, '0');
+      await fs.writeFile(path.join(directory, id + '.json'), JSON.stringify({id, port, name: 'Stale fixture'}));
+    }
+    for (let index = 0; index < 300; index++) {
+      await fs.writeFile(path.join(directory, 'invalid-' + index + '.json'), 'invalid');
+    }
+  } finally {
+    await new Promise(resolve => reservation.close(resolve));
+  }
 }
 
 async function client(root,name) {
@@ -106,7 +124,8 @@ test('the compiled application exposes MCP over redirected standard streams',asy
     const call=rpc(child);
     assert.equal((await call('initialize')).result.serverInfo.name,'codex-switch-chrome');
     const names=(await call('tools/list')).result.tools.map(tool=>tool.name);
-    for(const name of ['browser_list','browser_tabs','browser_snapshot','browser_click','browser_fill','browser_screenshot']) {
+    for(const name of ['browser_list','browser_tabs','browser_snapshot','browser_click',
+      'browser_fill','browser_screenshot','browser_console_logs','browser_workers','browser_finish']) {
       assert.ok(names.includes(name));
     }
   } finally {
@@ -125,21 +144,64 @@ test('compiled Native Messaging and MCP helpers authenticate, relay, revoke, and
     const incoming = [];
     framedMessages(host.stdout,message=>{
       incoming.push(message);
-      if (message.type === 'cancel' || message.request.operation === 'open') return;
-      const result = message.request.operation === 'status' ? {paused:false} : {tabs:[{tabId:42,title:'fixture'}]};
+      if (message.type === 'cancel' || message.type === 'client-disconnected' || message.request.operation === 'open') return;
+      const replies = {status:{paused:false},tabs:{tabs:[{tabId:42,title:'fixture'}]},
+        finish:{closedTabIds:[42],keptTabIds:[],failedTabIds:[],releasedWorkerIds:['worker-1'],failedWorkerIds:[]},
+        workers:{workers:[{workerId:'worker-1',url:'https://example.com/sw.js'}],scope:'profile'},
+        console_logs:{tabId:42,frameId:'main',entries:[{level:'error',text:'fixture error'}],truncated:false}};
+      const result = replies[message.request.operation];
       host.stdin.write(frame({type:'reply',id:message.id,result,error:null}));
     });
     host.stdin.write(frame({type:'ready',name:'Protocol fixture'}));
     const live = await endpoint(root);
+    await addStaleRecords(root);
     const mcp = start([`--chrome-mcp=${first.clientId}`],root);children.push(mcp);
-    const call = rpc(mcp);
+    const call = rpc(mcp, 15000);
     assert.equal((await call('initialize')).result.serverInfo.name,'codex-switch-chrome');
     const definitions = (await call('tools/list')).result.tools;
     assert.ok(definitions.some(tool=>tool.name==='browser_screenshot'));
+    const logOptions = definitions.find(tool=>tool.name==='browser_console_logs').inputSchema.properties;
+    assert.ok(logOptions.source.enum.includes('browser'));
+    assert.equal(logOptions.since.type,'number');
+    assert.equal(logOptions.text.maxLength,500);
     const list = await call('tools/call',{name:'browser_list',arguments:{}});
     assert.equal(JSON.parse(list.result.content[0].text).browsers[0].browserId,live.id);
     const tabs = await call('tools/call',{name:'browser_tabs',arguments:{browserId:live.id}});
     assert.equal(JSON.parse(tabs.result.content[0].text).tabs[0].tabId,42);
+    const sessionId = incoming.at(-1).sessionId;
+    assert.match(sessionId, /^[a-f0-9-]{36}$/);
+    const sibling = start([`--chrome-mcp=${first.clientId}`],root); children.push(sibling);
+    const siblingCall = rpc(sibling);
+    await siblingCall('tools/call',{name:'browser_tabs',arguments:{browserId:live.id}});
+    const siblingId = incoming.at(-1).sessionId;
+    assert.notEqual(sessionId, siblingId);
+    const siblingExited = once(sibling,'exit'); sibling.stdin.end(); await siblingExited;
+    await waitFor(()=>incoming.some(message=>message.type==='client-disconnected' && message.sessionId===siblingId));
+    assert.ok(!incoming.some(message=>message.type==='client-disconnected' && message.sessionId===sessionId));
+    const other = start([`--chrome-mcp=${second.clientId}`],root); children.push(other);
+    const otherCall = rpc(other);
+    await otherCall('tools/call',{name:'browser_tabs',arguments:{browserId:live.id}});
+    const otherExited = once(other,'exit'); other.kill(); await otherExited;
+    await waitFor(()=>incoming.some(message=>message.type==='client-disconnected' && message.clientId===second.clientId));
+    assert.ok(!incoming.some(message=>message.type==='client-disconnected' && message.sessionId===sessionId));
+    const logs = await call('tools/call',{name:'browser_console_logs',
+      arguments:{browserId:live.id,tabId:42,level:'error',limit:10,source:'browser',since:100,text:'fixture'}});
+    assert.equal(logs.result.isError,false);
+    assert.equal(JSON.parse(logs.result.content[0].text).entries[0].text,'fixture error');
+    assert.deepEqual(incoming.at(-1).request,
+      {operation:'console_logs',args:{tabId:42,level:'error',limit:10,source:'browser',since:100,text:'fixture'}});
+    const workers = await call('tools/call',{name:'browser_workers',arguments:{browserId:live.id}});
+    assert.equal(JSON.parse(workers.result.content[0].text).workers[0].workerId,'worker-1');
+    const workerLogs = await call('tools/call',{name:'browser_console_logs',
+      arguments:{browserId:live.id,workerId:'worker-1',source:'worker'}});
+    assert.equal(workerLogs.result.isError,false);
+    assert.deepEqual(incoming.at(-1).request,
+      {operation:'console_logs',args:{workerId:'worker-1',source:'worker'}});
+    const finishArgs = {tabIds:[42],workerIds:['worker-1']};
+    const finished = await call('tools/call',{name:'browser_finish',arguments:{browserId:live.id,...finishArgs}});
+    assert.equal(finished.result.isError,false);
+    assert.deepEqual(JSON.parse(finished.result.content[0].text).closedTabIds,[42]);
+    assert.deepEqual(incoming.at(-1).request,{operation:'finish',args:finishArgs});
     const before = incoming.length;
     const forged = await bridge(live.port,{clientId:first.clientId,token:second.record.token,
       request:{operation:'tabs',args:{}}});
@@ -149,12 +211,20 @@ test('compiled Native Messaging and MCP helpers authenticate, relay, revoke, and
     first.record.enabled=false;await first.save();
     assert.equal((await pending).result.isError,true);
     await waitFor(()=>incoming.some(message=>message.type==='cancel'));
+    await waitFor(()=>incoming.some(message=>message.type==='client-disconnected' && message.sessionId===sessionId));
     const secondReply=await bridge(live.port,{clientId:second.clientId,token:second.record.token,
       request:{operation:'tabs',args:{}}});
     assert.equal(secondReply.result.tabs[0].tabId,42);
     first.record.enabled=true;await first.save();
+    await call('tools/call',{name:'browser_tabs',arguments:{browserId:live.id}});
+    const count = incoming.filter(message=>message.type==='client-disconnected' && message.clientId===first.clientId).length;
+    const mcpExited = once(mcp,'exit'); mcp.stdin.end(); await mcpExited;
+    await waitFor(()=>incoming.filter(message=>message.type==='client-disconnected' && message.clientId===first.clientId)
+      .length === count + 1);
+    const recovered = start([`--chrome-mcp=${first.clientId}`],root); children.push(recovered);
+    const recoveredCall = rpc(recovered);
     const exited=once(host,'exit');host.stdin.end();await exited;
-    const gone=await call('tools/call',{name:'browser_list',arguments:{}});
+    const gone=await recoveredCall('tools/call',{name:'browser_list',arguments:{}});
     assert.deepEqual(JSON.parse(gone.result.content[0].text).browsers,[]);
   } finally {
     await Promise.all(children.map(async child=>{

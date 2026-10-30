@@ -1,0 +1,61 @@
+import type { ProjectBrowserRequest, ProjectDocument } from '../../../shared/project-browser/protocol';
+import type { ProjectFilesResponse } from '../../../shared/remote-chat/projectFiles';
+import { mutateFixture } from './project-browser-mutations';
+
+export const browserRoot = 'C:/project';
+const documents: Record<string, string> = {
+  'src/main.ts': 'export function greet(name: string) {\n  const message = `Hello, ${name}`;\n  return message;\n}\n',
+  'notes.txt': 'Project notes\nFind this sentence\nA plain text paragraph\n\nSecond paragraph\nAnother line\n',
+  'README.md': '# Project\n\nThis is plain documentation.\n',
+  'settings.json': '{\n  "enabled": true,\n  "theme": "dark"\n}\n',
+  'nested/子目录/测试.py': 'def hello():\n    return "你好"\n',
+};
+const revisions: Record<string, number> = {};
+const directories = new Set(['', 'src', 'nested', 'nested/子目录']);
+export const savedFiles: { path: string; text: string }[] = [];
+export let conflict = false;
+export function causeConflict() { conflict = true; }
+
+function searchFiles(cwd: string, query: string): ProjectFilesResponse {
+  const term = query.toLowerCase().replace(/\\/g, '/');
+  const entries = [...Object.keys(documents), ...directories, 'archive.zip', 'huge.txt']
+    .filter(path => path && path.toLowerCase().includes(term))
+    .map(path => ({ name: path.split('/').at(-1)!, path: `${cwd}/${path}`,
+      directory: directories.has(path), relativePath: path }))
+    .sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name));
+  return { directory: cwd, parent: null, entries, truncated: false };
+}
+
+export async function browserRequest<T>(request: ProjectBrowserRequest): Promise<T> {
+  const path = request.operation === 'projectFiles' ? request.directory ?? '' : request.path;
+  const relative = path === request.cwd ? '' : path.replace(`${request.cwd}/`, '');
+  if (request.operation === 'projectEntryAction') {
+    return mutateFixture(request, { documents, directories, revisions }) as T;
+  }
+  if (request.operation === 'projectFiles') {
+    if (request.query !== undefined) return searchFiles(request.cwd, request.query) as T;
+    const prefix = relative ? `${relative}/` : '';
+    const names = new Map<string, boolean>();
+    for (const name of [...Object.keys(documents), ...directories, 'archive.zip', 'huge.txt']) {
+      if (!name.startsWith(prefix) || name === relative || !name) continue;
+      const rest = name.slice(prefix.length).split('/');
+      names.set(rest[0], rest.length > 1 || directories.has(name));
+    }
+    const data: ProjectFilesResponse = { directory: path || request.cwd, parent: relative ? request.cwd : null,
+      truncated: false, entries: [...names].map(([name, directory]) => ({
+        name, directory, path: `${request.cwd}/${prefix}${name}`,
+      })).sort((a, b) => Number(b.directory) - Number(a.directory) || a.name.localeCompare(b.name)) };
+    return data as T;
+  }
+  if (request.operation === 'projectFileWrite') {
+    if (conflict || request.revision !== String(revisions[relative] ?? 0)) {
+      throw new Error('文件已在其他地方修改。请先复制你的修改，再重新加载文件。');
+    }
+    savedFiles.push({ path: request.path, text: request.text });
+    documents[relative] = request.text; revisions[relative] = (revisions[relative] ?? 0) + 1;
+  }
+  const kind = relative === 'archive.zip' ? 'binary' : relative === 'huge.txt' ? 'large' : 'text';
+  const data: ProjectDocument = { path: request.path, kind, size: kind === 'large' ? 3_000_000 : 120,
+    readOnly: kind !== 'text', revision: String(revisions[relative] ?? 0), text: documents[relative] };
+  return data as T;
+}

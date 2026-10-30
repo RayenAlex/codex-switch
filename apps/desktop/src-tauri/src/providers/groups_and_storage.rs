@@ -26,6 +26,7 @@ fn set_provider_groups_blocking<R: Runtime>(
     let groups = normalize_provider_groups(groups)?;
     let mut settings = read_app_settings(&app)?;
     settings.provider_groups.clone_from(&groups);
+    settings.account_groups.clone_from(&groups);
     write_app_settings(&app, &settings)?;
     Ok(groups)
 }
@@ -69,10 +70,11 @@ pub(crate) fn provider_group_profiles(
     if group.is_empty() {
         return Err("Select a Provider group".to_string());
     }
-    let providers = list_provider_profiles(paths)?
+    let mut providers = list_provider_profiles(paths)?
         .into_iter()
         .filter(|provider| provider.kind == ProviderKind::Custom && provider.group == group)
         .collect::<Vec<_>>();
+    providers.extend(group_accounts::profiles(paths, &group)?);
     if providers.is_empty() {
         return Err("Provider group does not contain any available APIs".to_string());
     }
@@ -95,26 +97,42 @@ fn validate_provider_group_models(providers: &[ProviderProfile]) -> Result<(), S
     Ok(())
 }
 
+fn provider_group_member_name(provider: &ProviderProfile) -> String {
+    // Email addresses can be shared by multiple workspaces; the stored account ID includes workspace identity.
+    if let Some(id) = crate::aggregate_api::member_account_id(&provider.id) {
+        return format!("{}-{id}", provider.name);
+    }
+    provider.name.clone()
+}
+
+/// Keep the model first in Codex pickers while retaining the member identity for routing.
 pub(crate) fn provider_group_model_name(provider: &ProviderProfile, model: &str) -> String {
-    format!("{}-{model}", provider.name)
+    format!("{model}-{}", provider_group_member_name(provider))
+}
+
+fn legacy_provider_group_model_name(provider: &ProviderProfile, model: &str) -> String {
+    format!("{}-{model}", provider_group_member_name(provider))
 }
 
 pub(crate) fn provider_for_group_model(
     providers: &[ProviderProfile],
     requested_model: Option<&str>,
 ) -> Result<ProviderProfile, String> {
-    let matching_provider = |requested: &str| {
+    let matching_provider = |requested: &str, model_name: fn(&ProviderProfile, &str) -> String| {
         providers.iter().find_map(|provider| {
             group_visible_models(provider)
                 .into_iter()
-                .find(|model| provider_group_model_name(provider, model) == requested)
+                .find(|model| model_name(provider, model) == requested)
                 .map(|model| (provider, model.to_string()))
         })
     };
     let selected = match requested_model {
-        Some(requested) => matching_provider(requested).ok_or_else(|| {
-            "The selected model is not available in this Provider group".to_string()
-        })?,
+        Some(requested) => matching_provider(requested, provider_group_model_name)
+            // Existing conversations can retain the previous member-first name. Current catalog names take precedence.
+            .or_else(|| matching_provider(requested, legacy_provider_group_model_name))
+            .ok_or_else(|| {
+                "The selected model is not available in this Provider group".to_string()
+            })?,
         None => providers
             .first()
             .and_then(|provider| {
@@ -178,6 +196,7 @@ fn provider_field_values(provider: &ProviderProfile) -> Vec<serde_json::Value> {
         json!(provider.fast_mode_enabled),
         json!(provider.websocket_enabled),
         json!(provider.api_format),
+        json!(provider.request_options),
         json!(provider.balance_platform),
         json!(provider.balance_query_url),
         json!(provider.balance_query_token),
@@ -188,7 +207,7 @@ fn provider_field_values(provider: &ProviderProfile) -> Vec<serde_json::Value> {
     ]
 }
 
-fn provider_field_versions_mut(values: &mut ProviderFieldModifiedAt) -> [&mut String; 23] {
+fn provider_field_versions_mut(values: &mut ProviderFieldModifiedAt) -> [&mut String; 24] {
     [
         &mut values.kind,
         &mut values.name,
@@ -206,6 +225,7 @@ fn provider_field_versions_mut(values: &mut ProviderFieldModifiedAt) -> [&mut St
         &mut values.fast_mode_enabled,
         &mut values.websocket_enabled,
         &mut values.api_format,
+        &mut values.request_options,
         &mut values.balance_platform,
         &mut values.balance_query_url,
         &mut values.balance_query_token,
@@ -333,6 +353,7 @@ fn provider_summary(
         fast_mode_enabled: provider.fast_mode_enabled,
         websocket_enabled: provider.websocket_enabled,
         api_format: provider.api_format,
+        request_options: provider.request_options.clone(),
         active,
         auto_switch_enabled: auto_switch_enabled && provider.kind == ProviderKind::Custom,
         has_api_key: !provider.api_key.trim().is_empty(),

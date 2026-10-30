@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { navigate } from './chat-helpers';
 import { messages } from '../src/i18n/messages';
 import { setLanguage, t } from '../src/i18n';
+import { translateText } from '../../../shared/i18n/translate';
 
 const LANGUAGE_KEY = 'codex-switch.web.language.v1';
 
@@ -10,6 +11,7 @@ async function signIn(page: Page) {
   await page.getByRole('textbox', { name: '邮箱', exact: true }).fill('review@example.test');
   await page.getByRole('textbox', { name: '密码', exact: true }).fill('local-review');
   await page.getByRole('button', { name: '登录并查看' }).click();
+  await page.getByRole('button', { name: '同意并登录' }).click();
   await expect(page.locator('.app-shell')).toBeVisible();
 }
 
@@ -18,7 +20,7 @@ async function chooseEnglish(page: Page) {
   await page.getByRole('button', { name: '语言 简体中文' }).click();
   await expect(page.getByRole('radio', { name: '简体中文' })).toHaveAttribute('aria-checked', 'true');
   await page.getByRole('radio', { name: 'English' }).click();
-  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en-US');
 }
 
 test('Chinese default, immediate English switch, persistence and switching back', async ({ page, request }, info) => {
@@ -35,7 +37,7 @@ test('Chinese default, immediate English switch, persistence and switching back'
   await page.reload();
   await navigate(page, 'Settings');
   await expect(page.getByRole('button', { name: 'Language English' })).toBeVisible();
-  await page.getByRole('button', { name: /About Codex Switch/ }).click();
+  await page.getByRole('button', { name: /About Remote AI/ }).click();
   await expect(page.getByText('Web browser', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Back to settings' }).click();
   await navigate(page, 'Accounts');
@@ -69,7 +71,7 @@ test('invalid preference falls back to Chinese and language changes reach other 
   await second.goto('./');
   await expect(second.locator('html')).toHaveAttribute('lang', 'zh-CN');
   await chooseEnglish(page);
-  await expect(second.locator('html')).toHaveAttribute('lang', 'en');
+  await expect(second.locator('html')).toHaveAttribute('lang', 'en-US');
   await second.close();
 });
 
@@ -99,4 +101,27 @@ test('translations keep placeholders intact and leave unknown content unchanged'
   expect(t('toString')).toBe('toString');
   setLanguage('zh');
   expect(t('语言')).toBe('语言');
+});
+
+test('Russian settings persist and fit narrow and desktop layouts', async ({ page, request }, info) => {
+  const ru = (source: string) => translateText('ru', source);
+  await request.post('http://127.0.0.1:1491/test/reset');
+  await signIn(page);
+  await navigate(page, '设置');
+  await page.getByRole('button', { name: '语言 简体中文' }).click();
+  await page.getByRole('radio', { name: 'Русский' }).click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ru-RU');
+  const languageName = `${ru('语言')} Русский`;
+  await expect(page.getByRole('button', { name: languageName })).toBeVisible();
+  await expect(page.getByRole('button', { name: ru('修改密码'), exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(page.getByText('欢迎回来', { exact: true })).toBeHidden();
+  await page.screenshot({ path: info.outputPath('settings-russian.png') });
+  await page.reload();
+  await navigate(page, ru('设置'));
+  await expect(page.getByRole('button', { name: languageName })).toBeVisible();
+  await page.getByRole('button', { name: languageName }).click();
+  await expect(page.getByRole('radio', { name: 'Русский' })).toHaveAttribute('aria-checked', 'true');
+  await page.getByRole('radio', { name: '简体中文' }).click();
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
 });

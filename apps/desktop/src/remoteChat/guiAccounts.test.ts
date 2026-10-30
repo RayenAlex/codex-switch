@@ -4,14 +4,14 @@ import { invoke } from '../api/backend';
 import { readGuiAccounts, selectGuiAccount } from './guiAccounts';
 import { ChatOperations } from './operations';
 
-vi.mock('../api/backend', () => ({ invoke: vi.fn() }));
+vi.mock('../api/backend', () => ({ invoke: vi.fn(), hasLocalBackend: false }));
 vi.mock('../pages/codexGui/api', () => ({ guiApi: { connect: vi.fn(), request: vi.fn(), respond: vi.fn() } }));
 beforeEach(() => vi.resetAllMocks());
 
 it('reads the independent GUI account and sends only picker fields from this computer', async () => {
   vi.mocked(invoke).mockImplementation(async (command) => {
     if (command === 'codex_gui_account_selection') return { kind: 'account', id: 'gui' };
-    if (command === 'get_local_proxy_status') return { running: true };
+    if (command === 'get_local_proxy_status') return { running: false };
     if (command === 'list_accounts') return [
       { id: 'global', email: 'global@example.test', active: true, localProxyCompatible: true,
         privateDetails: { password: 'private' }, codexAccessToken: 'secret' },
@@ -21,15 +21,20 @@ it('reads the independent GUI account and sends only picker fields from this com
         } },
     ];
     if (command === 'list_providers') return [{ id: 'provider', name: 'Provider', model: 'model', apiKey: 'secret' }];
+    if (command === 'list_aggregate_apis') return [];
     throw new Error('Unexpected command');
   });
   const snapshot = await readGuiAccounts();
+  expect(snapshot.running).toBe(true);
+  expect(invoke).not.toHaveBeenCalledWith('get_local_proxy_status');
   expect(snapshot.selection).toEqual({ kind: 'account', id: 'gui' });
   expect(snapshot.choices).toEqual([
     { kind: 'account', id: 'global', name: 'global@example.test',
-      detail: '套餐未知 · 主剩余 — · 次剩余 —', available: true },
+      detail: '套餐未知 · 主剩余 — · 次剩余 —', plan: '套餐未知', primaryRemainingPercent: null,
+      secondaryRemainingPercent: null, available: true },
     { kind: 'account', id: 'gui', name: 'gui@example.test',
-      detail: 'pro · 主剩余 82% · 次剩余 0%', searchDetail: '工作', available: true },
+      detail: 'pro · 主剩余 82% · 次剩余 0%', plan: 'pro', primaryRemainingPercent: 82.4,
+      secondaryRemainingPercent: 0, searchDetail: '工作', available: true },
     { kind: 'provider', id: 'provider', name: 'Provider',
       detail: '钱包余额 暂无余额', searchDetail: 'model', available: true },
   ]);
@@ -63,4 +68,24 @@ it('supports selecting a GUI provider through the same isolated command', async 
     .resolves.toEqual({ kind: 'provider', id: 'provider' });
   expect(invoke).toHaveBeenCalledExactlyOnceWith('codex_gui_switch_account',
     { selection: { kind: 'provider', id: 'provider' } });
+});
+
+it('lets remote clients select aggregates without converting them to providers', async () => {
+  vi.mocked(invoke).mockResolvedValue({ kind: 'aggregate', id: 'pool' });
+  await expect(selectGuiAccount({ kind: 'aggregate', id: 'pool' }))
+    .resolves.toEqual({ kind: 'aggregate', id: 'pool' });
+  expect(invoke).toHaveBeenCalledExactlyOnceWith('codex_gui_switch_account',
+    { selection: { kind: 'aggregate', id: 'pool' } });
+});
+
+it('publishes aggregate availability without exposing member settings', async () => {
+  vi.mocked(invoke).mockImplementation(async command => {
+    if (command === 'codex_gui_account_selection') return { kind: 'aggregate', id: 'pool' };
+    if (command === 'list_aggregate_apis') return [{ id: 'pool', name: 'Pool', model: 'shared',
+      enabled: true, memberModels: { private: 'deployment' }, failoverPolicy: { enabled: true } }];
+    return [];
+  });
+  expect((await readGuiAccounts()).choices).toEqual([
+    { kind: 'aggregate', id: 'pool', name: 'Pool', detail: 'shared', available: true },
+  ]);
 });

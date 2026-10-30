@@ -1,14 +1,24 @@
 import type { ChatConnection, ConnectionEvents } from './connection';
+import { openPreparedDownload } from '../archiveDownload';
+import { mergeTaskDelivery } from '../taskDelivery';
 import type { RemoteComposerCatalog } from '../composerCatalog';
 import type { ProjectFilesRequest, ProjectFilesResponse } from '../projectFiles';
 import { applyChatEvent } from './events';
 import { syncChatProcessing } from './processing';
 import { mergeHistory } from './history';
-import { contentHash, HISTORY_CHANGED } from '../historySync';
+import { historyLoadResult } from './historyLoad';
+import { HISTORY_CHANGED } from '../historySync';
+import { contentStringHash } from '../stringHash';
 import type { HistoryPage } from '../historyPage';
 import { HistoryReader } from './historyReader';
+import type { HistoryVersionSource } from './historyPreparation';
 import { HistoryCache } from './historyCache';
 import { ImageCache } from './imageCache';
+import { ThreadActions, threadMutationPatch, type ThreadMutation } from './threadActions';
+import { ThreadListRequests } from './threadListRequests';
+import { mergeThreadList } from './threadListSnapshot';
+import { forkConversation } from './forkConversation';
+import { RemoteMessageEditor } from './messageEdit';
 import { OfflineWriter, type OfflineHistoryStore } from './offline';
 import { offlineImage } from './offlineImages';
 import { validateChatImages } from '../attachments';
@@ -26,7 +36,12 @@ import { QueueConnection } from './queueConnection';
 import { AsyncAnswers } from './asyncAnswers';
 import { createGuiAccountsClient } from './guiAccounts';
 import { createContextSettingsClient } from './contextSettings';
+import { createGuiToolsClient } from '../guiTools';
+import type { MappingSocket } from '../../port-mapping/socket';
+import { MAPPING_UPDATE_REQUIRED } from '../../port-mapping/errors';
+import { canSelectProject } from '../projects';
 import type { UsageSummary } from '../usage';
+import { CONVERSATION_METRICS_OPERATION, type ReadConversationMetrics } from '../conversationMetrics';
 import { TOKEN_SUMMARY_OPERATION, type ReadTokenSummary } from '../tokenSummary';
 import { decodeTokenSummary, QUOTA_HISTORY_FORMAT, type TokenSummaryResponse } from '../tokenSummaryCodec';
 import { initialChatState, type ApprovalReply, type ChatProject, type ChatState, type GuiEvent,
@@ -35,13 +50,29 @@ import { initialChatState, type ApprovalReply, type ChatProject, type ChatState,
 const SYNCHRONIZATION_RETRY_MS = 3000;
 
 export class ChatController {
+  readonly messageEditor = new RemoteMessageEditor({ snapshot: () => this.state,
+    update: patch => this.update(patch), request: body => this.request(body),
+    image: (threadId, source) => this.imagePreview(threadId, source, true), invalidate: threadId => {
+      this.histories.remove(threadId);
+      if (this.state.selected?.id !== threadId) return;
+      this.readGeneration += 1;
+      this.refreshThreadId = null;
+      this.update({ historyLoading: false, historyLoadingMore: false });
+    } });
+  readonly threadActions = new ThreadActions({ snapshot: () => this.state, update: patch => this.update(patch),
+    request: body => this.connection.request('request', body),
+    complete: (body, result) => body.operation === 'threadPin'
+      ? this.applySidebar(result as SidebarSnapshot) : this.completeThreadMutation(body),
+    refresh: () => this.list({ background: true }) });
   readonly goals = new RemoteGoals({ snapshot: () => this.state, update: (patch) => this.update(patch),
     request: (body) => this.request(body), created: (id, settings) => this.composer.created(id, settings),
     generation: () => this.synchronization });
   private state = initialChatState();
   private readonly listeners = new Set<() => void>();
   private readonly eventListeners = new Set<(event: GuiEvent) => void>();
-  private readonly connection: Pick<ChatConnection, 'request' | 'start' | 'stop'>;
+  private readonly connection: Pick<ChatConnection, 'request' | 'start' | 'stop'>
+    & Partial<Pick<ChatConnection, 'confirmHostIdentity' | 'reportDiagnostic' | 'retryNow' | 'openNativeMedia'
+      | 'downloadsBulk' | 'setBulkSupport' | 'mappingStreams'>>;
   private readonly queueConnection = new QueueConnection((body) => this.connection.request('request', body));
   private readonly asyncAnswers = new AsyncAnswers({ snapshot: () => this.state,
     request: (body) => this.connection.request('request', body), update: (patch) => this.update(patch),
@@ -49,8 +80,18 @@ export class ChatController {
   readonly guiAccounts = createGuiAccountsClient({
     request: (body) => this.connection.request('request', body), subscribe: (listener) => this.subscribeEvents(listener),
   });
-  private listGeneration = 0;
+  readonly guiTools = createGuiToolsClient(<T>(body: object) => this.connection.request<T>('request', body),
+    (event, fields) => this.connection.reportDiagnostic?.(event, fields),
+    viewId => this.connection.openNativeMedia?.(viewId) ?? Promise.resolve(undefined),
+    (resource, url, options): Promise<MappingSocket> => this.connection.mappingStreams
+      ? this.connection.mappingStreams.open(resource, url, options)
+      : Promise.reject(new Error(MAPPING_UPDATE_REQUIRED)));
+  private readonly listRequests = new ThreadListRequests(async () => {
+    if (this.active && this.transportConnected) await this.list({ background: true });
+  });
+  private manualList?: Promise<void>;
   private readGeneration = 0;
+  private selectionGeneration = 0;
   private refreshThreadId: string | null = null;
   private synchronization = 0;
   private synchronizing?: number;
@@ -61,11 +102,12 @@ export class ChatController {
   private readonly images = new ImageCache(<T>(body: Parameters<ConstructorParameters<typeof ImageCache>[0]>[0]) =>
     this.connection.request<T>('request', body));
   private readonly histories = new HistoryCache();
-  private readonly historyReader = new HistoryReader((body) => this.connection.request('request', body));
+  private readonly historyReader: HistoryReader;
   private readonly historyPages = new Map<string, HistoryPage>();
   private historyTimer?: ReturnType<typeof setTimeout>;
   private historyDirty = false;
   private olderQueued = false;
+  private olderStartedAt?: number;
   private readonly composer = new RemoteComposerSettings({ snapshot: () => this.state,
     update: (patch) => this.update(patch), ready: () => this.active && this.state.ready,
     request: (body) => this.connection.request('request', body) });
@@ -79,21 +121,40 @@ export class ChatController {
     if (!this.state.cacheError) this.update({ cacheError: '部分内容未能缓存，连接电脑后可继续查看。' });
   };
 
-  constructor(createConnection: (events: ConnectionEvents) => Pick<ChatConnection, 'request' | 'start' | 'stop'>,
-    private readonly offline?: OfflineHistoryStore) {
+  constructor(createConnection: (events: ConnectionEvents) => Pick<ChatConnection, 'request' | 'start' | 'stop'>
+    & Partial<Pick<ChatConnection, 'confirmHostIdentity' | 'reportDiagnostic' | 'retryNow'
+      | 'downloadsBulk' | 'setBulkSupport'>>,
+    private readonly offline?: OfflineHistoryStore, versions?: HistoryVersionSource) {
+    this.historyReader = new HistoryReader((body) => this.connection.request('request', body), versions);
     if (offline) this.offlineWriter = new OfflineWriter(offline, this.cacheFailure);
     this.connection = createConnection({
-      mode: (mode) => this.changeMode(mode), error: (error) => this.update({ error }),
+      mode: (mode) => this.changeMode(mode), error: (error) => this.update({ error, connectionIssue: error }),
+      stage: (connectionStage) => this.update({ connectionStage }),
+      publicEndpoints: (publicEndpoints) => this.update({ publicEndpoints }),
+      directEndpoints: (directEndpoints) => this.update({ directEndpoints }),
+      delivery: (value) => {
+        const turn = this.state.selected?.id === value.threadId ? this.state.selected.turns?.at(-1) : undefined;
+        const receipt = value.phase === 'sending' ? { ...value, afterTurnId: turn?.id,
+          afterUserCount: turn?.items.filter(item => item.type === 'userMessage').length ?? 0 } : value;
+        this.update({ deliveries: { ...this.state.deliveries,
+          [value.threadId]: mergeTaskDelivery(this.state.deliveries?.[value.threadId], receipt) } });
+      },
       ready: () => { void this.synchronize(); },
       // Resuming the coordinator socket must not replace a pending GUI initialization deadline.
       retryAt: (retryAt) => { if (!this.transportConnected) this.update({ retryAt }); },
       event: (event) => this.receive(event as GuiEvent),
       upload: (upload) => { if (this.state.sending) this.update({ upload }); },
     });
+    this.downloads.bulk = this.connection.downloadsBulk;
   }
 
   snapshot = () => this.state;
+  setWorkspaceBusy = (workspaceBusy: boolean) => this.update({ workspaceBusy });
+  suggestNextPrompt: import('../../chat/nextPromptSuggestion').RequestPromptSuggestion = target =>
+    this.request({ operation: 'suggestNextPrompt', ...target });
   readUsage = () => this.connection.request<UsageSummary>('request', { operation: 'usageSummary' });
+  readConversationMetrics: ReadConversationMetrics = (threadId) =>
+    this.connection.request('request', { operation: CONVERSATION_METRICS_OPERATION, threadId });
   readonly contextSettings = createContextSettingsClient(<T>(body: unknown) =>
     this.connection.request<T>('request', body));
   readTokenSummary: ReadTokenSummary = (weeks) =>
@@ -124,7 +185,13 @@ export class ChatController {
 
   private changeMode(mode: ConnectionMode) {
     // A path outage keeps the logical session, pending requests and loaded history intact.
-    if (mode !== 'offline' && this.transportConnected) { this.update({ mode }); return; }
+    if (mode !== 'offline' && this.transportConnected) {
+      this.update({ mode });
+      // A failed initialization cannot schedule a retry while all paths are down.
+      // Resuming transport v2 preserves the session and does not emit ready again.
+      if (!this.state.ready && this.synchronizing !== this.synchronization) this.scheduleSynchronization();
+      return;
+    }
     this.transportConnected = mode === 'direct' || mode === 'relay';
     this.historyReader.reset();
     this.queueConnection.reset();
@@ -135,16 +202,17 @@ export class ChatController {
       this.update({ queue: { ...this.state.queue, revision: -1 } });
     }
     this.synchronization += 1;
-    this.listGeneration += 1;
+    this.listRequests.reset();
     this.readGeneration += 1;
     this.refreshThreadId = null;
     this.olderQueued = false;
+    this.olderStartedAt = undefined;
     clearTimeout(this.syncTimer);
     clearTimeout(this.historyTimer);
     this.historyTimer = undefined;
     this.update({ mode, ready: false, connecting: mode !== 'offline', retryAt: null,
       historyOffline: this.offline && this.state.selected ? true : this.state.historyOffline,
-      loading: false, historyLoading: false, historyLoadingMore: false, compacting: undefined });
+      loading: false, listRefreshing: false, historyLoading: false, historyLoadingMore: false, compacting: undefined });
     if (this.offline) void this.flushCache().then(() => this.listOffline());
   }
 
@@ -152,13 +220,12 @@ export class ChatController {
     if (!event?.params || typeof event.method !== 'string') return;
     for (const listener of this.eventListeners) listener(event);
     if (event.method === 'thread/deleted' && event.params.threadId) {
-      if (this.loadedThreadId === event.params.threadId) this.loadedThreadId = null;
-      this.offlineWriter?.forget(event.params.threadId);
+      this.completeThreadMutation({ operation: 'delete', threadId: event.params.threadId });
     }
     if (event?.method === HISTORY_CHANGED) {
       if (event.params.threadId === this.state.selected?.id) this.scheduleHistory();
       if (event.params.reason?.startsWith('thread/')
-        || !this.state.threads.some((thread) => thread.id === event.params.threadId)) void this.list();
+        || !this.state.threads.some((thread) => thread.id === event.params.threadId)) this.listRequests.changed();
       return;
     }
     if (event?.method === COMPOSER_EVENT) { this.composer.receive(event.params as unknown as ComposerSnapshot); return; }
@@ -170,14 +237,18 @@ export class ChatController {
     if (event?.method === 'turn/completed' && event.params.threadId === this.state.selected?.id) {
       this.scheduleHistory();
     }
-    if (['thread/name/updated', 'thread/archived', 'thread/unarchived', 'thread/deleted'].includes(event?.method)) {
-      void this.list();
+    if (['thread/started', 'thread/name/updated', 'thread/archived', 'thread/unarchived', 'thread/deleted',
+      'turn/started', 'turn/completed'].includes(event.method)) this.listRequests.changed();
+    if (['thread/name/updated', 'thread/archived', 'thread/unarchived', 'thread/deleted'].includes(event.method)) {
       if (event.params.threadId === this.state.selected?.id) this.scheduleHistory();
     }
     if (event?.method === 'connection/closed' || event?.method === 'codex/disconnected') {
       this.skillGeneration += 1;
       this.synchronization += 1;
-      this.update({ ready: false, connecting: false, error: CONNECTION_ERRORS.guiDisconnected });
+      this.listRequests.reset();
+      this.update({ ready: false, connecting: false, loading: false, listRefreshing: false,
+        error: CONNECTION_ERRORS.guiDisconnected,
+        connectionIssue: CONNECTION_ERRORS.guiDisconnected });
       this.scheduleSynchronization();
     }
   }
@@ -208,10 +279,10 @@ export class ChatController {
 
   private async listOffline() {
     if (!this.offline) return;
-    const generation = this.listGeneration;
+    const generation = this.listRequests.generation;
     try {
       const cached = await this.offline.list();
-      if (!this.active || generation !== this.listGeneration || this.state.ready) return;
+      if (!this.active || generation !== this.listRequests.generation || this.state.ready) return;
       const { archived, search } = this.state;
       const threads = cached.filter((value) => value.archived === archived
         && `${value.thread.name ?? ''} ${value.thread.preview}`.toLowerCase().includes(search.toLowerCase()))
@@ -220,9 +291,16 @@ export class ChatController {
     } catch { this.cacheFailure(); }
   }
 
+  confirmHostIdentity = async (fingerprint: string) => {
+    if (!this.connection.confirmHostIdentity) throw new Error('当前连接无法更新电脑身份。');
+    await this.connection.confirmHostIdentity(fingerprint);
+    this.connectNow();
+  };
+
   connectNow = () => {
-    if (this.state.ready || this.state.connecting) return;
     this.active = true;
+    this.connection.retryNow?.();
+    if (this.state.ready || this.state.connecting) return;
     if (this.transportConnected) { void this.synchronize(); return; }
     this.connection.stop();
     this.update({ connecting: true, retryAt: null, error: '' });
@@ -230,6 +308,7 @@ export class ChatController {
   };
 
   stop() {
+    this.previewDownloads?.dispose();
     void this.flushCache();
     this.active = false;
     this.composer.reset();
@@ -237,14 +316,15 @@ export class ChatController {
     this.historyReader.reset();
     this.queueConnection.reset();
     this.olderQueued = false;
+    this.olderStartedAt = undefined;
     clearTimeout(this.syncTimer);
     clearTimeout(this.historyTimer);
     this.historyTimer = undefined;
     this.synchronization += 1;
-    this.listGeneration += 1;
+    this.listRequests.reset();
     this.readGeneration += 1;
     this.refreshThreadId = null;
-    this.update({ ready: false, connecting: false, retryAt: null,
+    this.update({ ready: false, connecting: false, retryAt: null, loading: false, listRefreshing: false,
       historyLoading: false, historyLoadingMore: false, compacting: undefined });
     this.connection.stop();
   }
@@ -254,25 +334,37 @@ export class ChatController {
     clearTimeout(this.syncTimer);
     const generation = ++this.synchronization;
     this.synchronizing = generation;
-    this.update({ connecting: true, retryAt: null });
+    this.composer.reset();
+    this.update({ connecting: true, retryAt: null, connectionStage: 'chat' });
     try {
       const response = await this.connection.request<unknown>('connect', chatHandshake);
       if (!this.active || generation !== this.synchronization) return;
       const approvals = chatApprovals(response);
+      this.previewDownloadSupported = !!response && typeof response === 'object'
+        && 'filePreviewsV1' in response && response.filePreviewsV1 === true;
+      this.connection.setBulkSupport?.(response);
+      if (response && typeof response === 'object' && 'desktopOnly' in response && response.desktopOnly === true) {
+        this.update({ desktopOnly: true, approvals: [], selected: null, threads: [], queue: emptyQueue(),
+          ready: true, connecting: false, retryAt: null, error: '', connectionStage: 'ready', connectionIssue: '' });
+        return;
+      }
+      this.update({ desktopOnly: false });
       this.update({ approvals, error: '' });
       // A disk read begun during connection must not delay or replace the authoritative refresh.
       if (this.offline && this.state.historyLoading) {
         this.readGeneration += 1;
         this.refreshThreadId = null;
       }
-      await Promise.all([this.list(), this.composer.load(), this.refreshSelected(), this.loadQueue(generation)]);
+      void this.composer.load().catch(() => undefined);
+      await Promise.all([this.list({ background: true }),
+        this.refreshSelected(), this.loadQueue(generation)]);
       if (this.active && generation === this.synchronization) {
-        this.update({ ready: true, connecting: false, retryAt: null });
+        this.update({ ready: true, connecting: false, retryAt: null, connectionStage: 'ready', connectionIssue: '' });
         this.composer.retry();
       }
     } catch (error) {
       if (!this.active || generation !== this.synchronization) return;
-      this.update({ connecting: false, error: guiConnectionError(error) });
+      this.update({ connecting: false, error: guiConnectionError(error), connectionIssue: guiConnectionError(error) });
       this.scheduleSynchronization();
     } finally { if (this.synchronizing === generation) this.synchronizing = undefined; }
   }
@@ -349,49 +441,78 @@ export class ChatController {
   }
 
   async setSettings(settings: Partial<ComposerSettings>) { this.composer.set(settings); }
+  refreshModels = () => this.composer.refreshModels().catch(() => {
+    // The settings panel displays discovery failures and keeps sending blocked until recovery.
+  });
 
   /** Search without replacing the sidebar list or its pagination. */
   searchThreads = (options: { search: string; archived: boolean; cursor?: string }) =>
     this.request<ListResponse<Thread>>({ operation: 'list', ...options });
 
-  async list(options: { search?: string; archived?: boolean; more?: boolean } = {}) {
-    const generation = ++this.listGeneration;
+  list(options: { search?: string; archived?: boolean; more?: boolean; background?: boolean } = {}) {
     const search = options.search ?? this.state.search;
     const archived = options.archived ?? this.state.archived;
     const cursor = options.more ? this.state.cursor ?? undefined : undefined;
-    this.update({ search, archived, loading: true });
+    const manual = !options.background && !options.more;
+    const key = JSON.stringify([search, archived, cursor, Boolean(options.more)]);
+    const scope = JSON.stringify([search, archived]);
+    const promise = this.listRequests.run({ key, scope, more: options.more, fresh: manual },
+      async (generation, revision) => {
+        this.update({ search, archived, loading: true });
+        await this.loadList({ search, archived, cursor, more: options.more }, generation, revision);
+      });
+    if (manual && this.manualList !== promise) {
+      this.manualList = promise;
+      this.update({ listRefreshing: true });
+      void promise.finally(() => {
+        if (this.manualList !== promise) return;
+        this.manualList = undefined;
+        this.update({ listRefreshing: false });
+      });
+    }
+    return promise;
+  }
+
+  private async loadList(options: { search: string; archived: boolean; cursor?: string; more?: boolean },
+    generation: number, revision: number) {
+    const { search, archived, cursor, more } = options;
+    const before = this.state.threads;
     if (this.offline && !this.state.ready && this.synchronizing !== this.synchronization) {
       await this.listOffline();
-      if (generation === this.listGeneration) this.update({ loading: false });
+      if (generation === this.listRequests.generation) this.update({ loading: false });
       return;
     }
     try {
       const result = await this.request<ListResponse<Thread> & { sidebar?: SidebarSnapshot }>({
         operation: 'list', search, archived, cursor,
       });
-      if (generation !== this.listGeneration) return;
+      if (!this.listRequests.accepts(generation, revision)) return;
       this.applySidebar(result.sidebar);
-      void this.offline?.updateSummaries?.(result.data, archived).catch(this.cacheFailure);
-      const threads = options.more ? [...this.state.threads, ...result.data] : result.data;
-      this.update({ threads: [...new Map(threads.map((thread) => [thread.id, thread])).values()],
-        cursor: result.nextCursor });
-    } catch (error) { if (generation === this.listGeneration) this.failure(error); }
-    finally { if (generation === this.listGeneration) this.update({ loading: false }); }
+      const { threads, summaries } = mergeThreadList({ before, current: this.state.threads,
+        incoming: result.data, more });
+      void this.offline?.updateSummaries?.(summaries, archived).catch(this.cacheFailure);
+      this.update({ threads, cursor: result.nextCursor });
+    } catch (error) { if (generation === this.listRequests.generation) this.failure(error); }
+    finally {
+      if (generation === this.listRequests.generation) this.update({ loading: false });
+    }
   }
 
   async select(thread: Thread) {
+    this.selectionGeneration += 1;
     this.rememberHistory();
     void this.flushCache();
     this.readGeneration += 1;
     this.refreshThreadId = null;
     this.olderQueued = false;
     this.loadedThreadId = null;
+    this.olderStartedAt = undefined;
     const cached = this.histories.get(thread.id);
     if (cached) this.historyPages.set(thread.id, cached.page);
     else this.historyPages.delete(thread.id);
     this.update({ selected: cached?.thread ?? thread, draftProject: null,
       selectedArchived: this.state.archived, error: '', historyOffline: Boolean(this.offline),
-      historyHasMore: this.historyPages.get(thread.id)?.hasMore ?? false });
+      historyHasMore: this.historyPages.get(thread.id)?.hasMore ?? false, historyLoad: undefined });
     if (this.offline && !this.state.ready) await this.readOffline(false);
     if (this.state.selected?.id !== thread.id || (this.offline && !this.transportConnected)) return;
     await Promise.all([this.refreshSelected(), this.composer.select()]);
@@ -399,27 +520,29 @@ export class ChatController {
 
   async loadOlder() {
     // A manual pull retries even after the PC previously reported the beginning of history.
-    if (!this.state.selected) return;
+    if (!this.state.selected || this.state.historyLoadingMore || (!this.offline && !this.state.ready)) return;
     if (this.offline && !this.state.ready) { await this.readOffline(true); return; }
     if (!this.state.ready) return;
     if (this.refreshThreadId === this.state.selected?.id) {
-      if (!this.state.historyLoadingMore) {
-        this.olderQueued = true;
-        this.update({ historyLoadingMore: true });
-      }
+      this.olderQueued = true;
+      this.olderStartedAt ??= Date.now();
+      this.update({ historyLoadingMore: true, historyLoad: undefined });
       return;
     }
     await this.refreshSelected(true);
   }
 
   async refreshSelected(older = false) {
+    if (this.messageEditor.busy) { this.historyDirty = true; return; }
     if (this.offline && !this.transportConnected) return;
     const selected = this.state.selected;
     if (!selected || this.refreshThreadId === selected.id) return;
     this.refreshThreadId = selected.id;
     this.historyDirty = false;
     const generation = ++this.readGeneration;
-    this.update({ historyLoading: true, historyLoadingMore: older });
+    const startedAt = this.olderStartedAt ?? Date.now();
+    if (older) this.olderStartedAt = undefined;
+    this.update({ historyLoading: true, historyLoadingMore: older, ...(older && { historyLoad: undefined }) });
     try {
       const result = await this.historyReader.read(selected,
         { start: this.historyPages.get(selected.id)?.start, older });
@@ -428,7 +551,8 @@ export class ChatController {
         if (result.page) this.historyPages.set(selected.id, result.page);
         this.update({ selected: mergeHistory(result.thread, this.state.selected, selected, this.state.historyOffline),
           error: '', historyOffline: false,
-          historyHasMore: result.page.hasMore });
+          historyHasMore: result.page.hasMore,
+          ...(older && { historyLoad: historyLoadResult(selected, result.thread, startedAt) }) });
         this.rememberHistory();
         this.markViewed();
       }
@@ -450,7 +574,9 @@ export class ChatController {
     if (!this.offline || !selected || this.refreshThreadId === selected.id) return;
     const generation = ++this.readGeneration;
     this.refreshThreadId = selected.id;
-    this.update({ historyLoading: true, historyLoadingMore: older });
+    const startedAt = this.olderStartedAt ?? Date.now();
+    if (older) this.olderStartedAt = undefined;
+    this.update({ historyLoading: true, historyLoadingMore: older, ...(older && { historyLoad: undefined }) });
     try {
       await this.flushCache();
       const result = await this.offline.read(selected.id,
@@ -459,7 +585,8 @@ export class ChatController {
       if (result) {
         this.historyPages.set(selected.id, result.page);
         this.update({ selected: result.thread, selectedArchived: result.archived,
-          historyOffline: true, historyHasMore: result.page.hasMore });
+          historyOffline: true, historyHasMore: result.page.hasMore,
+          ...(older && { historyLoad: historyLoadResult(selected, result.thread, startedAt) }) });
       }
     } catch { this.cacheFailure(); }
     finally {
@@ -481,10 +608,13 @@ export class ChatController {
 
   back(project: ChatProject | null = null) {
     if (this.state.sending) return;
+    this.selectionGeneration += 1;
     const inherit = this.state.selected && this.state.ready && !this.state.settingsBusy
-      ? { model: this.state.settings.model, effort: this.state.settings.effort } : undefined;
+      ? { model: this.state.settings.model, effort: this.state.settings.effort, access: this.state.settings.access }
+      : undefined;
     this.rememberHistory();
     this.olderQueued = false;
+    this.olderStartedAt = undefined;
     this.readGeneration += 1;
     this.refreshThreadId = null;
     this.loadedThreadId = null;
@@ -492,10 +622,12 @@ export class ChatController {
       selectedArchived: false, error: '', historyHasMore: false, historyLoading: false, historyLoadingMore: false });
     void this.flushCache();
     if (!this.offline || this.transportConnected) void this.composer.select(inherit);
-    void this.list();
+    void this.list({ background: true });
   }
 
-  async send(input: SendInput) {
+  async send(input: SendInput, onQueued?: (id: string) => void) {
+    if (this.state.desktopOnly) { this.update({ error: '请先登录电脑并打开聊天，再发送消息。' }); return false; }
+    if (this.state.threadActionBusy || this.state.workspaceBusy) return false;
     if (input.goalMode) return this.goals.start(input);
     const images = input.images ?? [];
     if (this.state.selectedArchived) { this.update({ error: '请先恢复聊天，再发送消息。' }); return false; }
@@ -519,14 +651,18 @@ export class ChatController {
         const result = await this.request<{ thread: Thread }>({ operation: 'start', model: selection.model || undefined,
           access: input.access, cwd: this.state.draftProject?.cwd });
         thread = result.thread;
+        this.listRequests.reset();
+        const threads = this.state.archived ? [] : this.state.threads;
         this.update({ selected: thread, draftProject: null, selectedArchived: false,
-          threads: [thread, ...this.state.threads.filter((entry) => entry.id !== result.thread.id)],
-          archived: false, search: '', cursor: null });
+          threads: [thread, ...threads.filter((entry) => entry.id !== result.thread.id)],
+          archived: false, search: '', cursor: null, loading: false, listRefreshing: false });
+        this.listRequests.changed();
         await this.composer.created(thread.id, selection);
       }
       this.ensureCurrent(generation);
       if (!created) {
         const queue = await this.queueConnection.enqueue(thread, { ...message, images });
+        if (queue?.enqueuedId) onQueued?.(queue.enqueuedId);
         if (queue && generation === this.synchronization) this.applyQueue(queue);
       } else {
         await this.request({ operation: 'send', threadId: thread.id, ...message, images });
@@ -543,10 +679,21 @@ export class ChatController {
     if (generation !== this.synchronization || !this.state.ready) throw new Error('连接已中断，请连接后再发送。');
   }
 
-  imagePreview = (threadId: string, source: string, original = false) => offlineImage({
-    store: this.offline, online: this.state.ready, key: JSON.stringify([threadId, contentHash(source), original]),
-    load: () => this.images.load(threadId, source, original), failed: this.cacheFailure,
-  });
+  imagePreview = async (threadId: string, source: string, original = false,
+    options?: import('../previewProgress').PreviewLoadOptions) => {
+    if (this.managedPreviews) return this.previewDownloads!.image(threadId, source, original, options);
+    const key = JSON.stringify([threadId, await contentStringHash(source), original]);
+    return offlineImage({ store: this.offline, online: this.state.ready, key,
+      load: () => this.images.load(threadId, source, original), failed: this.cacheFailure });
+  };
+
+  previewDownloads?: import('../previewDownloads').PreviewAdapter;
+  private previewDownloadSupported = true;
+  get managedPreviews() { return Boolean(this.previewDownloads && this.previewDownloadSupported); }
+  savePreviewImage = (url: string) => {
+    if (!this.previewDownloads) return Promise.reject(new Error('请更新应用后保存图片。'));
+    return this.previewDownloads.saveImage(url);
+  };
 
   videos: import('../video').VideoClient = {
     open: (threadId, path) => this.connection.request('request', { operation: 'videoOpen', threadId, path }),
@@ -560,8 +707,24 @@ export class ChatController {
     close: (threadId, id) => this.connection.request('request', { operation: 'fileClose', threadId, id }),
   };
 
-  textPreview = (threadId: string, path: string) =>
-    this.connection.request<import('../textPreview').TextPreview>('request', { operation: 'textPreview', threadId, path });
+  downloads: import('../downloads').DownloadClient = {
+    open: (options, controls) => options.preview
+      ? this.connection.request('request', { operation: 'previewOpen', transferId: options.transferId,
+        threadId: options.threadId, path: options.path, preview: options.preview })
+      : openPreparedDownload({
+        open: body => this.connection.request('request', { operation: 'downloadOpen', ...body }),
+        close: (threadId, id) => this.files.close(threadId, id),
+      }, options, controls),
+    browse: (options) => this.connection.request('request', { operation: 'downloadBrowse', ...options }),
+    read: (request) => this.files.read(request),
+    close: (transferId, id) => this.files.close(transferId, id),
+  };
+
+  textPreview = (threadId: string, path: string, options?: import('../previewProgress').PreviewLoadOptions) =>
+    this.managedPreviews ? this.previewDownloads!.text(threadId, path, options)
+      : this.connection.request<import('../textPreview').TextPreview>('request', {
+        operation: 'textPreview', threadId, path,
+      });
 
   loadSkills = async (cwd: string) => {
     const generation = this.skillGeneration;
@@ -589,8 +752,35 @@ export class ChatController {
     });
 
   chooseDraftProject = (project: ChatProject) => {
-    if (!this.state.ready || this.state.selected || this.state.sending || !project.cwd.trim()) return;
+    // A completed worktree request can arrive before chat synchronization finishes after reconnecting.
+    if ((!this.state.ready && !this.state.workspaceBusy)
+      || this.state.selected || this.state.sending || !project.cwd.trim()) return;
     this.update({ draftProject: { cwd: project.cwd, label: project.label }, error: '' });
+  };
+
+  selectProject = async (project: ChatProject | null) => {
+    if (!canSelectProject(this.state) || (!project && this.state.selected)) return false;
+    if (!project) { this.update({ draftProject: null, error: '' }); return true; }
+    const threadId = this.state.selected?.id;
+    const before = this.state.draftProject;
+    this.update({ workspaceBusy: true, error: '' });
+    try {
+      const selected = await this.guiTools.projects.select({ cwd: project.cwd, threadId });
+      this.listRequests.reset();
+      this.update({ loading: false, listRefreshing: false });
+      // Invalidate reads started before this choice; they can still contain the previous directory.
+      if (this.state.selected?.id === threadId) {
+        this.readGeneration += 1; this.refreshThreadId = null;
+        if (this.state.selected) this.update({ selected: { ...this.state.selected, cwd: selected.cwd } });
+        else if (this.state.draftProject === before) this.update({ draftProject: selected });
+        this.update({ historyLoading: false, historyLoadingMore: false });
+        this.rememberHistory();
+      }
+      if (threadId) this.update({ threads: this.state.threads.map(thread =>
+        thread.id === threadId ? { ...thread, cwd: selected.cwd } : thread) });
+      return true;
+    } catch (error) { this.failure(error); return false; }
+    finally { this.update({ workspaceBusy: false }); }
   };
 
   compact = async () => {
@@ -641,15 +831,47 @@ export class ChatController {
     } catch (error) { this.failure(error); }
   }
 
+  private completeThreadMutation(body: ThreadMutation) {
+    const { threadId, operation } = body;
+    this.listRequests.reset();
+    if (operation !== 'rename' && this.state.selected?.id === threadId) {
+      this.readGeneration += 1; this.refreshThreadId = null; this.loadedThreadId = null;
+      this.olderQueued = false;
+      this.olderStartedAt = undefined;
+      this.update({ selected: null, selectedArchived: false, historyLoading: false,
+        historyLoadingMore: false, historyHasMore: false });
+    }
+    this.histories.remove(threadId);
+    if (operation === 'delete') {
+      this.historyPages.delete(threadId);
+      this.offlineWriter?.forget(threadId);
+    } else {
+      const thread = this.state.threads.find(entry => entry.id === threadId);
+      const archived = operation === 'rename' ? this.state.archived : operation === 'archive';
+      if (thread) void this.flushCache().then(() => this.offline?.updateSummaries?.([
+        operation === 'rename' ? { ...thread, name: body.name } : thread,
+      ], archived)).catch(this.cacheFailure);
+    }
+    this.update({ ...threadMutationPatch(this.state, body), loading: false, listRefreshing: false });
+  }
+
+  forkConversation = (thread: Thread) => {
+    const generation = this.synchronization;
+    const selection = this.selectionGeneration;
+    const selectedId = this.state.selected?.id;
+    return forkConversation({ snapshot: this.snapshot, update: patch => this.update(patch),
+      request: () => this.connection.request('request', { operation: 'forkLatest', threadId: thread.id }),
+      isCurrent: () => generation === this.synchronization && this.state.ready,
+      canOpen: () => selection === this.selectionGeneration && selectedId === this.state.selected?.id
+        && !this.state.sending,
+      select: fork => this.select(fork), refresh: () => this.list({ background: true }) }, thread);
+  };
+
   async archive() {
     const thread = this.state.selected;
     if (!thread) return;
-    if (this.state.queue.threads[thread.id]?.length) {
-      this.update({ error: '请先处理待发送消息，再归档聊天。' }); return;
-    }
     try {
-      await this.request({ operation: this.state.selectedArchived ? 'unarchive' : 'archive', threadId: thread.id });
-      this.back();
+      await this.threadActions.run(thread, this.state.selectedArchived ? 'unarchive' : 'archive');
     } catch (error) { this.failure(error); }
   }
 }

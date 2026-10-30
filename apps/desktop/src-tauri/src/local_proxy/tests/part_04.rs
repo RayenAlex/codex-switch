@@ -69,6 +69,7 @@ fn streaming_token_usage_does_not_require_response_content_type() {
 #[test]
 fn provider_models_response_matches_codex_model_info_shape() {
     let provider = ProviderProfile {
+        request_options: Default::default(),
         id: "deepseek".to_string(),
         kind: ProviderKind::Custom,
         name: "DeepSeek".to_string(),
@@ -130,6 +131,7 @@ fn provider_models_response_matches_codex_model_info_shape() {
 #[test]
 fn switch_control_catalog_exposes_only_fixed_model_name() {
     let provider = ProviderProfile {
+        request_options: Default::default(),
         id: "deepseek".to_string(),
         kind: ProviderKind::Custom,
         name: "DeepSeek".to_string(),
@@ -177,6 +179,7 @@ fn switch_control_catalog_exposes_only_fixed_model_name() {
 #[test]
 fn provider_models_payload_etag_changes_with_the_model_list() {
     let mut provider = ProviderProfile {
+        request_options: Default::default(),
         id: "deepseek".to_string(),
         kind: ProviderKind::Custom,
         name: "DeepSeek".to_string(),
@@ -247,10 +250,10 @@ fn non_success_upstream_response_is_buffered_for_diagnostics() {
         UpstreamBody::Buffered(body) => body,
         UpstreamBody::Streaming(_) => panic!("non-success responses should be buffered"),
     };
-    let diagnostic = diagnostic_response_body(&body, payload.content_type.as_deref());
+    let diagnostic = diagnostic_response_body(&body, payload.content_type.as_deref(), payload.status);
     assert_eq!(diagnostic["captured"], true);
-    assert_eq!(diagnostic["text"], "{\"error\":\"bad upstream key\"}");
-    assert_eq!(diagnostic["truncated"], false);
+    assert_eq!(diagnostic["stream"]["failure"]["message"], "bad upstream key");
+    assert_eq!(diagnostic["stream"]["failure"]["captureTruncated"], false);
 }
 
 #[test]

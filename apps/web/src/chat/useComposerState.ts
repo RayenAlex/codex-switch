@@ -1,5 +1,5 @@
 import { t } from '../i18n';
-import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useChatDraft } from '../../../../shared/remote-chat/client/useChatDraft';
 import { useQueueEditor } from '../../../../shared/remote-chat/client/useQueueEditor';
 import { useGoalMode } from '../../../../shared/remote-chat/client/useGoalMode';
@@ -11,6 +11,9 @@ import { useComposerAttachments } from './useComposerAttachments';
 import { useComposerMenu } from './useComposerMenu';
 import type { ComposerProps } from './composerProps';
 import { pickChatImages } from './pickChatImages';
+import { useComposerPaste } from './useComposerPaste';
+import { fileDropError, useFileDrop } from '../../../../shared/chat/useFileDrop';
+import { useComposerFileReferences } from '../../../../shared/chat/ChatFileReferences';
 
 export function useComposerState(props: ComposerProps) {
   const { threadId, active, ready, sending, settingsBusy, compacting, selection, send, goals, running } = props;
@@ -18,9 +21,11 @@ export function useComposerState(props: ComposerProps) {
   const [pausing, setPausing] = useState(false);
   const [error, setError] = useState('');
   const attachments = useComposerAttachments({ threadId, sending });
+  const dropTarget = useRef<HTMLDivElement>(null);
   const quotes = useChatQuotes();
   const disabled = !ready || settingsBusy || compacting;
-  const draft = useChatDraft({ threadId, sending, disabled: disabled || attachments.busy, selection, send });
+  const draft = useChatDraft({ threadId, sending, disabled: disabled || attachments.busy, selection, send,
+    recovered: props.recoveredEdit, consumeRecovered: props.consumeRecoveredEdit });
   const menu = useComposerMenu({ draft, scope: `${threadId ?? ''}:${props.cwd}`, active,
     refresh: props.catalog.refresh, compact: props.compact });
   const hasContent = draft.hasContent || attachments.items.length > 0 || Boolean(quotes?.quotes.length);
@@ -31,17 +36,38 @@ export function useComposerState(props: ComposerProps) {
       menu.setSelection({ start: message.text.length, end: message.text.length });
       requestAnimationFrame(() => menu.input.current?.focus());
     } });
-  const busy = sending || draft.picking || attachments.busy || queueEditor.loading;
-  const paste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    const files = Array.from(event.clipboardData.files);
-    if (!files.length) return;
-    event.preventDefault();
-    if (!active || busy) return;
+  const addFiles = async (files: File[]) => {
     const images = files.filter(file => file.type.startsWith('image/'));
     const documents = files.filter(file => !file.type.startsWith('image/'));
-    if (images.length) void draft.addImages(remaining => pickChatImages(images, remaining));
-    if (documents.length) void attachments.pick(documents);
+    await Promise.all([
+      images.length ? draft.addImages(remaining => pickChatImages(images, remaining)) : undefined,
+      documents.length ? attachments.pick(documents) : undefined,
+    ]);
   };
+  const drop = useFileDrop({ target: dropTarget, scope: threadId, active,
+    disabled: disabled || sending || draft.picking || attachments.busy || queueEditor.loading,
+    subscribe: props.nativeFileDrop?.subscribe,
+    addPaths: async (paths, current) => {
+      const files = await props.nativeFileDrop!.readFiles(paths);
+      if (!current()) return;
+      await addFiles(files);
+      if (current()) menu.input.current?.focus();
+    }, addFiles, report: error => setError(t(fileDropError(error))) });
+  const paste = useComposerPaste({ scope: threadId, active,
+    busy: sending || draft.picking || attachments.busy || queueEditor.loading || drop.reading,
+    readClipboardImages: props.readClipboardImages, insertText: (text, input) => {
+      const start = input.selectionStart;
+      const end = input.selectionEnd;
+      const available = Math.max(0, input.maxLength - input.value.length + end - start);
+      const inserted = input.maxLength < 0 ? text : text.slice(0, available);
+      draft.setText(input.value.slice(0, start) + inserted + input.value.slice(end));
+      menu.restoreCaret(start + inserted.length);
+    }, addFiles });
+  const busy = sending || draft.picking || attachments.busy || queueEditor.loading || paste.reading || drop.reading;
+  useComposerFileReferences({ scope: `${threadId ?? ''}:${props.cwd}`,
+    enabled: active && !disabled && !busy && !goalMode.enabled, add: attachments.add,
+    addQuote: quote => quotes?.add({ ...quote, role: 'tool' }) ?? false,
+    focus: () => menu.input.current?.focus() });
   const compact = !goalMode.enabled && !props.goal && !draft.text.length && !hasContent && !busy;
   const action = composerAction({ running: running && !hasContent,
     interrupted: !!props.interrupted && !goalMode.enabled, hasDraft: hasContent });
@@ -53,8 +79,15 @@ export function useComposerState(props: ComposerProps) {
     const input = menu.input.current;
     if (!input || !active) return;
     const resize = () => {
+      const viewport = input.closest<HTMLElement>('.chat-composer-content');
+      const scrollTop = viewport?.scrollTop ?? 0;
+      const editingEnd = document.activeElement === input && input.selectionStart === input.value.length;
+      // Measuring at auto height temporarily collapses the outer scroll range.
+      // Restore it after sizing, keeping the last line's padding visible while typing at the end.
       input.style.height = 'auto';
       input.style.height = `${input.scrollHeight}px`;
+      input.scrollTop = 0;
+      if (viewport) viewport.scrollTop = editingEnd ? viewport.scrollHeight : scrollTop;
     };
     resize();
     let width = input.clientWidth;
@@ -101,5 +134,8 @@ export function useComposerState(props: ComposerProps) {
     else goalMode.exit();
   };
   return { draft, attachments, goalMode, menu, queueEditor, busy, compact, action, actionDisabled, pausing,
-    error: error || attachments.error || draft.error, submit, removeGoal, paste };
+    drop, dropTarget,
+    hasQuotes: Boolean(quotes?.quotes.length),
+    error: error || paste.error || attachments.error || draft.error, submit, removeGoal,
+    paste: paste.paste, pasteKeyDown: paste.pasteKeyDown, readingClipboard: paste.reading };
 }

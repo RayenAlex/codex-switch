@@ -39,6 +39,10 @@ static CODEX_RUNTIME_APP: OnceLock<AppHandle> = OnceLock::new();
 mod model_retry;
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 mod official_refresh;
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+mod renderer_refresh;
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+pub(crate) use renderer_refresh::refresh_after_launch;
 
 pub(crate) struct ModelRefreshRequest {
     pub(crate) models: Vec<String>,
@@ -134,11 +138,18 @@ pub(crate) fn refresh_usage_summary() {
     crate::dream_skin_native::notify_usage_summary_changed();
 }
 
-/// Relaunches Codex with the local renderer channel. Theme injection remains
-/// controlled exclusively by Dream Skin's installation and pause state.
+/// Relaunches Codex, enabling the renderer channel only when enhancements are allowed.
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 pub(crate) fn restart_managed_session(executable: Option<&Path>) -> Result<(), String> {
     crate::dream_skin_native::restart_runtime_session(executable)
+}
+
+/// Reserve a validated runtime before a manual restart closes the current client.
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+pub(crate) fn prepare_managed_session(
+    executable: Option<&Path>,
+) -> Result<crate::dream_skin_native::PreparedRuntimeSession, String> {
+    crate::dream_skin_native::prepare_runtime_session(executable)
 }
 
 /// Refreshes Codex's model and config caches through the managed renderer channel.
@@ -237,28 +248,14 @@ fn next_model_refresh_generation() -> u64 {
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 fn apply_model_refresh(generation: u64, request: ModelRefreshRequest) {
+    if !crate::client_integration::enabled_for(crate::local_proxy::is_running()) {
+        return;
+    }
     let _guard = MODEL_REFRESH_LOCK
         .get_or_init(|| Mutex::new(()))
         .lock()
         .unwrap_or_else(|error| error.into_inner());
-    if MODEL_REFRESH_GENERATION.load(Ordering::Acquire) != generation {
-        return;
-    }
-    match crate::dream_skin_native::refresh_codex_models(
-        &request.models,
-        &request.fast_mode_models,
-        &request.image_input_models,
-        &request.model_reasoning_efforts,
-        &request.selected_model,
-        request.reasoning_profile,
-    ) {
-        Ok(result) if result.refreshed => {}
-        Ok(result) => eprintln!(
-            "Codex model picker refresh was skipped: {}",
-            result.reason.as_deref().unwrap_or("unknown reason")
-        ),
-        Err(error) => eprintln!("Codex model picker refresh failed: {error}"),
-    }
+    renderer_refresh::apply(generation, &request);
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
@@ -293,16 +290,23 @@ fn fetch_model_refresh_catalog(
         crate::providers::LOCAL_PROXY_PORT,
         client_version
     );
-    let response = Client::builder()
-        .timeout(timeout)
-        .build()
-        .map_err(|error| format!("Failed to create the model catalog client: {error}"))?
+    let response = model_catalog_client(timeout)?
         .get(url)
         .bearer_auth(crate::providers::LOCAL_PROXY_TOKEN)
         .send()
         .and_then(reqwest::blocking::Response::error_for_status)
         .map_err(|error| format!("Official model catalog request failed: {error}"))?;
     parse_official_model_catalog(response, selected_model, client_version)
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+fn model_catalog_client(timeout: Duration) -> Result<Client, String> {
+    // This client only reads our local model endpoint; upstream routing belongs to that endpoint.
+    Client::builder()
+        .no_proxy()
+        .timeout(timeout)
+        .build()
+        .map_err(|error| format!("Failed to create the model catalog client: {error}"))
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
@@ -410,3 +414,6 @@ fn unique_reasoning_efforts(
 
 #[cfg(all(test, any(target_os = "windows", target_os = "macos")))]
 mod tests;
+
+#[cfg(all(test, any(target_os = "windows", target_os = "macos")))]
+mod proxy_tests;

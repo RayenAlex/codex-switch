@@ -8,10 +8,17 @@ export interface UsageWindow {
 export interface UsageSummary {
   primary?: UsageWindow | null;
   secondary?: UsageWindow | null;
+  credits?: CreditsSnapshot | null;
   apiExpiresAt?: string | null;
   plan?: string | null;
   fetchedAt?: string | null;
   error?: string | null;
+}
+
+export interface CreditsSnapshot {
+  hasCredits: boolean;
+  unlimited: boolean;
+  balance: string | null;
 }
 
 export interface Account {
@@ -77,7 +84,7 @@ export interface AppInfo {
   version: string;
 }
 
-export type ProviderApiFormat = "openaiResponses" | "openaiChat";
+export type ProviderApiFormat = "openaiResponses" | "openaiChat" | "anthropicMessages" | "geminiGenerateContent";
 export type ModelApiFormats = Record<string, ProviderApiFormat>;
 export type ProviderKind = "custom" | "openai";
 export type ProviderBalancePlatform = "newApi" | "sub2Api" | "deepSeek" | "codexSwitch";
@@ -86,7 +93,14 @@ export type ModelReasoningEfforts = Record<string, ReasoningEffort[]>;
 export type ModelContextWindows = Record<string, number>;
 export type ModelTokenCosts = Record<string, number>;
 
+export interface ProviderRequestOptions {
+  useFullUrl: boolean;
+  headers: Record<string, string>;
+  body: Record<string, unknown>;
+}
+
 export interface Provider {
+  requestOptions?: ProviderRequestOptions | null;
   id: string;
   kind: ProviderKind;
   name: string;
@@ -120,6 +134,7 @@ export interface Provider {
 }
 
 export interface ProviderInput {
+  requestOptions?: ProviderRequestOptions;
   id?: string;
   kind: ProviderKind;
   name: string;
@@ -149,14 +164,38 @@ export interface ProviderInput {
   walletPassword?: string;
 }
 
+export interface AggregateFailoverPolicy {
+  routingStrategy?: "balanced" | "priority";
+  recoverySuccessThreshold?: number;
+  errorRateThresholdPercent?: number | null;
+  errorRateMinRequests?: number;
+  enabled: boolean;
+  maxAttempts: number;
+  failureThreshold: number;
+  initialCooldownSeconds: number;
+  maxCooldownSeconds: number;
+  retryStatusCodes: number[];
+  retryOnNetworkErrors: boolean;
+  respectRetryAfter: boolean;
+}
+
+export interface AggregateMemberHealth {
+  state: "healthy" | "coolingDown" | "recovering";
+  consecutiveFailures: number;
+  retryAfterSeconds: number;
+}
+
 export interface AggregateApi {
   id: string;
   name: string;
   model: string;
   memberProviderIds: string[];
+  memberModels?: Record<string, string>;
   enabled: boolean;
   active: boolean;
   memberConversationCounts: Record<string, number>;
+  failoverPolicy?: AggregateFailoverPolicy;
+  memberHealth?: Record<string, AggregateMemberHealth>;
 }
 
 export interface AggregateApiInput {
@@ -164,7 +203,9 @@ export interface AggregateApiInput {
   name: string;
   model: string;
   memberProviderIds: string[];
+  memberModels?: Record<string, string>;
   enabled: boolean;
+  failoverPolicy?: AggregateFailoverPolicy;
 }
 
 export interface CcSwitchImportRequest {
@@ -217,8 +258,12 @@ export interface LocalProxyLanApiKeyInput {
   usageReviewThreshold?: number;
 }
 
+export type ProxyServiceTier = "default" | "priority" | "ultrafast";
+
 export interface LocalProxyStatus {
+  activeProviderGroup?: string | null;
   running: boolean;
+  serviceTier?: ProxyServiceTier;
   fastModeEnabled: boolean;
   fastModeAvailable: boolean;
   address: string;
@@ -312,7 +357,7 @@ export interface ProxySessionRequest {
     startedAt: number;
     model?: string | null;
     reasoningEffort?: string | null;
-    serviceTier?: "default" | "priority" | null;
+    serviceTier?: "default" | "priority" | "ultrafast" | null;
     conversation?: string | null;
     response?: string | null;
     inputAttachments?: ProxyConversationAttachment[];
@@ -320,6 +365,7 @@ export interface ProxySessionRequest {
     responseTruncated?: boolean;
     interrupted?: boolean;
     firstResponseTimeMs?: number | null;
+    firstTokenTimeMs?: number | null;
     responseTimeMs?: number | null;
     totalTokens?: number | null;
     inputTokens?: number | null;
@@ -329,8 +375,13 @@ export interface ProxySessionRequest {
 }
 
 export interface ProxySessionLatencySummary {
+  totalFirstTokenTimeMs: number;
+  firstTokenRequestCount: number;
   totalFirstResponseTimeMs: number;
   requestCount: number;
+  totalOutputTokens: number;
+  totalOutputTimeMs: number;
+  outputRequestCount: number;
 }
 
 export interface DirectConversationSyncResult {
@@ -490,6 +541,7 @@ export interface AppSettings {
   codexHomes?: CodexHomeEntry[];
   launchAtStartup?: boolean;
   closeToTray?: boolean;
+  nonProxyEnhancementsEnabled?: boolean;
   floatingBubbleEnabled: boolean;
   privacyMode: boolean;
   hideAccountNotes: boolean;
@@ -506,6 +558,8 @@ export interface AppSettings {
   autoDisableStatusCodes?: number[];
   upstream429RetryTimeoutSeconds?: number;
   sseIdleTimeout?: import("./api/sseIdleTimeout").SseIdleTimeoutSettings;
+  proxyTransport?: import("./api/proxyTransport").ProxyTransportSettings;
+  responseHeaderTimeout?: import("./api/responseHeaderTimeout").ResponseHeaderTimeoutSettings;
   showUsageNetworkErrors?: boolean;
   gpt56SolContextWindow?: number;
   officialModelContextWindows?: Record<string, number>;
@@ -589,6 +643,7 @@ export interface CloudAuthenticationResult {
   state: CloudAuthState;
   passwordSaved: boolean;
   credentialStorageUpdated: boolean;
+  syncWarning?: "aggregateSyncUnavailable";
 }
 
 export interface CloudSyncResult {
@@ -730,6 +785,7 @@ export interface FeedbackImageInput {
 }
 
 export interface AccountArchiveImportResult {
+  aggregatesImported?: number;
   imported: number;
   accountIds: string[];
   activeAccountId?: string | null;
@@ -840,6 +896,8 @@ export type DreamSkinAppearance = "auto" | "light" | "dark";
 
 export interface DreamSkinStatus {
   supported: boolean;
+  available?: boolean;
+  restartRequired?: boolean;
   platform: string;
   installed: boolean;
   runtimeInstalled: boolean;

@@ -1,3 +1,6 @@
+import { useThemeColor } from '../theme/store';
+import { createThemedStyles } from '../theme/styles';
+import { t, useLanguage } from '../i18n';
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -11,7 +14,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { SHEET_HORIZONTAL_PADDING } from './SheetScrollView';
 
 const AnimatedSafeAreaView = Animated.createAnimatedComponent(SafeAreaView);
@@ -29,6 +32,9 @@ export interface BottomSheetAction {
 interface BottomSheetProps {
   visible: boolean;
   title: string;
+  titleIcon?: ReactNode;
+  titleAction?: ReactNode;
+  truncateTitle?: boolean;
   subtitle?: string;
   onClose: () => void;
   onBack?: () => void;
@@ -38,11 +44,17 @@ interface BottomSheetProps {
   tall?: boolean;
   dragFromHeaderOnly?: boolean;
   fullWidthContent?: boolean;
+  horizontalPadding?: number;
+  maxWidth?: number;
+  compactHeader?: boolean;
 }
 
 export function BottomSheet({
   visible,
   title,
+  titleIcon,
+  titleAction,
+  truncateTitle = false,
   subtitle,
   onClose,
   onBack,
@@ -52,7 +64,14 @@ export function BottomSheet({
   tall = false,
   dragFromHeaderOnly = false,
   fullWidthContent = false,
+  horizontalPadding = SHEET_HORIZONTAL_PADDING,
+  maxWidth,
+  compactHeader = false,
 }: BottomSheetProps) {
+  const resolveThemeColor = useThemeColor();
+  const styles = useStyles();
+  const insetStyle = { paddingHorizontal: horizontalPadding };
+  useLanguage();
   const translateY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -99,13 +118,20 @@ export function BottomSheet({
     onPanResponderTerminate: resetDrag,
   }), [dismissible, onClose, resetDrag, translateY]);
 
+  const headingTitle = <Text style={[styles.title, compactHeader && styles.compactTitle,
+    titleAction ? styles.actionTitle : undefined]}
+    numberOfLines={truncateTitle ? 1 : undefined} ellipsizeMode="tail">{title}</Text>;
+
   return <Modal
     visible={visible}
     transparent
     animationType="slide"
     statusBarTranslucent
+    supportedOrientations={['portrait', 'landscape-left', 'landscape-right']}
     onRequestClose={() => { if (dismissible) (onBack ?? onClose)(); }}
   >
+    {/* Measure the modal window, not the animated sheet: fractional insets can otherwise feed back into its height. */}
+    <SafeAreaProvider>
     <KeyboardAvoidingView
       style={styles.root}
       behavior={Platform.select({ ios: 'padding', android: undefined })}
@@ -115,25 +141,28 @@ export function BottomSheet({
         edges={['bottom']}
         style={[
           styles.sheet,
+          maxWidth !== undefined && { maxWidth, width: '100%', alignSelf: 'center' },
           tall && styles.sheetTall,
           { transform: [{ translateY }] },
         ]}
         {...(!dragFromHeaderOnly ? dragResponder.panHandlers : {})}
       >
-        <View style={styles.inset} {...(dragFromHeaderOnly ? dragResponder.panHandlers : {})}>
-          <View style={styles.handle} />
-          <View style={styles.header}>
-            {onBack && <Pressable accessibilityRole="button" accessibilityLabel="返回上一层"
+        <View style={insetStyle} {...(dragFromHeaderOnly ? dragResponder.panHandlers : {})}>
+          <View style={[styles.handle, compactHeader && styles.compactHandle]} />
+          <View style={[styles.header, compactHeader && styles.compactHeader]}>
+            {onBack && <Pressable accessibilityRole="button" accessibilityLabel={t("返回上一层")}
               hitSlop={8} onPress={onBack} style={styles.closeButton}>
               <Text style={styles.closeText}>‹</Text>
             </Pressable>}
-            <View style={styles.heading}>
-              <Text style={styles.title}>{title}</Text>
-              {subtitle ? <Text style={styles.subtitle} numberOfLines={2}>{subtitle}</Text> : null}
+            {titleIcon}
+            <View style={[styles.heading, compactHeader && styles.compactHeading]}>
+              {titleAction ? <View style={styles.titleRow}>{headingTitle}{titleAction}</View> : headingTitle}
+              {subtitle ? <Text style={[styles.subtitle, compactHeader && styles.compactSubtitle]}
+                numberOfLines={compactHeader ? 1 : 2}>{subtitle}</Text> : null}
             </View>
             {dismissible ? <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`关闭${title}`}
+              accessibilityLabel={t("关闭{value1}", { value1: title })}
               hitSlop={8}
               onPress={onClose}
               style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}
@@ -142,8 +171,9 @@ export function BottomSheet({
             </Pressable> : null}
           </View>
         </View>
-        {children ? <View style={[styles.content, !fullWidthContent && styles.inset]}>{children}</View> : null}
-        {actions.length ? <View style={[styles.actions, styles.inset]}>
+        {children ? <View style={[styles.content, compactHeader && styles.compactContent,
+          !fullWidthContent && insetStyle]}>{children}</View> : null}
+        {actions.length ? <View style={[styles.actions, insetStyle]}>
           {actions.map((action) => {
             const tone = action.tone ?? 'neutral';
             return <Pressable
@@ -160,7 +190,7 @@ export function BottomSheet({
               ]}
             >
               {action.loading
-                ? <ActivityIndicator color={tone === 'neutral' ? '#173128' : '#fff'} size="small" />
+                ? <ActivityIndicator color={tone === 'neutral' ? resolveThemeColor('#173128', 'ink') : '#fff'} size="small" />
                 : <Text style={[
                   styles.actionText,
                   tone === 'primary' && styles.actionTextOnColor,
@@ -171,15 +201,16 @@ export function BottomSheet({
         </View> : null}
       </AnimatedSafeAreaView>
     </KeyboardAvoidingView>
+    </SafeAreaProvider>
   </Modal>;
 }
 
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((color) => ({
   root: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(6, 20, 15, 0.5)' },
   sheet: {
     maxHeight: '82%',
-    backgroundColor: '#ffffff',
+    backgroundColor: color('#ffffff', 'surface'),
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingTop: 9,
@@ -190,21 +221,34 @@ const styles = StyleSheet.create({
     elevation: 24,
   },
   sheetTall: { maxHeight: '92%' },
-  inset: { paddingHorizontal: SHEET_HORIZONTAL_PADDING },
-  handle: { width: 44, height: 5, borderRadius: 3, alignSelf: 'center', backgroundColor: '#d5dfd9', marginBottom: 17 },
+  handle: { width: 44, height: 5, borderRadius: 3, alignSelf: 'center', backgroundColor: color('#d5dfd9', 'elevated'), marginBottom: 17 },
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
   heading: { flex: 1, minWidth: 0 },
-  title: { color: '#10251d', fontSize: 21, lineHeight: 27, fontWeight: '800' },
-  subtitle: { color: '#708078', fontSize: 12, lineHeight: 18, marginTop: 4 },
-  closeButton: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#eef3f0', alignItems: 'center', justifyContent: 'center' },
-  closeText: { color: '#52645b', fontSize: 25, lineHeight: 28, fontWeight: '400', marginTop: -2 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  actionTitle: { flexShrink: 1 },
+  title: { color: color('#10251d', 'ink'), fontSize: 21, lineHeight: 31, fontWeight: '800',
+    includeFontPadding: true, paddingVertical: 2 },
+  subtitle: { color: color('#708078', 'muted'), fontSize: 12, lineHeight: 18, marginTop: 4,
+    includeFontPadding: true, paddingVertical: 2 },
+  closeButton: { width: 34, height: 34, borderRadius: 17, backgroundColor: color('#eef3f0', 'canvas'), alignItems: 'center', justifyContent: 'center' },
+  closeText: { color: color('#52645b', 'ink'), fontSize: 25, lineHeight: 28, fontWeight: '400', marginTop: -2 },
   content: { marginTop: 19, flexShrink: 1 },
+  compactHandle: { marginBottom: 8 },
+  compactHeader: { alignItems: 'center' },
+  compactHeading: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  compactTitle: { fontSize: 18, lineHeight: 28, fontWeight: '700' },
+  compactSubtitle: { flexShrink: 1, marginTop: 0, fontSize: 11 },
+  compactContent: { marginTop: 8 },
   actions: { flexDirection: 'row', gap: 10, paddingTop: 16, paddingBottom: 10 },
-  action: { flex: 1, minHeight: 48, borderRadius: 14, backgroundColor: '#eef3f0', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
+  action: {
+    flex: 1, minHeight: 48, borderRadius: 14, backgroundColor: color('#eef3f0', 'canvas'),
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 10,
+  },
   actionPrimary: { backgroundColor: '#0b8065' },
   actionDanger: { backgroundColor: '#c84f47' },
-  actionText: { color: '#173128', fontSize: 15, fontWeight: '800' },
+  actionText: { alignSelf: 'stretch', textAlign: 'center', color: color('#173128', 'ink'), fontSize: 15,
+    lineHeight: 22, includeFontPadding: true, fontWeight: '800' },
   actionTextOnColor: { color: '#ffffff' },
   pressed: { opacity: 0.78 },
   disabled: { opacity: 0.55 },
-});
+}));

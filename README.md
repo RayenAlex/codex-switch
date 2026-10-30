@@ -1,24 +1,30 @@
-# Codex Switch
+# Remote AI
+
+> [!IMPORTANT]
+> **Codex Switch 现已更名为 Remote AI。** 仓库也已由 `codex-switch` 迁至
+> [piperhex/remoteai](https://github.com/piperhex/remoteai)，欢迎更新收藏，继续关注后续版本。
 
 > For English documentation, please see [README_EN.md](README_EN.md).
+> 俄语（Русский）文档请参阅 [README_RU.md](README_RU.md)。
 
-Codex Switch 是一款面向 Codex / ChatGPT 用户的桌面工作台，集 Codex GUI 编程助手与多账号管理于一体。
+Remote AI 是一款面向 Codex 的图形化 AI 编程工作台，以直观易用的界面整合对话编程、项目管理与多账号管理。
 你可以直接在应用中与 Codex 对话，理解代码、实现功能、排查问题，并随时查看执行进度和文件改动。
 它还提供账号登录与切换、用量查看、第三方 Provider、本地热切换代理、Token 分析、Skills 市场和一键换肤，
 支持在本机启动网页版，也可连接自建后端与移动端，实现跨设备协同管理。
 
-[![许可证](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE) [![发布版本](https://img.shields.io/github/v/release/piperhex/codex-switch)](https://github.com/piperhex/codex-switch/releases)
+[![许可证](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE) [![发布版本](https://img.shields.io/github/v/release/piperhex/remoteai)](https://github.com/piperhex/remoteai/releases)
 
-QQ 技术交流群1：`1051213898`（已满）。
+QQ 技术交流群：`972062132`
 
-QQ 技术交流群2：`972062132`。
+产品官网：[Remote AI](https://piperhex.github.io/remoteai/)，查看功能介绍、下载入口与使用指南。
+官网源码和维护说明见 [apps/website](apps/website/README.md)。
 
-## Codex Web
+## RemoteAI Web
 
-访问 [Codex Web](https://codex.onepiper.cloud/web/)，在浏览器中连接电脑使用 Codex。
+访问 [RemoteAI Web](https://codex.onepiper.cloud/web/)，在浏览器中连接电脑使用 Codex。
 
-使用前，请先安装 [Codex Switch PC 端](https://github.com/piperhex/codex-switch/releases)，
-再打开 **Codex GUI**，按页面提示完成安装。
+使用前，请先安装 [Remote AI PC 端](https://github.com/piperhex/remoteai/releases)，
+进入 **首页**，按页面提示完成 Codex 安装。
 保持 PC 端运行并联网，在网页端登录与 PC 端相同的云端账号，即可连接电脑开始使用。
 
 ## 产品截图
@@ -35,46 +41,48 @@ Codex GUI 是内置的图形化对话工作区。选择项目后，用自然语�
 - **按需选择模型**：调整模型、思考强度和访问权限，适应不同任务。
 - **随时掌握进展**：实时查看回复、计划、命令输出和文件差异，处理权限确认，也可中断任务。
 - **接着上次继续**：搜索、重命名、置顶或归档对话，重新打开后继续交流。
-- **桌面与浏览器均可使用**：通过 Codex Switch 提供的网页版访问同一工作区，任务在运行 Switch 的电脑上执行。
+- **桌面与浏览器均可使用**：通过 Remote AI 提供的网页版访问同一工作区，任务在运行 Remote AI 的电脑上执行。
 
 首次使用可按页面提示下载 Codex。更多操作请参阅 [Codex GUI 使用说明](docs/codex-gui.md)。
 
 ### 账号管理与本地代理
 
-![Codex Switch 账号管理界面](docs/assets/codex-switch-dashboard.png)
+![Remote AI 账号管理界面](docs/assets/codex-switch-dashboard.png)
 
 ### 会话管理
 
-![Codex Switch 会话管理界面](docs/assets/codex-switch-conversations.png)
+![Remote AI 会话管理界面](docs/assets/codex-switch-conversations.png)
 
 ### 第三方模型服务商
 
-![Codex Switch 第三方模型服务商界面](docs/assets/codex-switch-providers.png)
+![Remote AI 第三方模型服务商界面](docs/assets/codex-switch-providers.png)
 
 ### Token 消耗分析
 
-![Codex Switch Token 消耗分析界面](docs/assets/codex-switch-token-usage.png)
+![Remote AI Token 消耗分析界面](docs/assets/codex-switch-token-usage.png)
 
 ### 一键换肤
 
 内置 300+ 套主题预设，并兼容 [Fei-Away/Codex-Dream-Skin](https://github.com/Fei-Away/Codex-Dream-Skin)。
 
-![Codex Switch 一键换肤界面](docs/assets/codex-switch-dream-skin.png)
+![Remote AI 一键换肤界面](docs/assets/codex-switch-dream-skin.png)
 
 ### 插件市场
 
-![Codex Switch 插件市场](docs/assets/codex-switch-skills.png)
+![Remote AI 插件市场](docs/assets/codex-switch-skills.png)
 
 ### 2FA 验证码
 
-![Codex Switch 2FA 验证码界面](docs/assets/codex-switch-two-factor.png)
+点击菜单中的 **2FA**，即可在主窗口右侧查看和管理验证码。
+
+![Remote AI 2FA 验证码界面](docs/assets/codex-switch-two-factor.png)
 
 ### 悬浮用量球
 
 <p align="center">
-  <img src="docs/assets/codex-switch-floating-usage.png" alt="Codex Switch 紧凑悬浮用量球" width="146">
+  <img src="docs/assets/codex-switch-floating-usage.png" alt="Remote AI 紧凑悬浮用量球" width="146">
   &nbsp;&nbsp;&nbsp;
-  <img src="docs/assets/codex-switch-floating-usage-expanded.png" alt="Codex Switch 玻璃悬浮用量面板" width="345">
+  <img src="docs/assets/codex-switch-floating-usage-expanded.png" alt="Remote AI 玻璃悬浮用量面板" width="345">
 </p>
 
 ## 功能
@@ -102,18 +110,15 @@ Codex GUI 是内置的图形化对话工作区。选择项目后，用自然语�
 - 内置 300+ 套 Dream Skin 主题预设，支持一键应用、自定义背景、外观调整和恢复。
 - 设置按外观、窗口、用量、网络、隐私和存储分组，支持界面语言、主题色、关闭到托盘、
   隐私模式、悬浮球、账号刷新和 Token 统计范围等本地选项。
-- 可选同步到自建 NestJS 后端；Expo 移动端读取账号摘要与短期 Codex access token，直接向 Codex 刷新用量和重置卡。移动端与独立 Web 端还可远程切换指定 PC 的官方模型或已同步 Provider；跨类型切换后会提示重启 ChatGPT/Codex。
+- 可选同步到自建 admin-go 后端；Expo 移动端读取账号摘要与短期 Codex access token，直接向 Codex 刷新用量和重置卡。移动端与独立 Web 端还可远程切换指定 PC 的官方模型或已同步 Provider；跨类型切换后会提示重启 ChatGPT/Codex。
 - 账号和服务商密钥仅保存在 Rust 后端，不会暴露给桌面端 React 界面或应用日志。
-
-> [!IMPORTANT]
-> 本地账号凭据、服务商 API 密钥和桌面端云登录令牌保存在应用数据目录中，未额外进行静态加密。`.cs` 备份包含有可恢复的账号凭据和服务商密钥，必须像 `auth.json` 一样妥善保护。云同步为可选功能；启用后，账号凭据和服务商密钥会上传到你配置的服务器，移动端还会接收短期 Codex access token 以直连官方接口。请仅在可信手机、可信桌面设备与可信自建服务器上使用，切勿提交或分享凭据文件、备份包，并在共享诊断导出文件前仔细检查内容。
 
 ## 技术栈
 
 - 前端：React 18、TypeScript、Vite、Ant Design
 - 桌面运行时：Tauri 2
 - 后端：Rust、Reqwest、Serde
-- 可选云服务：NestJS、TypeORM、PostgreSQL、Redis、JWT 认证
+- 可选云服务：Go、Gin、GORM、PostgreSQL、Redis、JWT 认证
 - 移动端：React Native、Expo
 - Monorepo：npm workspaces、Lerna、Nx
 
@@ -121,7 +126,7 @@ Codex GUI 是内置的图形化对话工作区。选择项目后，用自然语�
 
 ### Linux 安装包用户
 
-从 [Releases](https://github.com/piperhex/codex-switch/releases) 下载 Linux x64 `.deb` 包，
+从 [Releases](https://github.com/piperhex/remoteai/releases) 下载 Linux x64 `.deb` 包，
 将下面的文件名替换为实际下载的文件名：
 
 ```bash
@@ -184,7 +189,7 @@ npm run dev:backend
 npm run start -w @codex-switch/native
 ```
 
-移动端需要已部署的云端后端，会读取已同步的账号摘要和短期 Codex access token，由手机直接刷新用量与重置卡，同时显示在线 PC，并可分别切换每台 PC 的官方模型或已同步 Provider。远程切换 Provider 前，需要先在目标 PC 启动本地代理；在官方模型与 Provider 间切换后，移动端会提示重启 ChatGPT/Codex。详细配置请参阅 [移动端文档](apps/native/README.md) 和 [管理后端文档](apps/admin/README.md)。
+移动端需要已部署的云端后端，会读取已同步的账号摘要和短期 Codex access token，由手机直接刷新用量与重置卡，同时显示在线 PC，并可分别切换每台 PC 的官方模型或已同步 Provider。远程切换 Provider 前，需要先在目标 PC 启动本地代理；在官方模型与 Provider 间切换后，移动端会提示重启 ChatGPT/Codex。详细配置请参阅 [移动端文档](apps/native/README.md) 和 [管理后端文档](apps/admin-go/README.md)。
 
 构建桌面安装包：
 
@@ -222,7 +227,7 @@ npm run check
 
 使用账号工具栏的“导入”和“导出”可恢复或创建包含所有本地账号与服务商配置的 `.cs` 备份。导入会按稳定标识合并记录，并不会将备份当成可随意公开的无密钥导出文件。
 
-“第三方服务商”页面用于管理兼容 OpenAI Responses 或 Chat Completions 的接口、API 密钥、模型列表，以及由 Codex 还是 Codex Switch 控制模型选择。三方 Provider 仅可在本地代理运行时使用；代理会监听 `127.0.0.1:15722` 并使 Codex 指向该地址，从而支持热切换。
+“第三方服务商”页面用于管理兼容 OpenAI Responses 或 Chat Completions 的接口、API 密钥、模型列表，以及由 Codex 还是 Remote AI 控制模型选择。三方 Provider 仅可在本地代理运行时使用；代理会监听 `127.0.0.1:15722` 并使 Codex 指向该地址，从而支持热切换。
 
 ### 局域网共享与 API Key 额度
 
@@ -236,30 +241,30 @@ npm run check
 
 若部分请求未返回完整用量，Key 会标记为“用量待确认”，设有额度的 Key 会暂停新请求。管理员核对成本并调整额度后，可在编辑时勾选确认以恢复使用；已确认的累计用量会保留。
 
-在下游 Codex Switch 添加上游设备的局域网地址和对应 Key，保存后可自动识别并显示该 Key 的剩余额度。也可在余额查询设置中选择“Codex Switch”。额度用完后仍可刷新余额；不同 Key 只能查询各自的额度。
+在下游 Remote AI 添加上游设备的局域网地址和对应 Key，保存后可自动识别并显示该 Key 的剩余额度。也可在余额查询设置中选择“Remote AI”。额度用完后仍可刷新余额；不同 Key 只能查询各自的额度。
 
 ### 中转站接入
 
-Codex Switch 支持通过桌面深链从 sub2api、newapi 以及其他兼容页面一键导入中转站 Provider。网页按钮只需要打开下面的自定义协议链接，浏览器会唤起已安装的 Codex Switch，并把参数交给桌面端保存：
+Remote AI 支持通过桌面深链从 sub2api、newapi 以及其他兼容页面一键导入中转站 Provider。网页按钮只需要打开下面的自定义协议链接，浏览器会唤起已安装的 Remote AI，并把参数交给桌面端保存：
 
 ```text
 cswitch://v1/import?resource=provider&app=codex&name=站点名称&homepage=https%3A%2F%2Fexample.com&endpoint=https%3A%2F%2Fexample.com%2Fv1&apiKey=你的API密钥&balancePlatform=sub2api
 ```
 
-Codex Switch 只注册自己的 `cswitch://` 协议。所有参数值都必须经过 URL 编码，尤其是 `name`、`homepage`、`endpoint` 和 `apiKey`；API 密钥不要直接拼接未编码的特殊字符。
+Remote AI 只注册自己的 `cswitch://` 协议。所有参数值都必须经过 URL 编码，尤其是 `name`、`homepage`、`endpoint` 和 `apiKey`；API 密钥不要直接拼接未编码的特殊字符。
 
 参数说明：
 
 - `resource=provider`：固定值，表示导入 Provider。
 - `app=codex`：按支持 OpenAI Responses 的第三方中转站 Provider 导入，不会识别为官方 OpenAI Provider。
 - `app=claude`、`app=gemini` 或 `app=grokbuild`：按兼容 Chat Completions 的自定义 Provider 导入，适合只提供 Chat Completions 的中转站。
-- `name`：在 Codex Switch 中显示的 Provider 名称。
+- `name`：在 Remote AI 中显示的 Provider 名称。
 - `homepage`：站点主页，保留给兼容页面使用。
 - `endpoint`：实际 API Base URL，例如 `https://example.com/v1`。
 - `apiKey`：中转站 API 密钥。
 - `balancePlatform=sub2api` 或 `balancePlatform=newapi`：可选，用于标记对应的余额查询平台；也接受兼容页面常用的 `platform` 参数名。
 
-页面只需提供余额平台；未提供余额查询地址和 Token 时，Codex Switch 会根据 `endpoint` 补全平台默认地址，并复用导入的 API 密钥。导入时还会自动从中转站加载可用模型；加载失败时使用链接指定的模型或程序默认模型，不会中断导入。
+页面只需提供余额平台；未提供余额查询地址和 Token 时，Remote AI 会根据 `endpoint` 补全平台默认地址，并复用导入的 API 密钥。导入时还会自动从中转站加载可用模型；加载失败时使用链接指定的模型或程序默认模型，不会中断导入。
 
 因此，sub2api 使用的核心格式不是账号 JSON，而是上面的 Provider 深链格式：把 `balancePlatform` 设置为 `sub2api`，把 `endpoint` 和 `apiKey` 换成该站点实际值即可。newapi 只需将其改为 `newapi`。深链会在桌面端后台解析并保存，不会把密钥写入前端日志。
 
@@ -306,7 +311,8 @@ apps/desktop/        Tauri 桌面应用工作区
   utils/             无副作用的格式化工具
   src-tauri/src/     Rust 后端
 apps/admin-ui/       React 管理控制台工作区
-apps/admin/          NestJS 云端后端工作区
+apps/admin-go/       Go 云端后端与生产部署
+apps/admin/          已冻结的 NestJS 兼容测试基线
 apps/native/         Expo 移动端账号用量伴侣应用
 docs/                架构和开发文档
 ```
@@ -320,6 +326,11 @@ docs/                架构和开发文档
 - [贡献指南](CONTRIBUTING.md)
 
 ## 发布版本
+
+部署管理后端与 Web 时，使用 `npm run deploy:admin -- --project-name <现有项目名>`
+和 `npm run deploy:web -- --project-name <现有项目名>`。
+命令更新当前 Docker 环境中已准备好的镜像；构建、上传、检查与回滚步骤见
+[生产部署](apps/admin-go/DEPLOYMENT.md#加载并更新-go)。
 
 推送版本标签后，GitHub Actions 会自动发布构建产物：
 
@@ -338,37 +349,8 @@ npm run release-beta
 
 ## 许可证
 
-Codex Switch 使用 [Apache License 2.0](LICENSE)，与官方 [OpenAI Codex](https://github.com/openai/codex) 仓库一致。
-
-## 当前限制
-
-- OAuth 回调会优先使用本地端口 `1455`，失败后回退到 `1457`。
-- 桌面端及其提供的网页版支持 Provider 管理；移动端与独立 Web 端可远程切换指定 PC 的官方模型或已同步 Provider。远程启用 Provider 时，目标 PC 必须正在运行本地代理。
-- macOS 发布构建采用临时签名；除非在 CI 配置 Apple Developer 签名与公证凭据，否则不会完成公证。
-- 已发布的 iOS `.app.zip` 未签名，仅为 CI 构建产物，不能直接作为 App Store 安装包使用。
-- 内嵌登录依赖 WebView 与身份提供商策略；若失败，请使用系统浏览器登录。
-- 本地代理默认监听 `127.0.0.1:15722`，可在代理设置中开启局域网访问；Token 历史仅包含经该代理转发的请求。
-- “重启 ChatGPT”为尽力而为的操作，依赖本地进程发现以及操作系统重新启动 ChatGPT 或旧版 `codex` 入口的能力。
+Remote AI 使用 [Apache License 2.0](LICENSE)，与官方 [OpenAI Codex](https://github.com/openai/codex) 仓库一致。
 
 ## 免责声明
 
-Codex Switch 是独立开发的第三方软件，与 OpenAI 及其 Codex 产品不存在隶属、关联、授权、认可或官方合作关系。
-
-## Star History
-
-<a href="https://www.star-history.com/#piperhex/codex-switch&Date">
-  <picture>
-    <source
-      media="(prefers-color-scheme: dark)"
-      srcset="assets/star-history/star-history-dark.svg"
-    />
-    <source
-      media="(prefers-color-scheme: light)"
-      srcset="assets/star-history/star-history-light.svg"
-    />
-    <img
-      alt="Codex Switch Star History"
-      src="assets/star-history/star-history-light.svg"
-    />
-  </picture>
-</a>
+Remote AI 是独立开发的第三方软件，与 OpenAI 及其 Codex 产品不存在隶属、关联、授权、认可或官方合作关系。

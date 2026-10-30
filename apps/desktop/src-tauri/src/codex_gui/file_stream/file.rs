@@ -1,47 +1,25 @@
 use std::{
     fs::{File, Metadata},
-    io::{Read, Seek, SeekFrom},
+    io::{Read, Seek, SeekFrom, Write},
     path::Path,
+    sync::{atomic::AtomicBool, Arc},
     time::SystemTime,
 };
 
 use super::super::error::{GuiError, Result};
+use super::manifest::Manifest;
 use super::{StreamChunk, StreamInfo, StreamKind, StreamRead, CHUNK_BYTES};
 
 pub(super) struct StreamFile {
     file: File,
     info: StreamInfo,
     modified: SystemTime,
+    manifest: Option<Manifest>,
+    pub(super) cancelled: Arc<AtomicBool>,
 }
 
 fn local_path(root: &Path, source: &str) -> Result<std::path::PathBuf> {
-    let normalized = source.replace('\\', "/");
-    let without_drive = if normalized.as_bytes().get(1) == Some(&b':')
-        && normalized.as_bytes()[0].is_ascii_alphabetic()
-        && normalized.as_bytes().get(2) == Some(&b'/')
-    {
-        &normalized[2..]
-    } else {
-        &normalized
-    };
-    if source.is_empty()
-        || source.len() > 4096
-        || source.chars().any(char::is_control)
-        || normalized.starts_with("//")
-        || without_drive.contains(':')
-        || !root.is_absolute()
-    {
-        return Err(GuiError::FileRead);
-    }
-    let root = root.canonicalize().map_err(|_| GuiError::FileRead)?;
-    let path = root
-        .join(source)
-        .canonicalize()
-        .map_err(|_| GuiError::FileRead)?;
-    if !path.starts_with(&root) || !path.is_file() {
-        return Err(GuiError::FileRead);
-    }
-    Ok(path)
+    super::super::local_file::resolve(root, source)
 }
 
 fn check_size(metadata: &Metadata, max_bytes: u64) -> Result<()> {
@@ -77,6 +55,72 @@ fn video_mime_type(path: &Path, file: &mut File) -> Result<&'static str> {
 }
 
 impl StreamFile {
+    /// Hash generated files in bounded memory so reopened patch downloads can resume safely.
+    pub(super) fn generated(file: File, name: String, mime_type: String) -> Result<Self> {
+        Self::generated_checked(file, name, mime_type, &mut || true)
+    }
+
+    pub(super) fn generated_checked(
+        mut file: File,
+        name: String,
+        mime_type: String,
+        check: &mut dyn FnMut() -> bool,
+    ) -> Result<Self> {
+        use sha2::{Digest, Sha256};
+        file.rewind().map_err(|_| GuiError::FileRead)?;
+        let mut hash = Sha256::new();
+        let mut buffer = [0; 64 * 1024];
+        loop {
+            if !check() {
+                return Err(GuiError::FileExpired);
+            }
+            let length = file.read(&mut buffer).map_err(|_| GuiError::FileRead)?;
+            if length == 0 {
+                break;
+            }
+            hash.update(&buffer[..length]);
+        }
+        let metadata = file.metadata().map_err(|_| GuiError::FileRead)?;
+        Ok(Self {
+            info: StreamInfo {
+                id: uuid::Uuid::new_v4().to_string(),
+                size: metadata.len(),
+                name,
+                mime_type,
+                revision: format!("sha256:{:x}", hash.finalize()),
+            },
+            modified: metadata.modified().map_err(|_| GuiError::FileRead)?,
+            file,
+            manifest: None,
+            cancelled: Arc::new(AtomicBool::new(false)),
+        })
+    }
+
+    /// A private, automatically deleted snapshot keeps previews on the normal download transport.
+    /// The content revision is stable across reopened snapshots, allowing verified blocks to resume.
+    pub(super) fn snapshot(bytes: &[u8], name: String, mime_type: String) -> Result<Self> {
+        use sha2::{Digest, Sha256};
+        let mut file = tempfile::tempfile().map_err(|_| GuiError::FileRead)?;
+        file.write_all(bytes).map_err(|_| GuiError::FileRead)?;
+        let modified = file
+            .metadata()
+            .and_then(|value| value.modified())
+            .map_err(|_| GuiError::FileRead)?;
+        Ok(Self {
+            file,
+            info: StreamInfo {
+                id: uuid::Uuid::new_v4().to_string(),
+                size: bytes.len() as u64,
+                name,
+                mime_type,
+                revision: format!("sha256:{:x}", Sha256::digest(bytes)),
+            },
+            modified,
+            manifest: None,
+            cancelled: Arc::new(AtomicBool::new(false)),
+        })
+    }
+
     pub(super) fn open(
         root: &Path,
         source: &str,
@@ -104,11 +148,14 @@ impl StreamFile {
             size: metadata.len(),
             mime_type,
             name,
+            revision: format!("{}:{:?}", metadata.len(), modified),
         };
         Ok(Self {
             file,
             info,
             modified,
+            manifest: None,
+            cancelled: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -116,15 +163,41 @@ impl StreamFile {
         self.info.clone()
     }
 
+    pub(super) fn manifest(&mut self, max_bytes: u64) -> Result<&Manifest> {
+        self.check_source(max_bytes)?;
+        if self.manifest.is_none() {
+            self.manifest = Some(Manifest::scan(
+                &mut self.file,
+                &self.info.revision,
+                &self.cancelled,
+            )?);
+        }
+        self.manifest.as_ref().ok_or(GuiError::FileRead)
+    }
+
+    pub(super) fn bulk_read(&mut self, request: &super::bulk::BlockRead) -> Result<Vec<u8>> {
+        self.check_source(request.max_bytes)?;
+        let manifest = self.manifest.as_ref().ok_or(GuiError::InvalidRequest)?;
+        if manifest.info.manifest_id != request.manifest_id {
+            return Err(GuiError::FileChanged);
+        }
+        manifest.read(&mut self.file, request.block)
+    }
+
+    fn check_source(&self, max_bytes: u64) -> Result<()> {
+        let metadata = self.file.metadata().map_err(|_| GuiError::FileRead)?;
+        check_size(&metadata, max_bytes)?;
+        if metadata.len() != self.info.size || metadata.modified().ok() != Some(self.modified) {
+            return Err(GuiError::FileChanged);
+        }
+        Ok(())
+    }
+
     pub(super) fn read(&mut self, request: &StreamRead) -> Result<StreamChunk> {
         if request.length == 0 || request.length > CHUNK_BYTES || request.offset >= self.info.size {
             return Err(GuiError::InvalidRequest);
         }
-        let metadata = self.file.metadata().map_err(|_| GuiError::FileRead)?;
-        check_size(&metadata, request.max_bytes)?;
-        if metadata.len() != self.info.size || metadata.modified().ok() != Some(self.modified) {
-            return Err(GuiError::FileChanged);
-        }
+        self.check_source(request.max_bytes)?;
         let length = request.length.min(self.info.size - request.offset);
         let mut bytes = vec![0; length as usize];
         self.file

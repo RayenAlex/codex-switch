@@ -1,15 +1,27 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { apiJson, getActiveSession } from '../api';
+import { apiJson, getActiveSession, refreshSession } from '../api';
 import type { AuthSession } from '../types';
 import { ChatConnection } from '../../../../shared/remote-chat/client/connection';
 import { ChatController } from '../../../../shared/remote-chat/client/controller';
 import { RtcPeer } from '../../../../shared/remote-chat/rtcPeer';
+import { browserTrustStore, trustedHost, trustScope } from '../../../../shared/remote-chat/trustedHost';
+import { createPreviewDownloads } from '../downloads/previews';
+import { downloadOwner } from '../downloads/manager';
+import { useActiveChatPolicy } from '../../../../shared/remote-chat/useActiveChatPolicy';
 
 const HISTORY_REFRESH_MS = 15_000;
 
 function createController(session: AuthSession, deviceId: string) {
-  return new ChatController((events) => new ChatConnection({ ...events, deviceId,
+  const controller = new ChatController((events) => new ChatConnection({ ...events, deviceId, managePolicyMode: false,
+    verifyHostKey: trustedHost(browserTrustStore, trustScope(session.baseUrl, deviceId)),
     randomBytes: (length) => crypto.getRandomValues(new Uint8Array(length)),
+    renewAuthorization: async () => {
+      const current = getActiveSession();
+      if (!current || current.baseUrl !== session.baseUrl || current.email !== session.email) {
+        throw Object.assign(new Error('请重新登录后连接电脑。'), { status: 401 });
+      }
+      await refreshSession();
+    },
     authorize: async () => {
       await apiJson('/auth/me');
       const current = getActiveSession();
@@ -20,12 +32,15 @@ function createController(session: AuthSession, deviceId: string) {
     },
     createPeer: (options) => new RtcPeer(options, () => new RTCPeerConnection({ iceServers: options.iceServers })),
   }));
+  controller.previewDownloads = createPreviewDownloads({ owner: downloadOwner(session), deviceId });
+  return controller;
 }
 
 export function useChat(session: AuthSession, deviceId: string, active: boolean) {
   // Token refresh keeps the same conversation; reconnect reads the renewed account credentials.
   const controller = useMemo(() => createController(session, deviceId), [session.baseUrl, session.email, deviceId]);
   const state = useSyncExternalStore(controller.subscribe, controller.snapshot);
+  useActiveChatPolicy(active, state.mode);
   const [foreground, setForeground] = useState(document.visibilityState === 'visible');
   useEffect(() => {
     const update = () => setForeground(document.visibilityState === 'visible');

@@ -22,6 +22,7 @@ pub(crate) enum GuiAccountSelection {
     None,
     Account(String),
     Provider(String),
+    Aggregate(String),
 }
 
 /// The revision also changes for a manual re-selection of the same account (A → B → A).
@@ -43,6 +44,9 @@ impl GuiAccountSelection {
         match self {
             Self::Account(id) => state.active_account_id = Some(id.clone()),
             Self::Provider(id) => state.active_provider_id = Some(id.clone()),
+            Self::Aggregate(id) => {
+                state.active_provider_id = Some(crate::aggregate_api::active_id(id))
+            }
             Self::None => {}
         }
     }
@@ -93,6 +97,23 @@ pub(crate) fn snapshot<R: Runtime>(
     snapshot_unlocked(app)
 }
 
+/// Refresh cached capabilities after aggregate edits, clearing a deleted or unavailable selection.
+pub(crate) fn refresh_aggregate_selection<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<(), SelectionError> {
+    let current = snapshot(app)?;
+    if !matches!(current.selection, GuiAccountSelection::Aggregate(_)) {
+        return Ok(());
+    }
+    let next = match validate(app, &current.selection) {
+        Ok(()) => current.selection,
+        Err(SelectionError::Unavailable) => GuiAccountSelection::None,
+        Err(error) => return Err(error),
+    };
+    compare_and_switch(app, current.revision, &next)?;
+    Ok(())
+}
+
 fn snapshot_unlocked<R: Runtime>(app: &AppHandle<R>) -> Result<SelectionSnapshot, SelectionError> {
     let root = app
         .path()
@@ -127,6 +148,7 @@ pub(crate) fn compare_and_switch<R: Runtime>(
             .path()
             .app_data_dir()
             .map_err(|_| SelectionError::Storage)?;
+        expire_model_cache(app)?;
         let updated = save(&root.join(FILE_NAME), selection)?;
         super::web::publish(app, CHANGED_EVENT, selection);
         Ok(updated)
@@ -145,7 +167,10 @@ pub(crate) fn with_current<R: Runtime, T>(
     Ok((current.revision == expected).then(apply))
 }
 
-fn validate(app: &AppHandle, selection: &GuiAccountSelection) -> Result<(), SelectionError> {
+fn validate<R: Runtime>(
+    app: &AppHandle<R>,
+    selection: &GuiAccountSelection,
+) -> Result<(), SelectionError> {
     let paths = crate::storage::resolve_paths(app).map_err(|_| SelectionError::Storage)?;
     match selection {
         GuiAccountSelection::Account(id) => {
@@ -172,6 +197,19 @@ fn validate(app: &AppHandle, selection: &GuiAccountSelection) -> Result<(), Sele
             crate::providers::ensure_not_local_proxy_base_url(&provider.base_url)
                 .map_err(|_| SelectionError::Unavailable)?;
         }
+        GuiAccountSelection::Aggregate(id) => {
+            let config = crate::aggregate_api::read_config(&paths, id)
+                .map_err(|_| SelectionError::Unavailable)?;
+            if !config.enabled {
+                return Err(SelectionError::Unavailable);
+            }
+            let profiles = crate::aggregate_api::member_profiles(&paths, &config)
+                .map_err(|_| SelectionError::Unavailable)?;
+            for profile in profiles {
+                crate::providers::ensure_not_local_proxy_base_url(&profile.base_url)
+                    .map_err(|_| SelectionError::Unavailable)?;
+            }
+        }
         GuiAccountSelection::None => return Err(SelectionError::Unavailable),
     }
     Ok(())
@@ -192,20 +230,32 @@ pub(crate) async fn codex_gui_switch_account(
     app: AppHandle,
     selection: GuiAccountSelection,
 ) -> Result<GuiAccountSelection, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        validate(&app, &selection)?;
-        let _guard = SELECTION_LOCK.lock().map_err(|_| SelectionError::Storage)?;
-        let root = app
-            .path()
-            .app_data_dir()
-            .map_err(|_| SelectionError::Storage)?;
-        save(&root.join(FILE_NAME), &selection)?;
-        crate::codex_gui::web::publish(&app, CHANGED_EVENT, &selection);
-        Ok::<_, SelectionError>(selection)
-    })
-    .await
-    .map_err(|_| SelectionError::Storage.to_string())?
-    .map_err(|error| error.to_string())
+    tauri::async_runtime::spawn_blocking(move || switch_account(&app, selection))
+        .await
+        .map_err(|_| SelectionError::Storage.to_string())?
+        .map_err(|error| error.to_string())
+}
+
+/// Switch only GUI routing. Call from a blocking worker or the remote control thread.
+pub(crate) fn switch_account<R: Runtime>(
+    app: &AppHandle<R>,
+    selection: GuiAccountSelection,
+) -> Result<GuiAccountSelection, SelectionError> {
+    validate(app, &selection)?;
+    let _guard = SELECTION_LOCK.lock().map_err(|_| SelectionError::Storage)?;
+    let root = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| SelectionError::Storage)?;
+    expire_model_cache(app)?;
+    save(&root.join(FILE_NAME), &selection)?;
+    super::web::publish(app, CHANGED_EVENT, &selection);
+    Ok(selection)
+}
+
+fn expire_model_cache<R: Runtime>(app: &AppHandle<R>) -> Result<(), SelectionError> {
+    let home = crate::codex_home::gui_home(app).map_err(|_| SelectionError::Storage)?;
+    super::home::clear_model_cache(&home).map_err(|_| SelectionError::Storage)
 }
 
 #[cfg(test)]

@@ -1,5 +1,8 @@
+import { guiText } from "../../i18n/guiText";
 import { projectName } from "./projectCatalog";
 import type { GuiState, Thread } from "./types";
+import { isThreadRunning } from "./threadRunning";
+import { prioritizeRunningThreads } from "../../../../../shared/chat/threadOrder";
 
 export function threadGroups(state: GuiState) {
   const pinned = state.threads.filter((thread) => state.pins.includes(thread.id));
@@ -14,7 +17,9 @@ export function threadGroups(state: GuiState) {
   projects.sort((left, right) => Number(state.pinnedProjects.includes(right.cwd))
     - Number(state.pinnedProjects.includes(left.cwd)));
   return [
-    ...(pinned.length ? [{ id: "pinned", label: "置顶", pinned: true, cwd: "", threads: pinned }] : []),
+    ...(pinned.length ? [{ id: "pinned", label: guiText("置顶"), pinned: true, cwd: "", threads: pinned }] : []),
     ...projects,
-  ];
+  ].map((group) => ({ ...group,
+    threads: prioritizeRunningThreads(group.threads, (thread) => isThreadRunning(state, thread)),
+  }));
 }

@@ -1,5 +1,5 @@
 import { useRef, useState, type KeyboardEvent } from 'react';
-import { Popover, Switch } from 'antd';
+import { Popover } from 'antd';
 import { Check, Hand, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { ACCESS_OPTIONS } from '../../../../shared/remote-chat/composer';
 import { t, useLanguage } from '../i18n';
@@ -48,7 +48,7 @@ export function ComposerAccess({ selection, settingsBusy, updateSettings, before
   </div>;
   return <Popover trigger="click" placement="topLeft" arrow={false} open={open} content={content}
     onOpenChange={value => { if (value) beforeOpen(); setOpen(value); }}
-    styles={{ root: { maxWidth: 400 }, body: { padding: 0, borderRadius: 12 } }}>
+    styles={{ root: { maxWidth: 400 }, body: { padding: 0, borderRadius: 12, overflow: 'hidden' } }}>
     <button ref={trigger} type="button" className={`chat-composer-access${selected.value === 'danger-full-access'
       ? ' is-full-access' : ''}`} disabled={settingsBusy} aria-haspopup="menu" aria-expanded={open}
       aria-label={t('访问权限：{value1}', { value1: t(selected.label) })}
@@ -66,10 +66,5 @@ export function ComposerDesktopStatus({ props, beforeOpen }: {
     <ChatUsage read={props.readUsage} active={props.active} ready={props.ready} inline
       contextControl={<ComposerContext tokenUsage={props.tokenUsage} threadId={props.threadId}
         contextSettings={props.contextSettings} ready={props.ready} beforeOpen={beforeOpen} />} />
-    {props.selection.speed !== undefined && <label className="chat-composer-speed">
-      <span>{t('快速模式')}</span><Switch size="small" aria-label={t('快速模式')}
-        checked={props.selection.speed === 'fast'} loading={props.settingsBusy}
-        onChange={enabled => { void props.updateSettings({ speed: enabled ? 'fast' : 'normal' }); }} />
-    </label>}
   </div>;
 }

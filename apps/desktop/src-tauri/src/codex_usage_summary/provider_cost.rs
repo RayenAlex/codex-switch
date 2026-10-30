@@ -164,6 +164,8 @@ mod tests {
 
     fn config() -> AggregateApiConfig {
         AggregateApiConfig {
+            member_models: Default::default(),
+            failover_policy: Default::default(),
             id: "pool".to_string(),
             name: "Pool".to_string(),
             model: "private-model".to_string(),
@@ -326,7 +328,7 @@ mod tests {
             &CostRates::default(),
             &profiles,
         );
-        assert!((summary.amount_usd - 43.02).abs() < 1e-10);
+        assert!((summary.amount_usd - 38.24).abs() < 1e-10);
         assert!(summary.aggregated);
     }
 
@@ -371,7 +373,7 @@ mod tests {
             &CostRates::default(),
             &profiles,
         );
-        assert!((summary.amount_usd - 12.8625).abs() < 1e-10);
+        assert!((summary.amount_usd - 12.33).abs() < 1e-10);
         assert!(summary.aggregated);
     }
 }

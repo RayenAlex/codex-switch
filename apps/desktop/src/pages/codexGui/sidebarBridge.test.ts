@@ -10,6 +10,19 @@ import { projectThreadGroups } from '../../../../../shared/remote-chat/sidebar';
 const thread: Thread = { id: 'one', cwd: 'F:/project', name: '第一项任务', preview: '', updatedAt: 1 };
 beforeEach(() => localStorage.clear());
 
+it('shares tool-resumed conversations and subsequent running status while the chat page is closed', () => {
+  const bridge = new SidebarBridge();
+  bridge.receive({ method: 'thread/resumed', params: { thread } });
+  expect(bridge.snapshot().threads.one.title).toBe(thread.name);
+  bridge.receive({ method: 'turn/started', params: { threadId: thread.id,
+    turn: { id: 'tool-turn', status: 'inProgress', items: [] } } });
+  expect(bridge.snapshot().threads.one.running).toBe(true);
+  bridge.receive({ method: 'turn/completed', params: { threadId: thread.id,
+    turn: { id: 'tool-turn', status: 'completed', items: [] } } });
+  expect(bridge.snapshot().threads.one.running).toBe(false);
+  expect(bridge.snapshot().readState.one.unread).toBe(true);
+});
+
 it('shares project overrides, running state and read receipts with the desktop in both directions', () => {
   let state = initialState();
   state.threads = [thread];
@@ -25,6 +38,10 @@ it('shares project overrides, running state and read receipts with the desktop i
   const detach = bridge.attach({ ...host, readState,
     subscribe: (listener) => { listeners.add(listener); return () => listeners.delete(listener); } });
   expect(bridge.snapshot().threads.one).toMatchObject({ projectName: '我的项目', cwd: 'F:/renamed', running: false });
+  host.patch({ pins: ['one'] });
+  expect(bridge.snapshot().pins).toEqual(['one']);
+  host.patch({ pins: [] });
+  expect(bridge.snapshot().pins).toEqual([]);
   bridge.markRead({ threadId: 'one', turnId: 'turn' });
   expect(state.threadReadState.one.unread).toBe(false);
   host.patch({ threadReadState: { one: { turnId: 'next', unread: true } } });
@@ -60,6 +77,15 @@ it('keeps a newer running notification ahead of a stale list response', () => {
   bridge.receive({ method: 'turn/started', params: { threadId: 'one',
     turn: { id: 'turn', status: 'inProgress', items: [] } } });
   expect(bridge.observe([{ ...thread, status: { type: 'idle' } }], version).threads.one.running).toBe(true);
+});
+
+it('publishes background title notifications and keeps them ahead of a stale list response', () => {
+  const bridge = new SidebarBridge();
+  bridge.observe([thread]);
+  const version = bridge.version();
+  bridge.receive({ method: 'thread/name/updated', params: { threadId: thread.id, threadName: '手机新标题' } });
+  expect(bridge.snapshot().threads.one.title).toBe('手机新标题');
+  expect(bridge.observe([thread], version).threads.one.title).toBe('手机新标题');
 });
 
 it('groups by full project path, including overrides, and leaves projectless chats together', () => {

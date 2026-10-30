@@ -1,7 +1,58 @@
 # Codex GUI 上下文容量隔离验证
 
+## 空闲后容量恢复（2026-10-19）
+
+修复空闲清理卸载对话后，容量缓存仍把上一次设置视为已应用的问题。
+旧路径会先为读取模型信息恢复对话，使引擎加载默认配置；随后因缓存与保存值相同跳过重新加载，
+即使再次恢复时携带容量配置，也无法覆盖已经加载的对话。
+
+在反馈设备 DESKTOP-2HPUEHM 上只读核对到：保存值保持 400K，模型始终为 `gpt-6-astra`，
+2026-10-19 09:19 的回报容量为 380K，10:31 下一轮回退至 258.4K，10:37 发生压缩（北京时间）。
+
+卸载成功、引擎关闭或报告未加载时，现在都会使容量缓存失效；下次发送或保存时重新应用
+当前对话的容量及压缩阈值。正常完成一轮不会使缓存失效，不会每次回复都重载对话。
+通知处理只更新原子状态，不等待正在执行请求的容量锁，避免阻塞事件读取和其他对话。
+
+回归覆盖 400K 设置、264.6K 用量、空闲后恢复、连续两次恢复、达到 360K 阈值时正常压缩、
+默认容量、其他对话隔离及进程重启。真实 CLI 夹具通过空配置强制重新加载来模拟空闲回收后的
+默认配置，避免等待引擎的半小时宽限期；恢复决策来自 GUI 实际使用的 Rust 容量缓存。
+
+本地 Codex CLI 0.163.0 的真实引擎回归通过；关闭重新应用分支时，同一回归会因容量仍为
+258.4K 而失败。Rust 全量测试 2228 项通过、24 项忽略，新增长上下文真实 CLI 用例另行运行通过；
+格式、Clippy（`--all-targets -- -D warnings`）、桌面 TypeScript/Vite 构建和 8 项页面测试通过。
+页面测试覆盖 390px/1280px、请求进行中与用量刷新未结束时的输入及定时刷新。
+
+```powershell
+$env:CODEX_CONTEXT_TEST_CLI = '<codex.exe 路径>'
+cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml `
+  --test codex_switch_lib_tests real_cli_context_capacity_survives_idle -- --ignored --nocapture
+```
+
+## 上下文估算用量（2026-10-16）
+
+GUI、代理会话列表、Web 和原生手机端优先显示 Codex 最近一次压缩检查使用的内部估算，
+不再只用最近一次 API 回复的 `last.totalTokens` 计算百分比。累计 Token 和计费用量保持原值。
+
+Codex 0.163.0 的 app-server 用量协议尚未提供这项估算。GUI 启动子进程时启用限定目标的 JSON
+诊断流，读取 `post sampling token usage` 的 `total_usage_tokens`，按轮次关联到对应对话，
+通过 `tokenUsage.contextTokens` 发布。不会扫描会话文件或轮询日志数据库，也不会把原始诊断发给前端。
+stdout 与 stderr 的更新串行合并；压缩、回退和删除会使旧估算失效，迟到的诊断不能恢复压缩前用量。
+估算快照通过后台任务保存，重新打开对话或重启后可恢复；历史回放不匹配时会清除旧快照。
+旧版引擎或尚未产生估算的对话仍使用原有回报值，收到内部估算后自动切换。
+
+真实 Codex 0.163.0 配合本地 Responses 夹具验证：API 回报 206,357 Token（79.9%），内部估算
+250,455 Token（96.9%），超过 244,800 的压缩阈值。Rust 桥接测试直接解析真实诊断并验证显示值一致。
+前端测试覆盖桌面弹窗、Web/原生手机端、压缩后的下降以及重新读取历史；390px 和 1280px
+页面测试在用量请求挂起时验证百分比更新、输入和定时刷新继续工作。
+
+```powershell
+$env:CODEX_GUI_TEST_CLI = '<codex.exe 路径>'
+cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml `
+  --test codex_switch_lib_tests real_cli_estimate_matches -- --ignored --nocapture
+```
+
 2026-09-15，Windows 11 Hyper-V 虚拟机 `win11`（设备名 `ZH2`），Codex CLI 0.154.0。
-虚拟机沿用现有 Codex Switch Provider，连接上游 Codex Switch，使用真实模型 `gpt-6-astra`。
+虚拟机沿用现有 Remote AI Provider，连接上游 Remote AI，使用真实模型 `gpt-6-astra`。
 
 GUI 对话保存的容量原本会被模型列表中的账户或 Provider 上限压低。
 代理会话列表也从账户或 Provider 配置推算容量，无法反映 GUI 对话的实际设置。
@@ -58,3 +109,32 @@ node scripts/codex-gui-context-pause-smoke.mjs <codex.exe路径>
 - 同一对话保留中断前的历史，恢复默认后回报测试配置原有的 190K。
 - 另一对话的 HTTP 请求在容量切换期间继续保持活动，其容量仍为 190K。
 - 任务执行期间连续读取对话状态成功；设置弹窗测试覆盖刷新未完成时的交互、保存等待和恢复失败。
+
+## 自动压缩阈值
+
+GUI 应用对话容量或模型默认容量时，同时把自动压缩阈值设置为容量的 90%，
+沿用 Codex 的默认预留比例。例如 1000K 对应 900K 的压缩阈值。
+CLI 仍会根据模型实际容量限制阈值；界面百分比使用 CLI 回报的可用容量，
+因此压缩阈值不一定对应界面上的 90%。
+
+此前只覆盖 `model_context_window`，继承的 `model_auto_compact_token_limit`
+或模型目录中的 `auto_compact_token_limit` 仍可能保持 250K。
+在本地模拟用量测试中，1000K 设置回报 950K 可用容量、285K 用量（30%）时即可触发压缩。
+现在新建、恢复对话和修改容量均通过同一处逻辑应用容量及压缩阈值。
+恢复默认后重新使用当前模型的默认容量；没有 GUI 容量配置时保留 Codex 原有配置。
+
+账户页的模型容量覆盖也会清除模型目录中的旧自动压缩阈值，让 CLI 按新容量计算默认值。
+该处理同时用于代理模型列表和本地模型缓存；未覆盖容量的模型保留原阈值。
+客户端配置文件中显式指定的压缩阈值仍优先于目录默认值，已加载的外部客户端会话需重新加载后生效。
+
+以下测试把 Rust 实际生成的配置传给已安装的 CLI，使用独立目录和本地模拟服务，
+不调用真实模型。覆盖旧配置与模型目录中的低阈值、达到新阈值时压缩、
+调小容量、恢复默认、其他对话隔离和重启后的重新应用：
+
+2026-10-12，Codex CLI 0.157.1 和 0.162.1 均通过以上验证。
+
+```powershell
+$env:CODEX_CONTEXT_TEST_CLI = '<codex.exe 路径>'
+cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml `
+  --test codex_switch_lib_tests real_cli_context_compaction_follows_gui_capacity -- --ignored --nocapture
+```

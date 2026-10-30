@@ -1,16 +1,18 @@
 import type { AccessMode, Model } from './client/types';
 import { object } from './protocol';
 
-export type RequestSpeed = 'normal' | 'fast';
+export type RequestSpeed = 'normal' | 'fast' | 'ultrafast';
 export interface ComposerSettings { model: string; effort: string; access: AccessMode; speed?: RequestSpeed }
 export const COMPOSER_FIELDS = ['model', 'effort', 'access', 'speed'] as const;
 export interface ComposerSnapshot {
   models: Model[]; settings: ComposerSettings; revision: number;
+  syncing?: boolean;
   /** Omitted by older hosts; null is the new-conversation draft. */
   threadId?: string | null;
 }
 export interface ComposerModelsResponse { data: Model[]; nextCursor: string | null; composer?: ComposerSnapshot }
 export const COMPOSER_EVENT = 'chat/composer/updated';
+export const MODEL_CATALOG_ERROR = '模型列表暂时无法更新，请稍后重试。';
 export const DEFAULT_COMPOSER: ComposerSettings = { model: '', effort: '', access: 'workspace-write' };
 export function composerThreadId(value: unknown): string | null | undefined {
   if (value === undefined || value === null) return value;
@@ -47,8 +49,9 @@ export function composerPatch(value: unknown): Partial<ComposerSettings> {
   if (input.access !== undefined && !ACCESS_OPTIONS.some((option) => option.value === input.access)) {
     throw new Error('请选择有效的访问权限。');
   }
-  if (input.speed !== undefined && input.speed !== 'normal' && input.speed !== 'fast') {
-    throw new Error('请选择普通模式或快速模式。');
+  if (input.speed !== undefined && (typeof input.speed !== 'string'
+    || !['normal', 'fast', 'ultrafast'].includes(input.speed))) {
+    throw new Error('请选择有效的速度模式。');
   }
   return input as Partial<ComposerSettings>;
 }

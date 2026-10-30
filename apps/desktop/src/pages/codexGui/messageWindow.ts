@@ -1,15 +1,16 @@
 import type { Item, Turn } from "./types";
 import { groupTurnItems } from "../../../../../shared/chat/turnGroups";
-import { visibleContinuationItems } from "./continuation";
+import { followsStoppedTurn, visibleContinuationItems } from "./continuation";
 
 export const MESSAGE_PAGE_SIZE = 10;
+export const MESSAGE_WINDOW_SIZE = MESSAGE_PAGE_SIZE * 3;
 export interface MessageCursor { turnId: string; itemId: string }
 interface Position { turn: number; item: number }
 export interface VisibleTurn { turn: Turn; items: Item[]; followsInterruption: boolean }
 
 function groupStarts(turns: Turn[], index: number): number[] {
   const items = turns[index].items;
-  const visible = turns[index - 1]?.status === "interrupted" ? visibleContinuationItems(items) : items;
+  const visible = followsStoppedTurn(turns[index - 1]) ? visibleContinuationItems(items) : items;
   const starts = new Set(groupTurnItems(visible).map((group) => group.items[0].id));
   return items.flatMap((item, position) => starts.has(item.id) ? [position] : []);
 }
@@ -48,18 +49,35 @@ function hasEarlierItems(turns: Turn[], first: Position): boolean {
   return false;
 }
 
+function following(turns: Turn[], first: Position, count: number): Position | undefined {
+  for (let turn = first.turn; turn < turns.length; turn++) {
+    const starts = groupStarts(turns, turn).filter(item => turn !== first.turn || item >= first.item);
+    if (starts.length > count) return { turn, item: starts[count] };
+    count -= starts.length;
+  }
+}
+
+function entriesBetween(turns: Turn[], first: Position, end?: Position): VisibleTurn[] {
+  const last = end ? end.turn + Number(end.item > 0) : turns.length;
+  return turns.slice(first.turn, last).map((turn, index) => ({ turn,
+    items: turn.items.slice(index === 0 ? first.item : 0, end?.turn === first.turn + index ? end.item : undefined),
+    followsInterruption: followsStoppedTurn(turns[first.turn + index - 1]),
+  }));
+}
+
 /** Page visible messages and whole process groups; collapsed activities must not consume separate pages. */
-export function messageWindow(turns: Turn[], options: { start?: MessageCursor; older?: boolean } = {}) {
-  if (!turns.length) return { entries: [] as VisibleTurn[], start: undefined, hasMore: false };
+export function messageWindow(turns: Turn[], options: {
+  start?: MessageCursor; older?: boolean; newer?: boolean;
+} = {}) {
+  if (!turns.length) return { entries: [] as VisibleTurn[], start: undefined, hasMore: false, hasNewer: false };
   const previous = locate(turns, options.start);
   const end = { turn: turns.length - 1, item: turns[turns.length - 1].items.length };
-  const first = previous && !options.older ? previous : preceding(turns, previous ?? end) ?? previous
+  let first = previous && !options.older ? previous : preceding(turns, previous ?? end) ?? previous
     ?? { turn: 0, item: 0 };
-  const entries = turns.slice(first.turn).map((turn, index) => ({ turn,
-    items: index === 0 && first.item > 0 ? turn.items.slice(first.item) : turn.items,
-    followsInterruption: turns[first.turn + index - 1]?.status === "interrupted",
-  }));
+  if (options.newer) first = following(turns, first, MESSAGE_PAGE_SIZE) ?? first;
+  const limit = following(turns, first, MESSAGE_WINDOW_SIZE);
+  const entries = entriesBetween(turns, first, limit);
   const firstItem = entries.find((entry) => entry.items.length > 0);
-  return { entries, hasMore: hasEarlierItems(turns, first),
+  return { entries, hasMore: hasEarlierItems(turns, first), hasNewer: Boolean(limit),
     start: firstItem ? { turnId: firstItem.turn.id, itemId: firstItem.items[0].id } : undefined };
 }

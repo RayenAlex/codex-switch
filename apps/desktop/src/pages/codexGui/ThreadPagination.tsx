@@ -1,12 +1,13 @@
-import { ChevronDown, LoaderCircle } from "lucide-react";
+import { guiText } from "../../i18n/guiText";
+import { LoaderCircle } from "lucide-react";
 import styles from "./ThreadPagination.module.less";
 
 export function ThreadPagination({ loading }: { loading: boolean }) {
-  const Icon = loading ? LoaderCircle : ChevronDown;
+  if (!loading) return null;
   return <div className={styles.footer} role="status" aria-live="polite">
     <span className={styles.hint}>
-      <Icon size={13} strokeWidth={1.6} className={loading ? styles.spinner : undefined} aria-hidden="true" />
-      <span>{loading ? "正在加载更多对话…" : "向下滚动，查看更多"}</span>
+      <LoaderCircle size={13} strokeWidth={1.6} className={styles.spinner} aria-hidden="true" />
+      <span>{guiText("正在加载更多对话…")}</span>
     </span>
   </div>;
 }

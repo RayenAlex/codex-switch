@@ -4,9 +4,10 @@ import type { Provider } from "../../types";
 import { ProviderBalanceSettings, type ProviderBalanceSettingsProps } from "./ProviderBalanceSettings";
 import { RelayModelPicker } from "./RelayModelPicker";
 import type { ModelReasoningConfig } from "./providerUtils";
-import { relayApiUrl } from "./providerUtils";
 
 interface ProviderFormFieldsProps {
+  allowModelDiscovery?: boolean;
+  discoveryOptions?: Parameters<typeof RelayModelPicker>[0]["discoveryOptions"];
   apiKey: string;
   baseUrl: string;
   supportsFastMode: boolean;
@@ -71,6 +72,8 @@ export function ProviderWebsocketControl({
 }
 
 export function ProviderFormFields({
+  allowModelDiscovery = true,
+  discoveryOptions,
   apiKey,
   baseUrl,
   supportsFastMode,
@@ -107,10 +110,11 @@ export function ProviderFormFields({
     <ProviderWebsocketControl enabled={websocketEnabled}
       available={(provider?.apiFormat ?? "openaiResponses") === "openaiResponses"}
       saving={saving} onChange={onWebsocketEnabledChange} />
-    <RelayModelPicker baseUrl={relayApiUrl(baseUrl)} apiKey={apiKey}
-      providerId={provider?.hasApiKey && relayApiUrl(provider.baseUrl) === relayApiUrl(baseUrl)
+    <RelayModelPicker baseUrl={baseUrl}
+      discoveryOptions={discoveryOptions} apiKey={apiKey}
+      providerId={provider && provider.baseUrl.trim().replace(/\/+$/, "") === baseUrl.trim().replace(/\/+$/, "")
         ? provider.id : undefined}
-      enabled={Boolean(baseUrl.trim())} disabled={saving}
+      enabled={allowModelDiscovery && Boolean(baseUrl.trim())} disabled={saving}
       modelConfigs={modelConfigs} activeModel={activeModel}
       onModelConfigsChange={onModelConfigsChange} onActiveModelChange={onActiveModelChange} t={t} />
     <ProviderBalanceSettings {...balanceSettings} t={t} />

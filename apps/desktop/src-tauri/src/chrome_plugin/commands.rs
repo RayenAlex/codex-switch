@@ -4,7 +4,7 @@ use std::path::Path;
 use tauri_plugin_clipboard_manager::ClipboardExt;
 
 use super::{
-    config, extension, install, native, protocol::*, registration, BrowserError, Result,
+    config, discovery, extension, install, protocol::*, registration, BrowserError, Result,
     INSTALL_CHANGES,
 };
 
@@ -29,6 +29,7 @@ pub(crate) enum ChromePluginAction {
     Enable,
     Disable,
     Remove,
+    OpenStore,
     OpenFolder,
     OpenExtensions,
 }
@@ -68,6 +69,7 @@ pub(crate) async fn chrome_plugin_action(
             ChromePluginAction::Enable => install::install(&root, &home, &executable)?,
             ChromePluginAction::Disable => install::disable(&root, &home, &executable)?,
             ChromePluginAction::Remove => install::remove(&root, &home)?,
+            ChromePluginAction::OpenStore => registration::open_store()?,
             ChromePluginAction::OpenExtensions => {
                 app.clipboard()
                     .write_text("chrome://extensions/")
@@ -113,19 +115,16 @@ fn status(root: &Path, home: &Path) -> Result<ChromePluginStatus> {
         let request = BridgeRequest {
             client_id: id,
             token: record.token.clone(),
+            session_id: None,
             request: BrowserRequest {
                 operation: Operation::Status,
                 args: json!({}),
             },
         };
-        for endpoint in native::endpoints(root) {
-            if let Ok(reply) = native::call(&endpoint, &request) {
-                if let Some(result) = reply.result {
-                    connected_browsers += 1;
-                    if result["paused"] != true {
-                        active_browsers += 1;
-                    }
-                }
+        for (_, result) in discovery::connected(root, &request) {
+            connected_browsers += 1;
+            if result["paused"] != true {
+                active_browsers += 1;
             }
         }
     }

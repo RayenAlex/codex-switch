@@ -7,7 +7,7 @@ fn record_captured_proxy_errors(errors: Vec<error_capture::ProxyCapturedError>) 
 fn record_discarded_proxy_attempt(result: &Result<UpstreamPayload, String>) {
     match result {
         Ok(payload) => record_retried_proxy_response(payload),
-        Err(error) => crate::error_logs::record_proxy_error(error, None),
+        Err(error) => crate::error_logs::record_proxy_error(&error_messages::gui(error), None),
     }
 }
 
@@ -23,11 +23,12 @@ fn record_retried_proxy_response(payload: &UpstreamPayload) {
     record_captured_proxy_errors(capture.finish());
 }
 
-fn attach_proxy_error_capture(mut payload: UpstreamPayload) -> UpstreamPayload {
+fn attach_proxy_error_capture(mut payload: UpstreamPayload, endpoint: &str) -> UpstreamPayload {
     let mut capture = error_capture::ErrorCapture::new(
         is_event_stream(payload.content_type.as_deref()),
         payload.status,
-    );
+    )
+    .for_endpoint(endpoint);
     payload.body = match payload.body {
         UpstreamBody::Buffered(body) => {
             record_captured_proxy_errors(capture.observe(&body));
@@ -52,7 +53,13 @@ impl Read for ProxyErrorCaptureReader {
             return Ok(0);
         }
         // Observe only bytes already pulled by the client; logging must never read ahead or retry a stream.
-        let count = self.inner.read(target)?;
+        let count = match self.inner.read(target) {
+            Ok(count) => count,
+            Err(error) => {
+                record_captured_proxy_errors(self.capture.finish_with_error(&error));
+                return Err(error);
+            }
+        };
         let errors = if count == 0 {
             self.capture.finish()
         } else {

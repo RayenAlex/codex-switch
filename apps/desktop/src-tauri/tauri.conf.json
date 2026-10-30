@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Codex Switch",
-  "version": "1.5.33",
+  "productName": "Remote AI",
+  "version": "2.0.17",
   "identifier": "dev.codex.switch",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -14,19 +14,30 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "Codex Switch",
+        "title": "Remote AI",
         "width": 1370,
         "height": 760,
-        "minWidth": 960,
+        "minWidth": 1200,
         "minHeight": 680,
         "center": true,
         "backgroundThrottling": "disabled",
+        "additionalBrowserArgs": "--disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows",
         "resizable": true,
         "fullscreen": false
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: http: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' ipc: http://ipc.localhost https://api.github.com ws: wss:"
+      "csp": {
+        "default-src": "'self'",
+        "img-src": "'self' data: http: https:",
+        "style-src": "'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src": "'self' https://fonts.gstatic.com",
+        "frame-src": "'self' http://127.0.0.1:*",
+        "object-src": "http://127.0.0.1:*",
+        "media-src": "'self' http://127.0.0.1:*",
+        "worker-src": "'self' blob:",
+        "connect-src": "'self' ipc: http://ipc.localhost https://api.github.com ws: wss:"
+      }
     }
   },
   "plugins": {
@@ -40,7 +51,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZDNzM5NjczQzMxNTBBQjcKUldTM0NoWERjNVp6L0ZxQ0k3ZzhJUGV4U1FVajBQdkZCclV6K1lkU3U5VXA2MDh6ZE5sK3Z4UXIK",
       "endpoints": [
-        "https://github.com/piperhex/codex-switch/releases/latest/download/latest.json"
+        "https://github.com/piperhex/remoteai/releases/latest/download/latest.json"
       ]
     }
   },
@@ -51,7 +62,10 @@
     "resources": [
       "resources/dream-skin/assets/**/*",
       "resources/dream-skin/LICENSE",
-      "resources/dream-skin/NOTICE.md"
+      "resources/dream-skin/NOTICE.md",
+      "resources/remote-desktop/**/*",
+      "resources/desktop-service/**/*",
+      "resources/chat-connectivity/*"
     ],
     "icon": [
       "icons/32x32.png",
@@ -65,7 +79,8 @@
     "longDescription": "A local-first manager for Codex auth.json files and account usage windows.",
     "windows": {
       "wix": {
-        "version": "1.5.33",
+        "upgradeCode": "f65516b1-807b-5d58-952e-3cd240f3fbad",
+        "version": "2.0.17",
         "fragmentPaths": [
           "windows/installer-lifecycle.wxs"
         ],
@@ -80,6 +95,13 @@
       }
     },
     "macOS": {
+      "entitlements": "Entitlements.plist",
+      "files": {
+        "Resources/en.lproj/InfoPlist.strings": "locales/en.lproj/InfoPlist.strings",
+        "Resources/ru.lproj/InfoPlist.strings": "locales/ru.lproj/InfoPlist.strings",
+        "Resources/zh-Hans.lproj/InfoPlist.strings": "locales/zh-Hans.lproj/InfoPlist.strings",
+        "Resources/zh-Hant.lproj/InfoPlist.strings": "locales/zh-Hant.lproj/InfoPlist.strings"
+      },
       "minimumSystemVersion": "10.13",
       "signingIdentity": "-"
     }

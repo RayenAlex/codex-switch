@@ -2,16 +2,21 @@ mod account_archive;
 mod account_quota_history;
 mod agent_identity;
 mod aggregate_api;
+mod aggregate_failover;
 mod aggregate_scheduler;
+mod aggregate_sync;
 mod antigravity_provider;
 mod auth;
 mod autostart;
 mod browser;
 mod ccs_import;
+mod chatgpt_launch;
 mod chrome_plugin;
 mod claude_code;
 mod claude_code_provider;
 mod claude_desktop;
+mod client_integration;
+mod client_lifecycle;
 mod cloud;
 mod codex_api;
 mod codex_config;
@@ -26,6 +31,10 @@ mod codex_usage_summary;
 mod commands;
 mod computer_use;
 mod conversation_hub;
+mod coze;
+#[cfg(windows)]
+mod desktop_service;
+mod download_files;
 mod dream_skin;
 mod dream_skin_community;
 mod dream_skin_market;
@@ -39,6 +48,7 @@ mod grok_provider;
 mod gui_terminal;
 #[cfg(windows)]
 mod installer_lifecycle;
+mod keyboard_shortcuts;
 mod launch_options;
 mod local_proxy;
 mod main_window;
@@ -48,33 +58,46 @@ mod oauth;
 mod official_models;
 mod official_plugins;
 mod open_code;
+mod platform;
+mod port_mapping;
 mod preset_provider;
 mod prompt_plugins;
 mod provider_api_cache;
 mod provider_connectivity;
+mod provider_discovery;
 mod provider_models;
 mod provider_platform;
 mod providers;
 mod remote_chat;
+mod remote_command;
 mod remote_control;
+mod remote_desktop;
 mod remote_websocket;
+mod rollout_metadata;
 mod skills_market;
 mod storage;
 mod system_proxy;
 mod system_tray;
 mod third_party_apps;
 mod totp_qr;
-mod totp_window;
+mod update_peers;
 mod web_server;
 mod web_session_login;
+mod webview_windows;
 #[cfg(target_os = "windows")]
 mod windows_client_processes;
+#[cfg(all(test, windows))]
+mod windows_test_resources;
 
 use oauth::AppState;
 use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(windows)]
+    if desktop_service::run_helper() {
+        return;
+    }
     #[cfg(windows)]
     if let Err(error) = installer_lifecycle::wait_before_startup() {
         eprintln!("failed to wait for the Windows installer: {error}");
@@ -84,6 +107,9 @@ pub fn run() {
         return;
     }
     if computer_use::run_helper() {
+        return;
+    }
+    if remote_command::run_helper() {
         return;
     }
     if std::env::args_os().any(|argument| argument == "--print-local-proxy-token") {
@@ -97,12 +123,19 @@ pub fn run() {
             std::process::exit(2);
         }
     };
+    #[cfg(target_os = "linux")]
+    if let Err(error) = platform::linux::initialize_desktop() {
+        eprintln!("failed to start Remote AI: {error}");
+        std::process::exit(1);
+    }
     let mut context = tauri::generate_context!();
     if launch_options.headless {
         context.config_mut().app.windows.clear();
     }
 
     tauri::Builder::default()
+        .manage(download_files::DownloadFileState::default())
+        .append_invoke_initialization_script(platform::interface_locale::initialization_script())
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             match launch_options::LaunchOptions::parse(args) {
                 Ok(options) if options.headless => {
@@ -118,9 +151,17 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_deep_link::init())
         .manage(AppState::default())
+        .manage(coze::CozeState::default())
         .manage(codex_gui::GuiState::default())
+        .manage(codex_gui::dropped_files::DroppedFilesState::default())
+        .manage(codex_gui::file_preview::PreviewSessions::default())
+        .manage(codex_gui::notification_navigation::NavigationState::default())
+        .manage(codex_gui::releases::CliUpdateState::default())
         .manage(codex_gui::scheduled_tasks::ScheduledTasksState::default())
         .manage(std::sync::Arc::new(gui_terminal::TerminalState::default()))
+        .manage(std::sync::Arc::new(
+            gui_terminal::links::LinkState::default(),
+        ))
         .manage(codex_gui::git::GitState::default())
         .manage(codex_gui::web::WebEventState::default())
         .manage(codex_gui::model_settings::ModelSettingsState::default())
@@ -144,13 +185,16 @@ pub fn run() {
             app.manage(system_tray::quick_menu::QuickMenuState::default());
             #[cfg(windows)]
             installer_lifecycle::setup(app.handle())?;
+            codex_home::initialize_paths(app.handle())?;
             storage::migrate_app_settings_for_version(app.handle())?;
             let settings = storage::read_app_settings(app.handle())?;
+            client_integration::setup(app.handle())?;
             if let Err(error) = error_logs::setup(app.handle()) {
                 eprintln!("failed to initialize error logs: {error}");
             }
             third_party_apps::capture_running_app_paths(app.handle());
             codex_home::initialize(&settings);
+            coze::restore(app.handle());
             main_window::configure_close_behavior(app.handle(), settings.close_to_tray);
             if let Err(error) = system_proxy::configure(&settings.network_proxy) {
                 eprintln!("failed to restore the network proxy setting: {error}");
@@ -162,6 +206,8 @@ pub fn run() {
                 main_window::restore_or_set_default(app)?;
             }
             commands::initialize_local_state(app.handle());
+            codex_gui::releases::start(app.handle());
+            codex_gui::push_notifications::start(app.handle(), &settings);
             chrome_plugin::refresh_on_startup();
             #[cfg(any(target_os = "linux", all(debug_assertions, windows)))]
             if let Err(error) = app.deep_link().register_all() {
@@ -170,7 +216,7 @@ pub fn run() {
             match app.deep_link().get_current() {
                 Ok(Some(urls)) => {
                     for url in urls {
-                        ccs_import::handle_url(app.handle(), &url);
+                        codex_gui::notification_navigation::handle_url(app.handle(), &url);
                     }
                 }
                 Ok(None) => {}
@@ -179,7 +225,7 @@ pub fn run() {
             let import_app = app.handle().clone();
             app.deep_link().on_open_url(move |event| {
                 for url in event.urls() {
-                    ccs_import::handle_url(&import_app, &url);
+                    codex_gui::notification_navigation::handle_url(&import_app, &url);
                 }
             });
             if !launch_options.headless {
@@ -196,9 +242,12 @@ pub fn run() {
                     providers::cleanup_stale_local_proxy_config(app.handle())?;
                 }
             }
-            official_models::refresh_on_startup(app.handle().clone());
+            official_models::setup(app.handle().clone());
             if !launch_options.headless {
                 system_tray::setup(app)?;
+                if let Err(error) = keyboard_shortcuts::setup(app.handle()) {
+                    eprintln!("failed to initialize keyboard shortcuts: {error}");
+                }
                 floating_bubble::setup(app.handle())?;
             }
             if let Err(error) = web_server::setup(app.handle(), launch_options.port) {
@@ -208,13 +257,21 @@ pub fn run() {
                 eprintln!("failed to restore web version server: {error}");
             }
             codex_gui::scheduled_tasks::start(app.handle());
+            update_peers::setup(app.handle())?;
             remote_control::start(app.handle().clone());
+            remote_command::start(app.handle().clone());
+            cloud::start_official_usage_reporting(app.handle().clone());
             if !launch_options.headless {
+                computer_use::start(app.handle().clone());
                 remote_chat::start(app.handle().clone());
+                #[cfg(windows)]
+                desktop_service::start(app.handle());
             }
             Ok(())
         })
+        .on_page_load(codex_gui::file_preview::handle_page_load)
         .on_window_event(|window, event| {
+            codex_gui::file_preview::handle_window_event(window, event);
             if window.label() == "main" {
                 if matches!(
                     event,
@@ -238,14 +295,6 @@ pub fn run() {
                     let _ = window.destroy();
                 }
             }
-            if window.label() == totp_window::TOTP_WINDOW_LABEL {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    if let Err(error) = window.destroy() {
-                        eprintln!("failed to close 2FA window: {error}");
-                    }
-                }
-            }
             if window.label() == web_session_login::WINDOW_LABEL {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
@@ -259,6 +308,43 @@ pub fn run() {
             system_tray::quick_menu::handle_window_event(window, event);
         })
         .invoke_handler(tauri::generate_handler![
+            keyboard_shortcuts::get_keyboard_shortcuts,
+            keyboard_shortcuts::set_keyboard_shortcut,
+            download_files::download_file_action,
+            coze::commands::coze_status,
+            coze::commands::coze_install,
+            coze::commands::coze_start,
+            coze::commands::coze_stop,
+            update_peers::commands::download_shared_app_update,
+            update_peers::commands::install_shared_app_update,
+            remote_desktop::remote_desktop_open,
+            remote_desktop::remote_desktop_renew,
+            #[cfg(windows)]
+            desktop_service::remote_desktop_service_status,
+            #[cfg(windows)]
+            desktop_service::remote_desktop_service_install,
+            #[cfg(windows)]
+            desktop_service::remote_desktop_service_uninstall,
+            remote_desktop::permissions::remote_desktop_permissions,
+            remote_desktop::system_permissions::remote_desktop_system_permissions,
+            remote_desktop::system_permissions::remote_desktop_repair_system_permission,
+            remote_desktop::remote_desktop_frame,
+            remote_desktop::remote_desktop_input,
+            remote_desktop::input_focus::remote_desktop_input_focus,
+            remote_desktop::clipboard::remote_desktop_clipboard,
+            remote_desktop::local_clipboard::remote_desktop_read_local_clipboard,
+            remote_desktop::local_clipboard::remote_desktop_write_local_clipboard,
+            remote_desktop::clipboard_stream::local::remote_desktop_local_file_clipboard,
+            remote_desktop::remote_desktop_close,
+            remote_desktop::stream::remote_desktop_stream_open,
+            remote_desktop::stream::remote_desktop_stream_available,
+            remote_desktop::stream::remote_desktop_stream_signal,
+            remote_desktop::stream::remote_desktop_stream_update,
+            #[cfg(any(windows, target_os = "macos"))]
+            remote_desktop::stream::privacy::remote_desktop_privacy,
+            remote_desktop::security::remote_desktop_security,
+            remote_desktop::stream::remote_desktop_stream_status,
+            remote_desktop::stream::remote_desktop_stream_close,
             #[cfg(windows)]
             system_tray::quick_menu::quick_menu_snapshot,
             #[cfg(windows)]
@@ -268,36 +354,99 @@ pub fn run() {
             #[cfg(windows)]
             system_tray::quick_menu::quick_menu_activate,
             codex_gui::codex_gui_connect,
+            codex_gui::dictation::codex_gui_dictation_prepare,
+            codex_gui::dictation::codex_gui_dictation_transcribe,
+            codex_gui::dictation::codex_gui_dictation_cancel,
+            codex_gui::help_assistant::remote_ai_help_status,
+            codex_gui::help_assistant::remote_ai_help_ask,
+            codex_gui::help_assistant::control::remote_ai_help_cancel,
+            codex_gui::help_assistant::remote_ai_help_questions,
+            codex_gui::notification_navigation::codex_gui_take_notification_navigation,
             codex_gui::scheduled_tasks::codex_gui_scheduled_tasks,
             codex_gui::clipboard::codex_gui_clipboard_files,
+            codex_gui::dropped_files::codex_gui_dropped_files,
             codex_gui::attachment_preview::codex_gui_attachment_preview,
             codex_gui::image_actions::codex_gui_image_action,
             codex_gui::account_selection::codex_gui_account_selection,
             codex_gui::account_selection::codex_gui_switch_account,
             codex_gui::model_settings::codex_gui_model_settings,
+            codex_gui::queue_store::codex_gui_queue_read,
+            codex_gui::queue_store::codex_gui_queue_save,
             codex_gui::context_settings::codex_gui_context_settings,
             codex_gui::context_settings::codex_gui_set_context_settings,
+            codex_gui::model_context::codex_gui_model_context_settings,
+            codex_gui::model_context::codex_gui_set_model_context,
             codex_gui::model_settings::codex_gui_set_model_settings,
             codex_gui::auto_switch_settings::codex_gui_auto_switch_settings,
             codex_gui::auto_switch_settings::codex_gui_set_auto_switch_settings,
+            local_proxy::gui_system_prompts::codex_gui_system_prompt_settings,
+            local_proxy::gui_system_prompts::codex_gui_set_system_prompt_settings,
             gui_terminal::codex_gui_terminal_open,
             gui_terminal::codex_gui_terminal_command,
+            gui_terminal::links::codex_gui_terminal_link,
+            gui_terminal::links::resources::codex_gui_resource_open,
+            gui_terminal::links::resources::codex_gui_resource_link,
             remote_chat::remote_chat_attach,
             remote_chat::remote_chat_send,
+            remote_chat::bulk::remote_chat_bulk_send,
+            remote_chat::identity::remote_chat_identity,
+            remote_chat::host_health::remote_chat_host_alive,
             remote_chat::remote_chat_ack,
+            remote_chat::remote_chat_bulk_ack,
             remote_chat::remote_chat_reconnect,
             remote_chat::remote_chat_detach,
+            remote_chat::tcp::remote_tcp_open,
+            remote_chat::tcp::remote_tcp_listen,
+            remote_chat::tcp::remote_tcp_unlisten,
+            remote_chat::tcp::remote_tcp_connect,
+            remote_chat::tcp::remote_tcp_socket,
+            remote_chat::tcp::remote_tcp_close,
+            remote_chat::traversal::remote_native_path_open,
+            remote_chat::traversal::remote_native_path_send,
+            remote_chat::traversal::remote_native_bulk_send,
+            remote_chat::traversal::remote_native_bulk_receive,
+            port_mapping::port_mapping_receiver,
+            port_mapping::port_mapping_poll,
+            port_mapping::port_mapping_socket,
+            port_mapping::port_mapping_read,
+            port_mapping::port_mapping_receive,
+            remote_chat::traversal::remote_native_path_close,
+            remote_chat::traversal::remote_native_media,
+            remote_chat::traversal::remote_chat_local_addresses,
+            codex_gui::clipboard_images::codex_gui_remote_clipboard_images,
+            remote_chat::gui_remote_open,
+            remote_chat::gui_remote_send,
+            remote_chat::client_bulk_send::gui_remote_bulk_send,
+            remote_chat::gui_remote_ack,
+            remote_chat::gui_remote_close,
+            cloud::codex_gui_devices,
+            cloud::sync_port_mappings,
+            cloud::remote_assistance,
             codex_gui::releases::codex_gui_cli_status,
             codex_gui::releases::codex_gui_cli_release,
+            codex_gui::releases::updates::codex_gui_cli_check,
+            codex_gui::releases::updates::codex_gui_cli_prepare,
             codex_gui::releases::codex_gui_cli_install,
+            codex_gui::releases::manual::codex_gui_cli_manual_download,
+            codex_gui::releases::manual::codex_gui_cli_import,
             codex_gui::codex_gui_request,
+            codex_gui::file_stream::bulk::codex_gui_file_bulk_read,
             codex_gui::codex_gui_respond,
             codex_gui::git::codex_gui_git,
+            codex_gui::git::tool::codex_gui_git_tool,
             codex_gui::file_actions::codex_gui_file_applications,
             codex_gui::file_actions::codex_gui_file_action,
+            codex_gui::file_preview::codex_gui_open_file_preview,
+            codex_gui::file_preview::codex_gui_close_file_preview,
+            codex_gui::file_preview::codex_gui_file_preview_host,
+            codex_gui::file_preview::website::codex_gui_sync_website_preview,
+            codex_gui::file_preview::website::codex_gui_close_website_preview,
             codex_gui::undo::codex_gui_undo,
             codex_gui::deletion::codex_gui_delete_thread,
             codex_gui::usage::codex_gui_usage_summary,
+            local_proxy::gui_runtime::codex_gui_request_settings,
+            local_proxy::gui_runtime::codex_gui_set_fast_mode,
+            local_proxy::gui_runtime::codex_gui_set_request_speed,
             commands::get_app_info,
             ccs_import::take_ccswitch_import_request,
             ccs_import::cancel_ccswitch_provider_import,
@@ -328,11 +477,14 @@ pub fn run() {
             commands::delete_account,
             commands::refresh_usage,
             official_models::refresh_official_model_catalog,
+            official_models::read_admin_model_names,
             commands::consume_account_quota,
             commands::fetch_reset_credits,
             commands::consume_reset_credit,
             commands::restart_chatgpt,
             commands::launch_chatgpt,
+            chatgpt_launch::get_chatgpt_launch_path,
+            chatgpt_launch::set_chatgpt_launch_path,
             codex_connection::get_codex_connection_status,
             codex_connection::connect_codex,
             codex_notification::sync_codex_notification,
@@ -416,17 +568,21 @@ pub fn run() {
             local_proxy::get_local_proxy_status,
             local_proxy::endpoints::list_local_proxy_ipv4_addresses,
             local_proxy::set_local_proxy_fast_mode,
+            local_proxy::set_local_proxy_service_tier,
             local_proxy::set_gpt_5_6_sol_context_window,
             local_proxy::get_official_model_context_settings,
             local_proxy::set_official_model_context_window,
             local_proxy::set_upstream_429_retry_timeout,
+            local_proxy::transport_settings::set_proxy_transport,
             local_proxy::sse_idle_timeout::set_sse_idle_timeout,
+            local_proxy::response_header_timeout::set_response_header_timeout,
             local_proxy::list_proxy_sessions,
             local_proxy::list_proxy_session_requests,
             local_proxy::get_proxy_conversation_attachment,
             local_proxy::get_proxy_session_unlimited_conversation,
             local_proxy::set_proxy_session_unlimited_conversation,
             local_proxy::get_recent_proxy_session_latency,
+            local_proxy::session_metrics::get_proxy_session_metrics,
             local_proxy::export_diagnostic_logs,
             local_proxy::list_token_usage_entries,
             local_proxy::list_token_usage_entries_since,
@@ -434,9 +590,9 @@ pub fn run() {
             local_proxy::list_account_token_usage,
             local_proxy::list_token_usage_breakdown,
             account_quota_history::list_account_quota_history,
+            cloud::get_official_usage_summary,
             local_proxy::list_provider_token_usage,
             local_proxy::show_token_usage_window,
-            totp_window::show_totp_window,
             local_proxy::start_local_proxy,
             local_proxy::stop_local_proxy,
             local_proxy::stop_local_proxy_without_migrating,
@@ -463,6 +619,7 @@ pub fn run() {
             floating_bubble::get_app_settings,
             autostart::set_launch_at_startup,
             main_window::set_close_to_tray,
+            client_integration::set_non_proxy_enhancements,
             floating_bubble::set_floating_bubble,
             floating_bubble::set_privacy_mode,
             floating_bubble::set_hide_account_notes,
@@ -486,7 +643,10 @@ pub fn run() {
             cloud::get_cloud_auth_state,
             cloud::get_saved_cloud_login,
             cloud::fetch_cloud_announcement,
+            cloud::fetch_cloud_title_settings,
+            cloud::fetch_cloud_home_presets,
             cloud::fetch_cloud_currency_rates,
+            cloud::fetch_cloud_token_cost_presets,
             cloud::fetch_cloud_faqs,
             cloud::fetch_cloud_notifications,
             cloud::report_announcement_click,
@@ -521,6 +681,8 @@ pub fn run() {
             computer_use::commands::computer_use_status,
             computer_use::commands::computer_use_action,
             computer_use::commands::computer_use_request_permission,
+            remote_command::commands::remote_command_status,
+            remote_command::commands::remote_command_action,
             skills_market::upload_market_skill,
             skills_market::install_market_skill,
             skills_market::remove_market_skill,
@@ -537,10 +699,11 @@ pub fn run() {
         ])
         .build(context)
         .unwrap_or_else(|error| {
-            eprintln!("failed to start Codex Switch: {error}");
+            eprintln!("failed to start Remote AI: {error}");
             std::process::exit(1);
         })
         .run(|app, event| {
+            codex_gui::dropped_files::handle_run_event(app, &event);
             #[cfg(target_os = "macos")]
             if matches!(event, tauri::RunEvent::Reopen { .. }) {
                 system_tray::show_dashboard(app);

@@ -2,6 +2,12 @@ use std::fmt;
 
 use toml_edit::{value, Array, DocumentMut, InlineTable, Item, Table, Value};
 
+mod official_compatibility;
+pub(crate) use official_compatibility::ensure_official_provider_compatibility;
+use official_compatibility::{
+    is_official_compatibility_provider, set_official_compatibility_provider,
+};
+
 pub(crate) const LOCAL_PROXY_HOST: &str = "127.0.0.1";
 pub(crate) const LOCAL_PROXY_PORT: u16 = 15722;
 pub(crate) const LOCAL_PROXY_BASE_URL: &str = "http://127.0.0.1:15722/v1";
@@ -9,6 +15,10 @@ pub(crate) const LOCAL_PROXY_TOKEN: &str = "CODEX_SWITCH_LOCAL_PROXY";
 pub(crate) const LOCAL_PROXY_ACTOR_AUTHORIZATION_HEADER: &str = "x-openai-actor-authorization";
 pub(crate) const LOCAL_PROXY_REQUEST_PURPOSE_HEADER: &str = "x-codex-switch-request-purpose";
 pub(crate) const TITLE_GENERATION_REQUEST_PURPOSE: &str = "title-generation";
+pub(crate) const PREDICTION_REQUEST_PURPOSE: &str = "next-prompt-suggestion";
+pub(crate) const HELP_REQUEST_PURPOSE: &str = "remote-ai-help";
+pub(crate) const GIT_MESSAGE_REQUEST_PURPOSE: &str = "git-commit-message";
+pub(crate) const HELP_ACCOUNT_REVISION_HEADER: &str = "x-remote-ai-help-account-revision";
 pub(crate) const LOCAL_PROXY_PROVIDER_ID: &str = "codex-switch-local";
 
 const OFFICIAL_PROVIDER_ID: &str = "openai";
@@ -86,6 +96,7 @@ pub(crate) fn restore_official(
     if let Some(model) = model.map(str::trim).filter(|model| !model.is_empty()) {
         set_root_value(&mut document, "model", Value::from(model));
     }
+    set_official_compatibility_provider(&mut document)?;
     Ok(document.to_string())
 }
 
@@ -102,11 +113,12 @@ pub(crate) fn default_official(model: &str, reasoning_effort: &str) -> String {
 
 pub(crate) fn contains_local_proxy(content: &str) -> bool {
     content.parse::<DocumentMut>().is_ok_and(|document| {
-        document
+        let has_proxy_reference = document
             .get("model_provider")
             .and_then(Item::as_str)
             .is_some_and(|provider| provider == LOCAL_PROXY_PROVIDER_ID)
-            || local_proxy_table(&document).is_some()
+            || local_proxy_table(&document).is_some();
+        has_proxy_reference && !is_official_compatibility_provider(&document)
     }) || content.contains(LOCAL_PROXY_BASE_URL)
         || content.contains(LOCAL_PROXY_TOKEN)
 }
@@ -367,14 +379,14 @@ fn is_table_header(value: &str) -> bool {
 mod tests {
     use super::*;
 
-    fn proxy_options<'a>() -> LocalProxyConfig<'a> {
+    pub(super) fn proxy_options<'a>() -> LocalProxyConfig<'a> {
         LocalProxyConfig {
             name: "DeepSeek",
             model: Some("deepseek-chat"),
             model_catalog_filename: Some("codex-switch-model-catalog.json"),
             requires_openai_auth: false,
             supports_websockets: false,
-            token_command: r"C:\Program Files\Codex Switch\csw.exe",
+            token_command: r"C:\Program Files\Remote AI\csw.exe",
         }
     }
 
@@ -432,7 +444,8 @@ js_repl = true
 
         assert_eq!(document["model_provider"].as_str(), Some("openai"));
         assert_eq!(document["notify"][0].as_str(), Some("done"));
-        assert!(local_proxy_table(&document).is_none());
+        assert!(is_official_compatibility_provider(&document));
+        assert!(!contains_local_proxy(&restored));
     }
 
     #[test]

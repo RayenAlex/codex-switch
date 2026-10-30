@@ -1,5 +1,7 @@
+import { createThemedStyles } from '../../theme/styles';
+import { t, useLanguage } from '../../i18n';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
@@ -8,23 +10,23 @@ import { useImageOrientation } from '../useImageOrientation';
 import { useVideoStream } from './useVideoStream';
 import { videoPlayerHtml } from './videoPlayerHtml';
 import type { FileClient } from '../../../../../shared/remote-chat/fileDownload';
-import { useFileDownload } from '../../../../../shared/remote-chat/useFileDownload';
-import { nativeDownloadTarget } from '../fileDownloadTarget';
+import { useManagedDownload } from '../../downloads/useManagedDownload';
 
 interface Props {
   path: string; threadId: string | null; ready: boolean; client: VideoClient; close: () => void;
   files: FileClient;
 }
 export function VideoViewer({ close, ...options }: Props) {
+  const styles = useStyles();
+  const language = useLanguage();
   const video = useVideoStream(options);
-  const download = useFileDownload({ ...options, client: options.files,
-    target: nativeDownloadTarget, success: '视频已保存到下载文件夹' });
+  const download = useManagedDownload({ ...options, client: options.files });
   const orientation = useImageOrientation();
   const [failedUrl, setFailedUrl] = useState('');
   const error = video.error || (video.url && video.url === failedUrl
-    ? '暂时无法播放此视频，请换一个 MP4 视频试试。' : '');
+    ? t("暂时无法播放此视频，请换一个 MP4 视频试试。") : '');
   const source = useMemo(() => video.url
-    ? { html: videoPlayerHtml(video.url), baseUrl: video.url } : undefined, [video.url]);
+    ? { html: videoPlayerHtml(video.url, t("视频播放器")), baseUrl: video.url } : undefined, [video.url, language]);
   return <Modal visible animationType="fade" onRequestClose={close} statusBarTranslucent
     navigationBarTranslucent supportedOrientations={['portrait', 'portrait-upside-down',
       'landscape-left', 'landscape-right']}>
@@ -33,15 +35,15 @@ export function VideoViewer({ close, ...options }: Props) {
         <View style={styles.toolbar}>
           <Text numberOfLines={1} style={styles.title}>{options.path.split(/[\\/]/).pop()}</Text>
           <Pressable accessibilityRole="button" accessibilityLabel={download.label}
-            disabled={!download.busy && !options.ready}
+            disabled={!download.busy && !download.completed && !options.ready}
             onPress={download.busy ? download.cancel : download.start} style={styles.download}>
             <Text style={styles.status}>{download.label}</Text>
           </Pressable>
-          {orientation.suggested && <Pressable accessibilityRole="button" accessibilityLabel="旋转视频"
+          {orientation.suggested && <Pressable accessibilityRole="button" accessibilityLabel={t("旋转视频")}
             disabled={orientation.rotating} onPress={orientation.rotate} style={styles.button}>
             <MaterialCommunityIcons name="screen-rotation" size={26} color="#fff" />
           </Pressable>}
-          <Pressable accessibilityRole="button" accessibilityLabel="关闭视频" onPress={close} style={styles.button}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("关闭视频")} onPress={close} style={styles.button}>
             <MaterialCommunityIcons name="close" size={28} color="#fff" />
           </Pressable>
         </View>
@@ -55,28 +57,28 @@ export function VideoViewer({ close, ...options }: Props) {
           onError={() => setFailedUrl(video.url)} />}
         {(!source || !!error) && <View style={styles.notice}>
           {!!error ? <>
-            <Text accessibilityRole="alert" style={styles.status}>{error}</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="重新加载视频" onPress={video.retry}
-              disabled={!options.ready} style={styles.retry}><Text style={styles.status}>重试</Text></Pressable>
-          </> : options.ready ? <ActivityIndicator color="#fff" accessibilityLabel="正在加载视频" />
-            : <Text style={styles.status}>请连接电脑后播放视频。</Text>}
+            <Text accessibilityRole="alert" style={styles.status}>{t(error)}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("重新加载视频")} onPress={video.retry}
+              disabled={!options.ready} style={styles.retry}><Text style={styles.status}>{t("重试")}</Text></Pressable>
+          </> : options.ready ? <ActivityIndicator color="#fff" accessibilityLabel={t("正在加载视频")} />
+            : <Text style={styles.status}>{t("请连接电脑后播放视频。")}</Text>}
         </View>}
         {!!orientation.error && <Text style={styles.status}>{orientation.error}</Text>}
         {download.busy && !!download.detail && <Text style={styles.status}>{download.detail}</Text>}
-        {!!download.message && <Text accessibilityLiveRegion="polite" style={styles.status}>{download.message}</Text>}
+        {!!download.message && <Text accessibilityLiveRegion="polite" style={styles.status}>{t(download.message)}</Text>}
       </SafeAreaView>
     </SafeAreaProvider>
   </Modal>;
 }
-const styles = StyleSheet.create({
+const useStyles = createThemedStyles((color) => ({
   overlay: { flex: 1, backgroundColor: '#000' },
   toolbar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 },
-  title: { flex: 1, color: '#ddd', fontSize: 14 },
+  title: { flex: 1, color: color('#ddd', 'faint'), fontSize: 14 },
   button: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   download: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 8 },
   player: { flex: 1, backgroundColor: '#000' },
   notice: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 },
-  status: { color: '#ddd', fontSize: 14, textAlign: 'center', maxWidth: 400 },
+  status: { color: color('#ddd', 'faint'), fontSize: 14, textAlign: 'center', maxWidth: 400 },
   retry: { minHeight: 44, minWidth: 88, alignItems: 'center', justifyContent: 'center',
     backgroundColor: '#333', borderRadius: 12 },
-});
+}));

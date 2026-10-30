@@ -4,7 +4,9 @@
 .nx
 .agents
 .codex
+.codex-tmp
 apps/desktop/*
+!apps/desktop/package.json
 !apps/desktop/src
 node_modules
 **/node_modules
@@ -16,5 +18,9 @@ coverage
 **/coverage
 apps/admin/public/admin.html
 apps/admin/public/admin-assets
+apps/admin-go/public
+**/.env
+**/compose.override.yml
+**/docker-compose.override.yml
 *.log
 npm-debug.log*

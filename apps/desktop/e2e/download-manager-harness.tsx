@@ -1,0 +1,119 @@
+import { useMemo, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import { ConfigProvider } from 'antd';
+import { DownloadsPage } from '../src/pages/DownloadsPage';
+import { authenticatedDownloadOwner, useDesktopDownloads } from '../src/downloads/useDesktopDownloads';
+import { FileMenu } from '../src/pages/codexGui/FileMenu';
+import { FileThreadContext } from '../src/pages/codexGui/fileApi';
+import { FileEnvironmentContext, type FileEnvironment } from '../src/pages/codexGui/fileEnvironment';
+import { downloadManager } from '../../web/src/downloads/manager';
+import { createGuiToolsClient } from '../../../shared/remote-chat/guiTools';
+import { DashboardNavigation, type DashboardPage } from '../src/components/dashboard/DashboardNavigation';
+import { translate } from '../src/i18n';
+import { initialChatState } from '../../../shared/remote-chat/client/types';
+import type { DownloadClient } from '../../../shared/remote-chat/downloads';
+import type { GuiComputer } from '../src/pages/codexGui/remote/types';
+import { ChatFilePreview } from '../../web/src/chat/ChatFilePreview';
+import { DEFAULT_CHAT_POLICY, setChatConnectionMode, setChatPolicy } from '../../../shared/remote-chat/policy';
+import { nativeBulkFixture, nativeBulkStats } from './native-bulk-fixture';
+import { nativeDirectBulkFixture, nativeDirectStats, NATIVE_DIRECT_FILE_BYTES } from './native-direct-bulk-fixture';
+import 'antd/dist/reset.css';
+import '../src/styles.css';
+
+Object.defineProperty(window, 'showSaveFilePicker', { value: undefined, configurable: true });
+setChatConnectionMode('offline');
+const nativeBulk = new URLSearchParams(location.search).has('nativeBulk');
+const nativeDirect = new URLSearchParams(location.search).has('nativeDirect');
+const collapsed = new URLSearchParams(location.search).has('collapsed');
+document.documentElement.dataset.theme = new URLSearchParams(location.search).has('dark') ? 'dark' : 'light';
+const size = nativeDirect ? NATIVE_DIRECT_FILE_BYTES : 8 * 1024 * 1024;
+setChatPolicy({ ...DEFAULT_CHAT_POLICY, fileDownloadMaxMb: nativeBulk ? 20 : 1,
+  fileBulkEnabled: nativeBulk || nativeDirect ? 1 : 0 });
+const identity = { baseUrl: 'https://fixture.test', userId: 'owner' };
+const auth = { ...identity, enabled: true, authenticated: true, sessionExpired: false };
+const fixture = { delay: 500, failDownload: false,
+  offsets: [] as { device: string; offset: number }[], nativeBulkStats, nativeDirectStats };
+declare global { interface Window { desktopDownloads: typeof fixture } }
+window.desktopDownloads = fixture;
+
+function controller(device: string) {
+  let state = { ...initialChatState(), ready: true, mode: nativeBulk ? 'relay' as const : 'direct' as const };
+  const listeners = new Set<() => void>();
+  const bulk = device === 'office' && nativeDirect ? nativeDirectBulkFixture() : undefined;
+  const downloads: DownloadClient = {
+    bulk: bulk ?? (nativeBulk && device === 'office' ? nativeBulkFixture() : undefined),
+    open: async ({ path }) => ({ id: '11111111-1111-4111-8111-111111111111', size,
+      name: path.split('/').at(-1)!, mimeType: 'application/octet-stream', revision: 'first' }),
+    read: async ({ offset, length }) => {
+      fixture.offsets.push({ device, offset });
+      await new Promise(resolve => setTimeout(resolve, fixture.delay));
+      return { offset, data: btoa((device === 'office' ? 'A' : 'B').repeat(length)) };
+    },
+    close: async () => {}, browse: async () => ({ entries: [], directory: '', truncated: false }),
+  };
+  const files = { open: (threadId: string, path: string) =>
+    downloads.open({ threadId, path, scope: 'project', transferId: 'preview' }),
+    read: downloads.read, close: downloads.close };
+  const guiTools = createGuiToolsClient(async () => { throw new Error('Unused GUI operation'); });
+  return { downloads, files, guiTools, snapshot: () => state,
+    subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
+    disconnect: () => { state = { ...state, ready: false }; listeners.forEach(listener => listener()); } };
+}
+const office = controller('office');
+const home = controller('home');
+const devices: GuiComputer[] = ['office', 'home'].map(deviceId => ({ deviceId,
+  name: deviceId === 'office' ? '办公电脑' : '家里电脑', platform: 'windows', online: true }));
+
+function Workspace({ device, active }: { device: GuiComputer; active: boolean }) {
+  const client = device.deviceId === 'office' ? office : home;
+  const [preview, setPreview] = useState(false);
+  useDesktopDownloads({ identity, device, controller: client });
+  const environment = useMemo<FileEnvironment>(() => ({ remote: true,
+    actions: {
+      applications: async () => { throw new Error('Installers must not discover applications'); },
+      perform: async (target, action) => {
+        if (action.type !== 'saveAs') throw new Error('Installers only support downloading');
+        if (fixture.failDownload) throw new Error('Download unavailable');
+        await downloadManager.enqueue({ owner: authenticatedDownloadOwner(auth), deviceId: device.deviceId,
+          deviceName: device.name, scope: 'project', threadId: target.threadId ?? undefined, path: target.path });
+        return { path: target.path, saved: false };
+      },
+    },
+    previews: { open: async () => { throw new Error('Installers must not open previews'); }, close: async () => {} },
+    resolveWebsite: async () => '', image: () => null,
+  }), [device]);
+  return <div hidden={!active} style={{ padding: 32 }}>
+    <h1>{device.name}</h1><button onClick={() => setPreview(true)}>打开安装包</button>
+    <FileEnvironmentContext.Provider value={environment}><FileThreadContext.Provider value="thread">
+      <p><FileMenu path={`C:/project/${device.deviceId}.msi`} preview>安装包链接</FileMenu></p>
+    </FileThreadContext.Provider></FileEnvironmentContext.Provider>
+    {active && preview && <ChatFilePreview path={`C:/project/${device.deviceId}.msi`}
+      context={{ client: client.files, threadId: 'thread', ready: true }} onClose={() => setPreview(false)} />}
+  </div>;
+}
+
+function Harness() {
+  const [page, setPage] = useState<DashboardPage>('codexGui');
+  const [device, setDevice] = useState('office');
+  const [owner, setOwner] = useState('owner');
+  return <ConfigProvider><div className={collapsed ? 'sidebar-collapsed' : undefined}
+    style={{ display: 'flex', minHeight: '100vh' }}>
+    <aside style={{ width: collapsed ? 64 : 220, padding: collapsed ? 0 : 16,
+      borderRight: '1px solid var(--line)' }}>
+      <DashboardNavigation variant="sidebar" page={page} onPageChange={setPage}
+        collapsed={collapsed} downloadOwner={authenticatedDownloadOwner({ ...auth, userId: owner })}
+        t={(key, values) => translate('zh', key, values)} />
+    </aside><main style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ display: 'flex', gap: 12, padding: 16 }}>
+        <button onClick={() => setDevice(value => value === 'office' ? 'home' : 'office')}>切换电脑</button>
+        <button onClick={() => office.disconnect()}>断开办公电脑</button>
+        <button onClick={() => setOwner(value => value === 'owner' ? 'other' : 'owner')}>切换账号</button>
+      </div>
+      {devices.map(item => <Workspace key={item.deviceId} device={item}
+        active={page === 'codexGui' && device === item.deviceId} />)}
+      {page === 'downloads' && <DownloadsPage auth={{ ...auth, userId: owner }} />}
+      {page === 'logDiagnostics' && <p>日志诊断</p>}
+    </main>
+  </div></ConfigProvider>;
+}
+createRoot(document.getElementById('root')!).render(<Harness />);

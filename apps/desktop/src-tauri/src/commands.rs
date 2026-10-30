@@ -1,15 +1,16 @@
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    io::{BufRead, BufReader, BufWriter, Write},
     path::{Path, PathBuf},
-    process::Command,
     sync::{Mutex, OnceLock},
     time::Duration,
 };
 
+#[cfg(all(unix, not(target_os = "macos")))]
+use std::process::Command;
+
 #[cfg(target_os = "windows")]
-use std::{os::windows::process::CommandExt, thread, time::Instant};
+use std::{thread, time::Instant};
 
 use chrono::{NaiveDate, TimeZone, Utc};
 use reqwest::blocking::{Client, Response};
@@ -19,6 +20,10 @@ use serde_json::Value;
 use tauri::{Emitter, Runtime};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_opener::OpenerExt;
+
+#[cfg(any(unix, test))]
+#[path = "commands/client_unix.rs"]
+mod client_unix;
 
 use crate::{
     agent_identity,

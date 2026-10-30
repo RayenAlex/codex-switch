@@ -1,6 +1,7 @@
 import { chunks } from './framing';
 import type { ConnectionMode, RpcMessage } from './protocol';
 import type { TransferProgress } from './uploadProgress';
+import { attachmentUploadReporter } from './attachmentUploadProgress';
 
 const MAX_QUEUED_MESSAGES = 512;
 // The receiver allows eight partial assemblies. Reserve one for ordered events/requests.
@@ -24,6 +25,7 @@ export class SendQueue {
   constructor(private readonly transport: {
     capacity: () => Promise<void>; send: (part: string, delivered?: () => void) => void;
     mode?: () => ConnectionMode;
+    prefix?: string;
   }) {}
 
   send(message: RpcMessage, progress?: TransferProgress): Promise<void> {
@@ -33,7 +35,12 @@ export class SendQueue {
     }
     const result = new Promise<void>((resolve, reject) => {
       const queue = message.kind === 'response' ? this.responses : this.ordered;
-      queue.push({ parts: chunks(message, String(++this.serial), this.transport.mode?.()), resolve, reject, progress });
+      const id = `${this.transport.prefix ?? ''}${++this.serial}`;
+      let report = progress;
+      const parts = chunks(message, id, this.transport.mode?.(), progress ? text => {
+        report = attachmentUploadReporter(message, text, progress);
+      } : undefined);
+      queue.push({ parts, resolve, reject, progress: progress ? fraction => report?.(fraction) : undefined });
     });
     if (!this.running) void this.drain();
     return result;

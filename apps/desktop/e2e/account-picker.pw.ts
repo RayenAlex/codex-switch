@@ -24,11 +24,10 @@ async function expectAligned(page: Page) {
   await expect.poll(async () => {
     const target = (await trigger.boundingBox())!;
     const panel = (await popup.boundingBox())!;
-    return Math.max(Math.abs(target.x - panel.x), Math.abs(target.width - panel.width),
-      Math.abs(target.x + target.width - panel.x - panel.width));
+    return Math.abs(target.x - panel.x);
   }).toBeLessThan(1);
   const bounds = (await popup.boundingBox())!;
-  expect(bounds.width).toBeLessThanOrEqual(400);
+  expect(bounds.width).toBeLessThanOrEqual(280);
   expect(bounds.x).toBeGreaterThanOrEqual(0);
   expect(bounds.x + bounds.width).toBeLessThanOrEqual(page.viewportSize()!.width);
 }
@@ -71,10 +70,12 @@ test("appearance changes messages, composer and code immediately and survives re
   await expect(sample.getByRole("textbox")).toHaveCSS("font-size", "14px");
 });
 
-test("picker edges match the footer across sidebar and viewport resizing", async ({ page }) => {
+test("compact picker aligns with the footer across sidebar and viewport resizing", async ({ page }) => {
   await mockCommands(page);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/e2e/account-picker-harness.html");
+  await expect(triggerFor(page).locator('svg')).toHaveCount(0);
+  expect((await triggerFor(page).boundingBox())!.height).toBeLessThan(64);
   await triggerFor(page).click();
   await expectAligned(page);
   await page.screenshot({ path: "../../.codex-tmp/gui-account-picker-desktop.png", animations: "disabled" });
@@ -90,7 +91,7 @@ test("picker edges match the footer across sidebar and viewport resizing", async
   await page.screenshot({ path: "../../.codex-tmp/gui-account-picker-narrow.png", animations: "disabled" });
 });
 
-test("gear opens an aligned 80vw settings dialog and saves GUI settings", async ({ page }) => {
+test("gear opens responsive settings with aligned accounts and saves GUI settings", async ({ page }) => {
   const saved = await mockCommands(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/e2e/account-picker-harness.html");
@@ -98,7 +99,7 @@ test("gear opens an aligned 80vw settings dialog and saves GUI settings", async 
   await page.getByRole("button", { name: "Codex GUI 设置", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Codex GUI 设置" });
   await expect(dialog).toBeVisible();
-  await expect.poll(async () => (await dialog.boundingBox())!.width).toBeCloseTo(1440 * 0.8, 0);
+  await expect.poll(async () => (await dialog.boundingBox())!.width).toBeCloseTo(1240, 0);
   // The opening transform changes cell coordinates until the dialog settles.
   await dialog.evaluate(async (element) => {
     await Promise.all(element.getAnimations().map((animation) => animation.finished));
@@ -126,8 +127,8 @@ test("gear opens an aligned 80vw settings dialog and saves GUI settings", async 
   await priority.fill("-2");
   await page.getByRole("switch", { name: "workspace2@example.com 参与自动切换", exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(async () => (await dialog.boundingBox())!.width).toBeCloseTo(390 - 24, 0);
   const bounds = (await dialog.boundingBox())!;
-  expect(bounds.width).toBeCloseTo(390 * 0.8, 0);
   expect(bounds.x).toBeGreaterThanOrEqual(0);
   expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
   const beats = Number(await page.getByLabel("刷新次数").textContent());
@@ -184,7 +185,9 @@ test("quota countdowns stay live while the account table scrolls inside a fixed 
   await page.screenshot({ path: "../../.codex-tmp/gui-auto-switch-usage-scroll.png", animations: "disabled" });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(save).toBeInViewport();
+  await scroll.scrollIntoViewIfNeeded();
   await expect(scroll).toBeInViewport();
+  await expect(save).toBeInViewport();
   expect(await scroll.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
   await page.screenshot({ path: "../../.codex-tmp/gui-auto-switch-usage-narrow.png", animations: "disabled" });
 });

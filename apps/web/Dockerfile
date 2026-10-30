@@ -2,6 +2,8 @@ FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
 COPY apps/web/package*.json ./apps/web/
+# Web previews reuse desktop components and their workspace dependencies.
+COPY apps/desktop/package.json ./apps/desktop/
 RUN npm ci
 
 FROM deps AS build
@@ -11,13 +13,11 @@ ENV VITE_WEB_BASE_PATH=${VITE_WEB_BASE_PATH}
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 COPY apps/web ./apps/web
 COPY shared ./shared
-# Shared chat settings reuse the backend's policy definition.
-COPY apps/admin/src/modules/chat-settings/chat-policy.ts ./apps/admin/src/modules/chat-settings/chat-policy.ts
-COPY apps/admin/src/modules/chat-settings/title-settings.ts ./apps/admin/src/modules/chat-settings/title-settings.ts
 # Shared chat logic imports model selection and turn timing from the desktop sources.
 COPY apps/desktop/src ./apps/desktop/src
 # Account formatting and 2FA lists share pure helpers with the mobile client.
 COPY apps/native/src/accounts/formatters.ts ./apps/native/src/accounts/formatters.ts
+COPY apps/native/src/i18n/index.ts ./apps/native/src/i18n/index.ts
 COPY apps/native/src/utils/expiration.ts ./apps/native/src/utils/expiration.ts
 COPY apps/native/src/totp/entryList.ts apps/native/src/totp/types.ts ./apps/native/src/totp/
 RUN npm run build -w @codex-switch/web

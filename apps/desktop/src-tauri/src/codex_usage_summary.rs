@@ -22,32 +22,40 @@ struct CostContext<'a> {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct CodexUsageSummary {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    language: Option<String>,
     enabled: bool,
     total_tokens: u64,
     estimated_cost_usd: f64,
+    cost_display: rates::CostDisplaySettings,
     primary_remaining_percent: Option<f64>,
     primary_remaining_aggregated: bool,
     provider_estimated_cost: Option<ProviderEstimatedCost>,
 }
 
 #[cfg(any(target_os = "windows", target_os = "macos"))]
-pub(crate) fn load() -> Result<CodexUsageSummary, String> {
-    let app = crate::codex_runtime::runtime_app_handle()
-        .ok_or_else(|| "Codex runtime is not initialized.".to_string())?;
-    let settings = crate::storage::read_app_settings(&app)?;
-    if !settings.codex_usage_summary_enabled {
+/// Loads accounting after the renderer has received the same snapshot's language preference.
+pub(crate) fn load(
+    app: &tauri::AppHandle,
+    settings: &crate::models::AppSettings,
+) -> Result<CodexUsageSummary, String> {
+    if !settings.codex_usage_summary_enabled || !crate::local_proxy::is_running() {
         return Ok(CodexUsageSummary {
+            language: settings.language.clone(),
             enabled: false,
             total_tokens: 0,
             estimated_cost_usd: 0.0,
+            cost_display: rates::CostDisplaySettings::default(),
             primary_remaining_percent: None,
             primary_remaining_aggregated: false,
             provider_estimated_cost: None,
         });
     }
-    let paths = crate::storage::resolve_paths(&app)?;
+    let paths = crate::storage::resolve_paths(app)?;
     let state = crate::storage::read_state(&paths);
-    load_for_selection(&app, &paths, &state)
+    let mut summary = load_for_selection(app, &paths, &state)?;
+    summary.language = settings.language.clone();
+    Ok(summary)
 }
 
 /// Shares the desktop summary's accounting with the GUI without depending on the official app's overlay setting.
@@ -139,12 +147,14 @@ fn summarize(
     costs: &CostContext<'_>,
 ) -> CodexUsageSummary {
     CodexUsageSummary {
+        language: None,
         enabled: true,
         total_tokens: entries
             .iter()
             .map(entry_total_tokens)
             .fold(0, u64::saturating_add),
         estimated_cost_usd: sum_estimated_cost(entries, costs),
+        cost_display: costs.rates.display.clone(),
         primary_remaining_percent: primary_remaining.map(|(remaining, _)| remaining),
         primary_remaining_aggregated: primary_remaining.is_some_and(|(_, aggregated)| aggregated),
         provider_estimated_cost,
@@ -231,7 +241,7 @@ mod tests {
         let normal_entry = usage_entry("gpt-5.6-sol");
         let summary = summarize_defaults(&[normal_entry, fast_entry], None, None);
         assert_eq!(summary.total_tokens, 2_200_000);
-        assert!((summary.estimated_cost_usd - 33.46).abs() < 1e-10);
+        assert!((summary.estimated_cost_usd - 28.68).abs() < 1e-10);
     }
 
     #[test]
@@ -323,7 +333,7 @@ mod tests {
         fast_long.service_tier = Some("fast".to_string());
         let summary = summarize_defaults(&[short, long, fast_short, fast_long], None, None);
         assert_eq!(summary.total_tokens, 2_620_000);
-        assert!((summary.estimated_cost_usd - 35.7).abs() < 1e-10);
+        assert!((summary.estimated_cost_usd - 30.6).abs() < 1e-10);
     }
 
     #[test]
@@ -341,5 +351,20 @@ mod tests {
         assert_eq!(value["providerEstimatedCost"]["amountUsd"], 2.5);
         assert_eq!(value["providerEstimatedCost"]["aggregated"], true);
         assert!(value.get("providerWalletBalance").is_none());
+    }
+
+    #[test]
+    fn serializes_overlay_language_without_changing_gui_summary_shape() {
+        let mut summary = summarize_defaults(&[], None, None);
+        assert!(serde_json::to_value(&summary)
+            .unwrap()
+            .get("language")
+            .is_none());
+        summary.language = Some("ru".to_string());
+        summary.enabled = false;
+        let value = serde_json::to_value(summary).unwrap();
+        assert_eq!(value["language"], "ru");
+        assert_eq!(value["enabled"], false);
+        assert_eq!(value["totalTokens"], 0);
     }
 }

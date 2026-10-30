@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Button, Input, Popover, Tooltip } from 'antd';
 import { Check, ChevronLeft, ChevronRight, RotateCcw, Search } from 'lucide-react';
 import { EFFORT_LABELS } from '../../../../shared/remote-chat/composer';
@@ -7,6 +7,10 @@ import { t, useLanguage } from '../i18n';
 import type { ComposerProps } from './composerProps';
 import type { Model } from './types';
 import './composerModelPicker.css';
+import { RequestSpeedButton } from '../../../../shared/remote-chat/RequestSpeedButton';
+import { requestSpeedSuffix } from '../../../../shared/remote-chat/requestSpeed';
+import { ComposerSpeedIndicator } from './ComposerSpeedIndicator';
+import { ModelRefreshButton } from './ModelRefreshButton';
 
 const EFFORT_ORDER = Object.keys(EFFORT_LABELS);
 const MODEL_SEARCH_THRESHOLD = 8;
@@ -22,15 +26,19 @@ function moveModelFocus(event: KeyboardEvent<HTMLDivElement>) {
   buttons[next]?.focus();
 }
 
-function ModelList({ models, model, onSelect, onBack }: {
+function ModelList({ models, model, onSelect, onBack, titleAction }: {
   models: Model[]; model: string; onSelect: (model: string) => void; onBack: () => void;
+  titleAction: ReactNode;
 }) {
   const [query, setQuery] = useState('');
   const options = models.filter(entry => `${entry.displayName} ${entry.model}`.toLowerCase()
     .includes(query.trim().toLowerCase()));
   return <div className="composer-model-list-panel">
-    <button type="button" className="composer-model-list-heading" onClick={onBack}
-      aria-label={t('返回推理强度设置')}><ChevronLeft size={12} /><span>{t('选择模型')}</span></button>
+    <div className="composer-model-list-header">
+      <button type="button" className="composer-model-list-heading" onClick={onBack}
+        aria-label={t('返回推理强度设置')}><ChevronLeft size={12} /><span>{t('选择模型')}</span></button>
+      {titleAction}
+    </div>
     {models.length > MODEL_SEARCH_THRESHOLD && <Input size="small" className="composer-model-search"
       prefix={<Search size={12} />} placeholder={t('搜索模型')} aria-label={t('搜索模型')}
       value={query} allowClear onChange={event => setQuery(event.target.value)} />}
@@ -46,8 +54,10 @@ function ModelList({ models, model, onSelect, onBack }: {
   </div>;
 }
 
-export function ComposerModelPicker({ models, selection, updateSettings, beforeOpen }: Pick<ComposerProps,
-  'models' | 'selection' | 'updateSettings'> & { beforeOpen: () => void }) {
+export function ComposerModelPicker({ models, selection, updateSettings, settingsBusy, ready, refreshModels,
+  beforeOpen }: Pick<ComposerProps,
+  'models' | 'selection' | 'updateSettings' | 'settingsBusy' | 'ready' | 'refreshModels'>
+  & { beforeOpen: () => void }) {
   useLanguage();
   const [open, setOpen] = useState(false);
   const [choosingModel, setChoosingModel] = useState(false);
@@ -72,10 +82,15 @@ export function ComposerModelPicker({ models, selection, updateSettings, beforeO
       if (event.key === 'Escape') { event.stopPropagation(); changeOpen(false); trigger.current?.focus(); }
     }}>
     {choosingModel ? <ModelList models={models} model={model} onBack={returnToReasoning}
+      titleAction={<ModelRefreshButton compact ready={ready} refreshModels={refreshModels} />}
       onSelect={value => {
         void updateSettings(resolveModelSelection(models, { model: value, effort: '' })); returnToReasoning();
       }} /> : <div className="composer-model-reasoning">
       <div className="composer-model-summary">
+        {selection.speed !== undefined && <span className="composer-model-speed">
+          <RequestSpeedButton speed={selection.speed} busy={settingsBusy} translate={t}
+            onChange={speed => { void updateSettings({ speed }); }} />
+        </span>}
         <button ref={heading} type="button" className="composer-model-heading" aria-label={t('选择模型')}
           onClick={() => setChoosingModel(true)}>
           <span className="composer-model-effort">{effortLabel}<ChevronRight size={12} /></span>
@@ -102,9 +117,11 @@ export function ComposerModelPicker({ models, selection, updateSettings, beforeO
       body: { padding: 0, borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 16px rgb(0 0 0 / 8%)' } }}>
     <button ref={trigger} type="button" className="chat-model" disabled={!model}
       aria-haspopup="dialog" aria-expanded={open && !!model}
-      aria-label={t('模型与推理强度：{model} {effort}', { model: modelLabel, effort: effortLabel })}
+      aria-label={t('模型与推理强度：{model} {effort}', { model: modelLabel, effort: effortLabel })
+        + requestSpeedSuffix(selection.speed, t)}
       onKeyDown={event => { if (event.key === 'Escape') changeOpen(false); }}>
       <span>{modelLabel}</span>{effortLabel && <span className="chat-model-effort">{effortLabel}</span>}
+      <ComposerSpeedIndicator speed={selection.speed} />
     </button>
   </Popover>;
 }

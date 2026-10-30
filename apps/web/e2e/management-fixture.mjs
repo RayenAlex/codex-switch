@@ -5,6 +5,10 @@ const require = createRequire(new URL('../../admin/package.json', import.meta.ur
 const { WebSocketServer } = require('ws');
 
 const now = new Date().toISOString();
+const usageRequests = [];
+let usageDelay = 0;
+let usageFailure = '';
+let refreshFailure = '';
 const profile = { id: 'web-review', email: 'review@example.test', role: 'admin', roleName: '管理员' };
 const accounts = [57, 100, 12, null].map((remaining, index) => ({
   id: `account-${index}`, email: ['alex@example.test', 'studio@example.test',
@@ -17,12 +21,20 @@ const accounts = [57, 100, 12, null].map((remaining, index) => ({
     resetsAt: Math.floor(Date.now() / 1000) + 7200 },
   secondary: { remainingPercent: 77, usedPercent: 23 }, fetchedAt: now, apiExpiresAt: '2027-10-01' },
 }));
+const initialAccounts = structuredClone(accounts);
 const devices = [
   { deviceId: 'sample-pc', name: '我的工作电脑', platform: 'Windows', online: true,
-    activeAccountId: accounts[0].id, capabilities: [], lastSeenAt: now, localProxyRunning: false },
+    activeAccountId: accounts[0].id, activeProviderId: null, activeProviderGroup: null,
+    guiAccountId: accounts[1].id, guiProviderId: null,
+    capabilities: ['provider-switch', 'provider-group-switch', 'gui-model-switch',
+      'aggregate-switch', 'gui-aggregate-switch', 'account-usage'],
+    lastSeenAt: now, localProxyRunning: true },
   { deviceId: 'offline-pc', name: '备用电脑', platform: 'Windows', online: false,
     activeAccountId: accounts[0].id, capabilities: [], lastSeenAt: now, localProxyRunning: false },
 ];
+const initialDevices = structuredClone(devices);
+const providers = [{ id: 'provider-1', name: '测试 Provider', model: 'test-model', group: '工作分组' }];
+const aggregates = [{ id: 'aggregate:route-1', name: '聚合测试', model: 'public-model', group: '', kind: 'aggregate' }];
 let credits = [{ issuedAt: now, expiresAt: '2027-12-31' }];
 let vault = { entries: ['GitHub', 'OpenAI', 'AWS'].map((issuer, index) => ({
   id: `totp-${index}`, issuer, accountName: `review-${index}@example.test`, secret: 'JBSWY3DPEHPK3PXP',
@@ -39,14 +51,46 @@ const server = http.createServer(async (request, response) => {
   const account = accounts.find((item) => path?.includes(`/accounts/${item.id}/`));
   let result;
   if (path === '/test/reset' && request.method === 'POST') {
+    accounts.splice(0, accounts.length, ...structuredClone(initialAccounts));
+    usageRequests.length = 0; usageDelay = 0; usageFailure = ''; refreshFailure = '';
     vault = structuredClone(initialVault);
+    devices.splice(0, devices.length, ...structuredClone(initialDevices));
+    result = { ok: true };
+  } else if (path === '/test/usage') {
+    if (request.method === 'POST') {
+      const input = JSON.parse(body);
+      usageDelay = input.delay ?? 0; usageFailure = input.failure ?? ''; refreshFailure = input.refreshFailure ?? '';
+      usageRequests.length = 0;
+    }
+    result = usageRequests;
+  } else if (path === '/test/devices' && request.method === 'POST') {
+    devices.splice(0, devices.length, ...JSON.parse(body));
+    for (const socket of sockets.clients) socket.send(JSON.stringify({ type: 'devices-snapshot', devices }));
     result = { ok: true };
   } else if (path === '/auth/login' || path === '/auth/refresh') {
     result = { accessToken: 'local-review', refreshToken: 'local-review-refresh', user: profile };
   } else if (path === '/auth/me') result = profile;
   else if (path === '/sync/accounts/web-summary') result = { accounts };
   else if (path === '/devices') result = { devices };
-  else if (path === '/devices/providers') result = { providers: [] };
+  else if (path === '/devices/providers') result = { providers };
+  else if (path === '/devices/providers?includeAggregates=true') result = { providers: [...providers, ...aggregates] };
+  else if (path?.startsWith('/devices/sample-pc/') && request.method === 'POST') {
+    const device = devices[0];
+    const input = JSON.parse(body);
+    switch (path.split('/').at(-1)) {
+      case 'gui-account': device.guiAccountId = input.accountId; device.guiProviderId = null; break;
+      case 'gui-provider': device.guiAccountId = null; device.guiProviderId = input.providerId; break;
+      case 'gui-aggregate': device.guiAccountId = null; device.guiProviderId = `aggregate:${input.aggregateId}`; break;
+      case 'account':
+        device.activeAccountId = input.accountId; device.activeProviderId = null; device.activeProviderGroup = null;
+        break;
+      case 'provider': device.activeProviderId = input.providerId; device.activeProviderGroup = null; break;
+      case 'aggregate': device.activeProviderId = `aggregate:${input.aggregateId}`; device.activeProviderGroup = null; break;
+      case 'provider-group': device.activeProviderId = null; device.activeProviderGroup = input.group; break;
+      default: response.writeHead(404);
+    }
+    result = { ...device, requiresRestart: false };
+  }
   else if (path === '/sync/totp') {
     if (request.method === 'PUT') {
       const incoming = JSON.parse(body);
@@ -68,7 +112,23 @@ const server = http.createServer(async (request, response) => {
   response.end(JSON.stringify(result));
 });
 const sockets = new WebSocketServer({ server });
-sockets.on('connection', (socket) => socket.on('message', () => {
-  socket.send(JSON.stringify({ type: 'devices-snapshot', devices }));
+sockets.on('connection', (socket) => socket.on('message', raw => {
+  const message = JSON.parse(raw.toString());
+  if (message.type !== 'account-usage') {
+    socket.send(JSON.stringify({ type: 'devices-snapshot', devices }));
+    return;
+  }
+  usageRequests.push(message);
+  const account = accounts.find(item => item.id === message.accountId);
+  const consumed = message.action === 'consume' && message.accountId !== usageFailure;
+  const usage = { ...account.usage, fetchedAt: new Date().toISOString(),
+    primary: { ...account.usage.primary, remainingPercent: consumed ? 42 : 64 } };
+  const error = message.accountId === usageFailure ? '电脑未确认额度消耗完成，请先查看用量，避免重复消耗。'
+    : message.accountId === refreshFailure ? '额度已消耗，但用量刷新失败，请稍后刷新用量。' : null;
+  setTimeout(() => {
+    if (socket.readyState !== 1) return;
+    socket.send(JSON.stringify({ type: 'account-usage-result', requestId: message.requestId,
+      data: { consumed, usage: message.accountId === refreshFailure ? null : usage, error } }));
+  }, usageDelay);
 }));
 server.listen(1491, '127.0.0.1', () => console.log('Management fixture: http://127.0.0.1:1491'));

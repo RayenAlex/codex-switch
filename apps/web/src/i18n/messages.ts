@@ -1,8 +1,1 @@
-import { accounts } from './accounts';
-import { app } from './app';
-import { chat } from './chat';
-import { settings } from './settings';
-import { shared } from './shared';
-import { errors } from './errors';
-
-export const messages: Readonly<Record<string, string>> = { ...accounts, ...app, ...chat, ...settings, ...shared, ...errors };
+export * from '../../../../shared/i18n/en/messages';

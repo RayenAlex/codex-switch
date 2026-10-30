@@ -3,6 +3,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { checkForUpdate, downloadAvailableUpdate, installDownloadedUpdate } from "../api/backend";
+import { AppUpdateCheckTimeoutError } from "../api/appUpdateErrors";
+import type { AppUpdateDownloadProgress } from "../api/appUpdateProgress";
 import type { Translate } from "../i18n";
 import type { UpdateInfo } from "../types";
 import { useAppUpdate } from "./useAppUpdate";
@@ -85,6 +87,27 @@ it("installs the downloaded release when the fresh check returns the same versio
   expect(installDownloadedUpdate).toHaveBeenCalledOnce();
 });
 
+it("keeps live download details when the prompt is closed and reopened", async () => {
+  const downloading = deferred<void>();
+  const details: AppUpdateDownloadProgress = {
+    percent: 41, downloadedBytes: 41_000, totalBytes: 100_000, bytesPerSecond: 2_048,
+    phase: "downloading", elapsedSeconds: 20,
+  };
+  vi.mocked(downloadAvailableUpdate).mockImplementationOnce((report) => {
+    report?.(details.percent, details);
+    return downloading.promise;
+  });
+  let request!: Promise<boolean>;
+  await act(async () => { request = controls.downloadUpdate(newerUpdate, true); });
+  expect(controls.updateProgress).toBe(41);
+  expect(controls.updateDownloadProgress).toEqual(details);
+  await act(async () => controls.setShowUpdatePrompt(false));
+  await act(async () => controls.showAvailableUpdate());
+  expect(controls.updateDownloadProgress).toEqual(details);
+  await act(async () => { downloading.resolve(); await request; });
+  expect(controls.updateDownloaded).toBe(true);
+});
+
 it("blocks duplicate clicks and background refreshes during the pre-install check", async () => {
   const checking = deferred<UpdateInfo | null>();
   vi.mocked(checkForUpdate).mockReturnValueOnce(checking.promise);
@@ -115,6 +138,21 @@ it("preserves the downloaded release after a failed check and allows retry", asy
 
   await act(async () => controls.installUpdate());
   expect(controls.updateInstallError).toBeNull();
+  expect(installDownloadedUpdate).toHaveBeenCalledOnce();
+});
+
+it("restores the prompt after a check timeout and retries without downloading again", async () => {
+  vi.mocked(checkForUpdate).mockRejectedValueOnce(new AppUpdateCheckTimeoutError());
+  await act(async () => controls.installUpdate());
+  expect(controls.updateInstallError).toBe("update.checkTimeout");
+  expect(controls.checkingBeforeInstall).toBe(false);
+  expect(controls.installingUpdate).toBe(false);
+  expect(controls.updateDownloaded).toBe(true);
+  expect(installDownloadedUpdate).not.toHaveBeenCalled();
+
+  await act(async () => controls.installUpdate());
+  expect(controls.updateInstallError).toBeNull();
+  expect(downloadAvailableUpdate).not.toHaveBeenCalled();
   expect(installDownloadedUpdate).toHaveBeenCalledOnce();
 });
 

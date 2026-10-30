@@ -1,38 +1,6 @@
 #[cfg(unix)]
 fn stop_unix_process(name: &str) -> Result<(), String> {
-    let status = Command::new("pkill")
-        .args(["-x", name])
-        .status()
-        .map_err(|error| format!("停止 ChatGPT 失败：{error}"))?;
-    if status.success() || status.code() == Some(1) {
-        Ok(())
-    } else {
-        Err(status_error("停止 ChatGPT 失败", status))
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn windows_hidden_command(program: &str) -> Command {
-    let mut command = Command::new(program);
-    command.creation_flags(CREATE_NO_WINDOW);
-    command
-}
-
-#[cfg(target_os = "windows")]
-fn windows_powershell_line(script: &str) -> Option<String> {
-    let output = windows_hidden_command("powershell")
-        .args(["-NoProfile", "-Command", script])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-
-    String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .map(str::trim)
-        .find(|line| !line.is_empty())
-        .map(str::to_string)
+    client_unix::stop(name)
 }
 
 #[cfg(target_os = "windows")]
@@ -89,7 +57,11 @@ fn is_dir_named(path: &Path, expected: &str) -> bool {
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
-fn start_unmanaged_chatgpt(_target: Option<&ChatGptLaunchTarget>) -> Result<(), String> {
+fn start_unmanaged_chatgpt(target: Option<&ChatGptLaunchTarget>) -> Result<(), String> {
+    if let Some(target) = target {
+        return Command::new(&target.executable).spawn().map(|_| ())
+            .map_err(|_| "无法启动指定的 ChatGPT，请检查设置中的启动路径。".to_string());
+    }
     let terminals: &[(&str, &[&str])] = &[
         (
             "x-terminal-emulator",
@@ -123,12 +95,4 @@ fn start_unmanaged_chatgpt(_target: Option<&ChatGptLaunchTarget>) -> Result<(), 
         .or_else(|_| Command::new(LEGACY_CODEX_COMMAND).spawn())
         .map(|_| ())
         .map_err(|error| format!("启动 ChatGPT 失败：{error}"))
-}
-
-#[cfg(unix)]
-fn status_error(action: &str, status: std::process::ExitStatus) -> String {
-    match status.code() {
-        Some(code) => format!("{action}（退出码：{code}）"),
-        None => format!("{action}（进程被信号终止）"),
-    }
 }

@@ -1,21 +1,30 @@
-# Codex Switch
+# Remote AI
+
+> [!IMPORTANT]
+> **Codex Switch is now Remote AI.** The repository has moved from `codex-switch` to
+> [piperhex/remoteai](https://github.com/piperhex/remoteai). Update your bookmarks to follow future releases.
 
 > Chinese is the default documentation language. For the Chinese README, see [README.md](README.md).
+> For the Russian README (Русский), see [README_RU.md](README_RU.md).
 
-Codex Switch is a desktop workspace for Codex / ChatGPT that brings together Codex GUI and multi-account management.
+Remote AI is a graphical AI coding workspace for Codex, bringing chat-based coding, project organization,
+and multi-account management together in an intuitive desktop interface.
 Chat with Codex to understand code, build features, and troubleshoot problems while following progress and file changes.
 It also includes account sign-in and switching, usage monitoring, third-party Providers, a hot-switching local proxy,
 token analytics, a Skills Market, and one-click themes. Use its hosted browser UI or connect a self-hosted backend
 and mobile companion to manage accounts across devices.
 
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE) [![Release](https://img.shields.io/github/v/release/piperhex/codex-switch)](https://github.com/piperhex/codex-switch/releases)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE) [![Release](https://img.shields.io/github/v/release/piperhex/remoteai)](https://github.com/piperhex/remoteai/releases)
 
-## Codex Web
+Product website: [Remote AI](https://piperhex.github.io/remoteai/en/) — explore features, downloads, and getting started.
+Website source and maintenance instructions: [apps/website](apps/website/README.md).
 
-Open [Codex Web](https://codex.onepiper.cloud/web/) to connect to your computer and use Codex in your browser.
+## RemoteAI Web
 
-Before using it, install the [Codex Switch desktop app](https://github.com/piperhex/codex-switch/releases),
-then open **Codex GUI** and follow the installation prompts.
+Open [RemoteAI Web](https://codex.onepiper.cloud/web/) to connect to your computer and use Codex in your browser.
+
+Before using it, install the [Remote AI desktop app](https://github.com/piperhex/remoteai/releases),
+then open **Home** and follow the prompts to install Codex.
 Keep the desktop app running and your computer online. Sign in to the web app with the same cloud account
 as the desktop app, then connect to your computer to get started.
 
@@ -39,40 +48,42 @@ On first use, follow the page's prompt to download Codex. See the [Codex GUI gui
 
 ### Account management and local proxy
 
-![Codex Switch account dashboard](docs/assets/codex-switch-dashboard.png)
+![Remote AI account dashboard](docs/assets/codex-switch-dashboard.png)
 
 ### Conversation management
 
-![Codex Switch conversation management](docs/assets/codex-switch-conversations.png)
+![Remote AI conversation management](docs/assets/codex-switch-conversations.png)
 
 ### Third-party providers
 
-![Codex Switch providers](docs/assets/codex-switch-providers.png)
+![Remote AI providers](docs/assets/codex-switch-providers.png)
 
 ### Token analytics
 
-![Codex Switch token analytics](docs/assets/codex-switch-token-usage.png)
+![Remote AI token analytics](docs/assets/codex-switch-token-usage.png)
 
 ### One-click themes
 
 Includes 300+ presets and integrates with [Fei-Away/Codex-Dream-Skin](https://github.com/Fei-Away/Codex-Dream-Skin).
 
-![Codex Switch one-click themes](docs/assets/codex-switch-dream-skin.png)
+![Remote AI one-click themes](docs/assets/codex-switch-dream-skin.png)
 
 ### Plugin Market
 
-![Codex Switch Plugin Market](docs/assets/codex-switch-skills.png)
+![Remote AI Plugin Market](docs/assets/codex-switch-skills.png)
 
 ### 2FA authenticator
 
-![Codex Switch 2FA authenticator](docs/assets/codex-switch-two-factor.png)
+Select **2FA** in the menu to view and manage authentication codes in the main window's content area.
+
+![Remote AI 2FA authenticator](docs/assets/codex-switch-two-factor.png)
 
 ### Floating usage widgets
 
 <p align="center">
-  <img src="docs/assets/codex-switch-floating-usage.png" alt="Codex Switch compact floating usage widget" width="146">
+  <img src="docs/assets/codex-switch-floating-usage.png" alt="Remote AI compact floating usage widget" width="146">
   &nbsp;&nbsp;&nbsp;
-  <img src="docs/assets/codex-switch-floating-usage-expanded.png" alt="Codex Switch glass floating usage panel" width="345">
+  <img src="docs/assets/codex-switch-floating-usage-expanded.png" alt="Remote AI glass floating usage panel" width="345">
 </p>
 
 ## Features
@@ -97,17 +108,14 @@ Includes 300+ presets and integrates with [Fei-Away/Codex-Dream-Skin](https://gi
 - Includes 300+ Dream Skin presets with one-click apply, custom backgrounds, appearance controls, and restore support.
 - Groups preferences by appearance, window behavior, usage, network, privacy, and storage, including language,
   accent color, close-to-tray behavior, usage widgets, account refresh, and token analytics.
-- Optionally syncs with a self-hosted NestJS backend. The Expo mobile app can refresh official usage/reset credits, while both the mobile and standalone Web apps can remotely switch a selected PC between official models and synchronized Providers. Cross-source switches prompt for a ChatGPT/Codex restart.
+- Optionally syncs with a self-hosted Go backend. The Expo mobile app can refresh official usage/reset credits, while both the mobile and standalone Web apps can remotely switch a selected PC between official models and synchronized Providers. Cross-source switches prompt for a ChatGPT/Codex restart.
 - Keeps account credentials and Provider secrets in the Rust backend, out of the React UI and application logs.
-
-> [!IMPORTANT]
-> Account credentials, Provider API keys, and cloud-login tokens are stored in the application data directory without additional at-rest encryption. A `.cs` backup contains restorable credentials and keys. Cloud sync is opt-in, but enabling it uploads those secrets to the server you configure. Use only trusted devices and self-hosted servers; never commit, share, or publish credential files, backups, or unchecked diagnostics.
 
 ## Getting started
 
 ### Linux packages
 
-Download the Linux x64 `.deb` from [Releases](https://github.com/piperhex/codex-switch/releases).
+Download the Linux x64 `.deb` from [Releases](https://github.com/piperhex/remoteai/releases).
 Replace the filename below with the downloaded package name:
 
 ```bash
@@ -162,7 +170,7 @@ npm run build:app
 npm run check
 ```
 
-The development browser preview uses demo data and never accesses real credentials. The mobile companion requires a deployed cloud backend; it receives redacted summaries plus a short-lived Codex access token for direct usage/reset-credit refreshes. The mobile and standalone Web apps can remotely switch a selected online PC between official models and synchronized Providers. Provider switching requires the local proxy to be running on the target PC, and cross-source switches prompt for a ChatGPT/Codex restart. See [the mobile README](apps/native/README.md) and [the admin backend README](apps/admin/README.md).
+The development browser preview uses demo data and never accesses real credentials. The mobile companion requires a deployed cloud backend; it receives redacted summaries plus a short-lived Codex access token for direct usage/reset-credit refreshes. The mobile and standalone Web apps can remotely switch a selected online PC between official models and synchronized Providers. Provider switching requires the local proxy to be running on the target PC, and cross-source switches prompt for a ChatGPT/Codex restart. See [the mobile README](apps/native/README.md) and [the admin backend README](apps/admin-go/README.md).
 
 ## Usage
 
@@ -208,6 +216,10 @@ The custom cloud server setting is hidden by default. Self-hosted users can set
 
 ## More documentation
 
+Use `npm run deploy:admin -- --project-name <existing-project>` and
+`npm run deploy:web -- --project-name <existing-project>` to update prepared images in the current Docker environment.
+See [production deployment](apps/admin-go/DEPLOYMENT.md#加载并更新-go) for image preparation, checks and rollback.
+
 - [Linux installation and usage (Chinese)](docs/linux.md)
 - [Architecture and data flow](docs/architecture.md)
 - [Development and debugging](docs/development.md)
@@ -215,27 +227,8 @@ The custom cloud server setting is hidden by default. Self-hosted users can set
 
 ## License
 
-Codex Switch is licensed under the [Apache License 2.0](LICENSE), the same license used by the official [OpenAI Codex](https://github.com/openai/codex) repository.
+Remote AI is licensed under the [Apache License 2.0](LICENSE), the same license used by the official [OpenAI Codex](https://github.com/openai/codex) repository.
 
 ## Disclaimer
 
-Codex Switch is independently developed third-party software and is not affiliated with, associated with, authorized by, endorsed by, or officially partnered with OpenAI or its Codex products.
-
-## Star History
-
-<a href="https://www.star-history.com/#piperhex/codex-switch&Date">
-  <picture>
-    <source
-      media="(prefers-color-scheme: dark)"
-      srcset="assets/star-history/star-history-dark.svg"
-    />
-    <source
-      media="(prefers-color-scheme: light)"
-      srcset="assets/star-history/star-history-light.svg"
-    />
-    <img
-      alt="Codex Switch Star History"
-      src="assets/star-history/star-history-light.svg"
-    />
-  </picture>
-</a>
+Remote AI is independently developed third-party software and is not affiliated with, associated with, authorized by, endorsed by, or officially partnered with OpenAI or its Codex products.

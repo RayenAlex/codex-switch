@@ -23,19 +23,42 @@ const ASSETS: &[(&str, &[u8])] = assets![
     "permissions.js",
     "site-access.js",
     "driver.js",
+    "debugger-connections.js",
     "rendering.js",
     "tab-indicator.js",
+    "pointer.js",
+    "pointer-overlay.js",
     "tab-groups.js",
+    "target-queue.js",
+    "finish-task.js",
     "frame-sessions.js",
     "snapshot.js",
+    "console-logs.js",
+    "console-format.js",
+    "console-buffer.js",
+    "console-runtime.js",
+    "console-objects.js",
+    "console-scope.js",
+    "console-target.js",
+    "console-workers.js",
+    "worker-driver.js",
     "actions.js",
     "operations.js",
     "popup.html",
     "popup.js",
+    "sidepanel.html",
+    "sidepanel.js",
+    "sidepanel.css",
+    "panel-theme.css",
+    "panel-settings.css",
     "approval.html",
     "approval.js",
     "ui.css",
     "icon.png",
+    "i18n.js",
+    "_locales/zh_CN/messages.json",
+    "_locales/en/messages.json",
+    "_locales/ru/messages.json",
 ];
 
 const BUNDLE_PLACEHOLDER: &str = "__CODEX_SWITCH_CHROME_BUNDLE__";
@@ -101,6 +124,10 @@ pub(super) fn export(root: &Path) -> Result<PathBuf> {
 fn write_asset(target: &Path, bytes: &[u8]) -> Result<()> {
     if fs::read(target).ok().as_deref() == Some(bytes) {
         return Ok(());
+    }
+    // Locale messages live in nested `_locales/<locale>/` folders.
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|_| BrowserError::Storage)?;
     }
     let temporary = target.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
     fs::write(&temporary, bytes).map_err(|_| BrowserError::Storage)?;

@@ -1,3 +1,4 @@
+import { guiText } from "../../i18n/guiText";
 import { guiApi } from "./api";
 import { savePreferences } from "./preferences";
 import { removeSavedProject } from "./projectCatalog";
@@ -8,6 +9,8 @@ interface ProjectHost {
   patch: (patch: Partial<GuiState>) => void;
   report: (error: unknown) => void;
 }
+
+const RECENT_PROJECT_LIMIT = 20;
 
 async function listAllThreads(archived: boolean) {
   const threads: Thread[] = [];
@@ -42,6 +45,22 @@ function removalPatch(state: GuiState, path: string, listed: Thread[]): Partial<
 export class GuiProjects {
   constructor(private host: ProjectHost) {}
 
+  /** Applies a validated remote folder without changing the desktop's selected conversation. */
+  selectRemote = (cwd: string, threadId?: string) => {
+    const state = this.host.getSnapshot();
+    const current = threadId ? state.conversations[threadId] : undefined;
+    if (state.sending || state.connection !== 'ready' || state.removingProject || state.goalBusy || (threadId
+      && (!current || current.activeTurn || state.queued[threadId]?.length || state.compacting === threadId
+        || state.deleting === threadId
+        || state.approvals.some(event => event.params.threadId === threadId)))) return false;
+    this.host.patch({ projects: [...new Set([cwd, ...state.projects])].slice(0, RECENT_PROJECT_LIMIT),
+      ...(threadId ? { projectOverrides: { ...state.projectOverrides, [threadId]: cwd },
+        threads: state.threads.map(thread => thread.id === threadId ? { ...thread, cwd } : thread),
+        ...(state.selected === threadId ? { settings: { ...state.settings, cwd } } : {}) } : {}) });
+    savePreferences(this.host.getSnapshot());
+    return true;
+  };
+
   pin = (path: string) => {
     if (!path) return;
     const { pinnedProjects } = this.host.getSnapshot();
@@ -59,7 +78,7 @@ export class GuiProjects {
       const lists = await Promise.all([listAllThreads(false), listAllThreads(true)]);
       const state = this.host.getSnapshot();
       if (state.sending) {
-        this.host.report("请等待消息发送完成后，再移除项目。");
+        this.host.report(guiText("请等待消息发送完成后，再移除项目。"));
         return false;
       }
       removeSavedProject(path);
@@ -67,7 +86,7 @@ export class GuiProjects {
       savePreferences(this.host.getSnapshot());
       return true;
     } catch {
-      this.host.report("项目未能移除，请重试。对话已保留。");
+      this.host.report(guiText("项目未能移除，请重试。对话已保留。"));
       return false;
     } finally { this.host.patch({ removingProject: undefined }); }
   };

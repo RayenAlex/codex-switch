@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useFilePaste } from "./useFilePaste";
+import { guiText } from "../../i18n/guiText";
 import type { GuiController } from "./controller";
 import type { ComposerText } from "./types";
-import { MAX_ATTACHMENTS, type AttachmentReference } from "./attachmentTypes";
+import { attachmentKey, MAX_ATTACHMENTS, type AttachmentReference } from "./attachmentTypes";
+import { validateUploadedFiles } from "../../../../../shared/remote-chat/composerAttachments";
 import { MAX_REPLY_QUOTES, MAX_QUOTE_CHARACTERS, quoteKey, quotedReply, type ReplyQuote } from "./replyQuotes";
 import { queuedMessageText } from "./queuedMessageDraft";
+import { MAX_CONVERSATION_REFERENCES } from "./conversationReferences";
 
 import { IMAGE_TYPES, MAX_IMAGES, MAX_IMAGE_BYTES, readImage, type DraftImage } from "./draftImages";
 export { IMAGE_TYPES, MAX_IMAGES, MAX_IMAGE_BYTES, readImage, type DraftImage } from "./draftImages";
@@ -32,20 +35,31 @@ export function useComposerDraft(key: string, controller: GuiController) {
         mentions: [...previous.mentions, ...mentions],
         attachments: [...(previous.attachments ?? []), ...(recovered.attachments ?? [])],
         images: [...previous.images, ...recovered.images.map((url) =>
-          ({ id: crypto.randomUUID(), name: "图片", url }))] } };
+          ({ id: crypto.randomUUID(), name: guiText("图片"), url }))] } };
     });
   }, [controller, key, recovered]);
   const draft = drafts[key] ?? EMPTY_DRAFT;
-  const update = (change: (value: Draft) => Draft) => setDrafts((values) =>
-    ({ ...values, [key]: change(values[key] ?? EMPTY_DRAFT) }));
+  const latestDrafts = useRef(drafts);
+  latestDrafts.current = drafts;
+  const update = (change: (value: Draft) => Draft) => {
+    const values = latestDrafts.current;
+    latestDrafts.current = { ...values, [key]: change(values[key] ?? EMPTY_DRAFT) };
+    setDrafts(latestDrafts.current);
+  };
   const editText = (text: string) => update((value) => ({ ...value, text, mentions: [] }));
   const editContent = (content: ComposerText) => update((value) => ({ ...value, ...content }));
+  const appendDictation = (text: string) => {
+    if (!text.trim()) return;
+    update((value) => ({ ...value,
+      text: value.text + (value.text && !/\s$/.test(value.text) ? "\n" : "") + text.trim() }));
+  };
   const editQueued = (id: string) => {
     if (submitting.current) return false;
     const message = controller.queue.take(key, id);
     if (!message) return false;
     const restored: Draft = { ...queuedMessageText(message), attachments: message.attachments,
-      images: message.images.map((url, index) => ({ id: crypto.randomUUID(), name: `图片 ${index + 1}`, url })) };
+      images: message.images.map((url, index) => ({ id: crypto.randomUUID(),
+        name: guiText("图片 {value1}", { value1: index + 1 }), url })) };
     update(() => restored);
     return true;
   };
@@ -66,16 +80,28 @@ export function useComposerDraft(key: string, controller: GuiController) {
     ({ ...value, quotes: value.quotes?.filter((item) => quoteKey(item) !== key) }));
   const clearQuotes = () => update((value) => ({ ...value, quotes: [] }));
   const addAttachments = (attachments: AttachmentReference[]) => {
-    if ((draft.attachments?.length ?? 0) + attachments.length > MAX_ATTACHMENTS) {
-      controller.report("每条消息最多添加 32 个文件、文件夹或插件。");
+    const current = latestDrafts.current[key] ?? EMPTY_DRAFT;
+    const combined = [...new Map([...(current.attachments ?? []), ...attachments]
+      .map((item) => [attachmentKey(item), item])).values()];
+    if (combined.filter((item) => item.kind === "conversation").length > MAX_CONVERSATION_REFERENCES) {
+      controller.report("每条消息最多引用 8 个对话。"); return false;
     }
-    update((value) => ({ ...value, attachments: [...new Map([...(value.attachments ?? []), ...attachments]
-      .map((item) => [item.path, item])).values()].slice(0, MAX_ATTACHMENTS) }));
+    if (combined.length > MAX_ATTACHMENTS) {
+      controller.report("每条消息最多添加 32 个附件或对话引用。"); return false;
+    }
+    try { validateUploadedFiles(combined, 'relay'); }
+    catch (cause) {
+      controller.report(cause instanceof Error ? cause.message : "文件粘贴失败，请重新复制后再试。"); return false;
+    }
+    update((value) => ({ ...value, attachments: combined }));
+    return true;
   };
   const removeAttachment = (path: string) => update((value) =>
-    ({ ...value, attachments: value.attachments?.filter((item) => item.path !== path) }));
+    ({ ...value, attachments: value.attachments?.filter((item) => attachmentKey(item) !== path) }));
   const removeImage = (id: string) => update((value) =>
     ({ ...value, images: value.images.filter((image) => image.id !== id) }));
+  const editImage = (id: string, url: string) => update((value) =>
+    ({ ...value, images: value.images.map((image) => image.id === id ? { ...image, url } : image) }));
   const addImages = (files: File[]) => {
     const valid = files.filter((file) => IMAGE_TYPES.includes(file.type) && file.size > 0
       && file.size <= MAX_IMAGE_BYTES);
@@ -121,7 +147,7 @@ export function useComposerDraft(key: string, controller: GuiController) {
       }
     } finally { submitting.current = false; }
   };
-  return { draft, reading, editText, editContent, removeImage, addImages, paste, pasteKeyDown,
+  return { draft, reading, editText, editContent, appendDictation, removeImage, editImage, addImages, paste, pasteKeyDown,
     send, addAttachments, removeAttachment,
     addQuote, removeQuote, clearQuotes, editQueued };
 }

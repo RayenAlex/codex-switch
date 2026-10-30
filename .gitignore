@@ -1,10 +1,14 @@
 node_modules/
 .nx/
+.idea/
 dist/
 apps/*/dist/
+apps/admin-go/public/
 apps/backend/coverage/
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/installer-helper/target/
+crates/chat-connectivity/target/
+apps/native/plugins/connectivity/build/
 apps/native/android/
 apps/native/ios/
 apps/native/.expo/
@@ -18,4 +22,8 @@ apps/desktop/src-tauri/.updater/
 .webview2-test
 .tar.gz
 .codex-tmp
+/.codex-tmp-*
 .worktrees/
+apps/desktop/src-tauri/resources/remote-desktop/runtime/
+apps/desktop/src-tauri/resources/desktop-service/*
+!apps/desktop/src-tauri/resources/desktop-service/README.md

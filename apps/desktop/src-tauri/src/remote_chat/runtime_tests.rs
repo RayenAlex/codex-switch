@@ -1,6 +1,45 @@
 use super::*;
 
 #[test]
+fn terminal_owner_is_stable_across_connections_and_cannot_be_supplied_by_a_peer() {
+    let mut runtime = connected_identity();
+    let delivered = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let captured = delivered.clone();
+    runtime.bridge = Some(Bridge::new(
+        "terminal-test".into(),
+        Box::new(move |batch| {
+            captured.lock().unwrap().extend(batch.events);
+            true
+        }),
+    ));
+    let peer = |id: &str| {
+        json!({ "type": "peer-open", "sessionId": id, "terminalOwner": "forged" }).to_string()
+    };
+    runtime.receive(&peer("first")).unwrap();
+    runtime.config.as_mut().unwrap().access_token = "renewed".into();
+    runtime.receive(&peer("second")).unwrap();
+    runtime.config.as_mut().unwrap().owner = "another-account".into();
+    runtime.receive(&peer("third")).unwrap();
+    runtime.bridge.as_mut().unwrap().flush();
+    let owners: Vec<_> = delivered
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|envelope| match &envelope.event {
+            Event::Message { data } => {
+                let message: serde_json::Value = serde_json::from_str(data).unwrap();
+                Some(message["terminalOwner"].clone())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(owners.len(), 3);
+    assert_eq!(owners[0], owners[1]);
+    assert_ne!(owners[1], owners[2]);
+    assert_ne!(owners[0], "forged");
+}
+
+#[test]
 fn coordinator_updates_upload_limits_and_owner_changes_reset_them() {
     let mut runtime = connected_identity();
     runtime
@@ -21,9 +60,10 @@ fn coordinator_updates_upload_limits_and_owner_changes_reset_them() {
     );
 }
 
-fn connected_identity() -> Runtime {
+pub(super) fn connected_identity() -> Runtime {
     let mut runtime = Runtime::default();
     runtime.command(Command::Attach {
+        bulk: None,
         client_id: "view".into(),
         deliver: Box::new(|_| true),
     });
@@ -58,6 +98,51 @@ fn renewal_preserves_resumes_but_logout_and_owner_changes_revoke_them() {
     runtime.configure(None);
     assert!(!runtime.sessions.contains("phone"));
     assert!(runtime.config.is_none());
+}
+
+#[test]
+fn negotiated_renewal_keeps_the_socket_generation_and_session_proofs() {
+    use std::net::TcpListener;
+    use tungstenite::protocol::Role;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let stream = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+    let (remote, _) = listener.accept().unwrap();
+    remote
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+    let mut server = WebSocket::from_raw_socket(remote, Role::Server, None);
+    let mut runtime = connected_identity();
+    runtime.socket = Some(WebSocket::from_raw_socket(
+        MaybeTlsStream::Plain(stream),
+        Role::Client,
+        None,
+    ));
+    runtime.registered = true;
+    runtime
+        .receive(r#"{"type":"chat-policy","authRenewal":true,"policy":{}}"#)
+        .unwrap();
+    let generation = runtime.generation;
+    let proof = serde_json::to_value(runtime.sessions.authentication()).unwrap();
+    let mut config = runtime.config.clone().unwrap();
+    config.access_token = "renewed-secret".into();
+    runtime.configure(Some(config));
+    let frame: serde_json::Value =
+        serde_json::from_str(server.read().unwrap().to_text().unwrap()).unwrap();
+    assert_eq!(
+        frame,
+        json!({"type": "renew-auth", "accessToken": "renewed-secret"})
+    );
+    assert_eq!(runtime.generation, generation);
+    assert!(runtime.socket.is_some());
+    assert!(runtime.registered);
+    assert_eq!(
+        serde_json::to_value(runtime.sessions.authentication()).unwrap(),
+        proof
+    );
+    runtime.configure(None);
+    assert!(runtime.socket.is_none());
+    assert!(!runtime.sessions.contains("phone"));
 }
 
 #[test]

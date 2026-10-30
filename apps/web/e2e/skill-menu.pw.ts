@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { connect, fixtureUrl, login, operationCount } from './chat-helpers';
+import { connect, fixtureUrl, login, operationCount, state } from './chat-helpers';
 
 test.beforeEach(async ({ page, request }) => {
   await request.post(`${fixtureUrl}/test/reset`);
@@ -15,14 +15,18 @@ test('navigates enabled options with arrows, wraps and keeps the active option v
   const input = page.getByRole('textbox', { name: '聊天消息' });
   const active = page.locator('.chat-menu-options [aria-current="true"]');
   const popover = page.locator('.chat-composer-popover');
+  const options = page.locator('.chat-menu-options [role="menuitem"]:not(:disabled)');
+  const nextLabel = await options.nth(1).getAttribute('aria-label');
+  const lastLabel = await options.last().getAttribute('aria-label');
+  expect(await options.count()).toBeGreaterThan(30);
   await expect(page.getByRole('menuitem', { name: '压缩上下文' })).toBeDisabled();
   await expect(active).toHaveAccessibleName('目标模式');
   await input.press('ArrowDown');
-  await expect(active).toHaveAccessibleName('使用技能 skill-0');
+  await expect(active).toHaveAccessibleName(nextLabel!);
   await input.press('ArrowUp');
   await expect(active).toHaveAccessibleName('目标模式');
   await input.press('ArrowUp');
-  await expect(active).toHaveAccessibleName('使用技能 代码检查');
+  await expect(active).toHaveAccessibleName(lastLabel!);
   await expect(input).toBeFocused();
   await expect(input).toHaveAttribute('aria-activedescendant', (await active.getAttribute('id'))!);
   await expect.poll(() => popover.evaluate(node => node.scrollTop)).toBeGreaterThan(0);
@@ -89,17 +93,21 @@ test('leaves composition keys and modified arrows to the input', async ({ page, 
     await expect(input).toHaveValue('/review');
   }
   await input.fill('/');
+  const nextLabel = await page.locator('.chat-menu-options [role="menuitem"]:not(:disabled)')
+    .nth(1).getAttribute('aria-label');
   await input.press('Shift+ArrowDown');
   await expect(active).toHaveAccessibleName('目标模式');
   await input.press('ArrowDown');
-  await expect(active).toHaveAccessibleName('使用技能 skill-0');
+  await expect(active).toHaveAccessibleName(nextLabel!);
   expect(await operationCount(request, 'send')).toBe(0);
 });
 
 test('uses the keyboard for plugin suggestions after loading', async ({ page, request }) => {
   const input = page.getByRole('textbox', { name: '聊天消息' });
   const active = page.locator('.chat-menu-options [aria-current="true"]');
-  await input.fill('@');
+  await input.fill('');
+  await page.getByRole('button', { name: '添加内容', exact: true }).click();
+  await page.getByRole('menuitem', { name: '插件', exact: true }).click();
   await expect(page.getByRole('menuitem', { name: '使用插件 GitHub' })).toBeAttached();
   await expect(active).toHaveAccessibleName('使用插件 GitHub');
   await input.press('ArrowDown');
@@ -112,6 +120,28 @@ test('uses the keyboard for plugin suggestions after loading', async ({ page, re
   await expect(input).toHaveValue('');
   await expect(input).toBeFocused();
   expect(await operationCount(request, 'send')).toBe(0);
+});
+
+test('references a remote conversation with @ and sends it without losing the message', async ({ page, request }) => {
+  const input = page.getByRole('textbox', { name: '聊天消息' });
+  await input.fill('@移动端');
+  const menu = page.getByRole('menu', { name: '对话', exact: true });
+  await expect(menu.getByRole('menuitem')).toHaveCount(1);
+  await expect(menu).toContainText('移动端聊天体验');
+  await page.screenshot({ path: `../../.codex-tmp/web-conversation-${page.viewportSize()!.width}.png` });
+  expect((await page.locator('.chat-composer-popover').boundingBox())!.width).toBeLessThanOrEqual(400);
+  await expect(page.getByLabel('插件列表')).toHaveCount(0);
+  await input.press('Tab');
+  await expect(page.getByText('@移动端聊天体验', { exact: true })).toBeVisible();
+  await expect(input).toHaveValue('');
+  expect(await operationCount(request, 'send')).toBe(0);
+  await input.fill('参考这个对话继续');
+  await page.getByRole('button', { name: '发送消息', exact: true }).click();
+  await expect.poll(async () => (await state(request)).operations.find(entry => entry.operation === 'send'))
+    .toMatchObject({ text: '参考这个对话继续', attachments: [
+      { kind: 'conversation', name: '移动端聊天体验', path: 'codex-thread://demo-chat' },
+    ] });
+  await expect(page.getByText('@移动端聊天体验', { exact: true })).toHaveCount(0);
 });
 
 for (const target of ['.chat-menu-options', '.chat-command-menu header']) {

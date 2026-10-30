@@ -21,6 +21,9 @@ struct ChatSseReader<R> {
     event_type: String,
     text: String,
     reasoning_content: String,
+    inline_reasoning: inline_reasoning::InlineReasoning,
+    reasoning_details: chat_reasoning::ReasoningDetails,
+    has_explicit_reasoning: bool,
     reasoning_id: String,
     reasoning_output_index: Option<usize>,
     message_output_index: Option<usize>,
@@ -28,12 +31,17 @@ struct ChatSseReader<R> {
     tools: BTreeMap<usize, StreamingToolCall>,
     tool_context: CodexToolContext,
     continuation_scope: Option<chat_bridge_continuation::ContinuationScope>,
+    request_history: Vec<Value>,
     metadata: ChatCompletionMetadata,
     termination: Option<ChatCompletionStatus>,
     completed: bool,
 }
 
 impl<R: BufRead> ChatSseReader<R> {
+    fn response_id(&self) -> &str {
+        &self.response_id
+    }
+
     fn new(
         upstream: R,
         model: String,
@@ -55,6 +63,9 @@ impl<R: BufRead> ChatSseReader<R> {
             event_type: String::new(),
             text: String::new(),
             reasoning_content: String::new(),
+            inline_reasoning: inline_reasoning::InlineReasoning::default(),
+            reasoning_details: chat_reasoning::ReasoningDetails::default(),
+            has_explicit_reasoning: false,
             reasoning_id,
             reasoning_output_index: None,
             message_output_index: None,
@@ -62,10 +73,16 @@ impl<R: BufRead> ChatSseReader<R> {
             tools: BTreeMap::new(),
             tool_context,
             continuation_scope,
+            request_history: Vec::new(),
             metadata: ChatCompletionMetadata::default(),
             termination: None,
             completed: false,
         }
+    }
+
+    fn with_request_history(mut self, request_history: Vec<Value>) -> Self {
+        self.request_history = request_history;
+        self
     }
 
     fn has_pending(&self) -> bool {
@@ -125,21 +142,23 @@ impl<R: BufRead> ChatSseReader<R> {
             self.finish();
             return;
         }
-        let Ok(value) = serde_json::from_str::<Value>(&data) else {
-            self.fail("The upstream response contained an unreadable event.");
-            return;
+        let value = match serde_json::from_str::<Value>(&data) {
+            Ok(value) => value,
+            Err(error) => {
+                self.fail(&request_error::RequestError::json(request_error::Stage::Chat, &error).to_string());
+                return;
+            }
         };
         self.metadata.observe(&value);
         if event_type == "error" || chat_completion_failed(&value) {
-            self.fail("The upstream service could not complete the response.");
+            self.fail(&request_error::upstream(request_error::Stage::Chat, &value).to_string());
             return;
         }
         self.observe_termination(&value);
-        if let Some(reasoning) = chat_stream_reasoning_delta(&value) {
-            self.append_reasoning_delta(reasoning);
-        }
+        self.observe_reasoning(&value);
         if let Some(delta) = chat_stream_delta_text(&value) {
-            self.append_text_delta(delta);
+            let split = self.inline_reasoning.push(delta);
+            self.append_split_content(split);
         }
         if let Some(tool_calls) = value
             .pointer("/choices/0/delta/tool_calls")
@@ -158,15 +177,19 @@ impl<R: BufRead> ChatSseReader<R> {
         if self.completed {
             return;
         }
-        let termination = self.termination.unwrap_or(ChatCompletionStatus::Failed(
-            "The upstream response ended before it was complete.",
+        self.flush_inline_reasoning();
+        let termination = self.termination.take().unwrap_or_else(|| ChatCompletionStatus::Failed(
+            request_error::RequestError::new(request_error::Stage::Chat,
+                request_error::Problem::MissingTerminal).to_string(),
         ));
         if termination != ChatCompletionStatus::Completed {
             self.finish_unsuccessfully(termination);
             return;
         }
         if !self.tools.values().all(streaming_tool_arguments_complete) {
-            self.fail("The upstream response ended with an incomplete tool call.");
+            self.fail(error_messages::localized(
+                "Chat 响应中的工具调用缺少名称，或参数 JSON 不完整。",
+            ));
             return;
         }
         let (tool_events, tool_items) = self.finalize_tools();
@@ -196,24 +219,42 @@ impl<R: BufRead> ChatSseReader<R> {
         let Some(scope) = self.continuation_scope.as_ref() else {
             return;
         };
+        chat_bridge_continuation::capture_reasoning(
+            scope,
+            &self.reasoning_id,
+            &self.reasoning_content,
+        );
+        let details = self.reasoning_details.value();
+        if let Some(details) = &details {
+            chat_bridge_continuation::capture_reasoning_details(scope, &self.reasoning_id, details);
+        }
         let tool_calls = self
             .tools
             .values()
             .filter(|tool| !tool.call_id.is_empty())
             .map(streaming_continuation_tool_call)
             .collect::<Vec<_>>();
-        if tool_calls.is_empty() {
-            return;
-        }
-        let message = json!({
-            "reasoning_content": self.reasoning_content,
-            "tool_calls": tool_calls
+        let mut message = json!({
+            "content": self.text,
+            "reasoning_content": self.reasoning_content
         });
+        if !tool_calls.is_empty() {
+            message["tool_calls"] = json!(tool_calls);
+        }
+        if let Some(details) = details {
+            message["reasoning_details"] = details;
+        }
         chat_bridge_continuation::capture_message(scope, &message);
+        chat_bridge_continuation::capture_response(
+            scope,
+            &self.response_id,
+            &message,
+            &self.request_history,
+        );
     }
 
-    fn fail(&mut self, message: &'static str) {
-        self.finish_unsuccessfully(ChatCompletionStatus::Failed(message));
+    fn fail(&mut self, message: &str) {
+        self.finish_unsuccessfully(ChatCompletionStatus::Failed(message.to_string()));
     }
 
     fn allocate_output_index(&mut self) -> usize {
@@ -249,14 +290,7 @@ impl<R: BufRead> ChatSseReader<R> {
         if delta.is_empty() {
             return;
         }
-        if self.reasoning_output_index.is_none() {
-            let output_index = self.allocate_output_index();
-            self.reasoning_output_index = Some(output_index);
-            self.push_pending(response_reasoning_start_sse(
-                &self.reasoning_id,
-                output_index,
-            ));
-        }
+        self.ensure_reasoning_started();
         self.reasoning_content.push_str(delta);
         let output_index = self.reasoning_output_index.unwrap_or(0);
         self.push_pending(response_reasoning_delta_sse(
@@ -264,6 +298,42 @@ impl<R: BufRead> ChatSseReader<R> {
             output_index,
             delta,
         ));
+    }
+
+    fn ensure_reasoning_started(&mut self) {
+        if self.reasoning_output_index.is_some() {
+            return;
+        }
+        let output_index = self.allocate_output_index();
+        self.reasoning_output_index = Some(output_index);
+        self.push_pending(response_reasoning_start_sse(
+            &self.reasoning_id,
+            output_index,
+        ));
+    }
+
+    fn observe_reasoning(&mut self, value: &Value) {
+        if let Some(delta) = value.pointer("/choices/0/delta") {
+            self.reasoning_details.observe(delta);
+        }
+        if let Some(reasoning) = chat_stream_reasoning_delta(value) {
+            self.has_explicit_reasoning = true;
+            self.append_reasoning_delta(&reasoning);
+        } else if !self.reasoning_details.is_empty() {
+            self.ensure_reasoning_started();
+        }
+    }
+
+    fn append_split_content(&mut self, split: inline_reasoning::SplitText) {
+        if !self.has_explicit_reasoning {
+            self.append_reasoning_delta(&split.reasoning);
+        }
+        self.append_text_delta(&split.text);
+    }
+
+    fn flush_inline_reasoning(&mut self) {
+        let split = self.inline_reasoning.finish();
+        self.append_split_content(split);
     }
 }
 
@@ -285,7 +355,8 @@ impl<R: BufRead> Read for ChatSseReader<R> {
                     self.finish();
                 }
                 Ok(_) => self.process_line(&line),
-                Err(_) => self.fail("The connection closed before the response was complete."),
+                Err(error) => self.fail(
+                    &request_error::RequestError::io(request_error::Stage::Chat, &error).to_string()),
             }
         }
         Ok(self.drain_pending(target))

@@ -22,6 +22,8 @@ async function mockConversation(page: Page) {
     let result: unknown = {};
     if (command === "codex_gui_cli_status") result = { version: "0.1.0" };
     if (command === "codex_gui_connect") result = [];
+    if (command === "codex_gui_queue_read") result = { revision: 0, threads: {} };
+    if (command === "codex_gui_queue_save") result = args.snapshot;
     if (command === "codex_gui_events") result = { cursor: { streamId: "test", sequence: events.length },
       reset: false, events: args.cursor ? events.slice(args.cursor.sequence) : [] };
     if (command === "codex_gui_model_settings") result = { threadId: null, selection: null, revision: 0 };
@@ -31,6 +33,9 @@ async function mockConversation(page: Page) {
       primaryRemainingPercent: null, primaryRemainingAggregated: false, providerEstimatedCost: null };
     if (command === "codex_gui_request") {
       let data: unknown = { data: [], nextCursor: null };
+      if (args.request.operation === "models") data = { data: [{ id: "test-model", model: "test-model",
+        displayName: "测试模型", isDefault: true, defaultReasoningEffort: "medium",
+        supportedReasoningEfforts: [{ reasoningEffort: "medium", description: "" }] }], nextCursor: null };
       if (args.request.operation === "list") data = { data: [thread], nextCursor: null };
       if (["read", "resume"].includes(args.request.operation)) data = { thread };
       if (args.request.operation === "goals") data = { goals: [] };
@@ -51,10 +56,10 @@ for (const dark of [false, true]) {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/e2e/gui-features-harness.html" + (dark ? "?dark=1" : ""));
     await page.getByRole("button", { name: "文件修改展示", exact: true }).click();
-    const badge = page.getByRole("button", { name: /^查看本轮修改：.*个文件已更改/ });
+    const badge = page.getByRole("button", { name: /^查看本轮修改：已编辑 .* 个文件/ });
     const cards = page.locator('[data-turn-id="turn"] section[aria-label]');
     const editor = page.getByRole("textbox", { name: "消息", exact: true });
-    await expect(badge).toHaveText("1 个文件已更改+23−17");
+    await expect(badge).toHaveText("已编辑 1 个文件+23−17");
     await expect(cards).toHaveCount(0);
     await editor.fill("修改进行中仍可继续输入");
     const before = Number(await page.getByLabel("刷新次数").textContent());
@@ -62,7 +67,7 @@ for (const dark of [false, true]) {
       backend.turn.items.push(item);
       backend.notify({ method: "item/completed", params: { item } });
     }
-    await expect(badge).toHaveText("3 个文件已更改+67−49");
+    await expect(badge).toHaveText("已编辑 3 个文件+67−49");
     await expect(cards).toHaveCount(0);
     await expect(editor).toHaveText("修改进行中仍可继续输入");
     expect(Number(await page.getByLabel("刷新次数").textContent())).toBeGreaterThan(before);
@@ -73,7 +78,7 @@ for (const dark of [false, true]) {
     expect(bounds.y + bounds.height).toBeLessThan((await editor.boundingBox())!.y);
     await page.screenshot({ path: `../../.codex-tmp/running-changes-${dark ? "dark" : "light"}.png` });
     await badge.click();
-    await expect(page.getByRole("complementary", { name: "文件更改详情" })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "文件更改详情" })).toBeVisible();
     await expect(page.getByLabel("src/first.ts 的代码差异")).toContainText("new 0");
     await page.getByRole("button", { name: "关闭详情抽屉", exact: true }).click();
     backend.turn.diff = backend.turn.items.flatMap((item) => item.changes ?? []).map((file) =>

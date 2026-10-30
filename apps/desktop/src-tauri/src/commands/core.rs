@@ -4,8 +4,6 @@ const OFFICIAL_CONVERSATION_PROVIDER: &str = "openai";
 const LOCAL_PROXY_CONVERSATION_PROVIDER: &str = "codex-switch-local";
 #[cfg(unix)]
 const LEGACY_CODEX_COMMAND: &str = "codex";
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x08000000;
 static ACCOUNT_AUTO_SWITCH_STATE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static ACCOUNT_SWITCH_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
@@ -17,32 +15,35 @@ pub(crate) fn account_switch_lock() -> &'static Mutex<()> {
     ACCOUNT_SWITCH_LOCK.get_or_init(|| Mutex::new(()))
 }
 
-/// Import the externally managed credential only once, when Codex Switch starts.
+/// Import the externally managed credential only once, when Remote AI starts.
 /// Later operations deliberately use the managed account store instead.
 pub(crate) fn initialize_local_state<R: Runtime>(app: &tauri::AppHandle<R>) {
     let _ = sync_current_into_store(app);
     refresh_local_codex_path(app);
 }
 
-#[cfg(any(target_os = "windows", target_os = "macos"))]
 #[derive(Clone)]
 pub(crate) struct ChatGptLaunchTarget {
     executable: std::path::PathBuf,
 }
 
-#[cfg(not(any(target_os = "windows", target_os = "macos")))]
-pub(crate) type ChatGptLaunchTarget = String;
-
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum ManagedFolder {
     CodexHome,
+    RemoteAiHome,
     AccountStore,
 }
 
 #[tauri::command]
-pub(crate) fn get_app_info<R: Runtime>(app: tauri::AppHandle<R>) -> Result<AppInfo, String> {
-    let paths = resolve_paths(&app)?;
+pub(crate) async fn get_app_info<R: Runtime>(app: tauri::AppHandle<R>) -> Result<AppInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || app_info_blocking(&app))
+        .await
+        .map_err(|_| "暂时无法读取应用信息，请稍后重试。".to_string())?
+}
+
+fn app_info_blocking<R: Runtime>(app: &tauri::AppHandle<R>) -> Result<AppInfo, String> {
+    let paths = resolve_paths(app)?;
     Ok(AppInfo {
         codex_home: paths.codex_home.display().to_string(),
         auth_path: paths.current_auth.display().to_string(),
@@ -54,20 +55,34 @@ pub(crate) fn get_app_info<R: Runtime>(app: tauri::AppHandle<R>) -> Result<AppIn
 }
 
 #[tauri::command]
-pub(crate) fn open_managed_folder<R: Runtime>(
+pub(crate) async fn open_managed_folder<R: Runtime>(
     app: tauri::AppHandle<R>,
     target: ManagedFolder,
 ) -> Result<(), String> {
-    let paths = resolve_paths(&app)?;
+    tauri::async_runtime::spawn_blocking(move || open_managed_folder_blocking(&app, target))
+        .await
+        .map_err(|_| "暂时无法打开目录，请稍后重试。".to_string())?
+}
+
+fn open_managed_folder_blocking<R: Runtime>(
+    app: &tauri::AppHandle<R>,
+    target: ManagedFolder,
+) -> Result<(), String> {
+    use tauri::Manager;
+
     let path = match target {
-        ManagedFolder::CodexHome => paths.codex_home,
-        ManagedFolder::AccountStore => paths.accounts,
+        ManagedFolder::CodexHome => resolve_paths(app)?.codex_home,
+        ManagedFolder::RemoteAiHome => app
+            .path()
+            .app_data_dir()
+            .map_err(|_| "暂时无法找到 RemoteAI Home 目录，请稍后重试。".to_string())?,
+        ManagedFolder::AccountStore => resolve_paths(app)?.accounts,
     };
     fs::create_dir_all(&path)
-        .map_err(|error| format!("Failed to create {}: {error}", path.display()))?;
+        .map_err(|_| "无法创建目录，请检查文件夹权限后重试。".to_string())?;
     app.opener()
         .open_path(path.display().to_string(), None::<&str>)
-        .map_err(|error| format!("Failed to open {}: {error}", path.display()))
+        .map_err(|_| "无法打开目录，请稍后重试。".to_string())
 }
 
 pub(crate) fn list_accounts_blocking<R: Runtime>(

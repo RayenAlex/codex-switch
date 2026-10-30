@@ -3,12 +3,52 @@ fn dispatch_gui_command(app: AppHandle, command: &str, args: Value) -> Result<Va
     use tauri::Manager;
 
     match command {
+        "codex_gui_dictation_prepare" => serialize(block_on(codex_gui::dictation::codex_gui_dictation_prepare(
+            app.clone(), app.state::<GuiState>(),
+        ))),
+        "codex_gui_dictation_transcribe" => serialize(block_on(codex_gui::dictation::codex_gui_dictation_transcribe(
+            app.clone(), app.state::<GuiState>(), argument(&args, "request")?,
+        ))),
+        "codex_gui_dictation_cancel" => serialize(block_on(codex_gui::dictation::codex_gui_dictation_cancel(
+            app.state::<GuiState>(), argument(&args, "sessionId")?,
+        ))),
+        "remote_ai_help_cancel" => serialize(block_on(codex_gui::help_assistant::control::remote_ai_help_cancel(
+            app.state::<GuiState>(), argument(&args, "requestId")?,
+        ))),
+        "remote_ai_help_questions" => serialize(block_on(codex_gui::help_assistant::remote_ai_help_questions(app))),
+        "remote_ai_help_status" => serialize(block_on(codex_gui::help_assistant::remote_ai_help_status(
+            app.clone(), app.state::<GuiState>(),
+        ))),
+        "remote_ai_help_ask" => serialize(block_on(codex_gui::help_assistant::remote_ai_help_ask(
+            app.clone(), app.state::<GuiState>(), argument(&args, "request")?,
+        ))),
+        "codex_gui_queue_read" => serialize(block_on(codex_gui::queue_store::codex_gui_queue_read(app))),
+        "codex_gui_queue_save" => serialize(block_on(codex_gui::queue_store::codex_gui_queue_save(
+            app, argument(&args, "snapshot")?,
+        ))),
+        "codex_gui_request_settings" => serialize(block_on(
+            crate::local_proxy::gui_runtime::codex_gui_request_settings(app),
+        )),
+        "codex_gui_set_fast_mode" => serialize(block_on(
+            crate::local_proxy::gui_runtime::codex_gui_set_fast_mode(app, argument(&args, "enabled")?),
+        )),
+        "codex_gui_set_request_speed" => serialize(block_on(
+            crate::local_proxy::gui_runtime::codex_gui_set_request_speed(app, argument(&args, "speed")?),
+        )),
         "codex_gui_context_settings" => serialize(block_on(
             codex_gui::context_settings::codex_gui_context_settings(app, argument(&args, "threadId")?),
         )),
         "codex_gui_set_context_settings" => serialize(block_on(
             codex_gui::context_settings::codex_gui_set_context_settings(
                 app, argument(&args, "threadId")?, argument(&args, "settings")?,
+            ),
+        )),
+        "codex_gui_model_context_settings" => serialize(block_on(
+            codex_gui::model_context::codex_gui_model_context_settings(app),
+        )),
+        "codex_gui_set_model_context" => serialize(block_on(
+            codex_gui::model_context::codex_gui_set_model_context(
+                app, argument(&args, "model")?, argument(&args, "capacity")?,
             ),
         )),
         "codex_gui_scheduled_tasks" => serialize(block_on(
@@ -28,12 +68,23 @@ fn dispatch_gui_command(app: AppHandle, command: &str, args: Value) -> Result<Va
         "codex_gui_set_auto_switch_settings" => serialize(block_on(
             codex_gui::auto_switch_settings::codex_gui_set_auto_switch_settings(app, argument(&args, "settings")?),
         )),
+        "codex_gui_system_prompt_settings" => serialize(block_on(
+            crate::local_proxy::gui_system_prompts::codex_gui_system_prompt_settings(app),
+        )),
+        "codex_gui_set_system_prompt_settings" => serialize(block_on(
+            crate::local_proxy::gui_system_prompts::codex_gui_set_system_prompt_settings(
+                app, argument(&args, "settings")?,
+            ),
+        )),
         "codex_gui_account_selection" => serialize(block_on(
             codex_gui::account_selection::codex_gui_account_selection(app),
         )),
         "codex_gui_switch_account" => serialize(block_on(
             codex_gui::account_selection::codex_gui_switch_account(app, argument(&args, "selection")?),
         )),
+        "codex_gui_git_tool" => serialize(block_on(codex_gui::git::tool::codex_gui_git_tool(
+            app.clone(), app.state::<codex_gui::git::GitState>(), argument(&args, "request")?,
+        ))),
         "codex_gui_git" => serialize(block_on(codex_gui::git::codex_gui_git(
             app.clone(), app.state::<codex_gui::git::GitState>(), argument(&args, "request")?,
         ))),

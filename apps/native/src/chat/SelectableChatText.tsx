@@ -1,20 +1,17 @@
 import { useContext, useEffect, useRef } from 'react';
-import { DeviceEventEmitter, findNodeHandle, NativeModules, Text,
+import { DeviceEventEmitter, findNodeHandle, Text,
   type GestureResponderHandlers, type TextProps } from 'react-native';
 import { QuoteSourceContext, useChatQuotes } from './ChatQuotes';
 import { CopyTextButton, type CopyAction } from './CopyTextButton';
-
-interface SelectionBridge {
-  configure: (tag: number, enabled: boolean, trailingControls: number) => void;
-  detach: (tag: number) => void;
-}
-const bridge = NativeModules.ChatTextSelection as SelectionBridge | undefined;
+import { nativeTextSelection as bridge } from './nativeTextSelection';
+import { useChatTextLayout } from './useChatTextLayout';
 
 export function SelectableChatText({ onLayout, children, copy, ...props }: TextProps & {
   copy?: CopyAction | CopyAction[];
 }) {
   const actions = copy ? Array.isArray(copy) ? copy : [copy] : [];
   const ref = useRef<Text>(null);
+  const layout = useChatTextLayout(ref, children);
   const source = useContext(QuoteSourceContext);
   const quotes = useChatQuotes();
   const enabled = Boolean(source && quotes?.enabled);
@@ -43,8 +40,11 @@ export function SelectableChatText({ onLayout, children, copy, ...props }: TextP
     configure();
     return false;
   } };
-  return <Text {...props} {...responder} ref={ref} selectable onLayout={(event) => {
-    configure();
-    onLayout?.(event);
-  }}>{children}{actions.map((action) => <CopyTextButton key={action.label} {...action} />)}</Text>;
+  return <Text {...props} {...responder} ref={ref} selectable
+    style={[props.style, layout.height === undefined ? undefined : { height: layout.height }]}
+    onLayout={(event) => {
+      layout.onLayout(event);
+      configure();
+      onLayout?.(event);
+    }}>{children}{actions.map((action) => <CopyTextButton key={action.label} {...action} />)}</Text>;
 }

@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/styles';
+import { t, useLanguage } from '../i18n';
 import { useEffect, useLayoutEffect, useState, type ReactNode, type RefObject } from 'react';
 import { BackHandler, Pressable, StyleSheet, View } from 'react-native';
 import { useChatOverlay } from './ChatOverlay';
@@ -16,6 +18,8 @@ const MAX_PANEL_WIDTH = 400;
 const MAX_PANEL_HEIGHT = 340;
 
 export function ComposerPopover({ anchor, anchorHeight, wide = false, children, close }: Props) {
+  const popoverStyles = usePopoverStyles();
+  useLanguage();
   const host = useChatOverlay();
   const [position, setPosition] = useState<{ left: number; bottom: number; height: number }>();
   useLayoutEffect(() => {
@@ -38,7 +42,7 @@ export function ComposerPopover({ anchor, anchorHeight, wide = false, children, 
     if (!position) return;
     const width = Math.min(wide ? MAX_PANEL_WIDTH : MENU_WIDTH, host.size.width - EDGE * 2);
     host.show(<>
-      <Pressable accessibilityRole="button" accessibilityLabel="关闭添加菜单"
+      <Pressable accessibilityRole="button" accessibilityLabel={t("关闭添加菜单")}
         onPress={close} style={StyleSheet.absoluteFill} />
       <View style={[popoverStyles.panel, { width, maxHeight: position.height, bottom: position.bottom,
         left: Math.min(position.left, host.size.width - width - EDGE) }]}>{children}</View>
@@ -48,8 +52,8 @@ export function ComposerPopover({ anchor, anchorHeight, wide = false, children, 
   return null;
 }
 
-const popoverStyles = StyleSheet.create({
-  panel: { position: 'absolute', borderRadius: 26, backgroundColor: '#fff', padding: 10,
+const usePopoverStyles = createThemedStyles((color) => ({
+  panel: { position: 'absolute', borderRadius: 26, backgroundColor: color('#fff', 'surface'), padding: 10,
     shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, shadowOffset: { width: 0, height: 5 },
     elevation: 8, overflow: 'hidden' },
-});
+}));

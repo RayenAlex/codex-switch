@@ -12,6 +12,17 @@ struct OfficialForwardRequest<'a, R: Runtime> {
 fn forward_official<R: Runtime>(
     request: OfficialForwardRequest<'_, R>,
 ) -> Result<UpstreamPayload, String> {
+    if *request.method == Method::Get
+        && matches!(request_path(request.url), "/models" | "/v1/models")
+    {
+        return official_model_cache::with_fallback(request.app, || forward_official_upstream(request));
+    }
+    forward_official_upstream(request)
+}
+
+fn forward_official_upstream<R: Runtime>(
+    request: OfficialForwardRequest<'_, R>,
+) -> Result<UpstreamPayload, String> {
     let OfficialForwardRequest {
         app,
         method,
@@ -51,7 +62,8 @@ fn forward_official<R: Runtime>(
     if invalid_agent_identity_task_response(&credentials.authentication, &payload) {
         diagnostic_retry("agent_identity_task_refresh", Duration::ZERO);
         record_retried_proxy_response(&payload);
-        refresh_agent_identity_task(&mut credentials.authentication, app, &client)?;
+        // Recalculate discovery's remaining credential budget before another network operation.
+        refresh_agent_identity_task(&mut credentials.authentication, app, &http_client()?)?;
         payload = send_official_request(
             &client,
             method,
@@ -73,8 +85,11 @@ fn send_official_request(
     body: &[u8],
     authentication: &OfficialRequestAuthentication,
 ) -> Result<UpstreamPayload, String> {
+    let body = responses_lite::prepare(method, upstream_url, headers, body.to_vec())
+        .map_err(|error| error.wire())?;
     diagnostic_event(json!({
-        "event": "official_request_prepared", "request": diagnostic_request_options(body)
+        "event": "official_request_prepared", "request": diagnostic_request_options(&body),
+        "responsesLite": responses_lite::enabled(headers)
     }));
     let request_method = reqwest_method(method)?;
     let response = send_with_timeout_retries(
@@ -105,12 +120,14 @@ fn send_official_request(
                     }
                 }
             }
-            apply_forward_headers(request, headers, true).body(body.to_vec())
+            let request = apply_forward_headers(request, headers, true);
+            official_model_request::apply_user_agent(request, method, upstream_url, headers)
+                .body(body.to_vec())
         },
         "Official Codex proxy request failed",
     )?;
     let mut payload = quota_sse::inspect_initial_official_sse(stream_response(response)?)?;
-    payload.token_usage_service_tier = forwarded_request_service_tier(body, headers);
+    payload.token_usage_service_tier = forwarded_request_service_tier(&body, headers);
     Ok(payload)
 }
 
@@ -137,6 +154,7 @@ fn official_body_for_upstream_with_tier(
     };
     let removed_incompatible_reasoning =
         remove_incompatible_official_reasoning_from_input(&mut value);
+    let removed_incompatible_message_ids = official_input::remove_incompatible_message_ids(&mut value);
     // ChatGPT's OAuth-backed Codex endpoint rejects the token-limit field that
     // OpenCode's Responses adapter sends. Codex itself leaves this field out,
     // so omit it when forwarding third-party requests to the official service.
@@ -145,6 +163,7 @@ fn official_body_for_upstream_with_tier(
         .is_some_and(|object| object.remove("max_output_tokens").is_some());
     if requested_model(&value).is_some()
         && !removed_incompatible_reasoning
+        && !removed_incompatible_message_ids
         && !removed_unsupported_output_limit
         && service_tier.is_none()
     {
@@ -175,9 +194,14 @@ fn forward_provider(
 ) -> Result<UpstreamPayload, String> {
     let client = http_client()?;
     let upstream_endpoint = upstream_endpoint_for_codex_request(url);
-    let upstream_url = build_upstream_url(&provider.base_url, &upstream_endpoint);
+    let upstream_url = provider_request_options::url(provider, &upstream_endpoint);
     let body = enforce_provider_service_tier(body, headers, provider);
     let body = provider_body_for_upstream(method, &upstream_endpoint, body, provider);
+    let body = apply_provider_body_options(method, &body, provider)?;
+    diagnostic_event(json!({
+        "event": "provider_request_prepared", "request": diagnostic_request_options(&body),
+        "responsesLite": responses_lite::enabled(headers)
+    }));
     let request_method = reqwest_method(method)?;
     let response = send_with_timeout_retries(
         || {
@@ -187,12 +211,16 @@ fn forward_provider(
             } else {
                 request.bearer_auth(provider.api_key.trim())
             };
-            apply_forward_headers(request, headers, true).body(body.clone())
+            provider_request_options::headers(apply_forward_headers(request, headers, true), provider)
+                .body(body.clone())
         },
         "Provider proxy request failed",
     )?;
     let mut payload = stream_response(response)?;
     payload.token_usage_service_tier = forwarded_request_service_tier(&body, headers);
+    if *method == Method::Get && matches!(request_path(&upstream_endpoint), "/models" | "/v1/models") {
+        return responses_lite::provider_catalog(payload);
+    }
     Ok(payload)
 }
 
@@ -203,91 +231,37 @@ fn forward_provider_request(
     body: Vec<u8>,
     provider: &ProviderProfile,
 ) -> Result<UpstreamPayload, String> {
+    if provider_request_options::uses_full_url(provider)
+        && (*method != Method::Post || !is_response_create_endpoint(request_path(url)))
+    {
+        return Err("This endpoint only supports new responses".to_string());
+    }
+    // Validate before automatic API fallback so malformed Lite requests are never replayed as Chat.
+    let body = responses_lite::prepare(method, url, headers, body)
+        .map_err(|error| error.wire())?;
     if provider.kind == ProviderKind::Custom
         && *method == Method::Post
         && is_response_create_endpoint(request_path(url))
     {
         return forward_provider_with_api_fallback(method, url, headers, body, provider);
     }
+    let request = serde_json::from_slice::<Value>(&body).unwrap_or(Value::Null);
+    let format = provider
+        .model_api_formats
+        .get(&selected_provider_model(&request, provider))
+        .copied()
+        .unwrap_or(provider.api_format);
     if is_responses_endpoint(request_path(url))
-        && provider.api_format == ProviderApiFormat::OpenaiChat
+        && matches!(format, ProviderApiFormat::AnthropicMessages | ProviderApiFormat::GeminiGenerateContent)
+    {
+        return Err("This provider does not support this response operation".to_string());
+    }
+    if is_responses_endpoint(request_path(url))
+        && format == ProviderApiFormat::OpenaiChat
     {
         return forward_chat_bridge(method, url, headers, body, provider);
     }
     forward_provider(method, url, headers, body, provider)
-}
-
-fn forward_aggregate_request(
-    request: AggregateForwardRequest<'_>,
-) -> Result<UpstreamPayload, String> {
-    let member_ids = request
-        .target
-        .profiles
-        .iter()
-        .map(|provider| provider.id.clone())
-        .collect::<Vec<_>>();
-    let mut excluded = HashSet::new();
-    let mut last_result = None;
-    loop {
-        let member_id = match aggregate_scheduler::select_member(
-            &request.target.config.id,
-            request.session_id,
-            &member_ids,
-            &excluded,
-        ) {
-            Ok(member_id) => member_id,
-            Err(error) => return last_result.unwrap_or(Err(error)),
-        };
-        if let Some(previous) = last_result.take() {
-            record_discarded_proxy_attempt(&previous);
-        }
-        let provider = request
-            .target
-            .profiles
-            .iter()
-            .find(|provider| provider.id == member_id)
-            .ok_or_else(|| "Aggregate API member does not exist".to_string())?;
-        let provider = aggregate_api::force_aggregate_model(provider, &request.target.config.model);
-        let result = forward_provider_request(
-            request.method,
-            request.url,
-            request.headers,
-            request.body.clone(),
-            &provider,
-        );
-        if !aggregate_result_is_retryable(&result) {
-            aggregate_scheduler::mark_success(&request.target.config.id, &member_id);
-            return result;
-        }
-        aggregate_scheduler::mark_failure(
-            &request.target.config.id,
-            &member_id,
-            request.session_id,
-        );
-        excluded.insert(member_id);
-        last_result = Some(result);
-    }
-}
-
-fn aggregate_result_is_retryable(result: &Result<UpstreamPayload, String>) -> bool {
-    match result {
-        Ok(payload) => matches!(payload.status, 408 | 425 | 429 | 500 | 502 | 503 | 504),
-        Err(error) => {
-            let error = error.to_ascii_lowercase();
-            [
-                "request failed",
-                "timed out",
-                "timeout",
-                "connection",
-                "connect error",
-                "network",
-                "dns",
-                "error sending request",
-            ]
-            .iter()
-            .any(|marker| error.contains(marker))
-        }
-    }
 }
 
 fn forward_provider_with_api_fallback(
@@ -297,32 +271,9 @@ fn forward_provider_with_api_fallback(
     body: Vec<u8>,
     provider: &ProviderProfile,
 ) -> Result<UpstreamPayload, String> {
-    let model = provider_request_model(&body, provider);
-    if let Some(format) = provider.model_api_formats.get(&model).copied() {
-        provider_api_cache::forget_format(&provider.id, &model);
-        return forward_provider_with_format(format, method, url, headers, body, provider);
-    }
-    let preferred = provider_api_cache::cached_format(&provider.id, &provider.base_url, &model)
-        .unwrap_or(provider.api_format);
-    let first =
-        forward_provider_with_format(preferred, method, url, headers, body.clone(), provider);
-    if api_attempt_succeeded(&first) {
-        remember_provider_api_format(provider, &model, preferred);
-        return first;
-    }
-    if first.as_ref().is_ok_and(|payload| payload.status == 429) {
-        return first;
-    }
-
-    let alternate = alternate_api_format(preferred);
-    let second = forward_provider_with_format(alternate, method, url, headers, body, provider);
-    if api_attempt_succeeded(&second) {
-        record_discarded_proxy_attempt(&first);
-        remember_provider_api_format(provider, &model, alternate);
-        return second;
-    }
-    provider_api_cache::forget_format(&provider.id, &model);
-    preferred_protocol_failure(first, second)
+    forward_provider_api(provider, &body, |format| {
+        forward_provider_with_format(format, method, url, headers, body.clone(), provider)
+    })
 }
 
 fn forward_provider_with_format(
@@ -338,52 +289,22 @@ fn forward_provider_with_format(
             forward_provider(method, url, headers, body, provider)
         }
         ProviderApiFormat::OpenaiChat => forward_chat_bridge(method, url, headers, body, provider),
+        ProviderApiFormat::AnthropicMessages => anthropic_upstream::forward(method, headers, body, provider),
+        ProviderApiFormat::GeminiGenerateContent => gemini_upstream::forward(method, headers, body, provider),
     }
 }
 
-fn provider_request_model(body: &[u8], provider: &ProviderProfile) -> String {
-    serde_json::from_slice::<Value>(body)
-        .ok()
-        .map(|value| selected_provider_model(&value, provider))
-        .unwrap_or_else(|| provider.model.clone())
-}
-
-fn alternate_api_format(format: ProviderApiFormat) -> ProviderApiFormat {
-    match format {
-        ProviderApiFormat::OpenaiResponses => ProviderApiFormat::OpenaiChat,
-        ProviderApiFormat::OpenaiChat => ProviderApiFormat::OpenaiResponses,
-    }
-}
-
-fn api_attempt_succeeded(result: &Result<UpstreamPayload, String>) -> bool {
-    result
-        .as_ref()
-        .is_ok_and(|payload| status_ok(payload.status))
-}
-
-fn remember_provider_api_format(
+fn apply_provider_body_options(
+    method: &Method,
+    body: &[u8],
     provider: &ProviderProfile,
-    model: &str,
-    format: ProviderApiFormat,
-) {
-    provider_api_cache::remember_format(&provider.id, &provider.base_url, model, format);
-}
-
-fn preferred_protocol_failure(
-    first: Result<UpstreamPayload, String>,
-    second: Result<UpstreamPayload, String>,
-) -> Result<UpstreamPayload, String> {
-    match (first, second) {
-        (first, Ok(payload)) => {
-            record_discarded_proxy_attempt(&first);
-            Ok(payload)
-        }
-        (Ok(payload), Err(error)) => {
-            crate::error_logs::record_proxy_error(&error, None);
-            Ok(payload)
-        }
-        (Err(first_error), Err(second_error)) => Err(format!(
-            "Provider request failed for both supported API formats: {first_error}; {second_error}"
-        )),
+) -> Result<Vec<u8>, String> {
+    if *method != Method::Post || provider.request_options.as_ref().is_none_or(|options| options.body.is_empty()) {
+        return Ok(body.to_vec());
     }
+    let mut value = serde_json::from_slice(body).map_err(|error|
+        request_error::RequestError::json(request_error::Stage::Request, &error).wire())?;
+    provider_request_options::body(&mut value, provider);
+    serde_json::to_vec(&value).map_err(|_| request_error::RequestError::new(
+        request_error::Stage::Request, request_error::Problem::Encode).wire())
 }

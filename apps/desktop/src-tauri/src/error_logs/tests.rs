@@ -2,14 +2,14 @@ use std::{fs, path::PathBuf};
 
 use super::{database, models::*, sanitize, worker::LogService};
 
-struct Fixture(PathBuf);
+pub(super) struct Fixture(PathBuf);
 
 impl Fixture {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self(std::env::temp_dir().join(format!("codex-switch-error-logs-{}", uuid::Uuid::new_v4())))
     }
 
-    fn database_path(&self) -> PathBuf {
+    pub(super) fn database_path(&self) -> PathBuf {
         self.0.join("logs.sqlite")
     }
 }
@@ -22,7 +22,7 @@ impl Drop for Fixture {
     }
 }
 
-fn entry(source: ErrorLogSource, message: &str) -> NewEntry {
+pub(super) fn entry(source: ErrorLogSource, message: &str) -> NewEntry {
     NewEntry {
         created_at: "2026-09-07T01:02:03Z".to_string(),
         source,
@@ -33,6 +33,68 @@ fn entry(source: ErrorLogSource, message: &str) -> NewEntry {
 
 fn query(limit: u32, before_id: Option<i64>, source: Option<ErrorLogSource>) -> ListQuery {
     ListQuery::new(Some(limit), before_id, source).unwrap()
+}
+
+#[test]
+fn codex_diagnostics_persist_original_details_and_redact_sensitive_values() {
+    let fixture = Fixture::new();
+    let service = LogService::start(fixture.database_path()).unwrap();
+    service.record_codex(
+        "Codex CLI [extract archive entry]: sharing violation (os error 32); \
+        caused by: access denied; path=\"C:\\private\\codex.exe\"; token=private-value",
+    );
+    let page = service
+        .list(query(10, None, Some(ErrorLogSource::Codex)))
+        .unwrap();
+    assert_eq!(page.entries.len(), 1);
+    let message = &page.entries[0].message;
+    assert!(message.contains("extract archive entry"));
+    assert!(message.contains("os error 32"));
+    assert!(message.contains("access denied"));
+    assert!(!message.contains("private"));
+    service.shutdown_for_test().unwrap();
+    let reopened = database::open(&fixture.database_path()).unwrap();
+    assert_eq!(
+        database::list(&reopened, query(10, None, Some(ErrorLogSource::Codex)))
+            .unwrap()
+            .entries
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn legacy_database_migration_preserves_history_and_cleared_record_ids() {
+    for cleared in [false, true] {
+        let fixture = Fixture::new();
+        fs::create_dir_all(fixture.database_path().parent().unwrap()).unwrap();
+        let old = rusqlite::Connection::open(fixture.database_path()).unwrap();
+        old.execute_batch(
+            "CREATE TABLE error_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL,
+            source TEXT NOT NULL CHECK(source IN ('proxy','toast')),
+            message TEXT NOT NULL, status_code INTEGER);
+            CREATE INDEX error_logs_source_id ON error_logs(source, id);
+            INSERT INTO error_logs VALUES (42, 'now', 'toast', 'old entry', NULL);",
+        )
+        .unwrap();
+        if cleared {
+            old.execute("DELETE FROM error_logs", []).unwrap();
+        }
+        drop(old);
+        let mut upgraded = database::open(&fixture.database_path()).unwrap();
+        database::insert(
+            &mut upgraded,
+            entry(ErrorLogSource::Codex, "install failed"),
+        )
+        .unwrap();
+        let page = database::list(&upgraded, query(10, None, None)).unwrap();
+        assert_eq!(page.entries.len(), if cleared { 1 } else { 2 });
+        assert!(page.entries[0].id > 42);
+        assert_eq!(page.entries[0].source, ErrorLogSource::Codex);
+        drop(upgraded);
+        assert!(database::open(&fixture.database_path()).is_ok());
+    }
 }
 
 #[test]

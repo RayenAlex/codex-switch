@@ -12,7 +12,7 @@ import { guiApi } from '../pages/codexGui/api';
 import { ChatSettings } from '../../../web/src/chat/ChatSettings';
 
 vi.mock('../pages/codexGui/api', () => ({ guiApi: { request: vi.fn() } }));
-vi.mock('../api/backend', () => ({ invoke: vi.fn() }));
+vi.mock('../api/backend', () => ({ invoke: vi.fn(), hasLocalBackend: false }));
 vi.mock('../../../web/src/components/AdaptiveSheet', () => ({
   AdaptiveSheet: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
@@ -42,6 +42,17 @@ it('applies context events without a turn id and isolates other conversations', 
   expect(applyChatEvent(next, event({ ...usage, last: { totalTokens: 5 } }, 'other')).selected).toBe(next.selected);
   expect(applyChatEvent(next, { method: 'thread/tokenUsage/updated', params: { threadId: thread.id } })
     .selected?.tokenUsage).toEqual(usage);
+});
+
+it('uses the engine estimate consistently through mobile/web events and history sync', () => {
+  const tokenUsage = { ...usage, last: { totalTokens: 206_357 }, contextTokens: 247_017,
+    modelContextWindow: 258_400 };
+  const state = applyChatEvent({ ...initialChatState(), selected: thread }, event(tokenUsage));
+  expect(contextUsageLabel(state.selected?.tokenUsage)).toBe('上下文 247K / 258.4K Token（96% 已用）');
+  expect(state.selected?.tokenUsage?.last.totalTokens).toBe(206_357);
+  expect(state.selected?.tokenUsage?.total.totalTokens).toBe(usage.total.totalTokens);
+  const compacted = applyChatEvent(state, event({ ...tokenUsage, contextTokens: 16_273 }));
+  expect(contextUsageLabel(compacted.selected?.tokenUsage)).toContain('6% 已用');
 });
 
 it('keeps a live compaction decrease during history reads and accepts newer snapshots', () => {
@@ -80,11 +91,20 @@ it('shows and updates context in settings even while daily usage is still loadin
   const container = document.createElement('div');
   const root = createRoot(container);
   const readUsage = vi.fn(() => new Promise<never>(() => {}));
+  const readConversationMetrics = vi.fn().mockResolvedValue({
+    totalOutputTokens: 0, totalOutputTimeMs: 0, outputRequestCount: 0,
+  });
+  const connection = { deviceName: '测试电脑', chooseDevice: vi.fn(), client: {
+    read: vi.fn().mockResolvedValue({ selection: { kind: 'none' }, choices: [], running: false }),
+    select: vi.fn(), subscribe: vi.fn(() => vi.fn()),
+  } };
   const render = async (tokenUsage?: ThreadTokenUsage) => act(async () => root.render(<ChatSettings
+    connection={connection}
     threadId="demo" contextSettings={{ read: vi.fn(), write: vi.fn() }}
     tokenUsage={tokenUsage} readUsage={readUsage} ready models={[]} saving={false} error=""
+    readConversationMetrics={readConversationMetrics}
     selection={{ model: 'astra', effort: 'low', access: 'workspace-write' }}
-    updateSettings={async () => {}} onClose={() => {}} />));
+    updateSettings={async () => {}} refreshModels={async () => {}} onClose={() => {}} />));
   try {
     await render(usage);
     expect(container.textContent).toContain('上下文 121.3K / 258K Token（47% 已用）');

@@ -12,6 +12,7 @@ import {
   completeEmbeddedAccountOAuth,
   consumeResetCredit,
   deleteRemoteDevice,
+  revokeDesktopService,
   fetchAccountSummary,
   fetchAccountUsage,
   fetchAccountUsageSummaries,
@@ -234,6 +235,16 @@ describe('mobile Codex API client', () => {
     expect(headers.get('Authorization')).toBe('Bearer switch-access');
   });
 
+  it('revokes only the selected desktop service grant using account authentication', async () => {
+    const apiFetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', apiFetch);
+    await expect(revokeDesktopService(session, 'device/1')).resolves.toBeUndefined();
+    expect(apiFetch.mock.calls[0]?.[0]).toBe('https://switch.example.com/devices/device%2F1/service-credential');
+    expect(apiFetch.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ method: 'DELETE' }));
+    const headers = new Headers((apiFetch.mock.calls[0]?.[1] as RequestInit).headers);
+    expect(headers.get('Authorization')).toBe('Bearer switch-access');
+  });
+
   it('loads safe provider summaries from the cloud API', async () => {
     const providers = [{ id: 'provider-1', name: 'Gateway', model: 'model-a', group: '工作' }];
     const apiFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ providers }), {
@@ -242,7 +253,7 @@ describe('mobile Codex API client', () => {
     vi.stubGlobal('fetch', apiFetch);
 
     await expect(fetchRemoteProviders(session)).resolves.toEqual(providers);
-    expect(apiFetch.mock.calls[0]?.[0]).toBe('https://switch.example.com/devices/providers');
+    expect(apiFetch.mock.calls[0]?.[0]).toBe('https://switch.example.com/devices/providers?includeAggregates=true');
   });
 
   it('switches a remote desktop between official and provider models', async () => {
@@ -288,6 +299,36 @@ describe('mobile Codex API client', () => {
       .toEqual({ providerId: 'provider-1' });
     expect(JSON.parse((apiFetch.mock.calls[2]?.[1] as RequestInit).body as string))
       .toEqual({ group: '工作' });
+  });
+
+  it('sends GUI selections to their own device endpoints', async () => {
+    const result = { deviceId: 'device/1', guiAccountId: null, guiProviderId: 'provider-1',
+      requiresRestart: false, online: true };
+    const apiFetch = vi.fn().mockImplementation(async () => new Response(JSON.stringify(result), { status: 200 }));
+    vi.stubGlobal('fetch', apiFetch);
+    await switchRemoteDeviceAccount(session, 'device/1', 'account-2', 'gui');
+    await expect(switchRemoteDeviceProvider(session, 'device/1', 'provider-1', 'gui')).resolves.toEqual(result);
+    expect(apiFetch.mock.calls.map(call => call[0])).toEqual([
+      'https://switch.example.com/devices/device%2F1/gui-account',
+      'https://switch.example.com/devices/device%2F1/gui-provider',
+    ]);
+    expect(apiFetch.mock.calls.map(call => JSON.parse(call[1].body))).toEqual([
+      { accountId: 'account-2' }, { providerId: 'provider-1' },
+    ]);
+  });
+
+  it('switches aggregate choices without sending them as plain providers', async () => {
+    const apiFetch = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ online: true }), { status: 200 }));
+    vi.stubGlobal('fetch', apiFetch);
+    await switchRemoteDeviceProvider(session, 'device/1', 'aggregate:route', 'gui');
+    await switchRemoteDeviceProvider(session, 'device/1', 'aggregate:route', 'proxy');
+    expect(apiFetch.mock.calls.map(call => call[0])).toEqual([
+      'https://switch.example.com/devices/device%2F1/gui-aggregate',
+      'https://switch.example.com/devices/device%2F1/aggregate',
+    ]);
+    expect(apiFetch.mock.calls.map(call => JSON.parse(call[1].body))).toEqual([
+      { aggregateId: 'route' }, { aggregateId: 'route' },
+    ]);
   });
 
   it('restarts Codex on the selected remote desktop', async () => {

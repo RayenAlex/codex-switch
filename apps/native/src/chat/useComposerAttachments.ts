@@ -1,9 +1,15 @@
+import { t } from '../i18n';
 import { useEffect, useRef, useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import { readAsStringAsync, EncodingType } from 'expo-file-system';
 import type { AttachmentReference, ComposerPlugin } from '../../../desktop/src/pages/codexGui/attachmentTypes';
 import { remoteAttachments } from '../../../../shared/remote-chat/composerAttachments';
-import { checkFileUploadSize } from '../../../../shared/remote-chat/policy';
+import { checkFileUploadSize, UploadPolicyError } from '../../../../shared/remote-chat/policy';
+
+/** Validators may localize their copy when thrown, so trust it by type rather than by wording. */
+export function attachmentErrorMessage(cause: unknown) {
+  return cause instanceof UploadPolicyError ? cause.message : t("文件添加失败，请重新选择。");
+}
 
 export function useComposerAttachments({ threadId, sending }: { threadId: string | null; sending: boolean }) {
   const [items, setItems] = useState<AttachmentReference[]>([]);
@@ -39,21 +45,19 @@ export function useComposerAttachments({ threadId, sending }: { threadId: string
       }
       if (current === generation.current) setItems((existing) => [...existing, ...additions]);
     } catch (cause) {
-      if (current === generation.current) setError(cause instanceof Error
-        && /文件|附件/.test(cause.message) ? cause.message : '文件添加失败，请重新选择。');
+      if (current === generation.current) setError(attachmentErrorMessage(cause));
     } finally { picking.current = false; if (mounted.current) setBusy(false); }
   };
-  const addPlugin = (plugin: ComposerPlugin) => {
-    const item: AttachmentReference = { kind: 'plugin', name: plugin.interface?.displayName || plugin.name,
-      path: `plugin://${plugin.id}` };
-    try { setItems(remoteAttachments([...items.filter((entry) => entry.path !== item.path), item])); setError(''); }
-    catch { setError('每条消息最多添加 8 个文件或插件。'); }
+  const add = (item: AttachmentReference) => {
+    if (sending || picking.current) return false;
+    try {
+      setItems(remoteAttachments([...items.filter((entry) => entry.path !== item.path), item])); setError('');
+      return true;
+    } catch { setError(t("每条消息最多添加 8 个附件或对话引用。")); return false; }
   };
-  const addFile = (item: AttachmentReference) => {
-    try { setItems(remoteAttachments([...items.filter((entry) => entry.path !== item.path), item])); setError(''); }
-    catch { setError('每条消息最多添加 8 个文件或插件。'); }
-  };
-  return { items, busy, error, pick, addPlugin, addFile, restore: setItems,
+  return { items, busy, error, pick, add,
+    addPlugin: (plugin: ComposerPlugin) => add({ kind: 'plugin', name: plugin.interface?.displayName || plugin.name,
+      path: `plugin://${plugin.id}` }), restore: setItems,
     remove: (item: AttachmentReference) => setItems((current) => current.filter((entry) => entry !== item)),
     clearSubmitted: (submitted: AttachmentReference[]) =>
       setItems((current) => current.filter((entry) => !submitted.includes(entry))) };

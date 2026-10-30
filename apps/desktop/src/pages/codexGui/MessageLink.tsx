@@ -1,27 +1,44 @@
-import type { ReactNode } from "react";
-import { message } from "antd";
+import { guiText } from "../../i18n/guiText";
+import { useContext, type ReactNode } from "react";
 import { isTauri } from "@tauri-apps/api/core";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { FileMenu } from "./FileMenu";
 import { parseFileReference } from "./fileReference";
 import { WebsiteIcon } from "./WebsiteIcon";
 import { MessageImage } from "./MessageImage";
 import { localImageSource } from "./imageSources";
+import { DetailsContext } from "./detailsContext";
+import { WebsiteLinkMenu, openWebsiteInBrowser } from "./WebsiteLinkMenu";
+import { FileEnvironmentContext } from './fileEnvironment';
+import { remoteDevelopmentUrl } from '../../../../../shared/terminal/links';
 
 export { isFileReference } from "./fileReference";
 
+function isWebsiteUrl(href: string | undefined): href is string {
+  if (!href || !/^https?:\/\//i.test(href)) return false;
+  try { return Boolean(new URL(href).hostname); } catch { return false; }
+}
+
 export function MessageLink({ href, children }: { href?: string; children?: ReactNode }) {
+  const panel = useContext(DetailsContext);
+  const environment = useContext(FileEnvironmentContext);
+  const openBrowser = () => openWebsiteInBrowser(href ?? '', environment?.resolveWebsite);
   if (href && localImageSource(href)) return <MessageImage src={href}
-    alt={typeof children === "string" ? children : "图片"} />;
+    alt={typeof children === "string" ? children : guiText("图片")} />;
   const file = href ? parseFileReference(href) : undefined;
-  if (file) return <FileMenu {...file}>{children}</FileMenu>;
-  if (!href || !/^https?:\/\//i.test(href)) return <span>{children}</span>;
-  return <a href={href} target="_blank" rel="noopener noreferrer" onClick={(event) => {
-    // Browser navigation must stay native, including Ctrl/Cmd-click and the link context menu.
-    if (!isTauri()) return;
+  if (file) return <FileMenu {...file} preview>{children}</FileMenu>;
+  if (!isWebsiteUrl(href)) return <span>{children}</span>;
+  return <WebsiteLinkMenu href={href}><a href={href} target="_blank" rel="noopener noreferrer"
+    onAuxClick={(event) => {
+      if ((!isTauri() && !environment) || event.button !== 1) return;
+      event.preventDefault(); void openBrowser();
+    }} onClick={(event) => {
+    if (panel && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+      event.preventDefault(); panel.openWebsite(href); return;
+    }
+    // Explicit browser shortcuts and contexts without a details sidebar retain their original behavior.
+    if (!isTauri() && !environment) return;
     event.preventDefault();
-    void openUrl(href).catch(() => { void message.error({
-      content: "链接暂时无法打开，请稍后重试。", style: { maxWidth: 400, marginInline: "auto" },
-    }); });
-  }}><WebsiteIcon key={href} href={href} />{children}</a>;
+    void openBrowser();
+  }}>{!(environment && remoteDevelopmentUrl(href)) && <WebsiteIcon key={href} href={href} />}
+    {children}</a></WebsiteLinkMenu>;
 }
